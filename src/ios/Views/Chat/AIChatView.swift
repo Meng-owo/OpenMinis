@@ -362,6 +362,7 @@ struct AIChatView: View {
     @State private var terminalInitCommand: String?
     @State private var showAttachmentMenu = false
     @State private var showPlusPanel = false
+    @State private var showVoiceSettingsSheet = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -652,6 +653,15 @@ struct AIChatView: View {
                                     else if vm.showMentionMenu { vm.dismissMentionMenu() }
                                 }
                         }
+                        if showPlusPanel {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                                        showPlusPanel = false
+                                    }
+                                }
+                        }
                         VStack(spacing: 0) {
                             floatingToolPreview
                                 .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.25) : UIColor(white: 0, alpha: 0) }), radius: 6, x: 0, y: 4)
@@ -682,6 +692,11 @@ struct AIChatView: View {
                         if vm.speakEnabled && vm.speechPlayerExpanded {
                             withAnimation(.easeInOut(duration: 0.16)) {
                                 vm.speechPlayerExpanded = false
+                            }
+                        }
+                        if showPlusPanel {
+                            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                                showPlusPanel = false
                             }
                         }
                     }
@@ -780,7 +795,7 @@ struct AIChatView: View {
             ChatToolbarHost(key: chatToolbarKey, title: {
                 chatNavPrincipalContent
             }, trailing: {
-                trailingMenu
+                EmptyView()
             })
             .equatable()
         )
@@ -1145,6 +1160,9 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showSessionMemory) {
             SessionMemoryView(vm: cached.vm)
+        }
+        .sheet(isPresented: $showVoiceSettingsSheet) {
+            ChatVoiceSettingsSheet(vm: vm)
         }
         .sheet(isPresented: $showMoveToSheet) {
             MoveToSessionSheet(currentSessionId: vm.sessionId) { targetId in
@@ -2072,36 +2090,48 @@ struct AIChatView: View {
             showPlusPanel = false
         }
         switch item {
-        case .zap:
-            vm.showSlashMenuOverInput()
-            inputFocused = true
-        case .image:
+        case .photo:
             showPhotoPicker = true
+        case .camera:
+            showCamera = true
         case .doc:
             showDocumentPicker = true
-        case .book:
-            showSessionSkills = true
         case .sticker:
             MinisToast.show("醒醒专属表情包系统入口已就绪，正在准备中…", systemImage: "face.smiling.inverse")
+        case .voice:
+            showVoiceSettingsSheet = true
         case .sparkles:
             showModelPicker = true
-        case .chats:
+        case .newChat:
             requestNewChatFromMenu()
-        case .group:
-            MinisToast.show("多智能体群聊模式筹备中", systemImage: "person.2.fill")
-        case .gear:
+        case .slash:
+            vm.showSlashMenuOverInput()
+            inputFocused = true
+        case .skills:
+            showSessionSkills = true
+        case .mcps:
             showSessionMCPs = true
-        case .footprint:
+        case .memory:
             showSessionMemory = true
-        case .eyeoff:
-            let key = "scheduled.stealthMode"
-            let cur = UserDefaults.standard.bool(forKey: key)
-            UserDefaults.standard.set(!cur, forKey: key)
-            MinisToast.show(!cur ? "已开启醒醒专属隐身模式" : "已退出隐身模式", systemImage: "eye.slash.fill")
+        case .terminal:
+            showTerminal = true
+        case .browser:
+            showBrowserSheet = true
+        case .files:
+            showFileBrowser = true
         case .gauge:
             showTokenUsage = true
         case .share:
             exportCurrentConversation()
+        case .stealth:
+            let key = "scheduled.stealthMode"
+            let cur = UserDefaults.standard.bool(forKey: key)
+            UserDefaults.standard.set(!cur, forKey: key)
+            MinisToast.show(!cur ? "已开启醒醒专属隐身模式" : "已退出隐身模式", systemImage: "eye.slash.fill")
+        case .compact:
+            vm.compactAll()
+        case .clear:
+            showClearChatConfirm = true
         }
     }
 
@@ -2430,30 +2460,22 @@ struct AIChatView: View {
             // iOS 26 keeps spacing 1 — the liquid-glass band has no crowding.
             VStack(spacing: legacyLayout ? -1 : 1) {
                 HStack(spacing: 4) {
-                    Button {
-                        showModelPicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(isAuthed ? ChatColors.success : ChatColors.warning)
-                                .frame(width: 6, height: 6)
-                            if isGroupBound {
-                                Image(systemName: "square.stack.3d.up")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(ChatColors.tertiaryText)
-                            }
-                            Text(modelName)
-                                .font(.caption2)
-                                .foregroundStyle(ChatColors.secondaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .semibold))
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(isAuthed ? ChatColors.success : ChatColors.warning)
+                            .frame(width: 6, height: 6)
+                        if isGroupBound {
+                            Image(systemName: "square.stack.3d.up")
+                                .font(.system(size: 8))
                                 .foregroundStyle(ChatColors.tertiaryText)
                         }
-                        .layoutPriority(-1)
+                        Text(modelName)
+                            .font(.caption2)
+                            .foregroundStyle(ChatColors.secondaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    .buttonStyle(.plain)
+                    .layoutPriority(-1)
                     // [T-ios-voiceover-labels] This label is assembled from a
                     // status dot, an optional group glyph, the model name and a
                     // chevron. Left alone VoiceOver reads those as disconnected
@@ -6603,56 +6625,79 @@ struct DownloadLocateTarget: Identifiable {
 // MARK: - 加号面板功能项类型定义
 
 public enum PlusPanelItemType: String, CaseIterable, Identifiable {
-    case zap = "zap"             // 快捷短语
-    case image = "image"         // 图片
-    case doc = "doc"             // 文档
-    case book = "book"           // 知识库
+    // Page 1: 常用互动与创作 (8项)
+    case photo = "photo"         // 照片与视频
+    case camera = "camera"       // 拍照
+    case doc = "doc"             // 发送文件
     case sticker = "sticker"     // 表情包 (醒醒专属)
+    case voice = "voice"         // 语音设置 (醒醒专属)
     case sparkles = "sparkles"   // 模型切换
-    case chats = "chats"         // 对话框
-    case group = "group"         // 群聊
-    case gear = "gear"           // 对话框设置
-    case footprint = "footprint" // 留痕
-    case eyeoff = "eyeoff"       // 隐身模式
-    case gauge = "gauge"         // 上下文用量
+    case newChat = "newChat"     // 新建对话
+    case slash = "slash"         // 斜杠指令
+
+    // Page 2: 扩展工具与环境能力 (8项)
+    case skills = "skills"       // 会话技能
+    case mcps = "mcps"           // MCP工具
+    case memory = "memory"       // 会话记忆
+    case terminal = "terminal"   // 终端
+    case browser = "browser"     // 浏览器
+    case files = "files"         // 会话文件
+    case gauge = "gauge"         // Token用量
     case share = "share"         // 导出对话
+
+    // Page 3: 会话管理与特殊模式 (3项)
+    case stealth = "stealth"     // 隐身模式
+    case compact = "compact"     // 压缩历史
+    case clear = "clear"         // 清空对话
 
     public var id: String { rawValue }
 
     public var title: String {
         switch self {
-        case .zap: return "快捷短语"
-        case .image: return "图片"
-        case .doc: return "文档"
-        case .book: return "知识库"
+        case .photo: return "照片与视频"
+        case .camera: return "拍照"
+        case .doc: return "发送文件"
         case .sticker: return "表情包"
+        case .voice: return "语音设置"
         case .sparkles: return "模型切换"
-        case .chats: return "对话框"
-        case .group: return "群聊"
-        case .gear: return "对话框设置"
-        case .footprint: return "留痕"
-        case .eyeoff: return "隐身模式"
-        case .gauge: return "上下文用量"
+        case .newChat: return "新建对话"
+        case .slash: return "斜杠指令"
+        case .skills: return "会话技能"
+        case .mcps: return "MCP工具"
+        case .memory: return "会话记忆"
+        case .terminal: return "终端"
+        case .browser: return "浏览器"
+        case .files: return "会话文件"
+        case .gauge: return "Token用量"
         case .share: return "导出对话"
+        case .stealth: return "隐身模式"
+        case .compact: return "压缩历史"
+        case .clear: return "清空对话"
         }
     }
 
     /// 精致可爱的实体矢量图标（原生系统符号，零编译负担，质感饱满）
     public var systemImageName: String {
         switch self {
-        case .zap: return "bolt.fill"
-        case .image: return "photo.fill"
+        case .photo: return "photo.fill"
+        case .camera: return "camera.fill"
         case .doc: return "doc.fill"
-        case .book: return "book.fill"
         case .sticker: return "face.smiling.inverse"
+        case .voice: return "waveform.circle.fill"
         case .sparkles: return "sparkles"
-        case .chats: return "bubble.left.and.bubble.right.fill"
-        case .group: return "person.2.fill"
-        case .gear: return "slider.horizontal.3"
-        case .footprint: return "pawprint.fill"
-        case .eyeoff: return "eye.slash.fill"
+        case .newChat: return "square.and.pencil"
+        case .slash: return "slash.circle.fill"
+        case .skills: return "puzzlepiece.extension.fill"
+        case .mcps: return "wrench.and.screwdriver.fill"
+        case .memory: return "brain.head.profile"
+        case .terminal: return "terminal.fill"
+        case .browser: return "globe"
+        case .files: return "folder.fill"
         case .gauge: return "gauge.with.needle.fill"
         case .share: return "square.and.arrow.up.fill"
+        case .stealth: return "eye.slash.fill"
+        case .compact: return "arrow.down.right.and.arrow.up.left"
+        case .clear: return "trash.fill"
         }
     }
 }
@@ -6719,13 +6764,17 @@ public struct ChatPlusPanel: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    // 两页分页：8 + 5
+    // 三页分页：8 + 8 + 3
     private let page1Items: [PlusPanelItemType] = [
-        .zap, .image, .doc, .book,
-        .sticker, .sparkles, .chats, .group
+        .photo, .camera, .doc, .sticker,
+        .voice, .sparkles, .newChat, .slash
     ]
     private let page2Items: [PlusPanelItemType] = [
-        .gear, .footprint, .eyeoff, .gauge, .share
+        .skills, .mcps, .memory, .terminal,
+        .browser, .files, .gauge, .share
+    ]
+    private let page3Items: [PlusPanelItemType] = [
+        .stealth, .compact, .clear
     ]
 
     private let columns = [
@@ -6746,7 +6795,7 @@ public struct ChatPlusPanel: View {
                 .fill(CSSThemeVariables.divider(isDark: isDark))
                 .frame(height: 1)
 
-            // 两页横向翻页 TabView
+            // 三页横向翻页 TabView
             TabView(selection: $currentPage) {
                 // Page 1
                 LazyVGrid(columns: columns, spacing: 20) {
@@ -6768,34 +6817,135 @@ public struct ChatPlusPanel: View {
                             onItemTap(item)
                         }
                     }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
+                .tag(1)
+
+                // Page 3
+                LazyVGrid(columns: columns, spacing: 20) {
+                    ForEach(page3Items) { item in
+                        PlusPanelTileButton(item: item, isDark: isDark) {
+                            onItemTap(item)
+                        }
+                    }
                     // 占位保持4列对齐
-                    ForEach(0..<3, id: \.self) { _ in
+                    ForEach(0..<5, id: \.self) { _ in
                         Color.clear.frame(height: 82)
                     }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 8)
-                .tag(1)
+                .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: 200)
 
-            // 底部指示小圆点 (对齐原型)
+            // 底部指示小圆点 (支持3页)
             HStack(spacing: 8) {
-                Capsule()
-                    .fill(currentPage == 0 ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.divider(isDark: isDark))
-                    .frame(width: currentPage == 0 ? 20 : 7, height: 7)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPage)
-
-                Capsule()
-                    .fill(currentPage == 1 ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.divider(isDark: isDark))
-                    .frame(width: currentPage == 1 ? 20 : 7, height: 7)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPage)
+                ForEach(0..<3, id: \.self) { idx in
+                    Capsule()
+                        .fill(currentPage == idx ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.divider(isDark: isDark))
+                        .frame(width: currentPage == idx ? 20 : 7, height: 7)
+                        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPage)
+                }
             }
             .padding(.top, 4)
             .padding(.bottom, 16)
         }
         .background(CSSThemeVariables.card(isDark: isDark))
+    }
+}
+
+// MARK: - AI 语音设置弹窗组件 (ChatVoiceSettingsSheet)
+
+public struct ChatVoiceSettingsSheet: View {
+    @ObservedObject var vm: AIChatViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    public init(vm: AIChatViewModel) {
+        self.vm = vm
+    }
+
+    public var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Toggle(isOn: Binding(
+                        get: {
+                            vm.sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false
+                        },
+                        set: { v in
+                            guard let sid = vm.sessionId else {
+                                MinisToast.show("先发一条消息激活当前会话", systemImage: "exclamationmark.triangle.fill")
+                                return
+                            }
+                            AIVoiceMessageComposer.setVoiceReplies(enabled: v, sessionId: sid)
+                            if v {
+                                if vm.isProcessing {
+                                    MinisToast.show("已开启AI语音回复，本条将以语音气泡送达")
+                                }
+                                vm.stopSpeech()
+                            }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("AI 语音回复")
+                                .font(.body.weight(.medium))
+                            Text("小梦以专属微信式语音气泡发送语音消息")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { VoiceOutputPreferences.capsuleVisible },
+                        set: { v in
+                            VoiceOutputPreferences.capsuleVisible = v
+                            NotificationCenter.default.post(name: .ttsCapsuleVisibilityChanged, object: nil)
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("语音胶囊")
+                                .font(.body.weight(.medium))
+                            Text("在屏幕显示浮动语音播放控制器")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { vm.speakEnabled },
+                        set: { v in
+                            vm.speakEnabled = v
+                            VoiceOutputPreferences.isEnabled = v
+                            if v { vm.speechPlayerExpanded = true } else { vm.stopSpeech() }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("朗读回复")
+                                .font(.body.weight(.medium))
+                            Text("由 iOS 系统语音引擎即时流式朗读文本")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("AI 语音与播报开关")
+                } footer: {
+                    Text("AI语音回复针对当前会话生效。")
+                }
+            }
+            .navigationTitle("AI 语音设置")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
