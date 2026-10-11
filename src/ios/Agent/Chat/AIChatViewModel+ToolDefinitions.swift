@@ -269,6 +269,17 @@ extension AIChatViewModel {
             }
         }
 
+        // 表情包抽屉浏览工具：支持模型翻看特定抽屉的完整表情包目录
+        tools.append(AgentToolDefinition(
+            name: "browse_stickers",
+            description: "Browse the full sticker catalog of a specific drawer/category (e.g. 委屈, 撒娇, 开心, 嘲讽, 难过) to pick a suitable sticker.",
+            parameters: [
+                "drawer": AgentToolParam(type: .string, description: "The name of the drawer/category to browse (e.g. 委屈, 撒娇, 开心, 嘲讽).")
+            ],
+            required: ["drawer"],
+            propertyOrdering: ["drawer"]
+        ))
+
         return tools
     }
 

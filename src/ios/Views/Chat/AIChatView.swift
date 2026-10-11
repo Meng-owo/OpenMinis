@@ -363,6 +363,7 @@ struct AIChatView: View {
     @State private var showAttachmentMenu = false
     @State private var showPlusPanel = false
     @State private var showVoiceSettingsSheet = false
+    @State private var showStickerSheet = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -1163,6 +1164,9 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showVoiceSettingsSheet) {
             ChatVoiceSettingsSheet(vm: vm)
+        }
+        .sheet(isPresented: $showStickerSheet) {
+            StickerPickerSheet(vm: vm)
         }
         .sheet(isPresented: $showMoveToSheet) {
             MoveToSessionSheet(currentSessionId: vm.sessionId) { targetId in
@@ -2097,7 +2101,7 @@ struct AIChatView: View {
         case .doc:
             showDocumentPicker = true
         case .sticker:
-            MinisToast.show("醒醒专属表情包系统入口已就绪，正在准备中…", systemImage: "face.smiling.inverse")
+            showStickerSheet = true
         case .voice:
             showVoiceSettingsSheet = true
         case .sparkles:
@@ -6947,5 +6951,891 @@ struct ChatVoiceSettingsSheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+
+// MARK: - 表情包系统 (Sticker System)
+
+public struct StickerItem: Identifiable, Codable, Equatable, Sendable {
+    public let id: String
+    public var title: String
+    public var content: String
+    public var scenario: String
+    public var shortDesc: String
+    public var category: String
+    public var useCount: Int
+    public var imageFilename: String
+    public var createdAt: Date
+
+    public init(
+        id: String,
+        title: String,
+        content: String = "",
+        scenario: String = "",
+        shortDesc: String = "",
+        category: String = "其他",
+        useCount: Int = 0,
+        imageFilename: String,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.content = content
+        self.scenario = scenario
+        self.shortDesc = shortDesc.isEmpty ? (title + (content.isEmpty ? "" : " " + String(content.prefix(10)))) : shortDesc
+        self.category = category.isEmpty ? "其他" : category
+        self.useCount = useCount
+        self.imageFilename = imageFilename
+        self.createdAt = createdAt
+    }
+}
+
+struct StickerCatalogData: Codable {
+    var stickers: [StickerItem]
+    var categories: [String]
+    var deletedIds: [String]
+    var nextNumericId: Int
+}
+
+public struct StickerRecognitionResult: Sendable {
+    public var title: String
+    public var content: String
+    public var scenario: String
+    public var shortDesc: String
+    public var category: String
+}
+
+@MainActor
+public final class StickerStore: ObservableObject {
+    public static let shared = StickerStore()
+
+    @Published public var stickers: [StickerItem] = []
+    @Published public var categories: [String] = [
+        "开心", "难过", "生气", "撒娇", "无语", "委屈", "问号", "嘲讽", "日常", "其他"
+    ]
+    private var deletedIds: Set<String> = []
+    private var nextNumericId: Int = 1
+    private let imageCache = NSCache<NSString, UIImage>()
+
+    private var stickersDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("stickers", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    private var catalogURL: URL {
+        stickersDir.appendingPathComponent("stickers_catalog.json")
+    }
+
+    private init() {
+        loadFromDisk()
+    }
+
+    private func loadFromDisk() {
+        guard FileManager.default.fileExists(atPath: catalogURL.path),
+              let data = try? Data(contentsOf: catalogURL),
+              let catalog = try? JSONDecoder().decode(StickerCatalogData.self, from: data) else {
+            return
+        }
+        self.stickers = catalog.stickers
+        if !catalog.categories.isEmpty {
+            self.categories = catalog.categories
+        }
+        self.deletedIds = Set(catalog.deletedIds)
+        self.nextNumericId = max(catalog.nextNumericId, 1)
+    }
+
+    private func saveToDisk() {
+        let catalog = StickerCatalogData(
+            stickers: stickers,
+            categories: categories,
+            deletedIds: Array(deletedIds),
+            nextNumericId: nextNumericId
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        if let data = try? encoder.encode(catalog) {
+            try? data.write(to: catalogURL, options: .atomic)
+        }
+    }
+
+    public func addSticker(
+        imageData: Data,
+        title: String,
+        content: String,
+        scenario: String,
+        shortDesc: String?,
+        category: String
+    ) -> StickerItem {
+        var assignedId = String(format: "%03d", nextNumericId)
+        while deletedIds.contains(assignedId) || stickers.contains(where: { $0.id == assignedId }) {
+            nextNumericId += 1
+            assignedId = String(format: "%03d", nextNumericId)
+        }
+        nextNumericId += 1
+
+        let filename = "\(assignedId).png"
+        let fileURL = stickersDir.appendingPathComponent(filename)
+        try? imageData.write(to: fileURL, options: .atomic)
+
+        if let uiImg = UIImage(data: imageData) {
+            imageCache.setObject(uiImg, forKey: assignedId as NSString)
+        }
+
+        let sDesc = (shortDesc?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+            ? (title + (content.isEmpty ? "" : " " + String(content.prefix(10))))
+            : shortDesc!
+
+        let item = StickerItem(
+            id: assignedId,
+            title: title,
+            content: content,
+            scenario: scenario,
+            shortDesc: sDesc,
+            category: category,
+            useCount: 0,
+            imageFilename: filename,
+            createdAt: Date()
+        )
+        stickers.append(item)
+        saveToDisk()
+        return item
+    }
+
+    public func updateSticker(
+        id: String,
+        title: String,
+        content: String,
+        scenario: String,
+        shortDesc: String,
+        category: String,
+        newImageData: Data? = nil
+    ) {
+        guard let idx = stickers.firstIndex(where: { $0.id == id }) else { return }
+        stickers[idx].title = title
+        stickers[idx].content = content
+        stickers[idx].scenario = scenario
+        stickers[idx].shortDesc = shortDesc.isEmpty ? title : shortDesc
+        stickers[idx].category = category
+
+        if let data = newImageData {
+            let fileURL = stickersDir.appendingPathComponent(stickers[idx].imageFilename)
+            try? data.write(to: fileURL, options: .atomic)
+            if let img = UIImage(data: data) {
+                imageCache.setObject(img, forKey: id as NSString)
+            }
+        }
+        saveToDisk()
+    }
+
+    public func deleteSticker(id: String) {
+        guard let idx = stickers.firstIndex(where: { $0.id == id }) else { return }
+        stickers.remove(at: idx)
+        deletedIds.insert(id)
+        imageCache.removeObject(forKey: id as NSString)
+        saveToDisk()
+    }
+
+    public func recordUse(id: String) {
+        if let idx = stickers.firstIndex(where: { $0.id == id }) {
+            stickers[idx].useCount += 1
+            saveToDisk()
+        }
+    }
+
+    public func sticker(for id: String) -> StickerItem? {
+        stickers.first(where: { $0.id == id })
+    }
+
+    public func isDeleted(id: String) -> Bool {
+        deletedIds.contains(id)
+    }
+
+    public func image(for sticker: StickerItem) -> UIImage? {
+        if let cached = imageCache.object(forKey: sticker.id as NSString) {
+            return cached
+        }
+        let fileURL = stickersDir.appendingPathComponent(sticker.imageFilename)
+        if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
+            imageCache.setObject(img, forKey: sticker.id as NSString)
+            return img
+        }
+        return nil
+    }
+
+    public func image(forId id: String) -> UIImage? {
+        if let item = sticker(for: id) {
+            return image(for: item)
+        }
+        let fileURL = stickersDir.appendingPathComponent("\(id).png")
+        if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
+            return img
+        }
+        return nil
+    }
+
+    // MARK: - AI 提示词与目录
+
+    public func promptCatalogSummary() -> String {
+        let allCategories = categories.filter { $0 != "常用" && $0 != "全部" }
+        var lines: [String] = []
+        lines.append("当前表情包抽屉列表：\(allCategories.joined(separator: "、"))")
+        lines.append("各抽屉常用表情包：")
+        for cat in allCategories {
+            let items = stickers.filter { $0.category == cat }
+                .sorted(by: { $0.useCount > $1.useCount })
+                .prefix(3)
+            if !items.isEmpty {
+                let descList = items.map { "[\($0.id): \($0.shortDesc)]" }.joined(separator: ", ")
+                lines.append("- \(cat): \(descList)")
+            }
+        }
+        let topUsed = stickers.sorted(by: { $0.useCount > $1.useCount }).prefix(5)
+        if !topUsed.isEmpty {
+            let topList = topUsed.map { "[\($0.id): \($0.shortDesc)]" }.joined(separator: ", ")
+            lines.append("- 最常用推荐: \(topList)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    public func promptDrawerContent(drawer: String) -> String {
+        let cleanDrawer = drawer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let items = stickers.filter { $0.category == cleanDrawer }
+        if items.isEmpty {
+            return "抽屉【\(cleanDrawer)】目前暂无表情包。当前可用抽屉有：\(categories.joined(separator: "、"))"
+        }
+        let list = items.map { "- [\($0.id)] \($0.shortDesc)（场景：\($0.scenario)）" }.joined(separator: "\n")
+        return "抽屉【\(cleanDrawer)】的全部表情包目录如下：\n\(list)"
+    }
+
+    public func systemPromptFragment() -> String {
+        guard !stickers.isEmpty else { return "" }
+        return """
+        ## 表情包系统
+        你可以根据对话情绪与场景向用户发送表情包。
+        核心原则：你看不到表情包图片，只能通过编号和描述挑选；挑选时看心情和场景，不只看画面。
+        规则：
+        1. 如需发送表情包，在回复中直接写入标签：[贴:编号]（例如 [贴:001]）。每条回复最多发送一张表情包。
+        2. 如果编号不存在，界面会自动忽略。没有符合情绪的表情包时不要强行发送。
+        3. \(promptCatalogSummary())
+        4. 如果你想查看某个抽屉的完整表情包目录，可以调用 browse_stickers 工具或在回复中输出 [翻:抽屉名]（例如 [翻:委屈]）。
+        """
+    }
+
+    // MARK: - 识图集成 (使用系统配置的视觉模型组，不写死模型)
+
+    public func recognizeSticker(imageData: Data) async throws -> StickerRecognitionResult {
+        guard VisionGroupResolver.isConfigured else {
+            throw VisionGroupResolver.VisionError.notConfigured
+        }
+        let prompt = """
+        分析这张表情包图片，提取表情包信息。请严格返回如下 JSON 格式，不要包含任何其他文字：
+        {
+          "title": "情绪标题（2至4个字，如委屈、得意、嘲讽、撒娇）",
+          "content": "完整画面与图片上的文字描述",
+          "scenario": "适用场景（如撒娇求原谅、表达无语）",
+          "shortDesc": "给AI看的短描述（约10个字，如委屈抱枕头）",
+          "category": "分类抽屉（请从以下选项中挑选最贴切的一个：开心、难过、生气、撒娇、无语、委屈、问号、嘲讽、日常、其他）"
+        }
+        """
+        let outcome = try await VisionGroupResolver.describe(
+            imageData: imageData,
+            mimeType: "image/png",
+            customPrompt: prompt
+        )
+        return parseRecognitionJSON(outcome.description)
+    }
+
+    private func parseRecognitionJSON(_ raw: String) -> StickerRecognitionResult {
+        var jsonString = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let start = jsonString.range(of: "{"), let end = jsonString.range(of: "}", options: .backwards) {
+            jsonString = String(jsonString[start.lowerBound...end.upperBound])
+        }
+        if let data = jsonString.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let title = (obj["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let content = (obj["content"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let scenario = (obj["scenario"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let shortDesc = (obj["shortDesc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var category = (obj["category"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !categories.contains(category) {
+                category = categories.first(where: { category.contains($0) }) ?? "其他"
+            }
+            return StickerRecognitionResult(
+                title: title.isEmpty ? "表情包" : title,
+                content: content,
+                scenario: scenario,
+                shortDesc: shortDesc.isEmpty ? title : shortDesc,
+                category: category
+            )
+        }
+        let clean = raw.prefix(20).trimmingCharacters(in: .whitespacesAndNewlines)
+        return StickerRecognitionResult(
+            title: clean.isEmpty ? "表情包" : String(clean),
+            content: raw,
+            scenario: "日常聊天",
+            shortDesc: clean.isEmpty ? "可爱表情包" : String(clean),
+            category: "其他"
+        )
+    }
+}
+
+// MARK: - 表情包标签解析器
+
+public struct StickerTagMatch {
+    public let rawTag: String
+    public let id: String
+    public let desc: String?
+}
+
+public enum StickerParser {
+    private static let regex = try! NSRegularExpression(pattern: #"\[贴:([A-Za-z0-9_-]+)(?:\s+([^\]]*))?\]"#)
+    private static let flipRegex = try! NSRegularExpression(pattern: #"\[翻:([^\]]+)\]"#)
+
+    public static func parseFirst(in text: String) -> (cleanText: String, match: StickerTagMatch?) {
+        let ns = text as NSString
+        guard let m = regex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)) else {
+            let stripped = flipRegex.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+            return (stripped.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+        }
+        let rawTag = ns.substring(with: m.range)
+        let id = ns.substring(with: m.range(at: 1))
+        var desc: String? = nil
+        if m.numberOfRanges > 2 && m.range(at: 2).location != NSNotFound {
+            desc = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespaces)
+        }
+        var clean = text.replacingOccurrences(of: rawTag, with: "")
+        clean = flipRegex.stringByReplacingMatches(in: clean, range: NSRange(location: 0, length: (clean as NSString).length), withTemplate: "")
+        return (clean.trimmingCharacters(in: .whitespacesAndNewlines), StickerTagMatch(rawTag: rawTag, id: id, desc: desc))
+    }
+}
+
+// MARK: - 表情包展示组件与全屏预览
+
+public struct StickerThumbnailView: View {
+    public let sticker: StickerItem
+    @State private var showZoomSheet = false
+
+    public init(sticker: StickerItem) {
+        self.sticker = sticker
+    }
+
+    public var body: some View {
+        Button {
+            showZoomSheet = true
+        } label: {
+            if let uiImage = StickerStore.shared.image(for: sticker) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 130, maxHeight: 130)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                    )
+                    .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+            } else {
+                ProgressView()
+                    .frame(width: 80, height: 80)
+            }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showZoomSheet) {
+            StickerZoomPreviewSheet(sticker: sticker)
+        }
+    }
+}
+
+public struct StickerDeletedPlaceholderView: View {
+    public init() {}
+
+    public var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "photo.badge.exclamationmark")
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+            Text("已删除表情包")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.secondary.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+public struct StickerZoomPreviewSheet: View {
+    public let sticker: StickerItem
+    @Environment(\.dismiss) private var dismiss
+
+    public init(sticker: StickerItem) {
+        self.sticker = sticker
+    }
+
+    public var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if let uiImage = StickerStore.shared.image(for: sticker) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 240, maxHeight: 240)
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
+                    }
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text(sticker.title)
+                                .font(.title3.bold())
+                            Spacer()
+                            Text("编号: \(sticker.id)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !sticker.shortDesc.isEmpty {
+                            Label("短描述: \(sticker.shortDesc)", systemImage: "sparkles")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !sticker.category.isEmpty {
+                            Label("抽屉分类: \(sticker.category)", systemImage: "tray.full")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !sticker.scenario.isEmpty {
+                            Label("使用场景: \(sticker.scenario)", systemImage: "clock")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !sticker.content.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("画面内容")
+                                    .font(.caption.bold())
+                                    .foregroundColor(.secondary)
+                                Text(sticker.content)
+                                    .font(.body)
+                            }
+                            .padding(.top, 4)
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .padding()
+            }
+            .navigationTitle("表情包详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - 表情包选择抽屉面板 (StickerPickerSheet)
+
+struct StickerPickerSheet: View {
+    @ObservedObject var vm: AIChatViewModel
+    @ObservedObject private var store = StickerStore.shared
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selectedCategory: String = "常用"
+    @State private var showUploadSheet = false
+    @State private var editingSticker: StickerItem?
+
+    var displayCategories: [String] {
+        ["常用", "全部"] + store.categories
+    }
+
+    var currentStickers: [StickerItem] {
+        if selectedCategory == "常用" {
+            let sorted = store.stickers.sorted(by: { $0.useCount > $1.useCount })
+            return sorted.filter { $0.useCount > 0 }
+        } else if selectedCategory == "全部" {
+            return store.stickers
+        } else {
+            return store.stickers.filter { $0.category == selectedCategory }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // 分类胶囊标签栏
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(displayCategories, id: \.self) { cat in
+                            Button {
+                                selectedCategory = cat
+                            } label: {
+                                Text(cat)
+                                    .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(
+                                        selectedCategory == cat
+                                            ? ChatColors.accent.opacity(0.18)
+                                            : Color(uiColor: .tertiarySystemFill)
+                                    )
+                                    .foregroundColor(
+                                        selectedCategory == cat
+                                            ? ChatColors.accent
+                                            : ChatColors.primaryText
+                                    )
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                }
+
+                Divider()
+
+                if currentStickers.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer()
+                        Image(systemName: "face.smiling")
+                            .font(.system(size: 44))
+                            .foregroundColor(.secondary)
+                        Text(selectedCategory == "常用" ? "暂无常用表情包，发送几次就会出现在这里~" : "此分类下暂无表情包")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Button {
+                            showUploadSheet = true
+                        } label: {
+                            Label("添加表情包", systemImage: "plus.circle.fill")
+                                .font(.system(size: 14, weight: .medium))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(ChatColors.accent)
+                                .foregroundColor(.white)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: 12)], spacing: 14) {
+                            ForEach(currentStickers) { sticker in
+                                Button {
+                                    vm.sendSticker(sticker)
+                                    dismiss()
+                                } label: {
+                                    VStack(spacing: 4) {
+                                        if let img = store.image(for: sticker) {
+                                            Image(uiImage: img)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fit)
+                                                .frame(width: 72, height: 72)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                                                )
+                                        } else {
+                                            Color.secondary.opacity(0.1)
+                                                .frame(width: 72, height: 72)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        }
+
+                                        Text(sticker.title)
+                                            .font(.caption2)
+                                            .lineLimit(1)
+                                            .foregroundColor(.primary)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button {
+                                        editingSticker = sticker
+                                    } label: {
+                                        Label("编辑信息", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        store.deleteSticker(id: sticker.id)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        }
+                        .padding(16)
+                    }
+                }
+            }
+            .navigationTitle("醒醒专属表情包")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showUploadSheet = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 18))
+                            .foregroundColor(ChatColors.accent)
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showUploadSheet) {
+                StickerEditSheet(editingItem: nil)
+            }
+            .sheet(item: $editingSticker) { item in
+                StickerEditSheet(editingItem: item)
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+// MARK: - 表情包登记与编辑弹窗 (StickerEditSheet)
+
+struct StickerEditSheet: View {
+    var editingItem: StickerItem?
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = StickerStore.shared
+
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var imageData: Data?
+    @State private var autoAiRecognize: Bool = VisionGroupResolver.isConfigured
+    @State private var isRecognizing: Bool = false
+
+    @State private var title: String = ""
+    @State private var content: String = ""
+    @State private var scenario: String = ""
+    @State private var shortDesc: String = ""
+    @State private var category: String = "日常"
+
+    var isEditMode: Bool { editingItem != nil }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Section 1: 图片选择与预览
+                Section("表情包图片") {
+                    HStack(spacing: 16) {
+                        if let data = imageData, let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 84, height: 84)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(Color.primary.opacity(0.1), lineWidth: 0.5)
+                                )
+                        } else {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color(uiColor: .tertiarySystemFill))
+                                .frame(width: 84, height: 84)
+                                .overlay(
+                                    Image(systemName: "photo.badge.plus")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(.secondary)
+                                )
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                Text(imageData == nil ? "选择图片" : "更换图片")
+                                    .font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(ChatColors.accent)
+                                    .foregroundColor(.white)
+                                    .clipShape(Capsule())
+                            }
+
+                            if isRecognizing {
+                                HStack(spacing: 6) {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("AI 识别情绪中…")
+                                        .font(.caption)
+                                        .foregroundColor(ChatColors.accent)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                // Section 2: 登记方式切换
+                if !isEditMode {
+                    Section {
+                        if VisionGroupResolver.isConfigured {
+                            Toggle("AI 自动识图预填", isOn: $autoAiRecognize)
+                        } else {
+                            HStack {
+                                Text("识图模型")
+                                Spacer()
+                                Text("未配置（当前为手动登记）")
+                                    .foregroundColor(.secondary)
+                                    .font(.subheadline)
+                            }
+                        }
+                    } footer: {
+                        Text(VisionGroupResolver.isConfigured
+                             ? "开启后选图即由小梦后台识图并自动预填，可随时修改。"
+                             : "可前往 Minis 设置配置识图助手以支持自动识图。")
+                    }
+                }
+
+                // Section 3: 详细信息字段
+                Section("表情包信息") {
+                    HStack {
+                        Text("情绪标题*")
+                            .font(.body.weight(.medium))
+                            .frame(width: 80, alignment: .leading)
+                        TextField("如：委屈、嘲讽、撒娇", text: $title)
+                    }
+
+                    HStack {
+                        Text("抽屉分类")
+                            .font(.body.weight(.medium))
+                            .frame(width: 80, alignment: .leading)
+                        Picker("", selection: $category) {
+                            ForEach(store.categories, id: \.self) { cat in
+                                Text(cat).tag(cat)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    HStack {
+                        Text("短描述")
+                            .font(.body.weight(.medium))
+                            .frame(width: 80, alignment: .leading)
+                        TextField("约10字，如：委屈抱枕头", text: $shortDesc)
+                    }
+
+                    HStack {
+                        Text("使用场景")
+                            .font(.body.weight(.medium))
+                            .frame(width: 80, alignment: .leading)
+                        TextField("如：撒娇求原谅", text: $scenario)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("完整内容")
+                            .font(.body.weight(.medium))
+                        TextField("画面是什么，图上有什么字", text: $content, axis: .vertical)
+                            .lineLimit(2...4)
+                    }
+                }
+            }
+            .navigationTitle(isEditMode ? "编辑表情包" : "登记表情包")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isEditMode ? "保存" : "确认入库") {
+                        save()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || imageData == nil)
+                }
+            }
+            .onChange(of: selectedPhotoItem) { newItem in
+                guard let newItem else { return }
+                Task {
+                    if let loaded = try? await newItem.loadTransferable(type: Data.self) {
+                        await MainActor.run {
+                            self.imageData = loaded
+                            if !isEditMode && autoAiRecognize && VisionGroupResolver.isConfigured {
+                                runAiRecognition(data: loaded)
+                            }
+                        }
+                    }
+                }
+            }
+            .onAppear {
+                if let item = editingItem {
+                    title = item.title
+                    content = item.content
+                    scenario = item.scenario
+                    shortDesc = item.shortDesc
+                    category = item.category
+                    if let img = store.image(for: item) {
+                        imageData = img.pngData()
+                    }
+                } else {
+                    category = store.categories.first ?? "日常"
+                }
+            }
+        }
+    }
+
+    private func runAiRecognition(data: Data) {
+        isRecognizing = true
+        Task {
+            do {
+                let res = try await store.recognizeSticker(imageData: data)
+                await MainActor.run {
+                    isRecognizing = false
+                    if self.title.isEmpty { self.title = res.title }
+                    if self.content.isEmpty { self.content = res.content }
+                    if self.scenario.isEmpty { self.scenario = res.scenario }
+                    if self.shortDesc.isEmpty { self.shortDesc = res.shortDesc }
+                    if self.category == "日常" || self.category.isEmpty {
+                        self.category = res.category
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isRecognizing = false
+                }
+            }
+        }
+    }
+
+    private func save() {
+        guard let data = imageData, !title.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        if let editingItem {
+            store.updateSticker(
+                id: editingItem.id,
+                title: title,
+                content: content,
+                scenario: scenario,
+                shortDesc: shortDesc,
+                category: category,
+                newImageData: data
+            )
+        } else {
+            _ = store.addSticker(
+                imageData: data,
+                title: title,
+                content: content,
+                scenario: scenario,
+                shortDesc: shortDesc.isEmpty ? nil : shortDesc,
+                category: category
+            )
+        }
+        dismiss()
     }
 }

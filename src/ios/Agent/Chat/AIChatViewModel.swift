@@ -2057,6 +2057,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 p += "\n\n" + dailyFragment
             }
         }
+        // Inject sticker catalog if configured
+        let stickerFragment = StickerStore.shared.systemPromptFragment()
+        if !stickerFragment.isEmpty {
+            p += "\n\n" + stickerFragment
+        }
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).
         p += memoryStatusFragment
@@ -2281,6 +2286,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     // MARK: - Send Message
+
+    func sendSticker(_ sticker: StickerItem) {
+        let tag = "[贴:\(sticker.id) \(sticker.shortDesc)]"
+        let current = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        inputText = current.isEmpty ? tag : "\(current) \(tag)"
+        StickerStore.shared.recordUse(id: sticker.id)
+        send()
+    }
 
     func send() {
         // Read-only mode — cannot send messages

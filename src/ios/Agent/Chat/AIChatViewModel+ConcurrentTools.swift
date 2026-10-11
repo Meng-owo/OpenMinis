@@ -1033,6 +1033,19 @@ extension AIChatViewModel {
                 }
             }
 
+        case "browse_stickers":
+            let drawer: String = {
+                let d = (toolArgs["drawer"] as? String ?? "")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return d
+            }()
+            let content = StickerStore.shared.promptDrawerContent(drawer: drawer)
+            toolOutput = content
+            toolSuccess = true
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         case "add_mcp", "list_mcp", "remove_mcp", "toggle_mcp":
             // [mcp-agg] MCP 聚合点管理工具（小管家专用）：定义与实现在 MCPManagementTools。
             let (mcpText, mcpOK) = await MCPManagementTools.handleDialogCall(name: tu.name, args: toolArgs)

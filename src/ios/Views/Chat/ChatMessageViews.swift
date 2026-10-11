@@ -410,23 +410,76 @@ struct ChatMessageRow: View {
                 }
 
                 if !userDisplayText.isEmpty {
-                    HStack(spacing: 6) {
-                        Text(userDisplayText)
-                            .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
-                            .foregroundStyle(message.isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .modifier(UserBubbleSurface(isQueued: message.isQueued))
-                            .id(appearanceStudio.themePackRevision)
+                    let (cleanUserText, stickerMatch) = StickerParser.parseFirst(in: userDisplayText)
+                    if let stickerMatch, let sticker = StickerStore.shared.sticker(for: stickerMatch.id) {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if !cleanUserText.isEmpty {
+                                HStack(spacing: 6) {
+                                    Text(cleanUserText)
+                                        .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                                        .foregroundStyle(message.isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                        .id(appearanceStudio.themePackRevision)
 
-                        if message.isQueued {
-                            if let onWithdraw {
-                                Button {
-                                    onWithdraw()
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 22))
-                                        .foregroundStyle(ChatColors.destructive)
+                                    if message.isQueued, let onWithdraw {
+                                        Button {
+                                            onWithdraw()
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 22))
+                                                .foregroundStyle(ChatColors.destructive)
+                                        }
+                                    }
+                                }
+                            }
+                            StickerThumbnailView(sticker: sticker)
+                        }
+                    } else if let stickerMatch, StickerStore.shared.isDeleted(id: stickerMatch.id) {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            if !cleanUserText.isEmpty {
+                                HStack(spacing: 6) {
+                                    Text(cleanUserText)
+                                        .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                                        .foregroundStyle(message.isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                        .id(appearanceStudio.themePackRevision)
+
+                                    if message.isQueued, let onWithdraw {
+                                        Button {
+                                            onWithdraw()
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.system(size: 22))
+                                                .foregroundStyle(ChatColors.destructive)
+                                        }
+                                    }
+                                }
+                            }
+                            StickerDeletedPlaceholderView()
+                        }
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(userDisplayText)
+                                .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                                .foregroundStyle(message.isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                .id(appearanceStudio.themePackRevision)
+
+                            if message.isQueued {
+                                if let onWithdraw {
+                                    Button {
+                                        onWithdraw()
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 22))
+                                            .foregroundStyle(ChatColors.destructive)
+                                    }
                                 }
                             }
                         }

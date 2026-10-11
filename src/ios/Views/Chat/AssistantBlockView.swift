@@ -54,11 +54,20 @@ struct AssistantBlockView: View {
                     }
                     return block.content
                 }()
-                let segments = Self.splitBubbleSegments(appliedContent)
+                let (cleanAppliedContent, stickerMatch) = StickerParser.parseFirst(in: appliedContent)
+                let activeSticker = stickerMatch.flatMap { StickerStore.shared.sticker(for: $0.id) }
+                let finalContent = (stickerMatch != nil) ? cleanAppliedContent : appliedContent
+
+                let segments = Self.splitBubbleSegments(finalContent)
                 if segments.count > 1 {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
-                            self.singleTextBubble(seg)
+                            if !seg.isEmpty {
+                                self.singleTextBubble(seg)
+                            }
+                        }
+                        if let activeSticker {
+                            StickerThumbnailView(sticker: activeSticker)
                         }
                         // [T-message-action-bar 09-11] One action bar under the
                         // LAST bubble group of the last text block — the reply's
@@ -67,16 +76,21 @@ struct AssistantBlockView: View {
                         // message's complete text.
                         if Self.isLastTextBlock(of: message, block: block),
                            canShowActionBar {
-                            actionBar(forBlockContent: appliedContent)
+                            actionBar(forBlockContent: finalContent)
                         }
                     }
                     .id(appearanceStudio.themePackRevision)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
-                        self.singleTextBubble(appliedContent)
+                        if !finalContent.isEmpty {
+                            self.singleTextBubble(finalContent)
+                        }
+                        if let activeSticker {
+                            StickerThumbnailView(sticker: activeSticker)
+                        }
                         if Self.isLastTextBlock(of: message, block: block),
                            canShowActionBar {
-                            actionBar(forBlockContent: appliedContent)
+                            actionBar(forBlockContent: finalContent)
                         }
                     }
                     .id(appearanceStudio.themePackRevision)
