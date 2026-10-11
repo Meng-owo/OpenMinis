@@ -362,6 +362,7 @@ struct AIChatView: View {
     @State private var terminalInitCommand: String?
     @State private var showAttachmentMenu = false
     @State private var showPlusPanel = false
+    @State private var showStickerPanel = false
     @State private var showVoiceSettingsSheet = false
     @State private var showStickerSheet = false
     @State private var isDropTargeted = false
@@ -654,12 +655,13 @@ struct AIChatView: View {
                                     else if vm.showMentionMenu { vm.dismissMentionMenu() }
                                 }
                         }
-                        if showPlusPanel {
+                        if showPlusPanel || showStickerPanel {
                             Color.clear
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
                                         showPlusPanel = false
+                                        showStickerPanel = false
                                     }
                                 }
                         }
@@ -695,9 +697,10 @@ struct AIChatView: View {
                                 vm.speechPlayerExpanded = false
                             }
                         }
-                        if showPlusPanel {
+                        if showPlusPanel || showStickerPanel {
                             withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
                                 showPlusPanel = false
+                                showStickerPanel = false
                             }
                         }
                     }
@@ -955,9 +958,10 @@ struct AIChatView: View {
             }
         }
         .onChange(of: inputFocused) { focused in
-            if focused && showPlusPanel {
+            if focused && (showPlusPanel || showStickerPanel) {
                 withAnimation(.easeOut(duration: 0.2)) {
                     showPlusPanel = false
+                    showStickerPanel = false
                 }
             }
         }
@@ -2090,8 +2094,11 @@ struct AIChatView: View {
     // MARK: - 加号功能面板动作分发
 
     private func handlePlusPanelAction(_ item: PlusPanelItemType) {
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-            showPlusPanel = false
+        if item != .sticker {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                showPlusPanel = false
+                showStickerPanel = false
+            }
         }
         switch item {
         case .photo:
@@ -2101,7 +2108,10 @@ struct AIChatView: View {
         case .doc:
             showDocumentPicker = true
         case .sticker:
-            showStickerSheet = true
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                showPlusPanel = false
+                showStickerPanel = true
+            }
         case .voice:
             showVoiceSettingsSheet = true
         case .sparkles:
@@ -3375,34 +3385,58 @@ struct AIChatView: View {
     @ViewBuilder
     private var attachmentMenuButton: some View {
         let isDark = colorScheme == .dark
+        let isPanelOpen = (showPlusPanel || showStickerPanel)
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if inputFocused {
+            if isPanelOpen {
+                // 点叉叉按钮关闭弹窗，并直接弹出输入法键盘
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                    showPlusPanel = false
+                    showStickerPanel = false
+                }
+                inputFocused = true
+            } else {
                 inputFocused = false
-            }
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
-                showPlusPanel.toggle()
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                    showPlusPanel = true
+                    showStickerPanel = false
+                }
             }
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 19, weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
-                .rotationEffect(.degrees(showPlusPanel ? 45 : 0))
+                .rotationEffect(.degrees(isPanelOpen ? 45 : 0))
                 .frame(width: 36, height: 36)
                 .background(CSSThemeVariables.accentSoft(isDark: isDark))
                 .clipShape(Circle())
         }
-        .accessibilityLabel(Text(showPlusPanel ? "收起功能面板" : "展开更多功能"))
+        .accessibilityLabel(Text(isPanelOpen ? "收起功能面板并输入" : "展开更多功能"))
     }
 
-    /// 加号展开面板区域（必须用 AnyView 擦除泛型，防 inputBar mangled name 爆栈）
-    private var plusPanelSection: AnyView {
-        guard showPlusPanel else { return AnyView(EmptyView()) }
-        let panel = ChatPlusPanel { item in
-            handlePlusPanelAction(item)
+    /// 底部抽屉面板区域（加号面板与微信式表情包面板同高度无缝切换）
+    private var bottomDrawerSection: AnyView {
+        if showPlusPanel {
+            let panel = ChatPlusPanel { item in
+                handlePlusPanelAction(item)
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            return AnyView(panel)
+        } else if showStickerPanel {
+            let panel = ChatStickerPanel(
+                vm: vm,
+                onBackToPlus: {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                        showStickerPanel = false
+                        showPlusPanel = true
+                    }
+                }
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            return AnyView(panel)
+        } else {
+            return AnyView(EmptyView())
         }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-        return AnyView(panel)
     }
 
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
@@ -3688,7 +3722,7 @@ struct AIChatView: View {
     /// where `AIChatView.inputBar.getter` blew the stack via
     /// `__swift_instantiateConcreteTypeFromMangledNameV2`).
     private var inputFieldOrWaveform: AnyView {
-        let topPadding: CGFloat = (vm.attachments.isEmpty && vm.loadingVideoCount == 0) ? 16 : 11
+        let topPadding: CGFloat = (vm.attachments.isEmpty && vm.loadingVideoCount == 0) ? 6 : 4
         if voiceInputActive {
             return AnyView(
                 // [voice-correction §6] Recent conversation turns, straight from the
@@ -3800,9 +3834,9 @@ struct AIChatView: View {
                 field.fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 14)
         .padding(.top, topPadding)
-        .padding(.bottom, 10)
+        .padding(.bottom, 2)
         .overlay(alignment: .top) {
             if composerResizeEnabled { composerResizeHandle }
         }
@@ -3913,7 +3947,7 @@ struct AIChatView: View {
                 .background(ChatColors.warning.opacity(0.08))
             }
 
-            VStack(spacing: 5) {
+            VStack(spacing: 2) {
                 // Attachment preview chips — 3 per row
                 if !vm.attachments.isEmpty || vm.loadingVideoCount > 0 {
                     ScrollView(.vertical, showsIndicators: true) {
@@ -3924,23 +3958,24 @@ struct AIChatView: View {
                     }
                     .frame(height: min(attachmentGridHeight, 160))
                     .onPreferenceChange(AttachmentGridHeightKey.self) { attachmentGridHeight = $0 }
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                 }
 
                 inputFieldOrWaveform
 
                 inputBottomRow
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
 
-                plusPanelSection
+                bottomDrawerSection
             }
             .contentShape(MinisThemeShape.inputBar)
             .onTapGesture {
                 inputFocused = true
-                if showPlusPanel {
+                if showPlusPanel || showStickerPanel {
                     withAnimation(.easeOut(duration: 0.2)) {
                         showPlusPanel = false
+                        showStickerPanel = false
                     }
                 }
             }
@@ -6802,7 +6837,7 @@ public struct ChatPlusPanel: View {
             // 三页横向翻页 TabView
             TabView(selection: $currentPage) {
                 // Page 1
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page1Items) { item in
                         PlusPanelTileButton(item: item, isDark: isDark) {
                             onItemTap(item)
@@ -6811,11 +6846,11 @@ public struct ChatPlusPanel: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 6)
                 .tag(0)
 
                 // Page 2
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page2Items) { item in
                         PlusPanelTileButton(item: item, isDark: isDark) {
                             onItemTap(item)
@@ -6824,11 +6859,11 @@ public struct ChatPlusPanel: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 6)
                 .tag(1)
 
                 // Page 3
-                LazyVGrid(columns: columns, spacing: 20) {
+                LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page3Items) { item in
                         PlusPanelTileButton(item: item, isDark: isDark) {
                             onItemTap(item)
@@ -6841,11 +6876,11 @@ public struct ChatPlusPanel: View {
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
-                .padding(.bottom, 8)
+                .padding(.bottom, 6)
                 .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 200)
+            .frame(height: 250)
 
             // 底部指示小圆点 (支持3页)
             HStack(spacing: 8) {
@@ -6857,9 +6892,220 @@ public struct ChatPlusPanel: View {
                 }
             }
             .padding(.top, 4)
-            .padding(.bottom, 16)
+            .padding(.bottom, 12)
         }
+        .frame(height: 295)
         .background(CSSThemeVariables.card(isDark: isDark))
+    }
+}
+
+// MARK: - 微信式表情包底栏抽屉面板 (ChatStickerPanel)
+
+public struct ChatStickerPanel: View {
+    @ObservedObject var vm: AIChatViewModel
+    var onBackToPlus: () -> Void
+    @ObservedObject private var store = StickerStore.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    @State private var selectedCategory: String = "常用"
+    @State private var showUploadSheet = false
+    @State private var editingSticker: StickerItem?
+    @State private var previewSticker: StickerItem?
+
+    private var isDark: Bool { colorScheme == .dark }
+
+    private var displayCategories: [String] {
+        ["常用", "全部"] + store.categories
+    }
+
+    private var currentStickers: [StickerItem] {
+        if selectedCategory == "常用" {
+            let sorted = store.stickers.sorted(by: { $0.useCount > $1.useCount })
+            return sorted.filter { $0.useCount > 0 }
+        } else if selectedCategory == "全部" {
+            return store.stickers
+        } else {
+            return store.stickers.filter { $0.category == selectedCategory }
+        }
+    }
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10),
+        GridItem(.flexible(), spacing: 10)
+    ]
+
+    public init(vm: AIChatViewModel, onBackToPlus: @escaping () -> Void) {
+        self.vm = vm
+        self.onBackToPlus = onBackToPlus
+    }
+
+    public var body: some View {
+        VStack(spacing: 0) {
+            // 顶部分割线
+            Rectangle()
+                .fill(CSSThemeVariables.divider(isDark: isDark))
+                .frame(height: 1)
+
+            // 顶部分类导航栏 (带返回加号面板胶囊 + 横向滑动分类 + 右侧添加按钮)
+            HStack(spacing: 8) {
+                // 返回功能加号面板按钮
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    onBackToPlus()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.grid.2x2")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("功能")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                // 横向分类滚动胶囊
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(displayCategories, id: \.self) { cat in
+                            Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                selectedCategory = cat
+                            } label: {
+                                Text(cat)
+                                    .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
+                                    .padding(.horizontal, 11)
+                                    .padding(.vertical, 5)
+                                    .background(
+                                        selectedCategory == cat
+                                            ? CSSThemeVariables.accent(isDark: isDark)
+                                            : CSSThemeVariables.surface(isDark: isDark)
+                                    )
+                                    .foregroundStyle(
+                                        selectedCategory == cat
+                                            ? Color.white
+                                            : CSSThemeVariables.textMain(isDark: isDark)
+                                    )
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                // 添加表情包按钮
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    showUploadSheet = true
+                } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            // 中间上下滑动表情包宫格区 (与加号面板总高度严格一致)
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVGrid(columns: columns, spacing: 14) {
+                    // 第一个格子：微信式「+ 添加」卡片
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showUploadSheet = true
+                    } label: {
+                        VStack(spacing: 4) {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .strokeBorder(
+                                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                                )
+                                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark).opacity(0.45))
+                                .frame(height: 72)
+                                .overlay(
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 22, weight: .semibold))
+                                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                )
+                            Text("添加")
+                                .font(.system(size: 11, weight: .regular))
+                                .foregroundStyle(CSSThemeVariables.textSub(isDark: isDark))
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    // 已入库表情包列表
+                    ForEach(currentStickers) { sticker in
+                        Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            vm.sendSticker(sticker)
+                        } label: {
+                            VStack(spacing: 4) {
+                                if let img = store.image(for: sticker) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(height: 72)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
+                                        )
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color.secondary.opacity(0.1))
+                                        .frame(height: 72)
+                                }
+
+                                Text(sticker.title)
+                                    .font(.system(size: 11, weight: .regular))
+                                    .lineLimit(1)
+                                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                previewSticker = sticker
+                            } label: {
+                                Label("查看大图与详情", systemImage: "eye")
+                            }
+                            Button {
+                                editingSticker = sticker
+                            } label: {
+                                Label("编辑信息", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                store.deleteSticker(id: sticker.id)
+                            } label: {
+                                Label("删除表情包", systemImage: "trash")
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+            }
+            .frame(height: 245)
+        }
+        .frame(height: 295)
+        .background(CSSThemeVariables.card(isDark: isDark))
+        .sheet(isPresented: $showUploadSheet) {
+            StickerEditSheet(editingItem: nil)
+        }
+        .sheet(item: $editingSticker) { item in
+            StickerEditSheet(editingItem: item)
+        }
+        .sheet(item: $previewSticker) { item in
+            StickerZoomPreviewSheet(sticker: item)
+        }
     }
 }
 
@@ -7254,7 +7500,9 @@ public final class StickerStore: ObservableObject {
     private func parseRecognitionJSON(_ raw: String) -> StickerRecognitionResult {
         var jsonString = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if let start = jsonString.range(of: "{"), let end = jsonString.range(of: "}", options: .backwards) {
-            jsonString = String(jsonString[start.lowerBound...end.upperBound])
+            if start.lowerBound < end.upperBound {
+                jsonString = String(jsonString[start.lowerBound..<end.upperBound])
+            }
         }
         if let data = jsonString.data(using: .utf8),
            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
@@ -7264,7 +7512,7 @@ public final class StickerStore: ObservableObject {
             let shortDesc = (obj["shortDesc"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             var category = (obj["category"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             if !categories.contains(category) {
-                category = categories.first(where: { category.contains($0) }) ?? "其他"
+                category = categories.first(where: { category.contains($0) }) ?? "日常"
             }
             return StickerRecognitionResult(
                 title: title.isEmpty ? "表情包" : title,
@@ -7280,7 +7528,7 @@ public final class StickerStore: ObservableObject {
             content: raw,
             scenario: "日常聊天",
             shortDesc: clean.isEmpty ? "可爱表情包" : String(clean),
-            category: "其他"
+            category: "日常"
         )
     }
 }
