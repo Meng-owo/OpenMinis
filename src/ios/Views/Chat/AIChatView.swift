@@ -697,12 +697,6 @@ struct AIChatView: View {
                                 vm.speechPlayerExpanded = false
                             }
                         }
-                        if showPlusPanel || showStickerPanel {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
-                                showPlusPanel = false
-                                showStickerPanel = false
-                            }
-                        }
                     }
                 )
                 .overlay(alignment: .bottomTrailing) {
@@ -3955,37 +3949,41 @@ struct AIChatView: View {
                 .background(ChatColors.warning.opacity(0.08))
             }
 
-            VStack(spacing: 2) {
-                // Attachment preview chips — 3 per row
-                if !vm.attachments.isEmpty || vm.loadingVideoCount > 0 {
-                    ScrollView(.vertical, showsIndicators: true) {
-                        inputAttachmentGrid
-                            .background(GeometryReader { geo in
-                                Color.clear.preference(key: AttachmentGridHeightKey.self, value: geo.size.height)
-                            })
+            VStack(spacing: 0) {
+                // 输入区域（点击输入框触发聚焦与收起底栏）
+                VStack(spacing: 2) {
+                    // Attachment preview chips — 3 per row
+                    if !vm.attachments.isEmpty || vm.loadingVideoCount > 0 {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            inputAttachmentGrid
+                                .background(GeometryReader { geo in
+                                    Color.clear.preference(key: AttachmentGridHeightKey.self, value: geo.size.height)
+                                })
+                        }
+                        .frame(height: min(attachmentGridHeight, 160))
+                        .onPreferenceChange(AttachmentGridHeightKey.self) { attachmentGridHeight = $0 }
+                        .padding(.top, 4)
                     }
-                    .frame(height: min(attachmentGridHeight, 160))
-                    .onPreferenceChange(AttachmentGridHeightKey.self) { attachmentGridHeight = $0 }
-                    .padding(.top, 4)
+
+                    inputFieldOrWaveform
+
+                    inputBottomRow
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 6)
+                }
+                .contentShape(MinisThemeShape.inputBar)
+                .onTapGesture {
+                    inputFocused = true
+                    if showPlusPanel || showStickerPanel {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            showPlusPanel = false
+                            showStickerPanel = false
+                        }
+                    }
                 }
 
-                inputFieldOrWaveform
-
-                inputBottomRow
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
-
+                // 底部抽屉功能/表情包面板（完全独立，不被输入框点击手势干扰）
                 bottomDrawerSection
-            }
-            .contentShape(MinisThemeShape.inputBar)
-            .onTapGesture {
-                inputFocused = true
-                if showPlusPanel || showStickerPanel {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        showPlusPanel = false
-                        showStickerPanel = false
-                    }
-                }
             }
             .onReceive(speechManager.$recognizedText) { text in
                 guard speechManager.state == .recording || !text.isEmpty else { return }
@@ -6937,8 +6935,10 @@ struct ChatStickerPanel: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedCategory: String = "常用"
-    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var activeSheet: ActivePanelSheet?
+    @State private var isManageMode: Bool = false
+    @State private var selectedStickerIds: Set<String> = []
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -6976,117 +6976,262 @@ struct ChatStickerPanel: View {
                 .fill(CSSThemeVariables.divider(isDark: isDark))
                 .frame(height: 1)
 
-            // 顶部分类导航栏 (带返回加号面板胶囊 + 横向滑动分类 + 右侧添加按钮)
-            HStack(spacing: 8) {
-                // 返回功能加号面板按钮
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    onBackToPlus()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.grid.2x2")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("功能")
-                            .font(.system(size: 12, weight: .medium))
+            // 顶部分类与功能操作栏
+            if isManageMode {
+                // 管理模式操作栏
+                HStack(spacing: 8) {
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            isManageMode = false
+                            selectedStickerIds.removeAll()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("完成")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(CSSThemeVariables.accent(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.accentFg(isDark: isDark))
+                        .clipShape(Capsule())
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(CSSThemeVariables.optionBg(isDark: isDark))
-                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
-                    )
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
-                // 横向分类滚动胶囊
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(displayCategories, id: \.self) { cat in
+                    Text("已选 \(selectedStickerIds.count) 项")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+
+                    Spacer()
+
+                    // 全选 / 取消全选
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        let allIds = Set(currentStickers.map(\.id))
+                        if selectedStickerIds.count == allIds.count && !allIds.isEmpty {
+                            selectedStickerIds.removeAll()
+                        } else {
+                            selectedStickerIds = allIds
+                        }
+                    } label: {
+                        Text(selectedStickerIds.count == currentStickers.count && !currentStickers.isEmpty ? "取消全选" : "全选")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(CSSThemeVariables.optionBg(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            .overlay(
+                                Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                            )
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    // 批量移动分类菜单
+                    Menu {
+                        ForEach(store.categories, id: \.self) { cat in
                             Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                selectedCategory = cat
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                let count = selectedStickerIds.count
+                                store.batchMoveCategory(ids: selectedStickerIds, newCategory: cat)
+                                MinisToast.show("已将 \(count) 个表情移动至「\(cat)」")
+                                selectedStickerIds.removeAll()
                             } label: {
                                 Text(cat)
-                                    .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
-                                    .padding(.horizontal, 11)
-                                    .padding(.vertical, 5)
-                                    .background(
-                                        selectedCategory == cat
-                                            ? CSSThemeVariables.accent(isDark: isDark)
-                                            : CSSThemeVariables.optionBg(isDark: isDark)
-                                    )
-                                    .foregroundStyle(
-                                        selectedCategory == cat
-                                            ? CSSThemeVariables.accentFg(isDark: isDark)
-                                            : CSSThemeVariables.textMain(isDark: isDark)
-                                    )
-                                    .overlay(
-                                        Capsule()
-                                            .strokeBorder(
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "folder.fill")
+                                .font(.system(size: 11))
+                            Text("移至抽屉")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                        .overlay(
+                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .disabled(selectedStickerIds.isEmpty)
+
+                    // 批量删除按钮
+                    Button(role: .destructive) {
+                        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                        let count = selectedStickerIds.count
+                        store.deleteStickers(ids: selectedStickerIds)
+                        MinisToast.show("已批量删除 \(count) 个表情包")
+                        selectedStickerIds.removeAll()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11))
+                            Text("删除")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(selectedStickerIds.isEmpty ? Color.clear : Color.red.opacity(0.12))
+                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : Color.red)
+                        .overlay(
+                            Capsule().strokeBorder(selectedStickerIds.isEmpty ? CSSThemeVariables.optionBorder(isDark: isDark) : Color.red.opacity(0.35), lineWidth: 1.0)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedStickerIds.isEmpty)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+            } else {
+                // 普通模式操作栏
+                HStack(spacing: 8) {
+                    // 返回加号面板小图标
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        onBackToPlus()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 11, weight: .bold))
+                            Image(systemName: "square.grid.2x2")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                        .overlay(
+                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                        )
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    // 核心「功能」操作菜单 (实至名归：批量管理、批量导入、手动登记)
+                    Menu {
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                isManageMode = true
+                                selectedStickerIds.removeAll()
+                            }
+                        } label: {
+                            Label("批量管理表情包", systemImage: "checklist")
+                        }
+
+                        PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                            Label("批量导入相册表情", systemImage: "square.and.arrow.down.on.square.fill")
+                        }
+
+                        Button {
+                            activeSheet = .add(initialData: nil)
+                        } label: {
+                            Label("手动登记单个表情", systemImage: "pencil.and.list.clipboard")
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("功能")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                        .overlay(
+                            Capsule().strokeBorder(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1.0)
+                        )
+                        .clipShape(Capsule())
+                    }
+
+                    // 横向分类滚动胶囊
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(displayCategories, id: \.self) { cat in
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    selectedCategory = cat
+                                } label: {
+                                    Text(cat)
+                                        .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 5)
+                                        .background(
+                                            selectedCategory == cat
+                                                ? CSSThemeVariables.accent(isDark: isDark)
+                                                : CSSThemeVariables.optionBg(isDark: isDark)
+                                        )
+                                        .foregroundStyle(
+                                            selectedCategory == cat
+                                                ? CSSThemeVariables.accentFg(isDark: isDark)
+                                                : CSSThemeVariables.textMain(isDark: isDark)
+                                        )
+                                        .overlay(
+                                            Capsule().strokeBorder(
                                                 selectedCategory == cat
                                                     ? Color.clear
                                                     : CSSThemeVariables.optionBorder(isDark: isDark),
                                                 lineWidth: 1.0
                                             )
-                                    )
-                                    .clipShape(Capsule())
+                                        )
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
-                }
 
-                // 添加表情包按钮 (直接呼出系统相册选图)
-                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button {
-                        activeSheet = .add(initialData: nil)
-                    } label: {
-                        Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
+                    // 添加表情包按钮 (多选或单选选图)
+                    PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                     }
+                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
 
             // 中间上下滑动表情包宫格区 (与加号面板总高度严格一致)
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 14) {
-                    // 第一个格子：微信式「+ 添加」卡片 (点击直接呼出系统相册)
-                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        VStack(spacing: 4) {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .strokeBorder(
-                                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
-                                )
-                                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark).opacity(0.45))
-                                .frame(height: 72)
-                                .overlay(
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 22, weight: .semibold))
-                                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
-                                )
-                            Text("添加")
-                                .font(.system(size: 11, weight: .regular))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    // 第一个格子：微信式「+ 添加/批量」卡片 (非管理模式时显示)
+                    if !isManageMode {
+                        PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                            VStack(spacing: 4) {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(
+                                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                                    )
+                                    .foregroundStyle(CSSThemeVariables.accent(isDark: isDark).opacity(0.45))
+                                    .frame(height: 72)
+                                    .overlay(
+                                        Image(systemName: "plus")
+                                            .font(.system(size: 22, weight: .semibold))
+                                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                    )
+                                Text("添加/批量")
+                                    .font(.system(size: 11, weight: .regular))
+                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            }
+                            .contentShape(Rectangle())
                         }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            activeSheet = .add(initialData: nil)
-                        } label: {
-                            Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                activeSheet = .add(initialData: nil)
+                            } label: {
+                                Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
+                            }
                         }
                     }
 
@@ -7094,23 +7239,57 @@ struct ChatStickerPanel: View {
                     ForEach(currentStickers) { sticker in
                         Button {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            vm.sendSticker(sticker)
+                            if isManageMode {
+                                if selectedStickerIds.contains(sticker.id) {
+                                    selectedStickerIds.remove(sticker.id)
+                                } else {
+                                    selectedStickerIds.insert(sticker.id)
+                                }
+                            } else {
+                                vm.sendSticker(sticker)
+                            }
                         } label: {
                             VStack(spacing: 4) {
-                                if let img = store.image(for: sticker) {
-                                    Image(uiImage: img)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(height: 72)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                                .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                                        )
-                                } else {
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(Color.secondary.opacity(0.1))
-                                        .frame(height: 72)
+                                ZStack(alignment: .topTrailing) {
+                                    if let img = store.image(for: sticker) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(height: 72)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .stroke(
+                                                        isManageMode && selectedStickerIds.contains(sticker.id)
+                                                            ? CSSThemeVariables.accent(isDark: isDark)
+                                                            : Color.primary.opacity(0.06),
+                                                        lineWidth: isManageMode && selectedStickerIds.contains(sticker.id) ? 2.0 : 0.5
+                                                    )
+                                            )
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.secondary.opacity(0.1))
+                                            .frame(height: 72)
+                                    }
+
+                                    // 管理模式下的选中状态小圆圈
+                                    if isManageMode {
+                                        ZStack {
+                                            Circle()
+                                                .fill(selectedStickerIds.contains(sticker.id) ? CSSThemeVariables.accent(isDark: isDark) : Color.black.opacity(0.35))
+                                                .frame(width: 22, height: 22)
+                                            if selectedStickerIds.contains(sticker.id) {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 11, weight: .bold))
+                                                    .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
+                                            } else {
+                                                Circle()
+                                                    .strokeBorder(Color.white, lineWidth: 1.5)
+                                                    .frame(width: 18, height: 18)
+                                            }
+                                        }
+                                        .padding(4)
+                                    }
                                 }
 
                                 Text(sticker.title)
@@ -7121,20 +7300,30 @@ struct ChatStickerPanel: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button {
-                                activeSheet = .preview(sticker)
-                            } label: {
-                                Label("查看大图与详情", systemImage: "eye")
-                            }
-                            Button {
-                                activeSheet = .edit(sticker)
-                            } label: {
-                                Label("编辑信息", systemImage: "pencil")
-                            }
-                            Button(role: .destructive) {
-                                store.deleteSticker(id: sticker.id)
-                            } label: {
-                                Label("删除表情包", systemImage: "trash")
+                            if !isManageMode {
+                                Button {
+                                    activeSheet = .preview(sticker)
+                                } label: {
+                                    Label("查看大图与详情", systemImage: "eye")
+                                }
+                                Button {
+                                    activeSheet = .edit(sticker)
+                                } label: {
+                                    Label("编辑信息", systemImage: "pencil")
+                                }
+                                Button {
+                                    withAnimation {
+                                        isManageMode = true
+                                        selectedStickerIds = [sticker.id]
+                                    }
+                                } label: {
+                                    Label("进入批量管理", systemImage: "checklist")
+                                }
+                                Button(role: .destructive) {
+                                    store.deleteSticker(id: sticker.id)
+                                } label: {
+                                    Label("删除表情包", systemImage: "trash")
+                                }
                             }
                         }
                     }
@@ -7147,13 +7336,57 @@ struct ChatStickerPanel: View {
         }
         .frame(height: 295)
         .background(CSSThemeVariables.card(isDark: isDark))
-        .onChange(of: selectedPhotoItem) { newItem in
-            guard let newItem else { return }
-            Task {
-                let data = await StickerEditSheet.loadData(from: newItem)
-                await MainActor.run {
-                    self.selectedPhotoItem = nil
-                    self.activeSheet = .add(initialData: data)
+        .onChange(of: selectedPhotoItems) { items in
+            guard !items.isEmpty else { return }
+            let count = items.count
+            if count == 1, let singleItem = items.first {
+                selectedPhotoItems = []
+                Task {
+                    let data = await StickerEditSheet.loadData(from: singleItem)
+                    await MainActor.run {
+                        self.activeSheet = .add(initialData: data)
+                    }
+                }
+            } else {
+                let currentItems = items
+                selectedPhotoItems = []
+                Task {
+                    let targetCategory = (selectedCategory != "常用" && selectedCategory != "全部") ? selectedCategory : "日常"
+                    var addedCount = 0
+                    for item in currentItems {
+                        if let data = await StickerEditSheet.loadData(from: item) {
+                            let newItem = await MainActor.run {
+                                store.addSticker(
+                                    imageData: data,
+                                    title: "表情包",
+                                    content: "",
+                                    scenario: "",
+                                    shortDesc: nil,
+                                    category: targetCategory
+                                )
+                            }
+                            addedCount += 1
+                            if VisionGroupResolver.isConfigured {
+                                Task.detached(priority: .utility) {
+                                    if let res = try? await store.recognizeSticker(imageData: data) {
+                                        await MainActor.run {
+                                            store.updateSticker(
+                                                id: newItem.id,
+                                                title: res.title,
+                                                content: res.content,
+                                                scenario: res.scenario,
+                                                shortDesc: res.shortDesc,
+                                                category: targetCategory
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    await MainActor.run {
+                        MinisToast.show("成功批量添加 \(addedCount) 个表情包！", systemImage: "checkmark.circle.fill")
+                    }
                 }
             }
         }
@@ -7445,6 +7678,26 @@ public final class StickerStore: ObservableObject {
         stickers.remove(at: idx)
         deletedIds.insert(id)
         imageCache.removeObject(forKey: id as NSString)
+        saveToDisk()
+    }
+
+    public func deleteStickers(ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        stickers.removeAll { ids.contains($0.id) }
+        for id in ids {
+            deletedIds.insert(id)
+            imageCache.removeObject(forKey: id as NSString)
+        }
+        saveToDisk()
+    }
+
+    public func batchMoveCategory(ids: Set<String>, newCategory: String) {
+        guard !ids.isEmpty else { return }
+        for i in 0..<stickers.count {
+            if ids.contains(stickers[i].id) {
+                stickers[i].category = newCategory
+            }
+        }
         saveToDisk()
     }
 
