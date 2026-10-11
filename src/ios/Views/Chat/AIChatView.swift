@@ -439,6 +439,7 @@ struct AIChatView: View {
     @State private var topSafeAreaInset: CGFloat = 59
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     // MARK: - [T-ipad-composer-resize] Draggable composer height (iPad only)
 
