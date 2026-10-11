@@ -3368,15 +3368,14 @@ struct AIChatView: View {
         .accessibilityLabel(Text(showPlusPanel ? "收起功能面板" : "展开更多功能"))
     }
 
-    /// 加号展开面板区域
-    @ViewBuilder
-    private var plusPanelSection: some View {
-        if showPlusPanel {
-            ChatPlusPanel { item in
-                handlePlusPanelAction(item)
-            }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
+    /// 加号展开面板区域（必须用 AnyView 擦除泛型，防 inputBar mangled name 爆栈）
+    private var plusPanelSection: AnyView {
+        guard showPlusPanel else { return AnyView(EmptyView()) }
+        let panel = ChatPlusPanel { item in
+            handlePlusPanelAction(item)
         }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        return AnyView(panel)
     }
 
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
