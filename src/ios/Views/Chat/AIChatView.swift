@@ -3442,6 +3442,67 @@ struct AIChatView: View {
         }
     }
 
+    /// [Single-Line WeChat Style] 微信式单行聊天输入条：左加号、中输入框、右语音与发送
+    /// AnyView-erased 防止输入条复杂组件加深 inputBar 泛型深度导致栈溢出 (crash 2026-04-17 / 2026-10-12)
+    private var singleLineInputRow: AnyView {
+        let row = HStack(alignment: .bottom, spacing: 8) {
+            attachmentMenuButton
+
+            if vm.editingMessageIndex != nil {
+                editExitButton
+            }
+
+            // 输入框在底栏按钮之间自适应
+            inputFieldOrWaveform
+
+            if voiceInputActive, vm.editingMessageIndex == nil {
+                readAloudToolbarToggle
+            }
+
+            micButtonContainer
+
+            sendButton
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
+        return AnyView(row)
+    }
+
+    /// [Stickers 10-12] 待发表情包缩略卡片 (和发图片一样，可配文字一并发)
+    /// AnyView-erased 避免 inline stroke / ZStack / conditional content 膨胀 inputBar 泛型深度导致闪退
+    private var pendingStickerPreview: AnyView {
+        guard let sticker = vm.pendingSticker, let img = StickerStore.shared.image(for: sticker) else {
+            return AnyView(EmptyView())
+        }
+        let view = HStack {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 52, height: 52)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(CSSThemeVariables.accent(isDark: colorScheme == .dark).opacity(0.35), lineWidth: 1)
+                    )
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    vm.pendingSticker = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.white, Color.black.opacity(0.6))
+                }
+                .offset(x: 6, y: -6)
+            }
+            .padding(.leading, 12)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
+            Spacer()
+        }
+        return AnyView(view)
+    }
+
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
     /// 所有零碎选项均已收纳至加号宫格面板内，保持底栏极致清爽。
     private var inputBottomRow: AnyView {
@@ -3966,57 +4027,11 @@ struct AIChatView: View {
                         .padding(.top, 4)
                     }
 
-                    // 待发表情包缩略卡片 (和发图片一样，可配文字一并发)
-                    if let sticker = vm.pendingSticker, let img = StickerStore.shared.image(for: sticker) {
-                        HStack {
-                            ZStack(alignment: .topTrailing) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 52, height: 52)
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .stroke(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1)
-                                    )
-                                Button {
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                    vm.pendingSticker = nil
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundStyle(Color.white, Color.black.opacity(0.6))
-                                }
-                                .offset(x: 6, y: -6)
-                            }
-                            .padding(.leading, 12)
-                            .padding(.top, 4)
-                            .padding(.bottom, 2)
-                            Spacer()
-                        }
-                    }
+                    // 待发表情包缩略卡片 (AnyView 类型擦除，杜绝深层泛型栈溢出)
+                    pendingStickerPreview
 
-                    // 微信式单行聊天输入条：左加号、中输入框、右语音与发送
-                    HStack(alignment: .bottom, spacing: 8) {
-                        attachmentMenuButton
-
-                        if vm.editingMessageIndex != nil {
-                            editExitButton
-                        }
-
-                        // 输入框在底栏按钮之间自适应
-                        inputFieldOrWaveform
-
-                        if voiceInputActive, vm.editingMessageIndex == nil {
-                            readAloudToolbarToggle
-                        }
-
-                        micButtonContainer
-
-                        sendButton
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 6)
+                    // 微信式单行聊天输入条 (AnyView 类型擦除，杜绝深层泛型栈溢出)
+                    singleLineInputRow
                 }
                 .contentShape(MinisThemeShape.inputBar)
                 .onTapGesture {
