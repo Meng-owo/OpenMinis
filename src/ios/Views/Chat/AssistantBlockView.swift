@@ -46,17 +46,15 @@ struct AssistantBlockView: View {
         switch block.kind {
         case .text:
             if !block.content.isEmpty {
-                // [T-bubble-blank-line-split] Split the block's markdown into
-                // blank-line-separated paragraphs, each rendered as its own
-                // bubble (WeChat-style: several utterances → several bubbles).
-                // Splitting is RENDER-ONLY — block.content, persistence and
-                // the LLM-facing history all stay one block.
-                //
-                // Fence/table guard: content containing a code fence or a
-                // markdown table is NOT split. Blank lines inside those
-                // constructs are structural, and naive splitting would shred
-                // them; such blocks keep the single wide-bubble look.
-                let segments = Self.splitBubbleSegments(block.content)
+                // [Kelivo Alignment] 助手消息渲染前应用正则替换规则 (视觉展示)
+                let appliedContent: String = {
+                    let pId = PersonaStore.currentID()
+                    if let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) {
+                        return p.applyRegexRules(to: block.content, role: "assistant", visual: true)
+                    }
+                    return block.content
+                }()
+                let segments = Self.splitBubbleSegments(appliedContent)
                 if segments.count > 1 {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
@@ -69,16 +67,16 @@ struct AssistantBlockView: View {
                         // message's complete text.
                         if Self.isLastTextBlock(of: message, block: block),
                            canShowActionBar {
-                            actionBar(forBlockContent: block.content)
+                            actionBar(forBlockContent: appliedContent)
                         }
                     }
                     .id(appearanceStudio.themePackRevision)
                 } else {
                     VStack(alignment: .leading, spacing: 8) {
-                        self.singleTextBubble(block.content)
+                        self.singleTextBubble(appliedContent)
                         if Self.isLastTextBlock(of: message, block: block),
                            canShowActionBar {
-                            actionBar(forBlockContent: block.content)
+                            actionBar(forBlockContent: appliedContent)
                         }
                     }
                     .id(appearanceStudio.themePackRevision)

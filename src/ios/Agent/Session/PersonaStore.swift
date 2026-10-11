@@ -47,6 +47,12 @@ struct Persona: Codable, Identifiable, Hashable {
     var appendCurrentTimeToUserMessage: Bool
     var messageTemplate: String
 
+    // Kelivo 对齐 - 快捷短语、正则替换与自定义请求
+    var presetMessages: [PresetMessage]
+    var regexRules: [PersonaRegexRule]
+    var customHeaders: [PersonaCustomHeader]
+    var customBody: [PersonaCustomBodyItem]
+
     enum CodingKeys: String, CodingKey {
         case id, name, avatar, modelId, skillIds, mcpServerIds, localToolIds, sortOrder, isBuiltIn
         case temperature, topP, limitContextMessages, contextMessageSize, thinkingBudget, maxTokens
@@ -54,6 +60,7 @@ struct Persona: Codable, Identifiable, Hashable {
         case background, useGradientBackground
         case allowConversationSystemPrompt, allowConversationPromptInjection
         case appendCurrentTimeToUserMessage, messageTemplate
+        case presetMessages, regexRules, customHeaders, customBody
     }
 
     init(id: String, name: String, avatar: String? = nil, modelId: String? = nil,
@@ -64,7 +71,9 @@ struct Persona: Codable, Identifiable, Hashable {
          defaultWorkspace: String? = nil, useAssistantAvatar: Bool = false, useAssistantName: Bool = false,
          streamOutput: Bool = true, background: String? = nil, useGradientBackground: Bool = false,
          allowConversationSystemPrompt: Bool = false, allowConversationPromptInjection: Bool = false,
-         appendCurrentTimeToUserMessage: Bool = false, messageTemplate: String = "{{ message }}") {
+         appendCurrentTimeToUserMessage: Bool = false, messageTemplate: String = "{{ message }}",
+         presetMessages: [PresetMessage] = [], regexRules: [PersonaRegexRule] = [],
+         customHeaders: [PersonaCustomHeader] = [], customBody: [PersonaCustomBodyItem] = []) {
         self.id = id
         self.name = name
         self.avatar = avatar
@@ -90,6 +99,10 @@ struct Persona: Codable, Identifiable, Hashable {
         self.allowConversationPromptInjection = allowConversationPromptInjection
         self.appendCurrentTimeToUserMessage = appendCurrentTimeToUserMessage
         self.messageTemplate = messageTemplate
+        self.presetMessages = presetMessages
+        self.regexRules = regexRules
+        self.customHeaders = customHeaders
+        self.customBody = customBody
     }
 
     init(from decoder: Decoder) throws {
@@ -122,7 +135,100 @@ struct Persona: Codable, Identifiable, Hashable {
         allowConversationPromptInjection = try container.decodeIfPresent(Bool.self, forKey: .allowConversationPromptInjection) ?? false
         appendCurrentTimeToUserMessage = try container.decodeIfPresent(Bool.self, forKey: .appendCurrentTimeToUserMessage) ?? false
         messageTemplate = try container.decodeIfPresent(String.self, forKey: .messageTemplate) ?? "{{ message }}"
+
+        presetMessages = try container.decodeIfPresent([PresetMessage].self, forKey: .presetMessages) ?? []
+        regexRules = try container.decodeIfPresent([PersonaRegexRule].self, forKey: .regexRules) ?? []
+        customHeaders = try container.decodeIfPresent([PersonaCustomHeader].self, forKey: .customHeaders) ?? []
+        customBody = try container.decodeIfPresent([PersonaCustomBodyItem].self, forKey: .customBody) ?? []
     }
+}
+
+// MARK: - 快捷短语、正则替换与自定义请求数据模型
+
+struct PresetMessage: Codable, Identifiable, Hashable {
+    var id: String
+    var role: String // "user" or "assistant"
+    var content: String
+
+    init(id: String = UUID().uuidString, role: String = "user", content: String = "") {
+        self.id = id
+        self.role = role
+        self.content = content
+    }
+}
+
+struct PersonaRegexRule: Codable, Identifiable, Hashable {
+    var id: String
+    var name: String
+    var pattern: String
+    var replacement: String
+    var scopes: [String] // ["assistant"], ["user"], or ["user", "assistant"]
+    var visualOnly: Bool
+    var replaceOnly: Bool
+    var enabled: Bool
+
+    init(id: String = UUID().uuidString, name: String = "", pattern: String = "", replacement: String = "", scopes: [String] = ["assistant"], visualOnly: Bool = false, replaceOnly: Bool = false, enabled: Bool = true) {
+        self.id = id
+        self.name = name
+        self.pattern = pattern
+        self.replacement = replacement
+        self.scopes = scopes
+        self.visualOnly = visualOnly
+        self.replaceOnly = replaceOnly
+        self.enabled = enabled
+    }
+}
+
+struct PersonaCustomHeader: Codable, Identifiable, Hashable {
+    var id: String
+    var name: String
+    var value: String
+
+    init(id: String = UUID().uuidString, name: String = "", value: String = "") {
+        self.id = id
+        self.name = name
+        self.value = value
+    }
+}
+
+struct PersonaCustomBodyItem: Codable, Identifiable, Hashable {
+    var id: String
+    var key: String
+    var value: String
+
+    init(id: String = UUID().uuidString, key: String = "", value: String = "") {
+        self.id = id
+        self.key = key
+        self.value = value
+    }
+}
+
+extension Persona {
+    func applyRegexRules(to text: String, role: String, visual: Bool = false) -> String {
+        guard !regexRules.isEmpty else { return text }
+        var result = text
+        for rule in regexRules where rule.enabled {
+            let applies = rule.scopes.contains(role) || rule.scopes.contains("all")
+            guard applies else { continue }
+            if visual && rule.replaceOnly { continue }
+            if !visual && rule.visualOnly { continue }
+            if let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.dotMatchesLineSeparators]) {
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: rule.replacement)
+            }
+        }
+        return result
+    }
+
+    var customHeadersDict: [String: String] {
+        var dict: [String: String] = [:]
+        for h in customHeaders {
+            let k = h.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !k.isEmpty { dict[k] = h.value }
+        }
+        return dict
+    }
+}
 }
 
 // MARK: - LocalToolRegistry (Kelivo 本地工具列表与映射)

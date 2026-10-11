@@ -260,6 +260,15 @@ extension AIChatViewModel {
         // add_mcp/remove_mcp 两段式（先探、请她确认再落盘）；skill 白名单门控在人设层。
         tools.append(contentsOf: MCPManagementTools.dialogDefinitions())
 
+        // [Kelivo Alignment] 人设本地工具白名单门控
+        let pid = sessionPersonaId ?? PersonaStore.currentID()
+        if let p = PersonaStore.shared.personas.first(where: { $0.id == pid }),
+           let toolWhitelist = p.localToolIds {
+            if !toolWhitelist.contains("askUser") {
+                tools.removeAll { $0.name == "user_ask" }
+            }
+        }
+
         return tools
     }
 

@@ -5030,6 +5030,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         var provider = await makeAgentProvider(for: entry)
 
+        // [Kelivo Alignment] 注入人设级别的采样与推理参数覆盖 (Temperature & Top P)
+        let activePersonaId = self.sessionPersonaId ?? PersonaStore.currentID()
+        if let activePersona = PersonaStore.shared.personas.first(where: { $0.id == activePersonaId }) {
+            var smp = provider.sampling ?? SamplingConfig()
+            if let t = activePersona.temperature { smp.temperature = t }
+            if let tp = activePersona.topP { smp.topP = tp }
+            provider.sampling = smp.isEmpty ? nil : smp
+        }
+
         // Set extended cache TTL globally for Anthropic request patching
         RequestBodyPatcher.setExtendedCacheTTL(self.enhancedCacheEnabled)
 
@@ -5491,7 +5500,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // every later round applies — wrap it here so round 1 sends the
             // same budgeted history and can't blow past the image byte cap
             // that later rounds respect.
-            let contextHistory = applyRequestImageBudget(effectiveAgentHistory())
+            var contextHistory = applyRequestImageBudget(effectiveAgentHistory())
+            // [Kelivo Alignment] 人设级上下文条数限制
+            if let activeP = PersonaStore.shared.personas.first(where: { $0.id == (sessionPersonaId ?? PersonaStore.currentID()) }),
+               activeP.limitContextMessages, activeP.contextMessageSize > 0,
+               contextHistory.count > activeP.contextMessageSize {
+                contextHistory = Array(contextHistory.suffix(activeP.contextMessageSize))
+            }
             // [T-msgidx-oob] Re-resync before subscripting. The loop-top resync
             // (~line 4698) is not sufficient for this site: the in-loop
             // compaction guard above runs `await compactBefore(...)` in between,

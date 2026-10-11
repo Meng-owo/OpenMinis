@@ -2,12 +2,25 @@ import SwiftUI
 import UIKit
 import PhotosUI
 
-// MARK: - PersonaContactsView
-//
-// 微信/QQ 风格的人设通讯录：
-// - 原生全屏 Navigation 页面（非抽屉），可从底栏一键推入
-// - 顶部通讯录列表，点击任一人设进入人设主页（PersonaDetailHomeView）
-// - 支持右上角添加新人设、左滑快捷删除与复制
+// MARK: - iOS Settings 统一风格图标胶囊
+struct SettingsRowIcon: View {
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(color)
+                .frame(width: 28, height: 28)
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+// MARK: - 1. PersonaContactsView (通讯录主列表)
+// 原生全屏 Navigation 页面，无弹窗抽屉，体验与系统设置及微信通讯录完全对齐。
 
 struct PersonaContactsView: View {
     @ObservedObject var store = PersonaStore.shared
@@ -93,8 +106,8 @@ struct PersonaContactsView: View {
                 }
             } header: {
                 Text("所有联系人")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(ChatColors.secondaryText)
+            } footer: {
+                Text("点击进入人设微调主页，左滑可复制或删除人设。")
             }
         }
         .listStyle(.insetGrouped)
@@ -108,12 +121,12 @@ struct PersonaContactsView: View {
                     showNewSheet = true
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 16, weight: .medium))
                 }
             }
         }
-        .alert("新建联系人", isPresented: $showNewSheet) {
-            TextField("联系人名字", text: $newName)
+        .alert("新建人设", isPresented: $showNewSheet) {
+            TextField("人设名字", text: $newName)
             Button("取消", role: .cancel) {}
             Button("创建") {
                 let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -121,35 +134,38 @@ struct PersonaContactsView: View {
                 _ = store.addPersona(name: trimmed)
             }
         }
-        .alert("确认删除联系人", isPresented: Binding(
+        .alert("删除人设", isPresented: Binding(
             get: { deleteTarget != nil },
             set: { if !$0 { deleteTarget = nil } }
         )) {
-            Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
                 if let target = deleteTarget {
                     store.deletePersona(target.id)
                     deleteTarget = nil
                 }
             }
+            Button("取消", role: .cancel) {
+                deleteTarget = nil
+            }
         } message: {
             if let target = deleteTarget {
-                Text("确定要删除「\(target.name)」吗？该人设的专属记忆与历史会话将一并清理。")
+                Text("确认删除人设「\(target.name)」？该人设的专属记忆目录将一并移除。")
             }
         }
     }
 
     private func personaBio(for persona: Persona) -> String {
-        let soulURL = PersonaStore.memoryDir(for: persona.id).appendingPathComponent("SOUL.md")
-        if let text = try? String(contentsOf: soulURL, encoding: .utf8), !text.isEmpty {
-            let lines = text.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            return lines.first?.replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces) ?? "点击微调此人设"
+        let soul = PersonaStore.readSoulMD(for: persona.id)
+        let bio = soul.body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if bio.isEmpty {
+            return persona.isBuiltIn ? "桥内置的 MCP 管家" : "暂无人设描述"
         }
-        return persona.isBuiltIn ? "系统内置专属助手" : "点击微调此人设"
+        return bio.replacingOccurrences(of: "\n", with: " ")
     }
 }
 
-// MARK: - PersonaDetailHomeView (复刻 Kelivo 人设主页)
+// MARK: - 2. PersonaDetailHomeView (人设主页)
+// 对齐系统设置主页与 Kelivo AssistantPage，彻底移除丑底框与抽屉弹窗。
 
 struct PersonaDetailHomeView: View {
     let personaId: String
@@ -160,7 +176,6 @@ struct PersonaDetailHomeView: View {
 
     @State private var showRenameAlert = false
     @State private var renameText = ""
-    @State private var showPhotoPicker = false
     @State private var photoItem: PhotosPickerItem?
 
     private var persona: Persona? {
@@ -171,22 +186,20 @@ struct PersonaDetailHomeView: View {
         Group {
             if let p = persona {
                 List {
-                    // Header: 大圆头像 + 名字
+                    // Header: 大圆头像 + 名字 + 活跃标记
                     Section {
                         VStack(spacing: 12) {
-                            Button {
-                                showPhotoPicker = true
-                            } label: {
+                            PhotosPicker(selection: $photoItem, matching: .images) {
                                 ZStack(alignment: .bottomTrailing) {
                                     PersonaAvatarView(iconRef: p.avatar, size: 84)
                                         .clipShape(Circle())
                                         .overlay(Circle().stroke(p.id == store.currentPersonaID ? MinisThemeList.accent : Color.secondary.opacity(0.2), lineWidth: 3))
-                                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 3)
+                                        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
 
                                     Image(systemName: "camera.fill")
                                         .font(.system(size: 11, weight: .bold))
                                         .foregroundStyle(Color.white)
-                                        .padding(5)
+                                        .padding(6)
                                         .background(Circle().fill(MinisThemeList.accent))
                                         .offset(x: -2, y: -2)
                                 }
@@ -223,125 +236,146 @@ struct PersonaDetailHomeView: View {
                     }
                     .listRowBackground(Color.clear)
 
-                    // 9 大子项导航 (完全对标 Kelivo)
+                    // 9 大核心子项 (与 Kelivo 9 个 Tab 完整对齐)
                     Section {
                         NavigationLink {
                             PersonaBasicSettingsView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "slider.horizontal.3", color: .indigo)
                                 Text("基础设置")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "slider.horizontal.3")
-                                    .foregroundStyle(MinisThemeList.accent)
+                                    .font(.body)
+                                Spacer()
+                                if p.temperature != nil || p.topP != nil {
+                                    Text("已调优")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
                         NavigationLink {
                             PersonaPromptSettingsView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "doc.text.fill", color: .blue)
                                 Text("提示词")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "doc.text")
-                                    .foregroundStyle(.blue)
+                                    .font(.body)
                             }
                         }
 
                         NavigationLink {
                             PersonaMemorySettingsView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "brain.head.profile", color: .purple)
                                 Text("记忆")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "brain")
-                                    .foregroundStyle(.purple)
+                                    .font(.body)
                             }
                         }
 
                         NavigationLink {
                             PersonaLocalToolsSettingsView(personaId: p.id)
                         } label: {
-                            Label {
-                                HStack {
-                                    Text("本地工具")
-                                        .font(.system(size: 16))
-                                    Spacer()
-                                    let enabledCount = p.localToolIds?.count ?? LocalToolRegistry.all.count
-                                    Text("\(enabledCount)/\(LocalToolRegistry.all.count)")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "wrench.and.screwdriver")
-                                    .foregroundStyle(.orange)
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "wrench.and.screwdriver.fill", color: .orange)
+                                Text("本地工具")
+                                    .font(.body)
+                                Spacer()
+                                let enabledCount = p.localToolIds?.count ?? LocalToolRegistry.all.count
+                                Text("\(enabledCount)/\(LocalToolRegistry.all.count)")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                             }
                         }
 
                         NavigationLink {
                             PersonaSkillsSettingsView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "sparkles", color: .yellow)
                                 Text("技能")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(.yellow)
+                                    .font(.body)
+                                Spacer()
+                                if let cnt = p.skillIds?.count {
+                                    Text("\(cnt) 项可用")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
                         NavigationLink {
                             PersonaMcpSettingsView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "terminal.fill", color: .green)
                                 Text("MCP")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "terminal")
-                                    .foregroundStyle(.green)
+                                    .font(.body)
+                                Spacer()
+                                if let cnt = p.mcpServerIds?.count {
+                                    Text("\(cnt) 个服务器")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
                         NavigationLink {
-                            PersonaSimpleSubpageView(title: "快捷短语", icon: "bolt", hint: "为该助手配置常用快捷短语。输入时支持一键呼出。")
+                            PersonaPresetMessagesView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "bolt.fill", color: .red)
                                 Text("快捷短语")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "bolt")
-                                    .foregroundStyle(.red)
+                                    .font(.body)
+                                Spacer()
+                                if !p.presetMessages.isEmpty {
+                                    Text("\(p.presetMessages.count) 条")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
                         NavigationLink {
-                            PersonaSimpleSubpageView(title: "自定义请求", icon: "bubble.left.and.exclamationmark.bubble.right", hint: "为该助手注入独立的请求头与自定义请求体参数。")
+                            PersonaCustomRequestView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "network", color: .teal)
                                 Text("自定义请求")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "bubble.left.and.exclamationmark.bubble.right")
-                                    .foregroundStyle(.teal)
+                                    .font(.body)
+                                Spacer()
+                                let total = p.customHeaders.count + p.customBody.count
+                                if total > 0 {
+                                    Text("\(total) 个字段")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
 
                         NavigationLink {
-                            PersonaSimpleSubpageView(title: "正则替换", icon: "textformat", hint: "为该助手的回答输出配置正则匹配与替换清洗规则。")
+                            PersonaRegexRulesView(personaId: p.id)
                         } label: {
-                            Label {
+                            HStack(spacing: 12) {
+                                SettingsRowIcon(icon: "textformat", color: .pink)
                                 Text("正则替换")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "textformat")
-                                    .foregroundStyle(.secondary)
+                                    .font(.body)
+                                Spacer()
+                                if !p.regexRules.isEmpty {
+                                    Text("\(p.regexRules.count) 条规则")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
                         }
+                    } header: {
+                        Text("微调与能力")
+                    } footer: {
+                        Text("人设各维度均与 Kelivo 深度打通，所有参数与规则实时生效。")
                     }
 
-                    // 底部开始对话按钮
+                    // 对话与快捷操作
                     Section {
                         Button {
                             store.setCurrent(p.id)
@@ -356,6 +390,19 @@ struct PersonaDetailHomeView: View {
                             }
                             .padding(.vertical, 4)
                             .foregroundStyle(MinisThemeList.accent)
+                        }
+
+                        if p.id != store.currentPersonaID {
+                            Button {
+                                store.setCurrent(p.id)
+                            } label: {
+                                HStack {
+                                    Spacer()
+                                    Text("设为当前活跃人设")
+                                        .font(.system(size: 15))
+                                    Spacer()
+                                }
+                            }
                         }
                     }
                 }
@@ -393,13 +440,22 @@ struct PersonaDetailHomeView: View {
                         }
                     }
                 }
-                .photosPicker(isPresented: $showPhotoPicker, selection: $photoItem, matching: .images)
                 .onChange(of: photoItem) { newItem in
                     guard let item = newItem else { return }
                     Task {
                         if let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            saveAvatarImage(image, for: p)
+                           let image = ThumbnailCache.downsampledImage(from: data, maxEdge: 512) {
+                            let name = SoulIconImage.storedName(prefix: "persona", id: p.id)
+                            if case .success(let path) = SoulIconImage.store(image, named: name) {
+                                await MainActor.run {
+                                    var updated = p
+                                    updated.avatar = path
+                                    store.updatePersona(updated)
+                                    if store.currentPersonaID == p.id {
+                                        SoulStore.refreshCache()
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -407,7 +463,9 @@ struct PersonaDetailHomeView: View {
                     TextField("人设名字", text: $renameText)
                     Button("取消", role: .cancel) {}
                     Button("保存") {
-                        store.renamePersona(p.id, to: renameText)
+                        let trimmed = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { return }
+                        store.renamePersona(p.id, to: trimmed)
                     }
                 }
             } else {
@@ -416,28 +474,10 @@ struct PersonaDetailHomeView: View {
             }
         }
     }
-
-    private func saveAvatarImage(_ image: UIImage, for p: Persona) {
-        let maxDim: CGFloat = 256
-        let scale = min(maxDim / image.size.width, maxDim / image.size.height, 1.0)
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
-        guard let pngData = resized.pngData() else { return }
-
-        let name = "persona_\(p.id).png"
-        let dir = AIChatViewModel.minisMemoryPersistentDir.appendingPathComponent("avatars", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let fileURL = dir.appendingPathComponent(name)
-        try? pngData.write(to: fileURL, options: .atomic)
-
-        var updated = p
-        updated.avatar = "avatars/\(name)"
-        store.updatePersona(updated)
-    }
 }
 
-// MARK: - 1. PersonaBasicSettingsView (复刻 photo_9459470E.png 基础设置)
+// MARK: - 3. PersonaBasicSettingsView (基础设置)
+// 系统设置 InsetGrouped 规范：采样参数、上下文限制、专属模型、壁纸与流式开关
 
 struct PersonaBasicSettingsView: View {
     let personaId: String
@@ -445,26 +485,24 @@ struct PersonaBasicSettingsView: View {
 
     @State private var tempValue: Double = 1.0
     @State private var tempEnabled: Bool = false
-    @State private var showTempSheet = false
 
     @State private var topPValue: Double = 1.0
     @State private var topPEnabled: Bool = false
-    @State private var showTopPSheet = false
 
-    @State private var showContextSheet = false
+    @State private var maxTokensValue: Int = 4096
+    @State private var maxTokensEnabled: Bool = false
+
+    @State private var thinkingBudgetValue: Int = 4096
+    @State private var thinkingBudgetEnabled: Bool = false
+
     @State private var contextLimitEnabled: Bool = false
     @State private var contextMessageCount: Int = 20
 
-    @State private var showThinkingBudgetSheet = false
-    @State private var thinkingBudgetEnabled: Bool = false
-    @State private var thinkingBudgetValue: Int = 4096
+    @State private var defaultWorkspaceText: String = ""
+    @State private var streamOutputVal: Bool = true
+    @State private var useAvatarVal: Bool = false
+    @State private var useNameVal: Bool = false
 
-    @State private var showMaxTokensSheet = false
-    @State private var maxTokensEnabled: Bool = false
-    @State private var maxTokensValue: Int = 4096
-
-    @State private var showModelPicker = false
-    @State private var showBackgroundPhotoPicker = false
     @State private var backgroundPhotoItem: PhotosPickerItem?
 
     private var persona: Persona? {
@@ -475,505 +513,265 @@ struct PersonaBasicSettingsView: View {
         Group {
             if let p = persona {
                 List {
-                    // Group 1: 采样与推理参数
+                    // MARK: 采样与推理参数
                     Section {
                         // Temperature
-                        Button {
-                            showTempSheet = true
-                        } label: {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Label {
-                                    Text("Temperature")
-                                        .font(.system(size: 16))
-                                } icon: {
-                                    Image(systemName: "thermometer")
-                                        .foregroundStyle(.orange)
-                                }
+                                Text("Temperature")
+                                    .font(.body)
                                 Spacer()
-                                Text(p.temperature != nil ? String(format: "%.2f", p.temperature!) : "已关闭 (使用服务商默认)")
-                                    .font(.system(size: 14))
+                                Text(tempEnabled ? String(format: "%.2f", tempValue) : "默认")
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
+                            }
+                            Toggle("自定义 Temperature", isOn: $tempEnabled)
+                                .onChange(of: tempEnabled) { on in
+                                    var updated = p
+                                    updated.temperature = on ? tempValue : nil
+                                    store.updatePersona(updated)
+                                }
+                            if tempEnabled {
+                                Slider(value: $tempValue, in: 0.0...2.0, step: 0.05) {
+                                    Text("Temperature")
+                                } minimumValueLabel: {
+                                    Text("0.0").font(.caption2).foregroundStyle(.secondary)
+                                } maximumValueLabel: {
+                                    Text("2.0").font(.caption2).foregroundStyle(.secondary)
+                                }
+                                .onChange(of: tempValue) { val in
+                                    var updated = p
+                                    updated.temperature = val
+                                    store.updatePersona(updated)
+                                }
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 4)
 
                         // Top P
-                        Button {
-                            showTopPSheet = true
-                        } label: {
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Label {
+                                Text("Top P")
+                                    .font(.body)
+                                Spacer()
+                                Text(topPEnabled ? String(format: "%.2f", topPValue) : "默认")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Toggle("自定义 Top P", isOn: $topPEnabled)
+                                .onChange(of: topPEnabled) { on in
+                                    var updated = p
+                                    updated.topP = on ? topPValue : nil
+                                    store.updatePersona(updated)
+                                }
+                            if topPEnabled {
+                                Slider(value: $topPValue, in: 0.0...1.0, step: 0.05) {
                                     Text("Top P")
-                                        .font(.system(size: 16))
-                                } icon: {
-                                    Image(systemName: "rays")
-                                        .foregroundStyle(.blue)
+                                } minimumValueLabel: {
+                                    Text("0.0").font(.caption2).foregroundStyle(.secondary)
+                                } maximumValueLabel: {
+                                    Text("1.0").font(.caption2).foregroundStyle(.secondary)
                                 }
-                                Spacer()
-                                Text(p.topP != nil ? String(format: "%.2f", p.topP!) : "已关闭 (使用服务商默认)")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
+                                .onChange(of: topPValue) { val in
+                                    var updated = p
+                                    updated.topP = val
+                                    store.updatePersona(updated)
+                                }
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 4)
 
-                        // 上下文消息数量
-                        Button {
-                            showContextSheet = true
-                        } label: {
+                        // 最大 Token
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Label {
-                                    Text("上下文消息数量")
-                                        .font(.system(size: 16))
-                                } icon: {
-                                    Image(systemName: "bubble.left.and.bubble.right")
-                                        .foregroundStyle(.green)
-                                }
+                                Text("最大输出 Token")
+                                    .font(.body)
                                 Spacer()
-                                Text(p.limitContextMessages ? "\(p.contextMessageSize) 条" : "已关闭 (无限制)")
-                                    .font(.system(size: 14))
+                                Text(maxTokensEnabled ? "\(maxTokensValue)" : "默认")
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
+                            }
+                            Toggle("限制最大 Token", isOn: $maxTokensEnabled)
+                                .onChange(of: maxTokensEnabled) { on in
+                                    var updated = p
+                                    updated.maxTokens = on ? maxTokensValue : nil
+                                    store.updatePersona(updated)
+                                }
+                            if maxTokensEnabled {
+                                Stepper("上限: \(maxTokensValue)", value: $maxTokensValue, in: 256...65536, step: 512)
+                                    .onChange(of: maxTokensValue) { val in
+                                        var updated = p
+                                        updated.maxTokens = val
+                                        store.updatePersona(updated)
+                                    }
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 4)
 
-                        // 思考预算
-                        Button {
-                            showThinkingBudgetSheet = true
-                        } label: {
+                        // 思考预算 (Thinking Budget)
+                        VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Label {
-                                    Text("思考预算")
-                                        .font(.system(size: 16))
-                                } icon: {
-                                    Image(systemName: "brain")
-                                        .foregroundStyle(.purple)
-                                }
+                                Text("思考预算 (Tokens)")
+                                    .font(.body)
                                 Spacer()
-                                Text(p.thinkingBudget != nil ? "\(p.thinkingBudget!)" : "-")
-                                    .font(.system(size: 14))
+                                Text(thinkingBudgetEnabled ? "\(thinkingBudgetValue)" : "默认")
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
                             }
-                        }
-                        .buttonStyle(.plain)
-
-                        // 最大 Token 数
-                        Button {
-                            showMaxTokensSheet = true
-                        } label: {
-                            HStack {
-                                Label {
-                                    Text("最大 Token 数")
-                                        .font(.system(size: 16))
-                                } icon: {
-                                    Image(systemName: "number")
-                                        .foregroundStyle(.teal)
+                            Toggle("自定义思考预算", isOn: $thinkingBudgetEnabled)
+                                .onChange(of: thinkingBudgetEnabled) { on in
+                                    var updated = p
+                                    updated.thinkingBudget = on ? thinkingBudgetValue : nil
+                                    store.updatePersona(updated)
                                 }
-                                Spacer()
-                                Text(p.maxTokens != nil ? "\(p.maxTokens!)" : "无限制")
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.tertiary)
+                            if thinkingBudgetEnabled {
+                                Stepper("预算: \(thinkingBudgetValue)", value: $thinkingBudgetValue, in: 1024...65536, step: 1024)
+                                    .onChange(of: thinkingBudgetValue) { val in
+                                        var updated = p
+                                        updated.thinkingBudget = val
+                                        store.updatePersona(updated)
+                                    }
                             }
                         }
-                        .buttonStyle(.plain)
+                        .padding(.vertical, 4)
+                    } header: {
+                        Text("采样与推理")
+                    } footer: {
+                        Text("未启用的项将自动采用底层供应商或全局默认参数。")
+                    }
 
-                        // 默认工作区
-                        HStack {
-                            Label {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("默认工作区")
-                                        .font(.system(size: 16))
-                                    Text("新建对话时自动绑定，已有对话不受影响。")
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "folder")
-                                    .foregroundStyle(.indigo)
-                            }
-                            Spacer()
-                            Text(p.defaultWorkspace ?? "无")
-                                .font(.system(size: 14))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        // 使用助手头像
-                        Toggle(isOn: Binding(
-                            get: { p.useAssistantAvatar },
-                            set: { val in
+                    // MARK: 上下文历史限制
+                    Section {
+                        Toggle("限制上下文消息条数", isOn: $contextLimitEnabled)
+                            .onChange(of: contextLimitEnabled) { on in
                                 var updated = p
-                                updated.useAssistantAvatar = val
+                                updated.limitContextMessages = on
+                                store.updatePersona(updated)
+                            }
+
+                        if contextLimitEnabled {
+                            Stepper("保留最近 \(contextMessageCount) 条消息", value: $contextMessageCount, in: 4...100, step: 2)
+                                .onChange(of: contextMessageCount) { cnt in
+                                    var updated = p
+                                    updated.contextMessageSize = cnt
+                                    store.updatePersona(updated)
+                                }
+                        }
+                    } header: {
+                        Text("上下文控制")
+                    } footer: {
+                        Text("开启后将自动截断更早的历史消息，避免上下文窗口过满并降低 Token 消耗。")
+                    }
+
+                    // MARK: 模型与独立绑定
+                    Section {
+                        Picker("绑定模型", selection: Binding(
+                            get: { p.modelId ?? "" },
+                            set: { newVal in
+                                var updated = p
+                                updated.modelId = newVal.isEmpty ? nil : newVal
                                 store.updatePersona(updated)
                             }
                         )) {
-                            Label {
-                                Text("使用助手头像")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "person.circle")
-                                    .foregroundStyle(.pink)
+                            Text("继承全局默认模型").tag("")
+                            ForEach(ProviderConfigStore.shared.allEntries()) { entry in
+                                Text("\(entry.model.displayName) (\(entry.providerType.displayName))").tag(entry.id)
                             }
                         }
 
-                        // 使用助手名字
-                        Toggle(isOn: Binding(
-                            get: { p.useAssistantName },
-                            set: { val in
-                                var updated = p
-                                updated.useAssistantName = val
-                                store.updatePersona(updated)
-                            }
-                        )) {
-                            Label {
-                                Text("使用助手名字")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "textformat")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-
-                        // 流式输出
-                        Toggle(isOn: Binding(
-                            get: { p.streamOutput },
-                            set: { val in
+                        Toggle("流式输出 (Stream)", isOn: $streamOutputVal)
+                            .onChange(of: streamOutputVal) { val in
                                 var updated = p
                                 updated.streamOutput = val
                                 store.updatePersona(updated)
                             }
-                        )) {
-                            Label {
-                                Text("流式输出")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "bolt.fill")
-                                    .foregroundStyle(.yellow)
-                            }
-                        }
+                    } header: {
+                        Text("模型与生成")
+                    } footer: {
+                        Text("为人设单独指定模型后，对话该人设时将自动路由至此模型。")
                     }
 
-                    // Group 2: 聊天模型
+                    // MARK: 外观与个性化
                     Section {
-                        Button {
-                            showModelPicker = true
-                        } label: {
-                            HStack(spacing: 10) {
-                                ZStack {
-                                    Circle()
-                                        .fill(MinisThemeList.accent.opacity(0.12))
-                                        .frame(width: 30, height: 30)
-                                    Text("使")
-                                        .font(.system(size: 13, weight: .bold))
-                                        .foregroundStyle(MinisThemeList.accent)
-                                }
-
-                                Text(modelDisplayName(for: p.modelId))
-                                    .font(.system(size: 15, weight: .medium))
+                        PhotosPicker(selection: $backgroundPhotoItem, matching: .images) {
+                            HStack {
+                                Text("专属聊天背景")
+                                    .font(.body)
                                     .foregroundStyle(ChatColors.primaryText)
-
                                 Spacer()
-
+                                Text(p.background != nil ? "已设置专属壁纸" : "未设置")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 12))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(.tertiary)
                             }
-                            .padding(.vertical, 4)
                         }
-                        .buttonStyle(.plain)
-                    } header: {
-                        Text("聊天模型")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(ChatColors.primaryText)
-                    } footer: {
-                        Text("为该助手设置默认聊天模型 (未设置时使用全局默认)")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
 
-                    // Group 3: 聊天背景
-                    Section {
-                        Toggle(isOn: Binding(
-                            get: { p.useGradientBackground },
-                            set: { val in
+                        if p.background != nil {
+                            Button(role: .destructive) {
                                 var updated = p
-                                updated.useGradientBackground = val
+                                updated.background = nil
+                                store.updatePersona(updated)
+                            } label: {
+                                Text("移除专属背景")
+                                    .font(.subheadline)
+                            }
+                        }
+
+                        Toggle("聊天中展示助手头像", isOn: $useAvatarVal)
+                            .onChange(of: useAvatarVal) { val in
+                                var updated = p
+                                updated.useAssistantAvatar = val
                                 store.updatePersona(updated)
                             }
-                        )) {
-                            Label {
-                                Text("渐变背景")
-                                    .font(.system(size: 16))
-                            } icon: {
-                                Image(systemName: "sparkles")
-                                    .foregroundStyle(.purple)
-                            }
-                        }
 
-                        Button {
-                            showBackgroundPhotoPicker = true
-                        } label: {
-                            HStack {
-                                Spacer()
-                                Image(systemName: "photo")
-                                Text(p.background != nil ? "更换背景图片" : "选择背景图片")
-                                    .font(.system(size: 15, weight: .medium))
-                                Spacer()
+                        Toggle("聊天中展示助手名字", isOn: $useNameVal)
+                            .onChange(of: useNameVal) { val in
+                                var updated = p
+                                updated.useAssistantName = val
+                                store.updatePersona(updated)
                             }
-                            .padding(.vertical, 6)
-                        }
                     } header: {
-                        Text("聊天背景")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(ChatColors.primaryText)
+                        Text("外观个性化")
+                    }
+
+                    // MARK: 默认工作区
+                    Section {
+                        TextField("工作区路径 (默认 /var/minis/workspace)", text: $defaultWorkspaceText)
+                            .font(.system(.body, design: .monospaced))
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onChange(of: defaultWorkspaceText) { val in
+                                var updated = p
+                                let trimmed = val.trimmingCharacters(in: .whitespacesAndNewlines)
+                                updated.defaultWorkspace = trimmed.isEmpty ? nil : trimmed
+                                store.updatePersona(updated)
+                            }
+                    } header: {
+                        Text("工作区")
                     } footer: {
-                        Text("设置助手聊天页面的背景图片")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                        Text("终端与文件操作默认以此目录为根路径。")
                     }
                 }
                 .listStyle(.insetGrouped)
                 .navigationTitle("基础设置")
                 .navigationBarTitleDisplayMode(.inline)
-                .photosPicker(isPresented: $showBackgroundPhotoPicker, selection: $backgroundPhotoItem, matching: .images)
-                .onChange(of: backgroundPhotoItem) { newItem in
-                    guard let item = newItem else { return }
+                .onAppear {
+                    loadFromPersona(p)
+                }
+                .onChange(of: backgroundPhotoItem) { item in
+                    guard let item = item else { return }
                     Task {
                         if let data = try? await item.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            saveBackgroundImage(image, for: p)
-                        }
-                    }
-                }
-                // Temperature 弹板调节
-                .sheet(isPresented: $showTempSheet) {
-                    NavigationStack {
-                        Form {
-                            Toggle("启用自定义 Temperature", isOn: $tempEnabled)
-                            if tempEnabled {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack {
-                                        Text("采样温度: \(String(format: "%.2f", tempValue))")
-                                            .font(.system(size: 15, weight: .semibold))
-                                        Spacer()
-                                    }
-                                    Slider(value: $tempValue, in: 0.0...2.0, step: 0.05)
-                                    Text("较高的值会使输出更加随机发散，较低的值会更严谨集中。")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                        .navigationTitle("Temperature")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
+                           let image = ThumbnailCache.downsampledImage(from: data, maxEdge: 2200) {
+                            let name = SoulIconImage.storedName(prefix: "bg-\(p.id)", id: p.id)
+                            if case .success(let path) = SoulIconImage.store(image, named: name) {
+                                await MainActor.run {
                                     var updated = p
-                                    updated.temperature = tempEnabled ? tempValue : nil
+                                    updated.background = path
                                     store.updatePersona(updated)
-                                    showTempSheet = false
                                 }
-                            }
-                        }
-                        .onAppear {
-                            tempEnabled = (p.temperature != nil)
-                            tempValue = p.temperature ?? 1.0
-                        }
-                    }
-                    .presentationDetents([.height(260)])
-                }
-                // Top P 弹板调节
-                .sheet(isPresented: $showTopPSheet) {
-                    NavigationStack {
-                        Form {
-                            Toggle("启用自定义 Top P", isOn: $topPEnabled)
-                            if topPEnabled {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    HStack {
-                                        Text("核采样阈值: \(String(format: "%.2f", topPValue))")
-                                            .font(.system(size: 15, weight: .semibold))
-                                        Spacer()
-                                    }
-                                    Slider(value: $topPValue, in: 0.0...1.0, step: 0.02)
-                                    Text("仅从累积概率达到 Top P 的候选中采样。")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.vertical, 4)
-                            }
-                        }
-                        .navigationTitle("Top P")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
-                                    var updated = p
-                                    updated.topP = topPEnabled ? topPValue : nil
-                                    store.updatePersona(updated)
-                                    showTopPSheet = false
-                                }
-                            }
-                        }
-                        .onAppear {
-                            topPEnabled = (p.topP != nil)
-                            topPValue = p.topP ?? 1.0
-                        }
-                    }
-                    .presentationDetents([.height(260)])
-                }
-                // 上下文限制弹板
-                .sheet(isPresented: $showContextSheet) {
-                    NavigationStack {
-                        Form {
-                            Toggle("限制上下文消息数量", isOn: $contextLimitEnabled)
-                            if contextLimitEnabled {
-                                Stepper("保留消息条数: \(contextMessageCount) 条", value: $contextMessageCount, in: 1...200, step: 2)
-                            }
-                        }
-                        .navigationTitle("上下文消息数量")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
-                                    var updated = p
-                                    updated.limitContextMessages = contextLimitEnabled
-                                    updated.contextMessageSize = contextMessageCount
-                                    store.updatePersona(updated)
-                                    showContextSheet = false
-                                }
-                            }
-                        }
-                        .onAppear {
-                            contextLimitEnabled = p.limitContextMessages
-                            contextMessageCount = p.contextMessageSize
-                        }
-                    }
-                    .presentationDetents([.height(220)])
-                }
-                // 思考预算弹板
-                .sheet(isPresented: $showThinkingBudgetSheet) {
-                    NavigationStack {
-                        Form {
-                            Toggle("启用思考预算 (Thinking Budget)", isOn: $thinkingBudgetEnabled)
-                            if thinkingBudgetEnabled {
-                                Stepper("Token 预算: \(thinkingBudgetValue)", value: $thinkingBudgetValue, in: 1024...65536, step: 1024)
-                            }
-                        }
-                        .navigationTitle("思考预算")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
-                                    var updated = p
-                                    updated.thinkingBudget = thinkingBudgetEnabled ? thinkingBudgetValue : nil
-                                    store.updatePersona(updated)
-                                    showThinkingBudgetSheet = false
-                                }
-                            }
-                        }
-                        .onAppear {
-                            thinkingBudgetEnabled = (p.thinkingBudget != nil)
-                            thinkingBudgetValue = p.thinkingBudget ?? 4096
-                        }
-                    }
-                    .presentationDetents([.height(220)])
-                }
-                // 最大 Token 弹板
-                .sheet(isPresented: $showMaxTokensSheet) {
-                    NavigationStack {
-                        Form {
-                            Toggle("限制最大 Token 数", isOn: $maxTokensEnabled)
-                            if maxTokensEnabled {
-                                Stepper("最大输出: \(maxTokensValue)", value: $maxTokensValue, in: 512...32768, step: 512)
-                            }
-                        }
-                        .navigationTitle("最大 Token 数")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("完成") {
-                                    var updated = p
-                                    updated.maxTokens = maxTokensEnabled ? maxTokensValue : nil
-                                    store.updatePersona(updated)
-                                    showMaxTokensSheet = false
-                                }
-                            }
-                        }
-                        .onAppear {
-                            maxTokensEnabled = (p.maxTokens != nil)
-                            maxTokensValue = p.maxTokens ?? 4096
-                        }
-                    }
-                    .presentationDetents([.height(220)])
-                }
-                // 模型选择弹层
-                .sheet(isPresented: $showModelPicker) {
-                    NavigationStack {
-                        List {
-                            Button {
-                                var updated = p
-                                updated.modelId = nil
-                                store.updatePersona(updated)
-                                showModelPicker = false
-                            } label: {
-                                HStack {
-                                    Text("使用全局默认")
-                                        .foregroundStyle(ChatColors.primaryText)
-                                    Spacer()
-                                    if p.modelId == nil {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(MinisThemeList.accent)
-                                    }
-                                }
-                            }
-
-                            ForEach(ProviderConfigStore.shared.config.modelEntries) { entry in
-                                Button {
-                                    var updated = p
-                                    updated.modelId = entry.id
-                                    store.updatePersona(updated)
-                                    showModelPicker = false
-                                } label: {
-                                    HStack {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(entry.model.displayName ?? entry.model.id)
-                                                .foregroundStyle(ChatColors.primaryText)
-                                            if let inst = ProviderConfigStore.shared.instance(for: entry.providerInstanceId) {
-                                                Text(inst.label)
-                                                    .font(.system(size: 11))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        Spacer()
-                                        if p.modelId == entry.id {
-                                            Image(systemName: "checkmark")
-                                                .foregroundStyle(MinisThemeList.accent)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .navigationTitle("选择聊天模型")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("取消") { showModelPicker = false }
                             }
                         }
                     }
@@ -982,47 +780,59 @@ struct PersonaBasicSettingsView: View {
         }
     }
 
-    private func modelDisplayName(for modelId: String?) -> String {
-        guard let mid = modelId, !mid.isEmpty else { return "使用全局默认" }
-        if let entry = ProviderConfigStore.shared.config.modelEntries.first(where: { $0.id == mid }) {
-            return entry.model.displayName ?? entry.model.id
+    private func loadFromPersona(_ p: Persona) {
+        if let t = p.temperature {
+            tempEnabled = true
+            tempValue = t
+        } else {
+            tempEnabled = false
+            tempValue = 1.0
         }
-        return mid
-    }
 
-    private func saveBackgroundImage(_ image: UIImage, for p: Persona) {
-        guard let data = image.jpegData(compressionQuality: 0.85) else { return }
-        let name = "persona_bg_\(p.id).jpg"
-        let dir = AIChatViewModel.minisMemoryPersistentDir.appendingPathComponent("backgrounds", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let fileURL = dir.appendingPathComponent(name)
-        try? data.write(to: fileURL, options: .atomic)
+        if let tp = p.topP {
+            topPEnabled = true
+            topPValue = tp
+        } else {
+            topPEnabled = false
+            topPValue = 1.0
+        }
 
-        var updated = p
-        updated.background = fileURL.path
-        store.updatePersona(updated)
+        if let mt = p.maxTokens {
+            maxTokensEnabled = true
+            maxTokensValue = mt
+        } else {
+            maxTokensEnabled = false
+            maxTokensValue = 4096
+        }
+
+        if let tb = p.thinkingBudget {
+            thinkingBudgetEnabled = true
+            thinkingBudgetValue = tb
+        } else {
+            thinkingBudgetEnabled = false
+            thinkingBudgetValue = 4096
+        }
+
+        contextLimitEnabled = p.limitContextMessages
+        contextMessageCount = p.contextMessageSize
+        streamOutputVal = p.streamOutput
+        useAvatarVal = p.useAssistantAvatar
+        useNameVal = p.useAssistantName
+        defaultWorkspaceText = p.defaultWorkspace ?? ""
     }
 }
 
-// MARK: - 2. PersonaPromptSettingsView (复刻 photo_6E385EE9.png 提示词)
+// MARK: - 4. PersonaPresetMessagesView (快捷短语)
+// 管理助手的预设对话信息与快捷短语，支持增删改查与拖拽排序。
 
-struct PersonaPromptSettingsView: View {
+struct PersonaPresetMessagesView: View {
     let personaId: String
     @ObservedObject var store = PersonaStore.shared
 
-    @State private var soulText = ""
-    @State private var allowConvPrompt = false
-    @State private var allowInjection = false
-    @State private var appendTime = false
-    @State private var messageTemplate = "{{ message }}"
-    @State private var showImportFile = false
-
-    private let availableVariables = [
-        "{cur_date}", "{cur_time}", "{cur_datetime}",
-        "{model_id}", "{model_name}", "{locale}", "{timezone}",
-        "{system_version}", "{device_info}", "{battery_level}",
-        "{nickname}", "{assistant_name}"
-    ]
+    @State private var showEditor = false
+    @State private var editingMessage: PresetMessage?
+    @State private var editorRole = "user"
+    @State private var editorContent = ""
 
     private var persona: Persona? {
         store.personas.first { $0.id == personaId }
@@ -1031,183 +841,767 @@ struct PersonaPromptSettingsView: View {
     var body: some View {
         Group {
             if let p = persona {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        // 系统提示词区域
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text("系统提示词")
-                                    .font(.system(size: 15, weight: .bold))
-                                Spacer()
-                                Button {
-                                    showImportFile = true
-                                } label: {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "doc.badge.plus")
-                                        Text("从文件导入")
-                                    }
-                                    .font(.system(size: 12, weight: .medium))
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Capsule().fill(Color.secondary.opacity(0.12)))
-                                    .foregroundStyle(ChatColors.primaryText)
-                                }
-                            }
-
-                            ZStack(alignment: .topLeading) {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(ChatColors.secondaryBg)
-                                    .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
-
-                                TextEditor(text: $soulText)
-                                    .font(.system(size: 14))
-                                    .padding(8)
-                                    .background(Color.clear)
-                                    .frame(minHeight: 200)
-                            }
-                            .frame(minHeight: 200)
-
-                            // 可用变量
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text("可用变量：")
-                                    .font(.system(size: 12, weight: .semibold))
+                List {
+                    Section {
+                        if p.presetMessages.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "bolt.slash")
+                                    .font(.system(size: 28))
                                     .foregroundStyle(.secondary)
-
-                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 6)], spacing: 6) {
-                                    ForEach(availableVariables, id: \.self) { variable in
-                                        Button {
-                                            insertVariable(variable)
-                                        } label: {
-                                            Text(variable)
-                                                .font(.system(size: 11, design: .monospaced))
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 4)
-                                                .background(RoundedRectangle(cornerRadius: 6).fill(MinisThemeList.accent.opacity(0.12)))
-                                                .foregroundStyle(MinisThemeList.accent)
+                                Text("暂无快捷短语")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("点击右上角「+」可为该人设添加常用提问或预设对话轮次。")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                        } else {
+                            ForEach(p.presetMessages) { msg in
+                                Button {
+                                    startEdit(msg)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HStack {
+                                            Text(msg.role == "assistant" ? "助手" : "用户")
+                                                .font(.system(size: 11, weight: .semibold))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 2)
+                                                .background(
+                                                    Capsule().fill(msg.role == "assistant" ? Color.green.opacity(0.15) : Color.blue.opacity(0.15))
+                                                )
+                                                .foregroundStyle(msg.role == "assistant" ? Color.green : Color.blue)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(.tertiary)
                                         }
-                                        .buttonStyle(.plain)
+
+                                        Text(msg.content)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(ChatColors.primaryText)
+                                            .lineLimit(3)
                                     }
+                                    .padding(.vertical, 2)
                                 }
+                                .buttonStyle(.plain)
                             }
-                            .padding(.top, 4)
-                        }
-                        .padding(.horizontal, 16)
-
-                        // 独立选项卡片
-                        VStack(spacing: 12) {
-                            Toggle(isOn: $allowConvPrompt) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("独立对话系统提示")
-                                        .font(.system(size: 15, weight: .medium))
-                                    Text("允许每个对话设置自己的系统提示词。")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
+                            .onDelete { indexSet in
+                                var updated = p
+                                updated.presetMessages.remove(atOffsets: indexSet)
+                                store.updatePersona(updated)
                             }
-
-                            Divider()
-
-                            Toggle(isOn: $allowInjection) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("独立对话指令注入")
-                                        .font(.system(size: 15, weight: .medium))
-                                    Text("每个对话单独选择指令注入和世界书，默认不选中。")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-
-                            Divider()
-
-                            Toggle(isOn: $appendTime) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("追加当前时间")
-                                        .font(.system(size: 15, weight: .medium))
-                                    Text("在每条用户消息末尾追加发送时刻。时间在请求末尾，不影响 Prompt 缓存。")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                }
+                            .onMove { indices, newOffset in
+                                var updated = p
+                                updated.presetMessages.move(fromOffsets: indices, toOffset: newOffset)
+                                store.updatePersona(updated)
                             }
                         }
-                        .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(ChatColors.secondaryBg))
-                        .padding(.horizontal, 16)
-
-                        // 聊天内容模板
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("聊天内容模板")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(ChatColors.primaryText)
-
-                            TextField("{{ message }}", text: $messageTemplate)
-                                .font(.system(size: 14, design: .monospaced))
-                                .padding(12)
-                                .background(RoundedRectangle(cornerRadius: 10).fill(ChatColors.secondaryBg))
+                    } header: {
+                        HStack {
+                            Text("预设短语与会话模板")
+                            Spacer()
+                            if !p.presetMessages.isEmpty {
+                                EditButton()
+                                    .font(.system(size: 13))
+                            }
                         }
-                        .padding(.horizontal, 16)
+                    } footer: {
+                        Text("预设短语可在输入栏中快速调用，或作为该人设发起会话时的示例范例。")
                     }
-                    .padding(.vertical, 16)
                 }
-                .navigationTitle("提示词")
+                .listStyle(.insetGrouped)
+                .navigationTitle("快捷短语")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("保存") {
-                            savePromptSettings(for: p)
+                        Button {
+                            startCreate()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .medium))
                         }
-                        .fontWeight(.semibold)
                     }
                 }
-                .onAppear {
-                    loadPromptSettings(for: p)
-                }
-                .fileImporter(isPresented: $showImportFile, allowedContentTypes: [.text, .plainText]) { result in
-                    if let url = try? result.get(),
-                       let text = try? String(contentsOf: url, encoding: .utf8) {
-                        soulText = text
+                .sheet(isPresented: $showEditor) {
+                    NavigationStack {
+                        Form {
+                            Section("消息角色") {
+                                Picker("角色", selection: $editorRole) {
+                                    Text("用户 (User)").tag("user")
+                                    Text("助手 (Assistant)").tag("assistant")
+                                }
+                                .pickerStyle(.segmented)
+                            }
+
+                            Section("消息内容") {
+                                TextEditor(text: $editorContent)
+                                    .frame(minHeight: 140)
+                                    .font(.system(size: 15))
+                            }
+                        }
+                        .navigationTitle(editingMessage == nil ? "添加快捷短语" : "编辑快捷短语")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showEditor = false }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("保存") {
+                                    saveMessage(for: p)
+                                    showEditor = false
+                                }
+                                .disabled(editorContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
                     }
+                    .presentationDetents([.medium, .large])
                 }
             }
         }
     }
 
-    private func insertVariable(_ variable: String) {
-        if soulText.isEmpty {
-            soulText = variable
-        } else {
-            soulText += " " + variable
-        }
+    private func startCreate() {
+        editingMessage = nil
+        editorRole = "user"
+        editorContent = ""
+        showEditor = true
     }
 
-    private func loadPromptSettings(for p: Persona) {
-        allowConvPrompt = p.allowConversationSystemPrompt
-        allowInjection = p.allowConversationPromptInjection
-        appendTime = p.appendCurrentTimeToUserMessage
-        messageTemplate = p.messageTemplate
-
-        let soulURL = PersonaStore.memoryDir(for: p.id).appendingPathComponent("SOUL.md")
-        if let text = try? String(contentsOf: soulURL, encoding: .utf8) {
-            soulText = text
-        }
+    private func startEdit(_ msg: PresetMessage) {
+        editingMessage = msg
+        editorRole = msg.role
+        editorContent = msg.content
+        showEditor = true
     }
 
-    private func savePromptSettings(for p: Persona) {
+    private func saveMessage(for p: Persona) {
+        let content = editorContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
         var updated = p
-        updated.allowConversationSystemPrompt = allowConvPrompt
-        updated.allowConversationPromptInjection = allowInjection
-        updated.appendCurrentTimeToUserMessage = appendTime
-        updated.messageTemplate = messageTemplate
+        if let target = editingMessage, let idx = updated.presetMessages.firstIndex(where: { $0.id == target.id }) {
+            updated.presetMessages[idx] = PresetMessage(id: target.id, role: editorRole, content: content)
+        } else {
+            updated.presetMessages.append(PresetMessage(role: editorRole, content: content))
+        }
         store.updatePersona(updated)
-
-        let soulURL = PersonaStore.memoryDir(for: p.id).appendingPathComponent("SOUL.md")
-        try? FileManager.default.createDirectory(at: soulURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? soulText.write(to: soulURL, atomically: true, encoding: .utf8)
-        SoulStore.refreshCache()
-        NotificationCenter.default.post(name: .soulMdChanged, object: nil)
     }
 }
 
-// MARK: - 3. PersonaLocalToolsSettingsView (复刻 photo_8A79EFD5.png 本地工具)
+// MARK: - 5. PersonaCustomRequestView (自定义请求)
+// 为该助手注入独立的请求头 (Headers) 与请求体参数 (Body)。
+
+struct PersonaCustomRequestView: View {
+    let personaId: String
+    @ObservedObject var store = PersonaStore.shared
+
+    @State private var showHeaderSheet = false
+    @State private var headerName = ""
+    @State private var headerValue = ""
+    @State private var editingHeaderId: String?
+
+    @State private var showBodySheet = false
+    @State private var bodyKey = ""
+    @State private var bodyValue = ""
+    @State private var editingBodyId: String?
+
+    private var persona: Persona? {
+        store.personas.first { $0.id == personaId }
+    }
+
+    var body: some View {
+        Group {
+            if let p = persona {
+                List {
+                    // MARK: 请求头 (Headers)
+                    Section {
+                        if p.customHeaders.isEmpty {
+                            Text("暂无自定义请求头")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(p.customHeaders) { h in
+                                Button {
+                                    editingHeaderId = h.id
+                                    headerName = h.name
+                                    headerValue = h.value
+                                    showHeaderSheet = true
+                                } label: {
+                                    HStack {
+                                        Text(h.name)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundStyle(ChatColors.primaryText)
+                                        Spacer()
+                                        Text(h.value)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .onDelete { indexSet in
+                                var updated = p
+                                updated.customHeaders.remove(atOffsets: indexSet)
+                                store.updatePersona(updated)
+                            }
+                        }
+
+                        Button {
+                            editingHeaderId = nil
+                            headerName = ""
+                            headerValue = ""
+                            showHeaderSheet = true
+                        } label: {
+                            Label("添加请求头", systemImage: "plus")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(MinisThemeList.accent)
+                        }
+                    } header: {
+                        Text("自定义请求头 (Headers)")
+                    } footer: {
+                        Text("大模型发起网络请求时，会将上述 Header 注入到 HTTP 请求中，例如特定网关路由标签。")
+                    }
+
+                    // MARK: 请求体 (Extra Body)
+                    Section {
+                        if p.customBody.isEmpty {
+                            Text("暂无自定义请求体参数")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(p.customBody) { b in
+                                Button {
+                                    editingBodyId = b.id
+                                    bodyKey = b.key
+                                    bodyValue = b.value
+                                    showBodySheet = true
+                                } label: {
+                                    HStack {
+                                        Text(b.key)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundStyle(ChatColors.primaryText)
+                                        Spacer()
+                                        Text(b.value)
+                                            .font(.system(.body, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .onDelete { indexSet in
+                                var updated = p
+                                updated.customBody.remove(atOffsets: indexSet)
+                                store.updatePersona(updated)
+                            }
+                        }
+
+                        Button {
+                            editingBodyId = nil
+                            bodyKey = ""
+                            bodyValue = ""
+                            showBodySheet = true
+                        } label: {
+                            Label("添加请求体参数", systemImage: "plus")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(MinisThemeList.accent)
+                        }
+                    } header: {
+                        Text("自定义请求体 (Extra Body)")
+                    } footer: {
+                        Text("向请求体顶层或 extra_body 注入自定义参数字段（例如供应商专用扩展）。")
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("自定义请求")
+                .navigationBarTitleDisplayMode(.inline)
+                .sheet(isPresented: $showHeaderSheet) {
+                    NavigationStack {
+                        Form {
+                            Section("Header 名称") {
+                                TextField("如 X-Custom-Header", text: $headerName)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+                            Section("Header 值") {
+                                TextField("值", text: $headerValue)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+                        }
+                        .navigationTitle(editingHeaderId == nil ? "添加请求头" : "编辑请求头")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showHeaderSheet = false }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("保存") {
+                                    saveHeader(for: p)
+                                    showHeaderSheet = false
+                                }
+                                .disabled(headerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                    }
+                    .presentationDetents([.medium])
+                }
+                .sheet(isPresented: $showBodySheet) {
+                    NavigationStack {
+                        Form {
+                            Section("参数 Key") {
+                                TextField("如 frequency_penalty", text: $bodyKey)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+                            Section("参数 Value") {
+                                TextField("值 (支持文本或数字)", text: $bodyValue)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+                        }
+                        .navigationTitle(editingBodyId == nil ? "添加请求体参数" : "编辑请求体参数")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showBodySheet = false }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("保存") {
+                                    saveBody(for: p)
+                                    showBodySheet = false
+                                }
+                                .disabled(bodyKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                    }
+                    .presentationDetents([.medium])
+                }
+            }
+        }
+    }
+
+    private func saveHeader(for p: Persona) {
+        let name = headerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        var updated = p
+        if let targetId = editingHeaderId, let idx = updated.customHeaders.firstIndex(where: { $0.id == targetId }) {
+            updated.customHeaders[idx] = PersonaCustomHeader(id: targetId, name: name, value: headerValue)
+        } else {
+            updated.customHeaders.append(PersonaCustomHeader(name: name, value: headerValue))
+        }
+        store.updatePersona(updated)
+    }
+
+    private func saveBody(for p: Persona) {
+        let key = bodyKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        var updated = p
+        if let targetId = editingBodyId, let idx = updated.customBody.firstIndex(where: { $0.id == targetId }) {
+            updated.customBody[idx] = PersonaCustomBodyItem(id: targetId, key: key, value: bodyValue)
+        } else {
+            updated.customBody.append(PersonaCustomBodyItem(key: key, value: bodyValue))
+        }
+        store.updatePersona(updated)
+    }
+}
+
+// MARK: - 6. PersonaRegexRulesView (正则替换)
+// 为该助手的回答输出配置正则匹配与替换清洗规则。
+
+struct PersonaRegexRulesView: View {
+    let personaId: String
+    @ObservedObject var store = PersonaStore.shared
+
+    @State private var showEditor = false
+    @State private var editingRuleId: String?
+    @State private var ruleName = ""
+    @State private var rulePattern = ""
+    @State private var ruleReplacement = ""
+    @State private var ruleScope = "assistant" // assistant, user, all
+    @State private var ruleVisualOnly = false
+    @State private var ruleReplaceOnly = false
+
+    private var persona: Persona? {
+        store.personas.first { $0.id == personaId }
+    }
+
+    var body: some View {
+        Group {
+            if let p = persona {
+                List {
+                    Section {
+                        if p.regexRules.isEmpty {
+                            VStack(spacing: 8) {
+                                Image(systemName: "textformat")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.secondary)
+                                Text("暂无正则替换规则")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text("点击右上角「+」可添加清洗思考标签、特定角色前缀或格式修正规则。")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                                    .multilineTextAlignment(.center)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                        } else {
+                            ForEach(p.regexRules) { rule in
+                                VStack(alignment: .leading, spacing: 6) {
+                                    HStack {
+                                        Toggle(isOn: Binding(
+                                            get: { rule.enabled },
+                                            set: { newVal in
+                                                var updated = p
+                                                if let idx = updated.regexRules.firstIndex(where: { $0.id == rule.id }) {
+                                                    updated.regexRules[idx].enabled = newVal
+                                                    store.updatePersona(updated)
+                                                }
+                                            }
+                                        )) {
+                                            HStack(spacing: 6) {
+                                                Text(rule.name.isEmpty ? "未命名规则" : rule.name)
+                                                    .font(.system(size: 15, weight: .semibold))
+                                                    .foregroundStyle(ChatColors.primaryText)
+
+                                                scopeBadge(for: rule)
+                                            }
+                                        }
+                                    }
+
+                                    Button {
+                                        startEdit(rule)
+                                    } label: {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack(spacing: 4) {
+                                                Text("/\(rule.pattern)/")
+                                                    .font(.system(.caption, design: .monospaced))
+                                                    .foregroundStyle(.secondary)
+                                                    .lineLimit(1)
+                                                Image(systemName: "arrow.right")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.tertiary)
+                                                Text("\"\(rule.replacement)\"")
+                                                    .font(.system(.caption, design: .monospaced))
+                                                    .foregroundStyle(MinisThemeList.accent)
+                                                    .lineLimit(1)
+                                            }
+
+                                            HStack(spacing: 6) {
+                                                if rule.visualOnly {
+                                                    badge(text: "仅显示替换", color: .purple)
+                                                }
+                                                if rule.replaceOnly {
+                                                    badge(text: "仅实际替换", color: .teal)
+                                                }
+                                            }
+                                        }
+                                        .padding(.vertical, 2)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .onDelete { indexSet in
+                                var updated = p
+                                updated.regexRules.remove(atOffsets: indexSet)
+                                store.updatePersona(updated)
+                            }
+                            .onMove { indices, newOffset in
+                                var updated = p
+                                updated.regexRules.move(fromOffsets: indices, toOffset: newOffset)
+                                store.updatePersona(updated)
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("正则清洗与替换列表")
+                            Spacer()
+                            if !p.regexRules.isEmpty {
+                                EditButton()
+                                    .font(.system(size: 13))
+                            }
+                        }
+                    } footer: {
+                        Text("规则按顺序应用于生成的内容。可用于清洗思考标签、特定角色前缀或格式修正。")
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("正则替换")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            startCreate()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                    }
+                }
+                .sheet(isPresented: $showEditor) {
+                    NavigationStack {
+                        Form {
+                            Section("规则名称") {
+                                TextField("如 去除思考标签", text: $ruleName)
+                            }
+
+                            Section("正则表达式") {
+                                TextField("如 <think>[\\s\\S]*?</think>", text: $rulePattern)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+
+                            Section("替换内容") {
+                                TextField("替换为 (留空表示删除匹配内容)", text: $ruleReplacement)
+                                    .font(.system(.body, design: .monospaced))
+                                    .autocorrectionDisabled()
+                                    .textInputAutocapitalization(.never)
+                            }
+
+                            Section("作用范围") {
+                                Picker("生效范围", selection: $ruleScope) {
+                                    Text("仅助手消息").tag("assistant")
+                                    Text("仅用户消息").tag("user")
+                                    Text("全部消息").tag("all")
+                                }
+                                .pickerStyle(.segmented)
+                            }
+
+                            Section("高级选项") {
+                                Toggle("仅视觉替换 (不影响历史与上下文)", isOn: $ruleVisualOnly)
+                                    .onChange(of: ruleVisualOnly) { on in
+                                        if on { ruleReplaceOnly = false }
+                                    }
+
+                                Toggle("仅发送前替换 (不影响本地展示)", isOn: $ruleReplaceOnly)
+                                    .onChange(of: ruleReplaceOnly) { on in
+                                        if on { ruleVisualOnly = false }
+                                    }
+                            }
+                        }
+                        .navigationTitle(editingRuleId == nil ? "添加正则规则" : "编辑正则规则")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("取消") { showEditor = false }
+                            }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("保存") {
+                                    saveRule(for: p)
+                                    showEditor = false
+                                }
+                                .disabled(rulePattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                    }
+                    .presentationDetents([.medium, .large])
+                }
+            }
+        }
+    }
+
+    private func scopeBadge(for rule: PersonaRegexRule) -> some View {
+        let isAll = rule.scopes.contains("all") || (rule.scopes.contains("assistant") && rule.scopes.contains("user"))
+        let text = isAll ? "全部" : (rule.scopes.contains("user") ? "用户" : "助手")
+        let col: Color = isAll ? .orange : (rule.scopes.contains("user") ? .blue : .green)
+        return badge(text: text, color: col)
+    }
+
+    private func badge(text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(color.opacity(0.14)))
+            .foregroundStyle(color)
+    }
+
+    private func startCreate() {
+        editingRuleId = nil
+        ruleName = ""
+        rulePattern = ""
+        ruleReplacement = ""
+        ruleScope = "assistant"
+        ruleVisualOnly = false
+        ruleReplaceOnly = false
+        showEditor = true
+    }
+
+    private func startEdit(_ rule: PersonaRegexRule) {
+        editingRuleId = rule.id
+        ruleName = rule.name
+        rulePattern = rule.pattern
+        ruleReplacement = rule.replacement
+        if rule.scopes.contains("all") { ruleScope = "all" }
+        else if rule.scopes.contains("user") { ruleScope = "user" }
+        else { ruleScope = "assistant" }
+        ruleVisualOnly = rule.visualOnly
+        ruleReplaceOnly = rule.replaceOnly
+        showEditor = true
+    }
+
+    private func saveRule(for p: Persona) {
+        let pat = rulePattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !pat.isEmpty else { return }
+        var updated = p
+        let scopes: [String] = ruleScope == "all" ? ["all"] : [ruleScope]
+        let item = PersonaRegexRule(
+            id: editingRuleId ?? UUID().uuidString,
+            name: ruleName.trimmingCharacters(in: .whitespacesAndNewlines),
+            pattern: pat,
+            replacement: ruleReplacement,
+            scopes: scopes,
+            visualOnly: ruleVisualOnly,
+            replaceOnly: ruleReplaceOnly,
+            enabled: true
+        )
+
+        if let targetId = editingRuleId, let idx = updated.regexRules.firstIndex(where: { $0.id == targetId }) {
+            updated.regexRules[idx] = item
+        } else {
+            updated.regexRules.append(item)
+        }
+        store.updatePersona(updated)
+    }
+}
+
+// MARK: - 7. PersonaPromptSettingsView (提示词)
+// 独立编辑 SOUL.md 人设设定与消息模板变量
+
+struct PersonaPromptSettingsView: View {
+    let personaId: String
+    @ObservedObject var store = PersonaStore.shared
+
+    @State private var soulText = ""
+    @State private var templateText = "{{ message }}"
+    @State private var appendTimeVal = false
+    @State private var allowSystemPromptVal = false
+    @State private var allowPromptInjectionVal = false
+    @State private var isSaved = false
+
+    private var persona: Persona? {
+        store.personas.first { $0.id == personaId }
+    }
+
+    var body: some View {
+        Group {
+            if let p = persona {
+                List {
+                    Section {
+                        TextEditor(text: $soulText)
+                            .frame(minHeight: 260)
+                            .font(.system(.body, design: .monospaced))
+                    } header: {
+                        HStack {
+                            Text("核心系统人设 (SOUL.md)")
+                            Spacer()
+                            Text("\(soulText.count) 字")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Text("定义助手的核心人设、口吻、底线与思考模式。保存后立即同步到大模型对话中。")
+                    }
+
+                    Section {
+                        TextField("消息模板，如 {{ message }}", text: $templateText)
+                            .font(.system(.body, design: .monospaced))
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onChange(of: templateText) { val in
+                                var updated = p
+                                updated.messageTemplate = val
+                                store.updatePersona(updated)
+                            }
+
+                        Toggle("向用户消息追加当前时间", isOn: $appendTimeVal)
+                            .onChange(of: appendTimeVal) { val in
+                                var updated = p
+                                updated.appendCurrentTimeToUserMessage = val
+                                store.updatePersona(updated)
+                            }
+
+                        Toggle("允许会话级系统提示词覆盖", isOn: $allowSystemPromptVal)
+                            .onChange(of: allowSystemPromptVal) { val in
+                                var updated = p
+                                updated.allowConversationSystemPrompt = val
+                                store.updatePersona(updated)
+                            }
+
+                        Toggle("允许会话级提示词注入", isOn: $allowPromptInjectionVal)
+                            .onChange(of: allowPromptInjectionVal) { val in
+                                var updated = p
+                                updated.allowConversationPromptInjection = val
+                                store.updatePersona(updated)
+                            }
+                    } header: {
+                        Text("消息模板与上下文注入")
+                    }
+
+                    Section {
+                        Button {
+                            saveSoul(for: p)
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Image(systemName: isSaved ? "checkmark" : "square.and.arrow.down")
+                                Text(isSaved ? "已保存" : "保存提示词修改")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(isSaved ? Color.green : MinisThemeList.accent)
+                        }
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .navigationTitle("提示词")
+                .navigationBarTitleDisplayMode(.inline)
+                .onAppear {
+                    loadFromPersona(p)
+                }
+            }
+        }
+    }
+
+    private func loadFromPersona(_ p: Persona) {
+        let soul = PersonaStore.readSoulMD(for: p.id)
+        soulText = soul.raw
+        templateText = p.messageTemplate
+        appendTimeVal = p.appendCurrentTimeToUserMessage
+        allowSystemPromptVal = p.allowConversationSystemPrompt
+        allowPromptInjectionVal = p.allowConversationPromptInjection
+    }
+
+    private func saveSoul(for p: Persona) {
+        PersonaStore.writeSoulMDRaw(for: p.id, raw: soulText)
+        if store.currentPersonaID == p.id {
+            SoulStore.refreshCache()
+        }
+        withAnimation {
+            isSaved = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                isSaved = false
+            }
+        }
+    }
+}
+
+// MARK: - 8. PersonaLocalToolsSettingsView (本地工具)
+// 13 项原生工具开关与白名单
 
 struct PersonaLocalToolsSettingsView: View {
     let personaId: String
@@ -1273,6 +1667,8 @@ struct PersonaLocalToolsSettingsView: View {
                             }
                             .font(.system(size: 12))
                         }
+                    } footer: {
+                        Text("开启的工具将被注入给模型作为 function call 工具使用。未启用的工具模型将不可见。")
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -1283,14 +1679,15 @@ struct PersonaLocalToolsSettingsView: View {
     }
 }
 
-// MARK: - 4. PersonaMemorySettingsView (独立记忆查看)
+// MARK: - 9. PersonaMemorySettingsView (记忆)
+// 独立查看与编辑该人设的 GLOBAL.md 记忆与状态
 
 struct PersonaMemorySettingsView: View {
     let personaId: String
     @ObservedObject var store = PersonaStore.shared
 
-    @State private var globalMd = ""
-    @State private var soulMd = ""
+    @State private var globalMemoryText = ""
+    @State private var isSaved = false
 
     private var persona: Persona? {
         store.personas.first { $0.id == personaId }
@@ -1300,25 +1697,34 @@ struct PersonaMemorySettingsView: View {
         Group {
             if let p = persona {
                 List {
-                    Section("全局人设事实 (GLOBAL.md)") {
-                        Text(globalMd.isEmpty ? "暂无 GLOBAL.md 长期事实记录" : globalMd)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(ChatColors.secondaryText)
-                            .lineLimit(10)
+                    Section {
+                        TextEditor(text: $globalMemoryText)
+                            .frame(minHeight: 280)
+                            .font(.system(.body, design: .monospaced))
+                    } header: {
+                        HStack {
+                            Text("长期全局记忆 (GLOBAL.md)")
+                            Spacer()
+                            Text("\(globalMemoryText.count) 字")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } footer: {
+                        Text("该人设跨会话持久保存的核心记忆与背景知识。")
                     }
 
-                    Section("提示词灵魂设定 (SOUL.md)") {
-                        Text(soulMd.isEmpty ? "暂无 SOUL.md" : soulMd)
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(ChatColors.secondaryText)
-                            .lineLimit(10)
-                    }
-
-                    Section("记忆管理") {
-                        Button(role: .destructive) {
-                            clearPersonaLogs(for: p)
+                    Section {
+                        Button {
+                            saveGlobalMemory(for: p)
                         } label: {
-                            Text("清理该人设的每日日志归档")
+                            HStack {
+                                Spacer()
+                                Image(systemName: isSaved ? "checkmark" : "square.and.arrow.down")
+                                Text(isSaved ? "已保存" : "保存记忆修改")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Spacer()
+                            }
+                            .foregroundStyle(isSaved ? Color.green : MinisThemeList.accent)
                         }
                     }
                 }
@@ -1326,38 +1732,40 @@ struct PersonaMemorySettingsView: View {
                 .navigationTitle("记忆")
                 .navigationBarTitleDisplayMode(.inline)
                 .onAppear {
-                    loadMemoryFiles(for: p)
+                    loadGlobalMemory(for: p)
                 }
             }
         }
     }
 
-    private func loadMemoryFiles(for p: Persona) {
-        let memDir = PersonaStore.memoryDir(for: p.id)
-        if let g = try? String(contentsOf: memDir.appendingPathComponent("GLOBAL.md"), encoding: .utf8) {
-            globalMd = g
-        }
-        if let s = try? String(contentsOf: memDir.appendingPathComponent("SOUL.md"), encoding: .utf8) {
-            soulMd = s
+    private func loadGlobalMemory(for p: Persona) {
+        let file = PersonaStore.memoryDir(for: p.id).appendingPathComponent("GLOBAL.md")
+        if let data = try? Data(contentsOf: file), let str = String(data: data, encoding: .utf8) {
+            globalMemoryText = str
+        } else {
+            globalMemoryText = "# \(p.name) 的全局记忆\n\n- 在此记录永久性知识与偏好。"
         }
     }
 
-    private func clearPersonaLogs(for p: Persona) {
-        let memDir = PersonaStore.memoryDir(for: p.id)
-        let fm = FileManager.default
-        if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: nil) {
-            for f in files where f.pathExtension == "md" && f.lastPathComponent != "SOUL.md" && f.lastPathComponent != "GLOBAL.md" {
-                try? fm.removeItem(at: f)
-            }
+    private func saveGlobalMemory(for p: Persona) {
+        let dir = PersonaStore.memoryDir(for: p.id)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent("GLOBAL.md")
+        try? globalMemoryText.data(using: .utf8)?.write(to: file, options: .atomic)
+        withAnimation { isSaved = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation { isSaved = false }
         }
     }
 }
 
-// MARK: - 5. PersonaSkillsSettingsView (技能白名单)
+// MARK: - 10. PersonaSkillsSettingsView (技能)
+// 技能白名单
 
 struct PersonaSkillsSettingsView: View {
     let personaId: String
     @ObservedObject var store = PersonaStore.shared
+    @ObservedObject var skillStore = SkillStore.shared
 
     private var persona: Persona? {
         store.personas.first { $0.id == personaId }
@@ -1366,36 +1774,42 @@ struct PersonaSkillsSettingsView: View {
     var body: some View {
         Group {
             if let p = persona {
-                let enabledSkillIds = Set(p.skillIds ?? SkillStore.shared.skills.map(\.id))
+                let allSkills = skillStore.skills
+                let isAll = p.skillIds == nil
 
                 List {
                     Section {
-                        ForEach(SkillStore.shared.skills) { skill in
-                            Toggle(isOn: Binding(
-                                get: { enabledSkillIds.contains(skill.id) },
-                                set: { isOn in
-                                    var currentSet = enabledSkillIds
-                                    if isOn { currentSet.insert(skill.id) }
-                                    else { currentSet.remove(skill.id) }
-                                    var updated = p
-                                    updated.skillIds = Array(currentSet)
-                                    store.updatePersona(updated)
-                                }
-                            )) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(skill.name)
-                                        .font(.system(size: 15, weight: .medium))
-                                    if !skill.description.isEmpty {
-                                        Text(skill.description)
-                                            .font(.system(size: 11))
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(2)
+                        Toggle("使用全部技能", isOn: Binding(
+                            get: { isAll },
+                            set: { on in
+                                var updated = p
+                                updated.skillIds = on ? nil : []
+                                store.updatePersona(updated)
+                            }
+                        ))
+                    } header: {
+                        Text("通用规则")
+                    } footer: {
+                        Text("开启后新安装的技能将自动对该人设生效。关闭后可手动勾选白名单。")
+                    }
+
+                    if !isAll {
+                        Section("技能白名单") {
+                            ForEach(allSkills) { skill in
+                                let currentList = p.skillIds ?? []
+                                Toggle(skill.name, isOn: Binding(
+                                    get: { currentList.contains(skill.id) },
+                                    set: { on in
+                                        var set = Set(currentList)
+                                        if on { set.insert(skill.id) }
+                                        else { set.remove(skill.id) }
+                                        var updated = p
+                                        updated.skillIds = Array(set)
+                                        store.updatePersona(updated)
                                     }
-                                }
+                                ))
                             }
                         }
-                    } header: {
-                        Text("启用的技能 (关掉的不再进入该人设的上下文)")
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -1406,11 +1820,13 @@ struct PersonaSkillsSettingsView: View {
     }
 }
 
-// MARK: - 6. PersonaMcpSettingsView (MCP 白名单)
+// MARK: - 11. PersonaMcpSettingsView (MCP)
+// MCP 服务器白名单
 
 struct PersonaMcpSettingsView: View {
     let personaId: String
     @ObservedObject var store = PersonaStore.shared
+    @ObservedObject var mcpStore = MCPStore.shared
 
     private var persona: Persona? {
         store.personas.first { $0.id == personaId }
@@ -1419,28 +1835,42 @@ struct PersonaMcpSettingsView: View {
     var body: some View {
         Group {
             if let p = persona {
-                let enabledMcpIds = Set(p.mcpServerIds ?? MCPStore.shared.servers.map(\.id))
+                let allServers = mcpStore.servers
+                let isAll = p.mcpServerIds == nil
 
                 List {
                     Section {
-                        ForEach(MCPStore.shared.servers) { server in
-                            Toggle(isOn: Binding(
-                                get: { enabledMcpIds.contains(server.id) },
-                                set: { isOn in
-                                    var currentSet = enabledMcpIds
-                                    if isOn { currentSet.insert(server.id) }
-                                    else { currentSet.remove(server.id) }
-                                    var updated = p
-                                    updated.mcpServerIds = Array(currentSet)
-                                    store.updatePersona(updated)
-                                }
-                            )) {
-                                Text(server.id)
-                                    .font(.system(size: 15, weight: .medium))
+                        Toggle("使用全部 MCP 服务", isOn: Binding(
+                            get: { isAll },
+                            set: { on in
+                                var updated = p
+                                updated.mcpServerIds = on ? nil : []
+                                store.updatePersona(updated)
+                            }
+                        ))
+                    } header: {
+                        Text("通用规则")
+                    } footer: {
+                        Text("开启后所有已配置的 MCP 服务器均对该人设生效。关闭后可单独勾选可用服务器。")
+                    }
+
+                    if !isAll {
+                        Section("MCP 服务器白名单") {
+                            ForEach(allServers) { server in
+                                let currentList = p.mcpServerIds ?? []
+                                Toggle(server.name, isOn: Binding(
+                                    get: { currentList.contains(server.id) },
+                                    set: { on in
+                                        var set = Set(currentList)
+                                        if on { set.insert(server.id) }
+                                        else { set.remove(server.id) }
+                                        var updated = p
+                                        updated.mcpServerIds = Array(set)
+                                        store.updatePersona(updated)
+                                    }
+                                ))
                             }
                         }
-                    } header: {
-                        Text("绑定的 MCP 服务器 (关掉的不再进入该人设的上下文)")
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -1448,35 +1878,5 @@ struct PersonaMcpSettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
-    }
-}
-
-// MARK: - 7. PersonaSimpleSubpageView (快捷短语 / 自定义请求 / 正则替换 提示页)
-
-struct PersonaSimpleSubpageView: View {
-    let title: String
-    let icon: String
-    let hint: String
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: icon)
-                .font(.system(size: 48))
-                .foregroundStyle(MinisThemeList.accent)
-                .padding(.top, 40)
-
-            Text(title)
-                .font(.system(size: 20, weight: .bold))
-
-            Text(hint)
-                .font(.system(size: 14))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 30)
-
-            Spacer()
-        }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
