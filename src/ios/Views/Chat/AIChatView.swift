@@ -3950,7 +3950,7 @@ struct AIChatView: View {
             }
 
             VStack(spacing: 0) {
-                // 输入区域（点击输入框触发聚焦与收起底栏）
+                // 输入区域 (单行紧凑微信风格)
                 VStack(spacing: 2) {
                     // Attachment preview chips — 3 per row
                     if !vm.attachments.isEmpty || vm.loadingVideoCount > 0 {
@@ -3965,11 +3965,57 @@ struct AIChatView: View {
                         .padding(.top, 4)
                     }
 
-                    inputFieldOrWaveform
+                    // 待发表情包缩略卡片 (和发图片一样，可配文字一并发)
+                    if let sticker = vm.pendingSticker, let img = StickerStore.shared.image(for: sticker) {
+                        HStack {
+                            ZStack(alignment: .topTrailing) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 52, height: 52)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1)
+                                    )
+                                Button {
+                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                    vm.pendingSticker = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundStyle(Color.white, Color.black.opacity(0.6))
+                                }
+                                .offset(x: 6, y: -6)
+                            }
+                            .padding(.leading, 12)
+                            .padding(.top, 4)
+                            .padding(.bottom, 2)
+                            Spacer()
+                        }
+                    }
 
-                    inputBottomRow
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 6)
+                    // 微信式单行聊天输入条：左加号、中输入框、右语音与发送
+                    HStack(alignment: .bottom, spacing: 8) {
+                        attachmentMenuButton
+
+                        if vm.editingMessageIndex != nil {
+                            editExitButton
+                        }
+
+                        // 输入框在底栏按钮之间自适应
+                        inputFieldOrWaveform
+
+                        if voiceInputActive, vm.editingMessageIndex == nil {
+                            readAloudToolbarToggle
+                        }
+
+                        micButtonContainer
+
+                        sendButton
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
                 }
                 .contentShape(MinisThemeShape.inputBar)
                 .onTapGesture {
@@ -4844,7 +4890,8 @@ struct AIChatView: View {
         // still loading. Only count `.ready` attachments as sendable content, so
         // a composer holding ONLY failed/loading chips (and no text) can't send.
         let hasReadyAttachment = vm.attachments.contains { $0.loadState == .ready }
-        return ready && !vm.hasLoadingAttachments && (hasText || hasReadyAttachment)
+        let hasPendingSticker = vm.pendingSticker != nil
+        return ready && !vm.hasLoadingAttachments && (hasText || hasReadyAttachment || hasPendingSticker)
     }
 
     private var canEnqueue: Bool {
@@ -6934,8 +6981,9 @@ struct ChatStickerPanel: View {
     @ObservedObject private var store = StickerStore.shared
     @Environment(\.colorScheme) private var colorScheme
 
-    @State private var selectedCategory: String = "常用"
+    @State private var selectedCategory: String = "全部"
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
+    @State private var showPhotosPicker: Bool = false
     @State private var activeSheet: ActivePanelSheet?
     @State private var isManageMode: Bool = false
     @State private var selectedStickerIds: Set<String> = []
@@ -6943,7 +6991,7 @@ struct ChatStickerPanel: View {
     private var isDark: Bool { colorScheme == .dark }
 
     private var displayCategories: [String] {
-        ["常用", "全部"] + store.categories
+        ["常用", "全部"]
     }
 
     private var currentStickers: [StickerItem] {
@@ -7125,7 +7173,9 @@ struct ChatStickerPanel: View {
                             Label("批量管理表情包", systemImage: "checklist")
                         }
 
-                        PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                        Button {
+                            showPhotosPicker = true
+                        } label: {
                             Label("批量导入相册表情", systemImage: "square.and.arrow.down.on.square.fill")
                         }
 
@@ -7189,7 +7239,9 @@ struct ChatStickerPanel: View {
                     }
 
                     // 添加表情包按钮 (多选或单选选图)
-                    PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                    Button {
+                        showPhotosPicker = true
+                    } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 20))
                             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
@@ -7206,7 +7258,9 @@ struct ChatStickerPanel: View {
                 LazyVGrid(columns: columns, spacing: 14) {
                     // 第一个格子：微信式「+ 添加/批量」卡片 (非管理模式时显示)
                     if !isManageMode {
-                        PhotosPicker(selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images) {
+                        Button {
+                            showPhotosPicker = true
+                        } label: {
                             VStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .strokeBorder(
@@ -7246,7 +7300,9 @@ struct ChatStickerPanel: View {
                                     selectedStickerIds.insert(sticker.id)
                                 }
                             } else {
-                                vm.sendSticker(sticker)
+                                // 和发图片一样：挂载到待发区，醒醒可配文字一并发
+                                vm.pendingSticker = sticker
+                                onBackToPlus()
                             }
                         } label: {
                             VStack(spacing: 4) {
@@ -7336,6 +7392,11 @@ struct ChatStickerPanel: View {
         }
         .frame(height: 295)
         .background(CSSThemeVariables.card(isDark: isDark))
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // 阻断内部点击穿透到底层收起手势
+        }
+        .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images)
         .onChange(of: selectedPhotoItems) { items in
             guard !items.isEmpty else { return }
             let count = items.count

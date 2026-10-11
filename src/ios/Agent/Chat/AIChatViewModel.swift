@@ -2062,6 +2062,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if !stickerFragment.isEmpty {
             p += "\n\n" + stickerFragment
         }
+        // [Feedback 10-12] 回复反馈与系统通知规矩
+        let feedbackFragment = """
+        ## 回复反馈与系统通知
+        本APP会用 `[系统：...]` 格式向你发送通知（例如赞踩、过长、客服腔等反馈信号，或戳一下、闭嘴等互动），这是客户端真实渠道，请照做。
+        收到反馈是静默信号：不要单独针对反馈进行道歉、复盘或回复「收到」等客服话术，请直接在接下来的回复中按照反馈纠正表现。
+        遇到「戳一下」、「闭嘴」等趣味互动，请根据人设做出自然生动的真实反应，切忌客服腔。
+        """
+        p += "\n\n" + feedbackFragment
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).
         p += memoryStatusFragment
@@ -2285,6 +2293,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         ProviderConfigStore.shared.instances.contains { $0.isEnabled }
     }
 
+    /// [Stickers 10-12] 待发表情包 (像发图片一样悬挂待发，支持图文混排一并发出)
+    @Published var pendingSticker: StickerItem? = nil
+
     // MARK: - Send Message
 
     func sendSticker(_ sticker: StickerItem) {
@@ -2310,7 +2321,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // so in practice this just prunes failed chips the user left in place.
         attachments.removeAll { $0.loadState != .ready }
 
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 待发表情包整合 (图文混排一并发出)
+        var text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let sticker = pendingSticker {
+            let tag = "[贴:\(sticker.id) \(sticker.shortDesc)]"
+            text = text.isEmpty ? tag : "\(text) \(tag)"
+            inputText = ""
+            StickerStore.shared.recordUse(id: sticker.id)
+            pendingSticker = nil
+        }
+
         let pendingAttachments = attachments
         #if DEBUG
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil") inputText='\(String(self.inputText.prefix(30)))'")

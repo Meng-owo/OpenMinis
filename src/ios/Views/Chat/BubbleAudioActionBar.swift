@@ -23,8 +23,10 @@ struct BubbleAudioActionBar: View {
     /// Text fallback (bubble file missing on disk) + the copy button source.
     let speakText: String
     let onSpeak: (String) -> Void
+    var onFeedback: ((String) -> Void)? = nil
 
     @ObservedObject private var player = GlobalAudioPlayer.shared
+    @State private var showFeedbackSheet: Bool = false
 
     private var isThisFilePlaying: Bool {
         player.isPlaying && player.activeFileURL == fileURL
@@ -39,10 +41,18 @@ struct BubbleAudioActionBar: View {
             regenerateButton
             copyButton
             deleteButton
+            if onFeedback != nil {
+                feedbackButton
+            }
             Spacer(minLength: 0)
         }
         .padding(.top, 6)
         .animation(.easeInOut(duration: 0.18), value: isThisFilePlaying)
+        .sheet(isPresented: $showFeedbackSheet) {
+            ChatFeedbackSheet { text in
+                onFeedback?(text)
+            }
+        }
     }
 
     // MARK: Play / pause / resume
@@ -103,6 +113,18 @@ struct BubbleAudioActionBar: View {
     private var deleteButton: some View {
         Button(role: .destructive) { onDelete() } label: {
             actionIcon("trash", label: "Delete")
+        }
+        .buttonStyle(.borderless)
+    }
+
+    // MARK: Feedback
+
+    private var feedbackButton: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            showFeedbackSheet = true
+        } label: {
+            actionIcon("text.bubble", label: "Feedback")
         }
         .buttonStyle(.borderless)
     }

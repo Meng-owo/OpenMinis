@@ -1203,6 +1203,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onRegenerate: (() -> Void)?
     /// [T-action-bar 09-11] Delete the assistant message this cell owns.
     @Published var onDeleteMessage: (() -> Void)?
+    /// [Feedback 10-12] 回复反馈与整蛊发送回调 (点赞/踩/快捷标签/系统通知)
+    @Published var onFeedback: ((String) -> Void)?
     /// [T-message-action-bar 09-11] The chat VM as SpeechControlling — drives
     /// the bubble action bar's pause/resume/stop. Weak (VM outlives cells, but
     /// the bridge may outlive the VM in teardown races).

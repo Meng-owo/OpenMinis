@@ -323,6 +323,7 @@ private struct BridgedAssistantBlockV3: View {
             voiceBubbleFileURL: bridge.voiceBubbleFileURL,
             onRegenerate: bridge.isStreaming ? nil : bridge.onRegenerate,
             onDeleteMessage: bridge.isStreaming ? nil : bridge.onDeleteMessage,
+            onFeedback: bridge.isStreaming ? nil : bridge.onFeedback,
             browserPool: bridge.browserPool,
             toolSnapshots: bridge.toolSnapshots,
             highlightedBlockId: .constant(nil),
@@ -1645,6 +1646,12 @@ extension CollectionViewMessageListV3 {
                 ? { [weak vm] in vm?.regenerateAssistantMessage(message.id) } : nil
             bridge.onDeleteMessage = (message.role == .assistant && !vm.isProcessing)
                 ? { [weak self] in self?.onRequestDeleteAssistant?(message.id) } : nil
+            bridge.onFeedback = (message.role == .assistant)
+                ? { [weak vm] text in
+                    guard let vm else { return }
+                    vm.inputText = text
+                    vm.send()
+                } : nil
             bridge.onCopyScreenshot = { [weak self, weak vm] in
                 guard let self, let vm else { return }
                 let msgs = vm.messages

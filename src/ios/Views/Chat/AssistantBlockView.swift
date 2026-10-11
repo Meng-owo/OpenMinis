@@ -30,6 +30,8 @@ struct AssistantBlockView: View {
     var onRegenerate: (() -> Void)?
     /// [T-action-bar 09-11] Delete this single assistant message.
     var onDeleteMessage: (() -> Void)?
+    /// [Feedback 10-12] 回复反馈与整蛊回调
+    var onFeedback: ((String) -> Void)?
     var browserPool: BrowserTabPool?
     var toolSnapshots: [ToolSnapshotItem] = []
     @Binding var highlightedBlockId: UUID?
@@ -221,14 +223,16 @@ struct AssistantBlockView: View {
                                      onRegenerate: { onRegenerate?() },
                                      onDelete: { onDeleteMessage?() },
                                      speakText: content,
-                                     onSpeak: onSpeakText)
+                                     onSpeak: onSpeakText,
+                                     onFeedback: onFeedback)
             } else {
                 MessageActionBar(
                     speakText: content,
                     onSpeak: onSpeakText,
                     controller: controller,
                     onRegenerate: { onRegenerate?() },
-                    onDelete: { onDeleteMessage?() }
+                    onDelete: { onDeleteMessage?() },
+                    onFeedback: onFeedback
                 )
             }
         }
