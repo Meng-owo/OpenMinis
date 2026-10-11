@@ -1,13 +1,12 @@
 import SwiftUI
 
-// MARK: - [s2-askuser] 提问小抽屉 (CSS全局变量驱动与原型一模一样)
+// MARK: - [s2-askuser] 提问小抽屉 (CSS全局变量驱动、胶囊选项与紧凑贴底设计)
 //
-// 对齐原型：/var/minis/attachments/uploads/question-tool-card.html
-// 结构：半屏圆角小抽屉 + 顶部居中标题 + 右上角 44×44 圆形关闭叉号
-//       + 通栏扁平选项行(带细分隔线) + 自填回答输入行 + 右下角 132×48 胶囊大发送按钮
-//       + 全屏半透明 scrim 遮罩。
-// 色彩：严格由 CSS 全局变量系统（:root 与 prefers-color-scheme: dark）驱动，
-//       并与 AppearanceStudio 主题无缝对齐。
+// 视觉特性：
+// 1. 弹窗高度跟着内容走，绝无大片空白区域；超长时自适应平滑滚动。
+// 2. 卡片紧贴屏幕物理底部，不悬空，安全区自然延展。
+// 3. 精致胶囊选项体系：每个选项为独立药丸胶囊卡片，带选中触感与弹性动效反馈。
+// 4. 全局 CSS 变量系统驱动色彩与样式，零硬编码色。
 
 // MARK: - CSS 全局色彩变量定义
 
@@ -53,6 +52,21 @@ public enum CSSThemeVariables {
         isDark ? Color(hex: "#C2869F") : Color(hex: "#ECC7D6")
     }
 
+    /// --color-accent-fg
+    public static func accentFg(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#FFFFFF") : Color(hex: "#FFFFFF")
+    }
+
+    /// --color-option-bg (未选中胶囊底色)
+    public static func optionBg(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#241F1D") : Color(hex: "#F7F3EE")
+    }
+
+    /// --color-option-border (未选中胶囊边框)
+    public static func optionBorder(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#3A3330") : Color(hex: "#ECE4DE")
+    }
+
     /// --color-scrim / rgba(42, 42, 46, 0.28)
     public static func scrim(isDark: Bool) -> Color {
         isDark ? Color.black.opacity(0.65) : Color(hex: "#2A2A2E").opacity(0.28)
@@ -77,6 +91,17 @@ private struct AskRoundedCorner: Shape {
             cornerRadii: CGSize(width: radius, height: radius)
         )
         return Path(path.cgPath)
+    }
+}
+
+// MARK: - 胶囊按压反馈样式
+
+private struct PillOptionButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+            .opacity(configuration.isPressed ? 0.88 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -152,195 +177,255 @@ private struct AskUserDrawerOverlay: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // 背景半透明遮罩 (Scrim)
-            CSSThemeVariables.scrim(isDark: isDark)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    dismiss()
-                }
+        GeometryReader { proxy in
+            let bottomInset = proxy.safeAreaInsets.bottom
 
-            // 抽屉卡片主体
-            VStack(spacing: 0) {
-                // 顶部抓手条 (Grabber)
-                Capsule()
-                    .fill(CSSThemeVariables.divider(isDark: isDark))
-                    .frame(width: 40, height: 5)
-                    .padding(.top, 8)
-                    .padding(.bottom, 2)
-
-                // 抽屉头部 (Head)
-                ZStack(alignment: .trailing) {
-                    VStack(spacing: 4) {
-                        Text(displayTitle)
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(1)
-                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-
-                        if questions.count > 1 {
-                            Text("问题 \(activeQuestionIndex + 1) / \(questions.count)")
-                                .font(.system(size: 11))
-                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
-                        } else if isRestored {
-                            Text("之前未答完的问题，答完后继续")
-                                .font(.system(size: 11))
-                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
-                        }
+            ZStack(alignment: .bottom) {
+                // 背景半透明遮罩 (Scrim)
+                CSSThemeVariables.scrim(isDark: isDark)
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        dismiss()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 64)
-                    .padding(.top, 10)
-                    .padding(.bottom, 8)
 
-                    // 右上角圆形关闭按钮 (Close Button)
-                    Button(action: dismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
-                            .frame(width: 44, height: 44)
-                            .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                            .clipShape(Circle())
-                    }
-                    .padding(.trailing, 14)
-                }
+                // 抽屉卡片主体 (贴底不悬空，高度随内容紧凑自适应)
+                VStack(spacing: 0) {
+                    // 顶部抓手条 (Grabber)
+                    Capsule()
+                        .fill(CSSThemeVariables.divider(isDark: isDark))
+                        .frame(width: 40, height: 5)
+                        .padding(.top, 8)
+                        .padding(.bottom, 2)
 
-                // 抽屉主体：选项列表与自填输入行 (Body)
-                ScrollView {
-                    VStack(spacing: 0) {
-                        if let q = currentQuestion, activeQuestionIndex < states.count {
-                            let isMulti = q.type == "multi"
-                            let currentState = states[activeQuestionIndex]
-
-                            // 选项列表
-                            ForEach(Array(q.options.enumerated()), id: \.offset) { optIdx, option in
-                                let isSelected = currentState.selected.contains(optIdx)
-                                Button {
-                                    toggleOption(questionIndex: activeQuestionIndex, optionIndex: optIdx, isMulti: isMulti)
-                                } label: {
-                                    HStack(spacing: 0) {
-                                        Text(option)
-                                            .font(.system(size: 14))
-                                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
-                                            .multilineTextAlignment(.leading)
-                                        Spacer()
-                                        if isSelected {
-                                            Image(systemName: isMulti ? "checkmark.square.fill" : "checkmark")
-                                                .font(.system(size: 13, weight: .semibold))
-                                                .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
-                                        }
-                                    }
-                                    .padding(.horizontal, 20)
-                                    .frame(minHeight: 56)
-                                    .background(isSelected ? CSSThemeVariables.accentSoft(isDark: isDark) : Color.clear)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(.plain)
-
-                                Divider()
-                                    .background(CSSThemeVariables.divider(isDark: isDark))
-                            }
-
-                            // 自填回答输入行 (Free Input Row)
-                            HStack(spacing: 8) {
-                                TextField("输入回答…", text: Binding(
-                                    get: {
-                                        activeQuestionIndex < states.count ? states[activeQuestionIndex].otherText : ""
-                                    },
-                                    set: { val in
-                                        if activeQuestionIndex < states.count {
-                                            states[activeQuestionIndex].otherText = val
-                                            if !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                                // 自填有输入时清空普通选项勾选，以自填为准
-                                                if !isMulti {
-                                                    states[activeQuestionIndex].selected.removeAll()
-                                                }
-                                                states[activeQuestionIndex].otherSelected = true
-                                            }
-                                        }
-                                    }
-                                ))
-                                .font(.system(size: 14))
+                    // 抽屉头部 (Head)
+                    ZStack(alignment: .trailing) {
+                        VStack(spacing: 4) {
+                            Text(displayTitle)
+                                .font(.system(size: 15, weight: .semibold))
+                                .tracking(1)
                                 .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
-                                .submitLabel(.send)
-                                .onSubmit {
-                                    if canSubmit && isSessionReady {
-                                        submit()
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+
+                            if questions.count > 1 {
+                                Text("问题 \(activeQuestionIndex + 1) / \(questions.count)")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                            } else if isRestored {
+                                Text("之前未答完的问题，答完后继续")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 56)
+                        .padding(.top, 10)
+                        .padding(.bottom, 8)
+
+                        // 右上角圆形关闭按钮 (Close Button)
+                        Button(action: dismiss) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                                .frame(width: 40, height: 40)
+                                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.trailing, 16)
+                    }
+
+                    // 抽屉主体：胶囊选项体系 (紧跟内容高度，底部绝无留白)
+                    if let q = currentQuestion, activeQuestionIndex < states.count {
+                        let isMulti = q.type == "multi"
+                        let currentState = states[activeQuestionIndex]
+
+                        if q.options.count <= 4 {
+                            // 选项少时紧贴内容高度渲染，高度由内容自然撑开
+                            optionsList(q: q, currentState: currentState, isMulti: isMulti)
+                                .padding(.horizontal, 18)
+                                .padding(.top, 6)
+                                .padding(.bottom, 8)
+                        } else {
+                            // 选项很多时才限制最大高度并支持滚动
+                            ScrollView(.vertical, showsIndicators: true) {
+                                optionsList(q: q, currentState: currentState, isMulti: isMulti)
+                                    .padding(.horizontal, 18)
+                                    .padding(.top, 6)
+                                    .padding(.bottom, 8)
+                            }
+                            .frame(maxHeight: UIScreen.main.bounds.height * 0.46)
+                        }
+                    }
+
+                    // 抽屉底部操作栏 (Foot)
+                    HStack(spacing: 12) {
+                        if questions.count > 1 {
+                            // 多题目时的上一题 / 下一题切换
+                            if activeQuestionIndex > 0 {
+                                Button("上一题") {
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                                        activeQuestionIndex -= 1
                                     }
                                 }
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                                .padding(.leading, 18)
+                            }
 
-                                if !states[activeQuestionIndex].otherText.isEmpty {
-                                    Button {
-                                        states[activeQuestionIndex].otherText = ""
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                            if activeQuestionIndex < questions.count - 1 {
+                                Button("下一题") {
+                                    withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                                        activeQuestionIndex += 1
                                     }
                                 }
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                                .padding(.leading, activeQuestionIndex == 0 ? 18 : 0)
                             }
-                            .padding(.horizontal, 20)
-                            .frame(minHeight: 52)
-
-                            Divider()
-                                .background(CSSThemeVariables.divider(isDark: isDark))
                         }
+
+                        Spacer()
+
+                        // 右下角大胶囊发送按钮 (Send Button)
+                        Button(action: submit) {
+                            Text("发送")
+                                .font(.system(size: 15, weight: .semibold))
+                                .tracking(2)
+                                .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
+                                .frame(minWidth: 120, minHeight: 46)
+                                .background(CSSThemeVariables.accent(isDark: isDark))
+                                .clipShape(Capsule())
+                        }
+                        .disabled(!canSubmit || !isSessionReady)
+                        .opacity((canSubmit && isSessionReady) ? 1.0 : 0.45)
+                        .padding(.trailing, 18)
                     }
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
                 }
-                .frame(maxHeight: UIScreen.main.bounds.height * 0.46)
-
-                // 抽屉底部操作栏 (Foot)
-                HStack(spacing: 12) {
-                    if questions.count > 1 {
-                        // 多题目时的上一题 / 下一题切换
-                        if activeQuestionIndex > 0 {
-                            Button("上一题") {
-                                activeQuestionIndex -= 1
-                            }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
-                            .padding(.leading, 20)
-                        }
-
-                        if activeQuestionIndex < questions.count - 1 {
-                            Button("下一题") {
-                                activeQuestionIndex += 1
-                            }
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
-                            .padding(.leading, activeQuestionIndex == 0 ? 20 : 0)
-                        }
-                    }
-
-                    Spacer()
-
-                    // 右下角大胶囊发送按钮 (Send Button)
-                    Button(action: submit) {
-                        Text("发送")
-                            .font(.system(size: 15, weight: .semibold))
-                            .tracking(2)
-                            .foregroundColor(.white)
-                            .frame(minWidth: 132, minHeight: 48)
-                            .background(CSSThemeVariables.accent(isDark: isDark))
-                            .clipShape(Capsule())
-                    }
-                    .disabled(!canSubmit || !isSessionReady)
-                    .opacity((canSubmit && isSessionReady) ? 1.0 : 0.45)
-                    .padding(.trailing, 20)
-                }
-                .padding(.top, 14)
-                .padding(.bottom, 16)
+                .padding(.bottom, max(bottomInset, 16))
+                .background(
+                    CSSThemeVariables.card(isDark: isDark)
+                        .clipShape(AskRoundedCorner(radius: 24, corners: [.topLeft, .topRight]))
+                )
+                .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark), radius: 24, x: 0, y: -8)
+                .transition(.move(edge: .bottom))
             }
-            .background(CSSThemeVariables.card(isDark: isDark))
-            .clipShape(AskRoundedCorner(radius: 24, corners: [.topLeft, .topRight]))
-            .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark), radius: 24, x: 0, y: -8)
-            .transition(.move(edge: .bottom))
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .ignoresSafeArea()
         }
         .onAppear {
             if let payload, states.count != payload.questions.count {
                 states = Array(repeating: QuestionAnswerState(), count: payload.questions.count)
             }
+        }
+    }
+
+    // MARK: - 胶囊选项与自填行
+
+    @ViewBuilder
+    private func optionsList(q: AskQuestion, currentState: QuestionAnswerState, isMulti: Bool) -> some View {
+        VStack(spacing: 8) {
+            // 胶囊选项列表
+            ForEach(Array(q.options.enumerated()), id: \.offset) { optIdx, option in
+                let isSelected = currentState.selected.contains(optIdx)
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                        toggleOption(questionIndex: activeQuestionIndex, optionIndex: optIdx, isMulti: isMulti)
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(option)
+                            .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+                            .foregroundColor(isSelected ? CSSThemeVariables.textMain(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(3)
+
+                        Spacer(minLength: 8)
+
+                        ZStack {
+                            if isSelected {
+                                Image(systemName: isMulti ? "checkmark.square.fill" : "checkmark.circle.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                                    .transition(.scale.combined(with: .opacity))
+                            } else {
+                                Circle()
+                                    .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.5)
+                                    .frame(width: 18, height: 18)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 46)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(isSelected ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.optionBg(isDark: isDark))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(isSelected ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: isSelected ? 1.5 : 1.0)
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(PillOptionButtonStyle())
+            }
+
+            // 自填回答输入行 (同样为胶囊卡片设计)
+            let hasCustomText = !currentState.otherText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            HStack(spacing: 10) {
+                Image(systemName: "pencil.line")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(hasCustomText ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textDim(isDark: isDark))
+
+                TextField("自填回答…", text: Binding(
+                    get: {
+                        activeQuestionIndex < states.count ? states[activeQuestionIndex].otherText : ""
+                    },
+                    set: { val in
+                        if activeQuestionIndex < states.count {
+                            states[activeQuestionIndex].otherText = val
+                            if !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                if !isMulti {
+                                    states[activeQuestionIndex].selected.removeAll()
+                                }
+                                states[activeQuestionIndex].otherSelected = true
+                            }
+                        }
+                    }
+                ))
+                .font(.system(size: 14))
+                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                .submitLabel(.send)
+                .onSubmit {
+                    if canSubmit && isSessionReady {
+                        submit()
+                    }
+                }
+
+                if !currentState.otherText.isEmpty {
+                    Button {
+                        states[activeQuestionIndex].otherText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 46)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(CSSThemeVariables.optionBg(isDark: isDark))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(hasCustomText ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: hasCustomText ? 1.5 : 1.0)
+            )
         }
     }
 
