@@ -6861,11 +6861,11 @@ public struct ChatPlusPanel: View {
 
 // MARK: - AI 语音设置弹窗组件 (ChatVoiceSettingsSheet)
 
-public struct ChatVoiceSettingsSheet: View {
+struct ChatVoiceSettingsSheet: View {
     @ObservedObject var vm: AIChatViewModel
     @Environment(\.dismiss) private var dismiss
 
-    public init(vm: AIChatViewModel) {
+    init(vm: AIChatViewModel) {
         self.vm = vm
     }
 
