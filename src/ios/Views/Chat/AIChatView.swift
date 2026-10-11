@@ -6901,7 +6901,7 @@ public struct ChatPlusPanel: View {
 
 // MARK: - 微信式表情包底栏抽屉面板 (ChatStickerPanel)
 
-public struct ChatStickerPanel: View {
+struct ChatStickerPanel: View {
     @ObservedObject var vm: AIChatViewModel
     var onBackToPlus: () -> Void
     @ObservedObject private var store = StickerStore.shared
@@ -6936,7 +6936,7 @@ public struct ChatStickerPanel: View {
         GridItem(.flexible(), spacing: 10)
     ]
 
-    public init(vm: AIChatViewModel, onBackToPlus: @escaping () -> Void) {
+    init(vm: AIChatViewModel, onBackToPlus: @escaping () -> Void) {
         self.vm = vm
         self.onBackToPlus = onBackToPlus
     }
@@ -6984,7 +6984,7 @@ public struct ChatStickerPanel: View {
                                     .background(
                                         selectedCategory == cat
                                             ? CSSThemeVariables.accent(isDark: isDark)
-                                            : CSSThemeVariables.surface(isDark: isDark)
+                                            : CSSThemeVariables.optionBg(isDark: isDark)
                                     )
                                     .foregroundStyle(
                                         selectedCategory == cat
@@ -7035,7 +7035,7 @@ public struct ChatStickerPanel: View {
                                 )
                             Text("添加")
                                 .font(.system(size: 11, weight: .regular))
-                                .foregroundStyle(CSSThemeVariables.textSub(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                         }
                     }
                     .buttonStyle(.plain)
