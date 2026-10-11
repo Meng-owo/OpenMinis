@@ -3405,11 +3405,19 @@ struct AIChatView: View {
         } label: {
             Image(systemName: "plus")
                 .font(.system(size: 19, weight: .semibold))
-                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                .foregroundStyle(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
                 .rotationEffect(.degrees(isPanelOpen ? 45 : 0))
                 .frame(width: 36, height: 36)
-                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                .background(isPanelOpen ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.optionBg(isDark: isDark))
                 .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .strokeBorder(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark).opacity(0.35) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                )
+                .shadow(
+                    color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06),
+                    radius: 4, x: 0, y: 1
+                )
         }
         .accessibilityLabel(Text(isPanelOpen ? "收起功能面板并输入" : "展开更多功能"))
     }
@@ -6762,21 +6770,25 @@ public struct PlusPanelTileButton: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(CSSThemeVariables.accentSoft(isDark: isDark))
+                        .fill(CSSThemeVariables.optionBg(isDark: isDark))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                        )
                         .shadow(
-                            color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.08),
-                            radius: 8, x: 0, y: 2
+                            color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06),
+                            radius: 6, x: 0, y: 2
                         )
                         .frame(width: 58, height: 58)
 
                     Image(systemName: item.systemImageName)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                 }
 
                 Text(item.title)
                     .font(.system(size: 12, weight: .regular))
-                    .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
@@ -6902,15 +6914,31 @@ public struct ChatPlusPanel: View {
 // MARK: - 微信式表情包底栏抽屉面板 (ChatStickerPanel)
 
 struct ChatStickerPanel: View {
+    enum ActivePanelSheet: Identifiable {
+        case add(initialData: Data?)
+        case edit(StickerItem)
+        case preview(StickerItem)
+
+        var id: String {
+            switch self {
+            case .add(let d):
+                return "add_\(d?.count ?? 0)"
+            case .edit(let item):
+                return "edit_\(item.id)"
+            case .preview(let item):
+                return "preview_\(item.id)"
+            }
+        }
+    }
+
     @ObservedObject var vm: AIChatViewModel
     var onBackToPlus: () -> Void
     @ObservedObject private var store = StickerStore.shared
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedCategory: String = "常用"
-    @State private var showUploadSheet = false
-    @State private var editingSticker: StickerItem?
-    @State private var previewSticker: StickerItem?
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var activeSheet: ActivePanelSheet?
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -6963,8 +6991,12 @@ struct ChatStickerPanel: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                    .background(CSSThemeVariables.optionBg(isDark: isDark))
                     .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                    )
                     .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -6988,8 +7020,17 @@ struct ChatStickerPanel: View {
                                     )
                                     .foregroundStyle(
                                         selectedCategory == cat
-                                            ? Color.white
+                                            ? CSSThemeVariables.accentFg(isDark: isDark)
                                             : CSSThemeVariables.textMain(isDark: isDark)
+                                    )
+                                    .overlay(
+                                        Capsule()
+                                            .strokeBorder(
+                                                selectedCategory == cat
+                                                    ? Color.clear
+                                                    : CSSThemeVariables.optionBorder(isDark: isDark),
+                                                lineWidth: 1.0
+                                            )
                                     )
                                     .clipShape(Capsule())
                             }
@@ -6998,16 +7039,20 @@ struct ChatStickerPanel: View {
                     }
                 }
 
-                // 添加表情包按钮
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    showUploadSheet = true
-                } label: {
+                // 添加表情包按钮 (直接呼出系统相册选图)
+                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 20))
                         .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Button {
+                        activeSheet = .add(initialData: nil)
+                    } label: {
+                        Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 10)
@@ -7016,11 +7061,8 @@ struct ChatStickerPanel: View {
             // 中间上下滑动表情包宫格区 (与加号面板总高度严格一致)
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVGrid(columns: columns, spacing: 14) {
-                    // 第一个格子：微信式「+ 添加」卡片
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        showUploadSheet = true
-                    } label: {
+                    // 第一个格子：微信式「+ 添加」卡片 (点击直接呼出系统相册)
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                         VStack(spacing: 4) {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .strokeBorder(
@@ -7037,8 +7079,16 @@ struct ChatStickerPanel: View {
                                 .font(.system(size: 11, weight: .regular))
                                 .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            activeSheet = .add(initialData: nil)
+                        } label: {
+                            Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
+                        }
+                    }
 
                     // 已入库表情包列表
                     ForEach(currentStickers) { sticker in
@@ -7072,12 +7122,12 @@ struct ChatStickerPanel: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button {
-                                previewSticker = sticker
+                                activeSheet = .preview(sticker)
                             } label: {
                                 Label("查看大图与详情", systemImage: "eye")
                             }
                             Button {
-                                editingSticker = sticker
+                                activeSheet = .edit(sticker)
                             } label: {
                                 Label("编辑信息", systemImage: "pencil")
                             }
@@ -7097,14 +7147,25 @@ struct ChatStickerPanel: View {
         }
         .frame(height: 295)
         .background(CSSThemeVariables.card(isDark: isDark))
-        .sheet(isPresented: $showUploadSheet) {
-            StickerEditSheet(editingItem: nil)
+        .onChange(of: selectedPhotoItem) { newItem in
+            guard let newItem else { return }
+            Task {
+                let data = await StickerEditSheet.loadData(from: newItem)
+                await MainActor.run {
+                    self.selectedPhotoItem = nil
+                    self.activeSheet = .add(initialData: data)
+                }
+            }
         }
-        .sheet(item: $editingSticker) { item in
-            StickerEditSheet(editingItem: item)
-        }
-        .sheet(item: $previewSticker) { item in
-            StickerZoomPreviewSheet(sticker: item)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .add(let initialData):
+                StickerEditSheet(editingItem: nil, initialImageData: initialData)
+            case .edit(let item):
+                StickerEditSheet(editingItem: item)
+            case .preview(let item):
+                StickerZoomPreviewSheet(sticker: item)
+            }
         }
     }
 }
@@ -7699,6 +7760,18 @@ public struct StickerZoomPreviewSheet: View {
 
 // MARK: - 表情包选择抽屉面板 (StickerPickerSheet)
 
+enum StickerPickerActiveSheet: Identifiable {
+    case add
+    case edit(StickerItem)
+
+    var id: String {
+        switch self {
+        case .add: return "add"
+        case .edit(let item): return "edit_\(item.id)"
+        }
+    }
+}
+
 struct StickerPickerSheet: View {
     @ObservedObject var vm: AIChatViewModel
     @ObservedObject private var store = StickerStore.shared
@@ -7849,11 +7922,25 @@ struct StickerPickerSheet: View {
                     Button("关闭") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showUploadSheet) {
-                StickerEditSheet(editingItem: nil)
-            }
-            .sheet(item: $editingSticker) { item in
-                StickerEditSheet(editingItem: item)
+            .sheet(item: Binding<StickerPickerActiveSheet?>(
+                get: {
+                    if let editing = editingSticker { return .edit(editing) }
+                    if showUploadSheet { return .add }
+                    return nil
+                },
+                set: { val in
+                    if val == nil {
+                        showUploadSheet = false
+                        editingSticker = nil
+                    }
+                }
+            )) { sheet in
+                switch sheet {
+                case .add:
+                    StickerEditSheet(editingItem: nil)
+                case .edit(let item):
+                    StickerEditSheet(editingItem: item)
+                }
             }
         }
         .presentationDetents([.medium, .large])
@@ -7864,6 +7951,7 @@ struct StickerPickerSheet: View {
 
 struct StickerEditSheet: View {
     var editingItem: StickerItem?
+    var initialImageData: Data? = nil
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var store = StickerStore.shared
 
@@ -7871,6 +7959,17 @@ struct StickerEditSheet: View {
     @State private var imageData: Data?
     @State private var autoAiRecognize: Bool = VisionGroupResolver.isConfigured
     @State private var isRecognizing: Bool = false
+
+    static func loadData(from item: PhotosPickerItem) async -> Data? {
+        do {
+            if let data = try await item.loadTransferable(type: Data.self), !data.isEmpty {
+                return data
+            }
+        } catch {
+            print("[StickerEditSheet] loadTransferable Data error: \(error)")
+        }
+        return nil
+    }
 
     @State private var title: String = ""
     @State private var content: String = ""
@@ -7917,6 +8016,7 @@ struct StickerEditSheet: View {
                                     .foregroundColor(.white)
                                     .clipShape(Capsule())
                             }
+                            .buttonStyle(.borderless)
 
                             if isRecognizing {
                                 HStack(spacing: 6) {
@@ -8012,7 +8112,7 @@ struct StickerEditSheet: View {
             .onChange(of: selectedPhotoItem) { newItem in
                 guard let newItem else { return }
                 Task {
-                    if let loaded = try? await newItem.loadTransferable(type: Data.self) {
+                    if let loaded = await Self.loadData(from: newItem) {
                         await MainActor.run {
                             self.imageData = loaded
                             if !isEditMode && autoAiRecognize && VisionGroupResolver.isConfigured {
@@ -8034,6 +8134,12 @@ struct StickerEditSheet: View {
                     }
                 } else {
                     category = store.categories.first ?? "日常"
+                    if let initial = initialImageData {
+                        imageData = initial
+                        if autoAiRecognize && VisionGroupResolver.isConfigured {
+                            runAiRecognition(data: initial)
+                        }
+                    }
                 }
             }
         }
