@@ -443,6 +443,7 @@ struct AIChatView: View {
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
 
     // MARK: - [T-ipad-composer-resize] Draggable composer height (iPad only)
 
