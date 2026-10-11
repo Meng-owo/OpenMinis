@@ -890,7 +890,7 @@ struct ContentView: View {
     @State private var sessions: [ChatSession] = []
     @State private var folders: [ChatFolder] = []
     // ［persona］人设列表 sheet。
-    @State private var showPersonaSheet = false
+    @State private var showContactsPage = false
     /// Collapsed folder sections. Pure UI view-state: persisted locally, never
     /// synced (like SessionBadgeStore's .unread — cross-device expand state is
     /// noise, not signal).
@@ -2096,6 +2096,11 @@ struct ContentView: View {
                 .navigationDestination(isPresented: $showPlayHub) {
                     PlayHubView()
                 }
+                .navigationDestination(isPresented: $showContactsPage) {
+                    PersonaContactsView { _ in
+                        openSession(Self.makeNewSessionId())
+                    }
+                }
         } detail: {
             detailView
                 .appFontScale()
@@ -2115,6 +2120,11 @@ struct ContentView: View {
                 // [T-play-hub 09-12] 玩法 hub on the same stack.
                 .navigationDestination(isPresented: $showPlayHub) {
                     PlayHubView()
+                }
+                .navigationDestination(isPresented: $showContactsPage) {
+                    PersonaContactsView { _ in
+                        openSession(Self.makeNewSessionId())
+                    }
                 }
                 .navigationDestination(for: String.self) { id in
                     // `.id(id)` mirrors detailView (iPad): navigationDestination
@@ -2765,11 +2775,6 @@ struct ContentView: View {
         // iPhone stack and the iPad split get it (lives on the Group).
         .safeAreaInset(edge: .top, spacing: 0) {
             inlineSearchBar
-        }
-        .sheet(isPresented: $showPersonaSheet) {
-            PersonaContactsView { _ in
-                openSession(Self.makeNewSessionId())
-            }
         }
         // Hardware ⌘F → focus search, available while the session list is on
         // screen (iPad/Mac keyboards). A zero-opacity button carries the
@@ -3488,7 +3493,7 @@ struct ContentView: View {
                 label: "Contacts",
                 size: 22, weight: .medium
             ) {
-                showPersonaSheet = true
+                showContactsPage = true
             }
             homeBottomTab(
                 icon: { Image(systemName: "gearshape") },

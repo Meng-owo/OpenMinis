@@ -17,13 +17,139 @@ import SwiftUI
 struct Persona: Codable, Identifiable, Hashable {
     var id: String
     var name: String
-    var avatar: String?          // 文件引用 avatars/….png（老版本 dataURI），nil = 默认图标
+    var avatar: String?          // 文件引用 avatars/….png，nil = 默认图标
     var modelId: String?         // nil = 用全局默认模型
     var skillIds: [String]?      // nil = 全部可用
     var mcpServerIds: [String]?  // nil = 全部可用
-    var localToolIds: [String]?  // nil = 全部可用（v1 仅存储，执行层过滤后续再接）
+    var localToolIds: [String]?  // nil = 全部可用
     var sortOrder: Int
     var isBuiltIn: Bool          // 内置（小管家）不可删除
+
+    // Kelivo 对齐 - 基础设置 (采样与模型)
+    var temperature: Double?
+    var topP: Double?
+    var limitContextMessages: Bool
+    var contextMessageSize: Int
+    var thinkingBudget: Int?
+    var maxTokens: Int?
+    var defaultWorkspace: String?
+    var useAssistantAvatar: Bool
+    var useAssistantName: Bool
+    var streamOutput: Bool
+
+    // Kelivo 对齐 - 聊天背景
+    var background: String?
+    var useGradientBackground: Bool
+
+    // Kelivo 对齐 - 提示词与模板
+    var allowConversationSystemPrompt: Bool
+    var allowConversationPromptInjection: Bool
+    var appendCurrentTimeToUserMessage: Bool
+    var messageTemplate: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, avatar, modelId, skillIds, mcpServerIds, localToolIds, sortOrder, isBuiltIn
+        case temperature, topP, limitContextMessages, contextMessageSize, thinkingBudget, maxTokens
+        case defaultWorkspace, useAssistantAvatar, useAssistantName, streamOutput
+        case background, useGradientBackground
+        case allowConversationSystemPrompt, allowConversationPromptInjection
+        case appendCurrentTimeToUserMessage, messageTemplate
+    }
+
+    init(id: String, name: String, avatar: String? = nil, modelId: String? = nil,
+         skillIds: [String]? = nil, mcpServerIds: [String]? = nil, localToolIds: [String]? = nil,
+         sortOrder: Int = 0, isBuiltIn: Bool = false,
+         temperature: Double? = nil, topP: Double? = nil, limitContextMessages: Bool = false,
+         contextMessageSize: Int = 20, thinkingBudget: Int? = nil, maxTokens: Int? = nil,
+         defaultWorkspace: String? = nil, useAssistantAvatar: Bool = false, useAssistantName: Bool = false,
+         streamOutput: Bool = true, background: String? = nil, useGradientBackground: Bool = false,
+         allowConversationSystemPrompt: Bool = false, allowConversationPromptInjection: Bool = false,
+         appendCurrentTimeToUserMessage: Bool = false, messageTemplate: String = "{{ message }}") {
+        self.id = id
+        self.name = name
+        self.avatar = avatar
+        self.modelId = modelId
+        self.skillIds = skillIds
+        self.mcpServerIds = mcpServerIds
+        self.localToolIds = localToolIds
+        self.sortOrder = sortOrder
+        self.isBuiltIn = isBuiltIn
+        self.temperature = temperature
+        self.topP = topP
+        self.limitContextMessages = limitContextMessages
+        self.contextMessageSize = contextMessageSize
+        self.thinkingBudget = thinkingBudget
+        self.maxTokens = maxTokens
+        self.defaultWorkspace = defaultWorkspace
+        self.useAssistantAvatar = useAssistantAvatar
+        self.useAssistantName = useAssistantName
+        self.streamOutput = streamOutput
+        self.background = background
+        self.useGradientBackground = useGradientBackground
+        self.allowConversationSystemPrompt = allowConversationSystemPrompt
+        self.allowConversationPromptInjection = allowConversationPromptInjection
+        self.appendCurrentTimeToUserMessage = appendCurrentTimeToUserMessage
+        self.messageTemplate = messageTemplate
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        modelId = try container.decodeIfPresent(String.self, forKey: .modelId)
+        skillIds = try container.decodeIfPresent([String].self, forKey: .skillIds)
+        mcpServerIds = try container.decodeIfPresent([String].self, forKey: .mcpServerIds)
+        localToolIds = try container.decodeIfPresent([String].self, forKey: .localToolIds)
+        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        isBuiltIn = try container.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
+
+        temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
+        topP = try container.decodeIfPresent(Double.self, forKey: .topP)
+        limitContextMessages = try container.decodeIfPresent(Bool.self, forKey: .limitContextMessages) ?? false
+        contextMessageSize = try container.decodeIfPresent(Int.self, forKey: .contextMessageSize) ?? 20
+        thinkingBudget = try container.decodeIfPresent(Int.self, forKey: .thinkingBudget)
+        maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
+        defaultWorkspace = try container.decodeIfPresent(String.self, forKey: .defaultWorkspace)
+        useAssistantAvatar = try container.decodeIfPresent(Bool.self, forKey: .useAssistantAvatar) ?? false
+        useAssistantName = try container.decodeIfPresent(Bool.self, forKey: .useAssistantName) ?? false
+        streamOutput = try container.decodeIfPresent(Bool.self, forKey: .streamOutput) ?? true
+
+        background = try container.decodeIfPresent(String.self, forKey: .background)
+        useGradientBackground = try container.decodeIfPresent(Bool.self, forKey: .useGradientBackground) ?? false
+
+        allowConversationSystemPrompt = try container.decodeIfPresent(Bool.self, forKey: .allowConversationSystemPrompt) ?? false
+        allowConversationPromptInjection = try container.decodeIfPresent(Bool.self, forKey: .allowConversationPromptInjection) ?? false
+        appendCurrentTimeToUserMessage = try container.decodeIfPresent(Bool.self, forKey: .appendCurrentTimeToUserMessage) ?? false
+        messageTemplate = try container.decodeIfPresent(String.self, forKey: .messageTemplate) ?? "{{ message }}"
+    }
+}
+
+// MARK: - LocalToolRegistry (Kelivo 本地工具列表与映射)
+
+struct LocalToolItem: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let icon: String
+}
+
+enum LocalToolRegistry {
+    static let all: [LocalToolItem] = [
+        LocalToolItem(id: "timeInfo", title: "时间信息", subtitle: "读取设备日期、星期、时间、时区、UTC 偏移和时间戳。", icon: "clock"),
+        LocalToolItem(id: "clipboard", title: "剪切板", subtitle: "在明确需要时读取或写入设备剪切板中的纯文本。", icon: "doc.on.clipboard"),
+        LocalToolItem(id: "textToSpeech", title: "文字转语音", subtitle: "允许助手使用已配置的语音播放朗读文本。", icon: "speaker.wave.2"),
+        LocalToolItem(id: "askUser", title: "询问用户", subtitle: "允许助手提出简短问题，并在你回答后继续生成。", icon: "questionmark.circle"),
+        LocalToolItem(id: "calculate", title: "计算器", subtitle: "计算数学表达式，支持加减乘除幂运算 sqrt sin cos 等。", icon: "function"),
+        LocalToolItem(id: "calendarQuery", title: "查询日历", subtitle: "读取本设备上的日历日程，需要授予日历权限。", icon: "calendar"),
+        LocalToolItem(id: "calendarCreate", title: "创建日程", subtitle: "在你确认后于本设备创建日历日程，需要授予日历权限。", icon: "calendar.badge.plus"),
+        LocalToolItem(id: "currentLocation", title: "当前位置", subtitle: "读取本设备的一次性位置，需要授予定位权限。", icon: "location"),
+        LocalToolItem(id: "weather", title: "天气", subtitle: "获取当前位置或指定地点的 Apple 天气，结果中会展示 WeatherKit 数据来源。", icon: "cloud.sun"),
+        LocalToolItem(id: "remindersQuery", title: "查询提醒", subtitle: "读取本设备上的提醒事项，需要授予提醒事项完整访问权限。", icon: "list.bullet"),
+        LocalToolItem(id: "remindersCreate", title: "创建提醒", subtitle: "在你确认后于本设备创建提醒事项，需要授予提醒事项完整访问权限。", icon: "plus.rectangle.on.rectangle"),
+        LocalToolItem(id: "remindersComplete", title: "完成提醒", subtitle: "在你确认后将提醒事项标记为完成，需要授予提醒事项完整访问权限。", icon: "checkmark.circle"),
+        LocalToolItem(id: "healthSummary", title: "健康摘要", subtitle: "读取本设备的健康活动摘要，需要授予健康数据读取权限。", icon: "heart")
+    ]
 }
 
 // MARK: - PersonaStore
