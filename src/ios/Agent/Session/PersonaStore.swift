@@ -229,7 +229,6 @@ extension Persona {
         return dict
     }
 }
-}
 
 // MARK: - LocalToolRegistry (Kelivo 本地工具列表与映射)
 
