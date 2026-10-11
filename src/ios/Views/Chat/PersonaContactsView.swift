@@ -666,7 +666,7 @@ struct PersonaBasicSettingsView: View {
 
                     // MARK: 模型与独立绑定
                     Section {
-                        let allEntries = ProviderConfigStore.shared.allEntries()
+                        let allEntries = ProviderConfigStore.shared.config.modelEntries
                         Picker("绑定模型", selection: Binding(
                             get: { p.modelId ?? "" },
                             set: { newVal in
@@ -783,7 +783,7 @@ struct PersonaBasicSettingsView: View {
     }
 
     private func entryTitle(for entry: ModelEntry) -> String {
-        "\(entry.model.displayName) (\(entry.providerType.displayName))"
+        entry.model.displayName
     }
 
     private func loadFromPersona(_ p: Persona) {
@@ -1877,7 +1877,7 @@ struct PersonaMcpSettingsView: View {
                         Section("MCP 服务器白名单") {
                             ForEach(allServers) { server in
                                 let isEnabled = (p.mcpServerIds ?? []).contains(server.id)
-                                Toggle(server.name, isOn: Binding(
+                                Toggle(server.id, isOn: Binding(
                                     get: { isEnabled },
                                     set: { on in
                                         toggleMcp(server.id, enabled: on, persona: p)
