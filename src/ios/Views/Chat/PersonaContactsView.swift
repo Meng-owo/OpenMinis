@@ -155,12 +155,13 @@ struct PersonaContactsView: View {
     }
 
     private func personaBio(for persona: Persona) -> String {
-        let soul = PersonaStore.readSoulMD(for: persona.id)
-        let bio = soul.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        if bio.isEmpty {
-            return persona.isBuiltIn ? "桥内置的 MCP 管家" : "暂无人设描述"
+        if let soul = SoulStore.load(for: persona.id) {
+            let bio = soul.body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !bio.isEmpty {
+                return bio.replacingOccurrences(of: "\n", with: " ")
+            }
         }
-        return bio.replacingOccurrences(of: "\n", with: " ")
+        return persona.isBuiltIn ? "桥内置的 MCP 管家" : "暂无人设描述"
     }
 }
 
@@ -665,6 +666,7 @@ struct PersonaBasicSettingsView: View {
 
                     // MARK: 模型与独立绑定
                     Section {
+                        let allEntries = ProviderConfigStore.shared.allEntries()
                         Picker("绑定模型", selection: Binding(
                             get: { p.modelId ?? "" },
                             set: { newVal in
@@ -674,8 +676,8 @@ struct PersonaBasicSettingsView: View {
                             }
                         )) {
                             Text("继承全局默认模型").tag("")
-                            ForEach(ProviderConfigStore.shared.allEntries()) { entry in
-                                Text("\(entry.model.displayName) (\(entry.providerType.displayName))").tag(entry.id)
+                            ForEach(allEntries) { entry in
+                                Text(entryTitle(for: entry)).tag(entry.id)
                             }
                         }
 
@@ -778,6 +780,10 @@ struct PersonaBasicSettingsView: View {
                 }
             }
         }
+    }
+
+    private func entryTitle(for entry: ModelEntry) -> String {
+        "\(entry.model.displayName) (\(entry.providerType.displayName))"
     }
 
     private func loadFromPersona(_ p: Persona) {
@@ -1576,8 +1582,15 @@ struct PersonaPromptSettingsView: View {
     }
 
     private func loadFromPersona(_ p: Persona) {
-        let soul = PersonaStore.readSoulMD(for: p.id)
-        soulText = soul.raw
+        let url = SoulStore.fileURL(for: p.id)
+        if let data = try? Data(contentsOf: url),
+           let str = String(data: data, encoding: .utf8) {
+            soulText = str
+        } else if let soul = SoulStore.load(for: p.id) {
+            soulText = SoulMDParser.serialize(soul)
+        } else {
+            soulText = ""
+        }
         templateText = p.messageTemplate
         appendTimeVal = p.appendCurrentTimeToUserMessage
         allowSystemPromptVal = p.allowConversationSystemPrompt
@@ -1585,7 +1598,9 @@ struct PersonaPromptSettingsView: View {
     }
 
     private func saveSoul(for p: Persona) {
-        PersonaStore.writeSoulMDRaw(for: p.id, raw: soulText)
+        let url = SoulStore.fileURL(for: p.id)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? soulText.data(using: .utf8)?.write(to: url, options: .atomic)
         if store.currentPersonaID == p.id {
             SoulStore.refreshCache()
         }
@@ -1796,16 +1811,11 @@ struct PersonaSkillsSettingsView: View {
                     if !isAll {
                         Section("技能白名单") {
                             ForEach(allSkills) { skill in
-                                let currentList = p.skillIds ?? []
+                                let isEnabled = (p.skillIds ?? []).contains(skill.id)
                                 Toggle(skill.name, isOn: Binding(
-                                    get: { currentList.contains(skill.id) },
+                                    get: { isEnabled },
                                     set: { on in
-                                        var set = Set(currentList)
-                                        if on { set.insert(skill.id) }
-                                        else { set.remove(skill.id) }
-                                        var updated = p
-                                        updated.skillIds = Array(set)
-                                        store.updatePersona(updated)
+                                        toggleSkill(skill.id, enabled: on, persona: p)
                                     }
                                 ))
                             }
@@ -1817,6 +1827,15 @@ struct PersonaSkillsSettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
+    }
+
+    private func toggleSkill(_ skillId: String, enabled: Bool, persona: Persona) {
+        var set = Set(persona.skillIds ?? [])
+        if enabled { set.insert(skillId) }
+        else { set.remove(skillId) }
+        var updated = persona
+        updated.skillIds = Array(set)
+        store.updatePersona(updated)
     }
 }
 
@@ -1857,16 +1876,11 @@ struct PersonaMcpSettingsView: View {
                     if !isAll {
                         Section("MCP 服务器白名单") {
                             ForEach(allServers) { server in
-                                let currentList = p.mcpServerIds ?? []
+                                let isEnabled = (p.mcpServerIds ?? []).contains(server.id)
                                 Toggle(server.name, isOn: Binding(
-                                    get: { currentList.contains(server.id) },
+                                    get: { isEnabled },
                                     set: { on in
-                                        var set = Set(currentList)
-                                        if on { set.insert(server.id) }
-                                        else { set.remove(server.id) }
-                                        var updated = p
-                                        updated.mcpServerIds = Array(set)
-                                        store.updatePersona(updated)
+                                        toggleMcp(server.id, enabled: on, persona: p)
                                     }
                                 ))
                             }
@@ -1878,5 +1892,14 @@ struct PersonaMcpSettingsView: View {
                 .navigationBarTitleDisplayMode(.inline)
             }
         }
+    }
+
+    private func toggleMcp(_ serverId: String, enabled: Bool, persona: Persona) {
+        var set = Set(persona.mcpServerIds ?? [])
+        if enabled { set.insert(serverId) }
+        else { set.remove(serverId) }
+        var updated = persona
+        updated.mcpServerIds = Array(set)
+        store.updatePersona(updated)
     }
 }
