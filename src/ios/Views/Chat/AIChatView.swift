@@ -361,6 +361,7 @@ struct AIChatView: View {
     @State private var showTerminal = false
     @State private var terminalInitCommand: String?
     @State private var showAttachmentMenu = false
+    @State private var showPlusPanel = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -934,6 +935,13 @@ struct AIChatView: View {
             if requested {
                 showClearChatConfirm = true
                 vm.clearChatConfirmRequested = false
+            }
+        }
+        .onChange(of: inputFocused) { focused in
+            if focused && showPlusPanel {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showPlusPanel = false
+                }
             }
         }
         .alert(AppLocalized("Compact Above"), isPresented: Binding(
@@ -2056,6 +2064,65 @@ struct AIChatView: View {
 
     /// [T-new-chat-menu-entry] "New Chat" from the "…" menu. Streaming sessions
     /// get a confirm first (stopping the task is destructive); idle sessions go
+    // MARK: - 加号功能面板动作分发
+
+    private func handlePlusPanelAction(_ item: PlusPanelItemType) {
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+            showPlusPanel = false
+        }
+        switch item {
+        case .zap:
+            vm.showSlashMenuOverInput()
+            inputFocused = true
+        case .image:
+            showPhotoPicker = true
+        case .doc:
+            showDocumentPicker = true
+        case .book:
+            showSessionSkills = true
+        case .sticker:
+            MinisToast.show("醒醒专属表情包系统入口已就绪，正在准备中…", systemImage: "face.smiling.inverse")
+        case .sparkles:
+            showModelPicker = true
+        case .chats:
+            requestNewChatFromMenu()
+        case .group:
+            MinisToast.show("多智能体群聊模式筹备中", systemImage: "person.2.fill")
+        case .gear:
+            showSessionMCPs = true
+        case .footprint:
+            showSessionMemory = true
+        case .eyeoff:
+            let key = "scheduled.stealthMode"
+            let cur = UserDefaults.standard.bool(forKey: key)
+            UserDefaults.standard.set(!cur, forKey: key)
+            MinisToast.show(!cur ? "已开启醒醒专属隐身模式" : "已退出隐身模式", systemImage: "eye.slash.fill")
+        case .gauge:
+            showTokenUsage = true
+        case .share:
+            exportCurrentConversation()
+        }
+    }
+
+    private func exportCurrentConversation() {
+        guard !vm.messages.isEmpty else {
+            MinisToast.show("当前还没有对话记录可导出", systemImage: "info.circle")
+            return
+        }
+        var text = "# OpenMinis 对话记录导出\n\n"
+        for msg in vm.messages {
+            let role = msg.isUser ? "我" : "小梦"
+            text += "### \(role):\n\(msg.text)\n\n"
+        }
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("OpenMinis-Chat-\(Int(Date().timeIntervalSince1970)).md")
+        do {
+            try text.write(to: tempURL, atomically: true, encoding: .utf8)
+            shareFile = tempURL
+        } catch {
+            MinisToast.show("导出失败: \(error.localizedDescription)", systemImage: "exclamationmark.triangle")
+        }
+    }
+
     /// straight to the shared `.newChatRequested` path, which replaces the
     /// current chat with a fresh draft. Drafts aren't persisted until the first
     /// message, so leaving an empty/draft session this way leaves no residue,
@@ -3277,53 +3344,36 @@ struct AIChatView: View {
         }
     }
 
-    /// Attachment "+" button.
-    /// iOS 16's Menu has a vertical alignment bug inside HStack that causes it
-    /// to sit higher than sibling buttons when the keyboard is up.
-    /// Use confirmationDialog on iOS 16, Menu on iOS 17+.
+    /// 加号展开按钮（收纳所有功能为宫格抽屉，实体可爱图标 + CSS全局变量驱动）
     @ViewBuilder
     private var attachmentMenuButton: some View {
-        // [T-ios-voiceover-labels] Labelled on the shared `icon` so both the
-        // iOS 17 Menu branch and the iOS 16 confirmationDialog branch below
-        // announce the same thing; otherwise VoiceOver reads "plus".
-        let icon = Image(systemName: "plus")
-            .font(.system(size: 18, weight: .medium))
-            .foregroundStyle(ChatColors.secondaryText)
-            .frame(width: 34, height: 34)
-            .accessibilityLabel(Text("Add attachment", comment: "VoiceOver label for the attachment button"))
-            .background(ChatColors.inputIconBg)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
-
-        if #available(iOS 17, *) {
-            Menu {
-                Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
-                Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
-                Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
-            } label: {
-                icon
+        let isDark = colorScheme == .dark
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            if inputFocused {
+                inputFocused = false
             }
-        } else {
-            Button { showAttachmentMenu = true } label: {
-                icon
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                showPlusPanel.toggle()
             }
-            .confirmationDialog("Add Attachment", isPresented: $showAttachmentMenu) {
-                Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
-                Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
-                Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
-            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                .rotationEffect(.degrees(showPlusPanel ? 45 : 0))
+                .frame(width: 36, height: 36)
+                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                .clipShape(Circle())
         }
+        .accessibilityLabel(Text(showPlusPanel ? "收起功能面板" : "展开更多功能"))
     }
 
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
-    /// Returns AnyView to keep `inputBar`'s generic type compact; SwiftUI
-    /// runtime demangle chokes on deep nested types otherwise.
+    /// 所有零碎选项均已收纳至加号宫格面板内，保持底栏极致清爽。
     private var inputBottomRow: AnyView {
         let row = HStack(spacing: 12) {
             attachmentMenuButton
-            slashMenuButton
             if vm.editingMessageIndex != nil { editExitButton }
-            voiceOptionsButton
             Spacer()
             // Mutually exclusive with editExitButton: while editing a past
             // message the exit capsule owns this row — showing both capsules
@@ -3845,9 +3895,23 @@ struct AIChatView: View {
                 inputBottomRow
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
+
+                if showPlusPanel {
+                    ChatPlusPanel { item in
+                        handlePlusPanelAction(item)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
             .contentShape(MinisThemeShape.inputBar)
-            .onTapGesture { inputFocused = true }
+            .onTapGesture {
+                inputFocused = true
+                if showPlusPanel {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showPlusPanel = false
+                    }
+                }
+            }
             .onReceive(speechManager.$recognizedText) { text in
                 guard speechManager.state == .recording || !text.isEmpty else { return }
                 // Append only the new delta to preserve existing input text
