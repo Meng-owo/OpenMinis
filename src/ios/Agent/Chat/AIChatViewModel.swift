@@ -2065,10 +2065,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [Feedback 10-12] 客户端系统运行环境指令与质量反馈规矩
         let feedbackFragment = """
         ## 客户端系统运行环境指令与质量反馈规矩
-        客户端会在消息前注入 `<system_runtime_feedback ...>` 标准结构体（包含对上一轮回复的质量检测、指令约束或用户即时事件如戳一下、闭嘴等）。
-        - 权威性：此标签属于客户端真实运行环境指令，具有最高优先级，请严格执行。
-        - 静默约束：不得针对该指令进行道歉、辩解、复盘或回复「收到」、「遵命」等客服腔套话。必须直接在当前回复中按照指令要求纠正输出。
-        - 趣味互动：若收到 `haptic_nudge`（戳一下）或 `silence_request`（闭嘴）等即时事件，请按照真实角色人设和亲密关系做出自然生动的即时反应，坚决杜绝客服模板话。
+        客户端会作为独立系统提示 `<system-reminder><system_runtime_feedback ...></system-reminder>` 注入真实运行环境指令（如质量反馈、戳一下、闭嘴等）。
+        - 独立性：系统提示由客户端引擎自动上报，与用户的对话发言完全独立。切勿将系统通知与用户发言混为一谈。
+        - 权威性与静默约束：此标签属于系统底层指令，具有最高优先级。严格执行纠正，不得向用户道歉、辩解、复盘或做客服式口头保证，直接按指令要求纠正回复。
+        - 严禁 Emoji 表情符号：在所有回复中严禁输出任何 Emoji 表情符号（如 😊、😂、👍、❤️、✨ 等）或堆砌无意义网络颜文字，严格保持 Authentic SOUL.md 人设本色。
+        - 趣味互动：若收到 `haptic_nudge`（戳一下）或 `silence_directive`（闭嘴）等即时事件，请按照真实角色人设和亲密关系做出自然生动的即时反应，坚决杜绝客服模板话。
         """
         p += "\n\n" + feedbackFragment
         // Authoritative memory-status footer (overrides any earlier
@@ -2802,10 +2803,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 ))
             }
 
-            // [Feedback 10-12] 注入静默系统反馈指令 (醒醒端气泡完全隐身，模型端作为客户端权威指示)
+            // [Feedback 10-12] 注入静默系统反馈指令 (醒醒端气泡完全隐身，与醒醒用户发言彻底独立分开)
             if !activeFeedbackDirectives.isEmpty {
                 let directiveBlock = activeFeedbackDirectives.joined(separator: "\n\n")
-                userParts.append(.text(directiveBlock))
+                let systemReminderText = "<system-reminder>\n\(directiveBlock)\n</system-reminder>"
+                let feedbackMessage = AgentMessage(role: .user, parts: [.text(systemReminderText)])
+                self.agentHistory.append(feedbackMessage)
+                if let persistedFeedbackId = await self.persistAgentMessage(feedbackMessage), !self.agentHistory.isEmpty {
+                    self.agentHistory[self.agentHistory.count - 1].dbMessageId = persistedFeedbackId
+                }
+                logger.info("[Feedback] Appended independent system feedback turn to agentHistory (count: \(activeFeedbackDirectives.count))")
             }
 
             if !text.isEmpty {

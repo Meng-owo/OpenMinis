@@ -201,7 +201,13 @@ struct ChatFeedbackSheet: View {
                                 isThumbUp = true
                                 isThumbDown = false
                                 MinisToast.show("已记录点赞，下轮静默生效", systemImage: "hand.thumbsup.fill")
-                                onSendFeedback("<system_runtime_feedback tag=\"quality_positive\">\n[Client Evaluation Notice] User submitted positive appraisal for the previous assistant reply.\nConstraint: Maintain current tone and proceed naturally in next turn without explicit gratitude or robotic acknowledgement.\n</system_runtime_feedback>")
+                                let comment = feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                var xml = "<system_runtime_feedback tag=\"quality_positive\">\n  <notice>User marked this response as helpful.</notice>\n"
+                                if !comment.isEmpty {
+                                    xml += "  <user_comment>\(comment)</user_comment>\n"
+                                }
+                                xml += "</system_runtime_feedback>"
+                                onSendFeedback(xml)
                                 dismiss()
                             } label: {
                                 HStack(spacing: 8) {
@@ -228,7 +234,13 @@ struct ChatFeedbackSheet: View {
                                 isThumbDown = true
                                 isThumbUp = false
                                 MinisToast.show("已记录踩，下轮静默生效", systemImage: "hand.thumbsdown.fill")
-                                onSendFeedback("<system_runtime_feedback tag=\"quality_negative\">\n[Client Evaluation Notice] User indicated dissatisfaction with the previous assistant reply.\nConstraint: Self-correct based on persona instructions. Strictly avoid apologies, excuses, or canned retrospectives.\n</system_runtime_feedback>")
+                                let comment = feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+                                var xml = "<system_runtime_feedback tag=\"quality_negative\">\n  <notice>User indicated dissatisfaction with the previous assistant reply.</notice>\n  <constraint>Maintain authentic persona, self-correct without apologies or excuses.</constraint>\n"
+                                if !comment.isEmpty {
+                                    xml += "  <user_comment>\(comment)</user_comment>\n"
+                                }
+                                xml += "</system_runtime_feedback>"
+                                onSendFeedback(xml)
                                 dismiss()
                             } label: {
                                 HStack(spacing: 8) {
@@ -239,12 +251,12 @@ struct ChatFeedbackSheet: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(isThumbDown ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
-                                .foregroundStyle(isThumbDown ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                                .background(isThumbDown ? CSSThemeVariables.dangerSoft(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
+                                .foregroundStyle(isThumbDown ? CSSThemeVariables.danger(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .strokeBorder(isThumbDown ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                        .strokeBorder(isThumbDown ? CSSThemeVariables.danger(isDark: isDark).opacity(0.35) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                                 )
                                 .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06), radius: 6, x: 0, y: 2)
                             }
@@ -259,11 +271,11 @@ struct ChatFeedbackSheet: View {
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
                         FeedbackFlowLayout(hSpacing: 8, vSpacing: 8) {
-                            tagButton("太长", systemMsg: "<system_runtime_feedback tag=\"brevity_control\">\n[Client Runtime Constraint] Previous response was flagged as verbose. Strictly compress subsequent responses to be concise and punchy.\n</system_runtime_feedback>")
-                            tagButton("太客服腔", systemMsg: "<system_runtime_feedback tag=\"persona_correction\">\n[Client Runtime Constraint] Previous response lapsed into robotic customer service conventions. Immediately discard formal politeness, disclaimers, and canned phrases; strictly adhere to authentic SOUL.md voice.\n</system_runtime_feedback>")
-                            tagButton("没感觉", systemMsg: "<system_runtime_feedback tag=\"emotional_connection\">\n[Client Runtime Constraint] Previous response was flagged as lacking emotional vitality and intimacy. Enrich emotional expressiveness according to current intimacy dynamics.\n</system_runtime_feedback>")
-                            funTagButton("戳一下", systemMsg: "<system_runtime_feedback event=\"haptic_nudge\">\n[Client Interaction Event] User nudged you (戳了一下). Respond naturally and playfully in character on your next turn.\n</system_runtime_feedback>")
-                            funTagButton("闭嘴", systemMsg: "<system_runtime_feedback event=\"silence_directive\">\n[Client Interaction Event] User commanded silence (闭嘴). React with genuine character attitude; strictly avoid customer service apologies.\n</system_runtime_feedback>")
+                            tagButton("太长", systemMsg: "<system_runtime_feedback tag=\"brevity_control\">\n  <directive>Previous response was flagged as verbose. Compress subsequent responses to be concise and punchy.</directive>\n</system_runtime_feedback>")
+                            tagButton("太客服腔", systemMsg: "<system_runtime_feedback tag=\"persona_correction\">\n  <directive>Previous response lapsed into robotic customer service conventions. Discard formal politeness and canned phrases; strictly adhere to authentic SOUL.md voice.</directive>\n</system_runtime_feedback>")
+                            tagButton("没感觉", systemMsg: "<system_runtime_feedback tag=\"emotional_connection\">\n  <directive>Previous response lacked emotional vitality and intimacy. Enrich emotional expressiveness according to current intimacy dynamics.</directive>\n</system_runtime_feedback>")
+                            funTagButton("戳一下", systemMsg: "<system_runtime_feedback event=\"haptic_nudge\">\n  <notice>User nudged you (戳了一下). Respond naturally and playfully in character on your next turn.</notice>\n</system_runtime_feedback>")
+                            funTagButton("闭嘴", systemMsg: "<system_runtime_feedback event=\"silence_directive\">\n  <notice>User commanded silence (闭嘴). React with genuine character attitude; strictly avoid customer service apologies.</notice>\n</system_runtime_feedback>")
                         }
                     }
 
@@ -284,11 +296,15 @@ struct ChatFeedbackSheet: View {
                                     .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                             )
 
-                        Text("✨ 隐身生效：反馈仅在 AI 上下文中注入，不会在你的气泡中发出；AI 不会立刻回复，下次你发消息时静默生效。")
-                            .font(.system(size: 11))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.top, 2)
+                        HStack(alignment: .top, spacing: 5) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 11))
+                            Text("隐身生效：反馈作为独立系统指令注入模型上下文，不在你的气泡中发出；AI 下轮静默执行。")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 2)
                     }
 
                     // 4. 常用模板

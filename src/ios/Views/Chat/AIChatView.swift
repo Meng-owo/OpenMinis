@@ -659,6 +659,7 @@ struct AIChatView: View {
                         if showPlusPanel || showStickerPanel {
                             Color.clear
                                 .contentShape(Rectangle())
+                                .padding(.bottom, inputBarHeight)
                                 .onTapGesture {
                                     withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
                                         showPlusPanel = false
@@ -3448,10 +3449,6 @@ struct AIChatView: View {
         let row = HStack(alignment: .center, spacing: 8) {
             attachmentMenuButton
 
-            if vm.editingMessageIndex != nil {
-                editExitButton
-            }
-
             // 输入框在底栏按钮之间自适应
             inputFieldOrWaveform
 
@@ -3466,6 +3463,26 @@ struct AIChatView: View {
         .padding(.horizontal, 10)
         .padding(.bottom, 6)
         return AnyView(row)
+    }
+
+    /// [Edit Header] 编辑模式提示栏（贴在输入框右上方，AnyView-erased 不增加泛型深度，不挤占单行输入条宽度）
+    private var editingModeHeader: AnyView {
+        let isDark = colorScheme == .dark
+        let view = HStack {
+            HStack(spacing: 4) {
+                Image(systemName: "pencil.line")
+                    .font(.system(size: 11, weight: .semibold))
+                Text("正在编辑已有消息")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+            Spacer()
+            editExitButton
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
+        return AnyView(view)
     }
 
     /// [Stickers 10-12] 待发表情包缩略卡片 (和发图片一样，可配文字一并发)
@@ -3689,17 +3706,25 @@ struct AIChatView: View {
 
     /// "Exit Edit Mode" capsule shown while editing a past message.
     private var editExitButton: some View {
-        Button {
+        let isDark = colorScheme == .dark
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             vm.cancelEdit()
         } label: {
-            Text("Exit Edit Mode", comment: "Cancel message editing")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(ChatColors.secondaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(ChatColors.inputIconBg)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
+            HStack(spacing: 4) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                Text("退出编辑")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(CSSThemeVariables.optionBg(isDark: isDark))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+            )
         }
     }
 
@@ -4030,6 +4055,11 @@ struct AIChatView: View {
                     // 待发表情包缩略卡片 (AnyView 类型擦除，杜绝深层泛型栈溢出)
                     pendingStickerPreview
 
+                    // 编辑已有消息模式提示与右上退出按钮 (不挤占单行输入条宽度)
+                    if vm.editingMessageIndex != nil {
+                        editingModeHeader
+                    }
+
                     // 微信式单行聊天输入条 (AnyView 类型擦除，杜绝深层泛型栈溢出)
                     singleLineInputRow
                 }
@@ -4256,6 +4286,10 @@ struct AIChatView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20, coordinateSpace: .local)
                     .onChanged { value in
+                        guard !showPlusPanel && !showStickerPanel else {
+                            sendSwipeAnchor = nil
+                            return
+                        }
                         // [T-ios-composer-swipe-send-at-bottom] While the inner
                         // scroll still owns the drag, keep the anchor cleared so
                         // that the instant it hands off (user reaches the bottom
@@ -4313,6 +4347,10 @@ struct AIChatView: View {
                         sendSwipeLocation = value.location
                     }
                     .onEnded { value in
+                        guard !showPlusPanel && !showStickerPanel else {
+                            sendSwipeProgress = 0
+                            return
+                        }
                         // [T-ios-composer-swipe-send-at-bottom] Consume the
                         // hand-off anchor: whatever happens below, the next
                         // gesture must re-anchor from scratch.
@@ -7138,10 +7176,10 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(selectedStickerIds.isEmpty ? Color.clear : Color.red.opacity(0.12))
-                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : Color.red)
+                        .background(selectedStickerIds.isEmpty ? Color.clear : CSSThemeVariables.dangerSoft(isDark: isDark))
+                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : CSSThemeVariables.danger(isDark: isDark))
                         .overlay(
-                            Capsule().strokeBorder(selectedStickerIds.isEmpty ? CSSThemeVariables.optionBorder(isDark: isDark) : Color.red.opacity(0.35), lineWidth: 1.0)
+                            Capsule().strokeBorder(selectedStickerIds.isEmpty ? CSSThemeVariables.optionBorder(isDark: isDark) : CSSThemeVariables.danger(isDark: isDark).opacity(0.35), lineWidth: 1.0)
                         )
                         .clipShape(Capsule())
                     }
@@ -7332,13 +7370,13 @@ struct ChatStickerPanel: View {
                                                     .stroke(
                                                         isManageMode && selectedStickerIds.contains(sticker.id)
                                                             ? CSSThemeVariables.accent(isDark: isDark)
-                                                            : Color.primary.opacity(0.06),
+                                                            : CSSThemeVariables.optionBorder(isDark: isDark),
                                                         lineWidth: isManageMode && selectedStickerIds.contains(sticker.id) ? 2.0 : 0.5
                                                     )
                                             )
                                     } else {
                                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                            .fill(Color.secondary.opacity(0.1))
+                                            .fill(CSSThemeVariables.optionBg(isDark: isDark))
                                             .frame(height: 72)
                                     }
 
@@ -7346,7 +7384,7 @@ struct ChatStickerPanel: View {
                                     if isManageMode {
                                         ZStack {
                                             Circle()
-                                                .fill(selectedStickerIds.contains(sticker.id) ? CSSThemeVariables.accent(isDark: isDark) : Color.black.opacity(0.35))
+                                                .fill(selectedStickerIds.contains(sticker.id) ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.scrim(isDark: isDark))
                                                 .frame(width: 22, height: 22)
                                             if selectedStickerIds.contains(sticker.id) {
                                                 Image(systemName: "checkmark")
@@ -7354,7 +7392,7 @@ struct ChatStickerPanel: View {
                                                     .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
                                             } else {
                                                 Circle()
-                                                    .strokeBorder(Color.white, lineWidth: 1.5)
+                                                    .strokeBorder(CSSThemeVariables.accentFg(isDark: isDark), lineWidth: 1.5)
                                                     .frame(width: 18, height: 18)
                                             }
                                         }

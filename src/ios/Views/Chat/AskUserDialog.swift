@@ -76,6 +76,16 @@ public enum CSSThemeVariables {
     public static func sheetShadow(isDark: Bool) -> Color {
         isDark ? Color.black.opacity(0.45) : Color(hex: "#8B736C").opacity(0.16)
     }
+
+    /// --color-danger
+    public static func danger(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#E05D52") : Color(hex: "#D94841")
+    }
+
+    /// --color-danger-soft
+    public static func dangerSoft(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#3D2423") : Color(hex: "#FDECEB")
+    }
 }
 
 // MARK: - 顶角圆角 Shape 工具
