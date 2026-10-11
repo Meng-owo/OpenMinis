@@ -3445,7 +3445,7 @@ struct AIChatView: View {
     /// [Single-Line WeChat Style] 微信式单行聊天输入条：左加号、中输入框、右语音与发送
     /// AnyView-erased 防止输入条复杂组件加深 inputBar 泛型深度导致栈溢出 (crash 2026-04-17 / 2026-10-12)
     private var singleLineInputRow: AnyView {
-        let row = HStack(alignment: .bottom, spacing: 8) {
+        let row = HStack(alignment: .center, spacing: 8) {
             attachmentMenuButton
 
             if vm.editingMessageIndex != nil {
@@ -3898,9 +3898,9 @@ struct AIChatView: View {
                 field.fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, topPadding)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .frame(minHeight: 34, alignment: .center)
         .overlay(alignment: .top) {
             if composerResizeEnabled { composerResizeHandle }
         }
@@ -7007,17 +7007,15 @@ struct ChatStickerPanel: View {
     private var isDark: Bool { colorScheme == .dark }
 
     private var displayCategories: [String] {
-        ["常用", "全部"]
+        ["全部", "常用"]
     }
 
     private var currentStickers: [StickerItem] {
         if selectedCategory == "常用" {
-            let sorted = store.stickers.sorted(by: { $0.useCount > $1.useCount })
-            return sorted.filter { $0.useCount > 0 }
-        } else if selectedCategory == "全部" {
-            return store.stickers
+            let used = store.stickers.filter { $0.useCount > 0 }.sorted(by: { $0.useCount > $1.useCount })
+            return used.isEmpty ? store.stickers : used
         } else {
-            return store.stickers.filter { $0.category == selectedCategory }
+            return store.stickers
         }
     }
 
@@ -7653,17 +7651,81 @@ public final class StickerStore: ObservableObject {
     }
 
     private func loadFromDisk() {
-        guard FileManager.default.fileExists(atPath: catalogURL.path),
-              let data = try? Data(contentsOf: catalogURL),
-              let catalog = try? JSONDecoder().decode(StickerCatalogData.self, from: data) else {
-            return
+        let fm = FileManager.default
+        let appSupportStickers = catalogURL
+        let docStickers = fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/stickers_catalog.json")
+        let libStickers = fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/stickers_catalog.json")
+        let docRootStickers = fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers_catalog.json")
+
+        let candidateCatalogs = [appSupportStickers, docStickers, libStickers, docRootStickers].compactMap { $0 }
+
+        for catURL in candidateCatalogs {
+            if fm.fileExists(atPath: catURL.path),
+               let data = try? Data(contentsOf: catURL),
+               let catalog = try? JSONDecoder().decode(StickerCatalogData.self, from: data),
+               !catalog.stickers.isEmpty {
+                self.stickers = catalog.stickers
+                if !catalog.categories.isEmpty { self.categories = catalog.categories }
+                self.deletedIds = Set(catalog.deletedIds)
+                self.nextNumericId = max(catalog.nextNumericId, 1)
+                
+                // 如果是从其他候选目录读取到的，同步将图片迁移到主目录
+                let sourceDir = catURL.deletingLastPathComponent()
+                if sourceDir.path != stickersDir.path {
+                    if let files = try? fm.contentsOfDirectory(atPath: sourceDir.path) {
+                        for file in files where file.hasSuffix(".png") {
+                            let src = sourceDir.appendingPathComponent(file)
+                            let dst = stickersDir.appendingPathComponent(file)
+                            if !fm.fileExists(atPath: dst.path) {
+                                try? fm.copyItem(at: src, to: dst)
+                            }
+                        }
+                    }
+                    saveToDisk()
+                }
+                break
+            }
         }
-        self.stickers = catalog.stickers
-        if !catalog.categories.isEmpty {
-            self.categories = catalog.categories
+
+        // 兜底容错恢复：若依然为空，扫描所有可能存过表情的目录自动恢复
+        if stickers.isEmpty {
+            let candidateDirs = [
+                stickersDir,
+                fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers"),
+                fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers")
+            ].compactMap { $0 }
+
+            for dir in candidateDirs {
+                if let files = try? fm.contentsOfDirectory(atPath: dir.path) {
+                    let pngFiles = files.filter { $0.hasSuffix(".png") }.sorted()
+                    for png in pngFiles {
+                        let id = png.replacingOccurrences(of: ".png", with: "")
+                        let dst = stickersDir.appendingPathComponent(png)
+                        if dir.path != stickersDir.path && !fm.fileExists(atPath: dst.path) {
+                            try? fm.copyItem(at: dir.appendingPathComponent(png), to: dst)
+                        }
+                        if !stickers.contains(where: { $0.id == id }) {
+                            let item = StickerItem(
+                                id: id,
+                                title: "表情包",
+                                content: "",
+                                scenario: "",
+                                shortDesc: "表情",
+                                category: "全部",
+                                useCount: 0,
+                                imageFilename: png,
+                                createdAt: Date()
+                            )
+                            stickers.append(item)
+                        }
+                    }
+                }
+            }
+            if !stickers.isEmpty {
+                nextNumericId = (stickers.compactMap { Int($0.id) }.max() ?? 0) + 1
+                saveToDisk()
+            }
         }
-        self.deletedIds = Set(catalog.deletedIds)
-        self.nextNumericId = max(catalog.nextNumericId, 1)
     }
 
     private func saveToDisk() {
@@ -7802,6 +7864,19 @@ public final class StickerStore: ObservableObject {
             imageCache.setObject(img, forKey: sticker.id as NSString)
             return img
         }
+        // 尝试从备用沙盒目录加载
+        let fm = FileManager.default
+        let backups = [
+            fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(sticker.imageFilename)"),
+            fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(sticker.imageFilename)")
+        ].compactMap { $0 }
+        for b in backups {
+            if let data = try? Data(contentsOf: b), let img = UIImage(data: data) {
+                try? data.write(to: fileURL, options: .atomic)
+                imageCache.setObject(img, forKey: sticker.id as NSString)
+                return img
+            }
+        }
         return nil
     }
 
@@ -7812,6 +7887,17 @@ public final class StickerStore: ObservableObject {
         let fileURL = stickersDir.appendingPathComponent("\(id).png")
         if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
             return img
+        }
+        let fm = FileManager.default
+        let backups = [
+            fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).png"),
+            fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).png")
+        ].compactMap { $0 }
+        for b in backups {
+            if let data = try? Data(contentsOf: b), let img = UIImage(data: data) {
+                try? data.write(to: fileURL, options: .atomic)
+                return img
+            }
         }
         return nil
     }

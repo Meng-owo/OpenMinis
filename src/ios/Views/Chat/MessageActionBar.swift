@@ -200,8 +200,8 @@ struct ChatFeedbackSheet: View {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 isThumbUp = true
                                 isThumbDown = false
-                                MinisToast.show("已点赞", systemImage: "hand.thumbsup.fill")
-                                onSendFeedback("[系统：上条回复被点赞]")
+                                MinisToast.show("已记录点赞，下轮静默生效", systemImage: "hand.thumbsup.fill")
+                                onSendFeedback("<system_runtime_feedback tag=\"quality_positive\">\n[Client Evaluation Notice] User submitted positive appraisal for the previous assistant reply.\nConstraint: Maintain current tone and proceed naturally in next turn without explicit gratitude or robotic acknowledgement.\n</system_runtime_feedback>")
                                 dismiss()
                             } label: {
                                 HStack(spacing: 8) {
@@ -227,8 +227,8 @@ struct ChatFeedbackSheet: View {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 isThumbDown = true
                                 isThumbUp = false
-                                MinisToast.show("已踩", systemImage: "hand.thumbsdown.fill")
-                                onSendFeedback("[系统：上条回复被踩]")
+                                MinisToast.show("已记录踩，下轮静默生效", systemImage: "hand.thumbsdown.fill")
+                                onSendFeedback("<system_runtime_feedback tag=\"quality_negative\">\n[Client Evaluation Notice] User indicated dissatisfaction with the previous assistant reply.\nConstraint: Self-correct based on persona instructions. Strictly avoid apologies, excuses, or canned retrospectives.\n</system_runtime_feedback>")
                                 dismiss()
                             } label: {
                                 HStack(spacing: 8) {
@@ -259,21 +259,21 @@ struct ChatFeedbackSheet: View {
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
                         FeedbackFlowLayout(hSpacing: 8, vSpacing: 8) {
-                            tagButton("太长", systemMsg: "[系统：上条回复被标记为过长]")
-                            tagButton("太客服腔", systemMsg: "[系统：上条回复被标记为客服腔]")
-                            tagButton("没感觉", systemMsg: "[系统：上条回复被标记为没感觉]")
-                            funTagButton("戳一下", systemMsg: "[系统：醒醒戳了你一下]")
-                            funTagButton("闭嘴", systemMsg: "[系统：醒醒让你闭嘴]")
+                            tagButton("太长", systemMsg: "<system_runtime_feedback tag=\"brevity_control\">\n[Client Runtime Constraint] Previous response was flagged as verbose. Strictly compress subsequent responses to be concise and punchy.\n</system_runtime_feedback>")
+                            tagButton("太客服腔", systemMsg: "<system_runtime_feedback tag=\"persona_correction\">\n[Client Runtime Constraint] Previous response lapsed into robotic customer service conventions. Immediately discard formal politeness, disclaimers, and canned phrases; strictly adhere to authentic SOUL.md voice.\n</system_runtime_feedback>")
+                            tagButton("没感觉", systemMsg: "<system_runtime_feedback tag=\"emotional_connection\">\n[Client Runtime Constraint] Previous response was flagged as lacking emotional vitality and intimacy. Enrich emotional expressiveness according to current intimacy dynamics.\n</system_runtime_feedback>")
+                            funTagButton("戳一下", systemMsg: "<system_runtime_feedback event=\"haptic_nudge\">\n[Client Interaction Event] User nudged you (戳了一下). Respond naturally and playfully in character on your next turn.\n</system_runtime_feedback>")
+                            funTagButton("闭嘴", systemMsg: "<system_runtime_feedback event=\"silence_directive\">\n[Client Interaction Event] User commanded silence (闭嘴). React with genuine character attitude; strictly avoid customer service apologies.\n</system_runtime_feedback>")
                         }
                     }
 
                     // 3. 自定义输入
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("自定义")
+                        Text("自定义指令")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
-                        TextField("写你想对他说的话…", text: $feedbackText, axis: .vertical)
+                        TextField("输入给模型的客户端指令/调整要求…", text: $feedbackText, axis: .vertical)
                             .lineLimit(3...5)
                             .font(.system(size: 14))
                             .padding(12)
@@ -284,50 +284,10 @@ struct ChatFeedbackSheet: View {
                                     .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                             )
 
-                        // 身份分段切换
-                        HStack(spacing: 0) {
-                            Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    sendAsSystem = false
-                                }
-                            } label: {
-                                Text("以醒醒发")
-                                    .font(.system(size: 13, weight: !sendAsSystem ? .semibold : .regular))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
-                                    .background(!sendAsSystem ? CSSThemeVariables.card(isDark: isDark) : Color.clear)
-                                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
-                                    .clipShape(Capsule())
-                                    .shadow(color: !sendAsSystem ? CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.12) : Color.clear, radius: 4, x: 0, y: 1)
-                            }
-                            .buttonStyle(.plain)
-
-                            Button {
-                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                    sendAsSystem = true
-                                }
-                            } label: {
-                                Text("以系统通知发")
-                                    .font(.system(size: 13, weight: sendAsSystem ? .semibold : .regular))
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
-                                    .background(sendAsSystem ? CSSThemeVariables.card(isDark: isDark) : Color.clear)
-                                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
-                                    .clipShape(Capsule())
-                                    .shadow(color: sendAsSystem ? CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.12) : Color.clear, radius: 4, x: 0, y: 1)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(4)
-                        .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                        .clipShape(Capsule())
-
-                        Text(sendAsSystem ? "以系统通知发 = 发出 [系统：…]，模型会照做 · 只在当前对话生效" : "以醒醒发 = 当普通消息发出 · 只在当前对话生效")
+                        Text("✨ 隐身生效：反馈仅在 AI 上下文中注入，不会在你的气泡中发出；AI 不会立刻回复，下次你发消息时静默生效。")
                             .font(.system(size: 11))
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 2)
                     }
 
@@ -401,11 +361,12 @@ struct ChatFeedbackSheet: View {
                     let trimmed = feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !trimmed.isEmpty else { return }
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    let msg = sendAsSystem ? "[系统：\(trimmed)]" : trimmed
+                    let msg = "<system_runtime_feedback tag=\"custom_runtime_directive\">\n[Client Dynamic Directive] \(trimmed)\nConstraint: Follow this client runtime directive in upcoming turns. Strictly avoid apologies, excuses, or canned retrospectives.\n</system_runtime_feedback>"
                     onSendFeedback(msg)
+                    MinisToast.show("指令已记录，下轮静默生效", systemImage: "checkmark.circle.fill")
                     dismiss()
                 } label: {
-                    Text("发送")
+                    Text("发送指令")
                         .font(.system(size: 14, weight: .semibold))
                         .frame(minWidth: 100)
                         .padding(.vertical, 12)
@@ -429,7 +390,7 @@ struct ChatFeedbackSheet: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onSendFeedback(systemMsg)
-            MinisToast.show("已反馈「\(title)」")
+            MinisToast.show("已记录「\(title)」，下轮静默生效")
             dismiss()
         } label: {
             Text(title)
@@ -450,7 +411,7 @@ struct ChatFeedbackSheet: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             onSendFeedback(systemMsg)
-            MinisToast.show("已发送「\(title)」")
+            MinisToast.show("已记录「\(title)」，下轮静默生效")
             dismiss()
         } label: {
             HStack(spacing: 4) {

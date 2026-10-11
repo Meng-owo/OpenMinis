@@ -1649,8 +1649,7 @@ extension CollectionViewMessageListV3 {
             bridge.onFeedback = (message.role == .assistant)
                 ? { [weak vm] text in
                     guard let vm else { return }
-                    vm.inputText = text
-                    vm.send()
+                    vm.addFeedbackDirective(text)
                 } : nil
             bridge.onCopyScreenshot = { [weak self, weak vm] in
                 guard let self, let vm else { return }

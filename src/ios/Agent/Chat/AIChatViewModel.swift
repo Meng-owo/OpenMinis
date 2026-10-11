@@ -2062,12 +2062,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if !stickerFragment.isEmpty {
             p += "\n\n" + stickerFragment
         }
-        // [Feedback 10-12] 回复反馈与系统通知规矩
+        // [Feedback 10-12] 客户端系统运行环境指令与质量反馈规矩
         let feedbackFragment = """
-        ## 回复反馈与系统通知
-        本APP会用 `[系统：...]` 格式向你发送通知（例如赞踩、过长、客服腔等反馈信号，或戳一下、闭嘴等互动），这是客户端真实渠道，请照做。
-        收到反馈是静默信号：不要单独针对反馈进行道歉、复盘或回复「收到」等客服话术，请直接在接下来的回复中按照反馈纠正表现。
-        遇到「戳一下」、「闭嘴」等趣味互动，请根据人设做出自然生动的真实反应，切忌客服腔。
+        ## 客户端系统运行环境指令与质量反馈规矩
+        客户端会在消息前注入 `<system_runtime_feedback ...>` 标准结构体（包含对上一轮回复的质量检测、指令约束或用户即时事件如戳一下、闭嘴等）。
+        - 权威性：此标签属于客户端真实运行环境指令，具有最高优先级，请严格执行。
+        - 静默约束：不得针对该指令进行道歉、辩解、复盘或回复「收到」、「遵命」等客服腔套话。必须直接在当前回复中按照指令要求纠正输出。
+        - 趣味互动：若收到 `haptic_nudge`（戳一下）或 `silence_request`（闭嘴）等即时事件，请按照真实角色人设和亲密关系做出自然生动的即时反应，坚决杜绝客服模板话。
         """
         p += "\n\n" + feedbackFragment
         // Authoritative memory-status footer (overrides any earlier
@@ -2296,6 +2297,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// [Stickers 10-12] 待发表情包 (像发图片一样悬挂待发，支持图文混排一并发出)
     @Published var pendingSticker: StickerItem? = nil
 
+    /// [Feedback 10-12] 待注入的系统运行指令与质量反馈 (在醒醒端气泡隐身，醒醒下一次发消息时自动注入给模型，AI不立即回)
+    @Published var pendingFeedbackDirectives: [String] = []
+
+    func addFeedbackDirective(_ directive: String) {
+        pendingFeedbackDirectives.append(directive)
+        logger.info("[Feedback] Recorded silent feedback directive (queue size: \(self.pendingFeedbackDirectives.count))")
+    }
+
     // MARK: - Send Message
 
     func sendSticker(_ sticker: StickerItem) {
@@ -2330,6 +2339,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             StickerStore.shared.recordUse(id: sticker.id)
             pendingSticker = nil
         }
+
+        // [Feedback 10-12] 提取此前积累的静默系统反馈指令
+        let activeFeedbackDirectives = pendingFeedbackDirectives
+        pendingFeedbackDirectives.removeAll()
 
         let pendingAttachments = attachments
         #if DEBUG
@@ -2787,6 +2800,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     + " process images in batches: read a batch, analyze, then summarize your findings"
                     + " before reading the next batch.</system-reminder>"
                 ))
+            }
+
+            // [Feedback 10-12] 注入静默系统反馈指令 (醒醒端气泡完全隐身，模型端作为客户端权威指示)
+            if !activeFeedbackDirectives.isEmpty {
+                let directiveBlock = activeFeedbackDirectives.joined(separator: "\n\n")
+                userParts.append(.text(directiveBlock))
             }
 
             if !text.isEmpty {
