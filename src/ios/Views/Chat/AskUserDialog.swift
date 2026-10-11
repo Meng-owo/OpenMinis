@@ -1,44 +1,121 @@
 import SwiftUI
 
-// MARK: - [s2-askuser] 问用户弹窗
+// MARK: - [s2-askuser] 提问小抽屉 (CSS全局变量驱动与原型一模一样)
 //
-// 与 ToolApprovalDialog 同风格的 sheet：标题＋问题卡（单选/多选按钮＋"其他"自填＋
-// 跳过）＋提交/全部跳过。消费底座 tag == "ask-user"（实时问询）和
-// "ask-user-restored"（App 被杀后没答完的问题）的挂起。
+// 对齐原型：/var/minis/attachments/uploads/question-tool-card.html
+// 结构：半屏圆角小抽屉 + 顶部居中标题 + 右上角 44×44 圆形关闭叉号
+//       + 通栏扁平选项行(带细分隔线) + 自填回答输入行 + 右下角 132×48 胶囊大发送按钮
+//       + 全屏半透明 scrim 遮罩。
+// 色彩：严格由 CSS 全局变量系统（:root 与 prefers-color-scheme: dark）驱动，
+//       并与 AppearanceStudio 主题无缝对齐。
+
+// MARK: - CSS 全局色彩变量定义
+
+@MainActor
+public enum CSSThemeVariables {
+    private static var studio: AppearanceStudio { .shared }
+
+    /// --color-card / var(--dudu-card)
+    public static func card(isDark: Bool) -> Color {
+        if studio.hasWallpaper(.chat) {
+            return studio.color(.surface, scope: .chat).opacity(studio.surfaceOpacity)
+        }
+        return isDark ? Color(hex: "#2A2523") : Color(hex: "#FFFFFF")
+    }
+
+    /// --color-bg / var(--dudu-cream)
+    public static func bg(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#1C1917") : Color(hex: "#FBF8EA")
+    }
+
+    /// --color-text-main / var(--dudu-brown)
+    public static func textMain(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#E8D9D2") : Color(hex: "#8B736C")
+    }
+
+    /// --color-text-dim / var(--dudu-text-dim)
+    public static func textDim(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#8A7A74") : Color(hex: "#A89890")
+    }
+
+    /// --color-divider / var(--dudu-divider)
+    public static func divider(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#38302C") : Color(hex: "#F1E7E2")
+    }
+
+    /// --color-accent-soft / var(--dudu-pink-soft)
+    public static func accentSoft(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#4A3A36") : Color(hex: "#FFE7E8")
+    }
+
+    /// --color-accent / var(--dudu-pink)
+    public static func accent(isDark: Bool) -> Color {
+        isDark ? Color(hex: "#C2869F") : Color(hex: "#ECC7D6")
+    }
+
+    /// --color-scrim / rgba(42, 42, 46, 0.28)
+    public static func scrim(isDark: Bool) -> Color {
+        isDark ? Color.black.opacity(0.65) : Color(hex: "#2A2A2E").opacity(0.28)
+    }
+
+    /// --color-sheet-shadow / rgba(139, 115, 108, 0.16)
+    public static func sheetShadow(isDark: Bool) -> Color {
+        isDark ? Color.black.opacity(0.45) : Color(hex: "#8B736C").opacity(0.16)
+    }
+}
+
+// MARK: - 顶角圆角 Shape 工具
+
+private struct AskRoundedCorner: Shape {
+    var radius: CGFloat = 24.0
+    var corners: UIRectCorner = [.topLeft, .topRight]
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
+}
+
+// MARK: - 问询挂载修饰器
 
 struct AskUserDialogModifier: ViewModifier {
     @ObservedObject private var suspension = ToolSuspensionService.shared
     @ObservedObject var vm: AIChatViewModel
 
+    private var currentRequest: SuspendedRequest? {
+        suspension.askRequestForSession(vm.sessionId)
+    }
+
     func body(content: Content) -> some View {
-        content.sheet(item: askRequest) { request in
-            AskUserDialogContent(request: request, vm: vm)
-                .id(request.id) // 换一条问询时重置作答状态（@State 不随 item 更新）
-                .presentationDetents([.medium, .large])
-                .interactiveDismissDisabled()
+        ZStack {
+            content
+
+            if let request = currentRequest {
+                AskUserDrawerOverlay(request: request, vm: vm)
+                    .zIndex(9999)
+                    .transition(.opacity)
+            }
         }
-    }
-
-    private var askRequest: Binding<SuspendedRequest?> {
-        Binding(
-            get: { suspension.askRequestForSession(vm.sessionId) },
-            set: { _ in }
-        )
+        .animation(.easeInOut(duration: 0.28), value: currentRequest != nil)
     }
 }
 
-/// 单题的作答状态。
-private struct QuestionAnswerState {
-    var selected: Set<Int> = []
-    var otherSelected = false
-    var otherText = ""
-    var skipped = false
-}
+// MARK: - 提问小抽屉 Overlay
 
-private struct AskUserDialogContent: View {
+private struct AskUserDrawerOverlay: View {
     let request: SuspendedRequest
     @ObservedObject var vm: AIChatViewModel
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == darkColorScheme }
+    private let darkColorScheme = ColorScheme.dark
+
     @State private var states: [QuestionAnswerState] = []
+    @State private var activeQuestionIndex: Int = 0
 
     private var payload: AskPayload? {
         if case .askUser(let p) = request.kind { return p }
@@ -46,173 +123,225 @@ private struct AskUserDialogContent: View {
     }
 
     private var isRestored: Bool { request.tag == "ask-user-restored" }
-
-    /// 会话历史没加载完之前不让提交——恢复的答案要配对进原历史，
-    /// 空历史投进去会变成配不上的孤儿 tool_result。
     private var isSessionReady: Bool { !vm.isLoadingSession }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Header
-                    VStack(spacing: 8) {
-                        Image(systemName: "questionmark.circle")
-                            .font(.system(size: 36))
-                            .foregroundStyle(ChatColors.accent)
+    private var questions: [AskQuestion] {
+        payload?.questions ?? []
+    }
 
-                        Text(payload?.title ?? "AI 想问你几个问题")
-                            .font(.title3.bold())
-                            .multilineTextAlignment(.center)
+    private var currentQuestion: AskQuestion? {
+        guard !questions.isEmpty, activeQuestionIndex < questions.count else { return nil }
+        return questions[activeQuestionIndex]
+    }
 
-                        if isRestored {
-                            Text("这是之前没答完的问题，答完 AI 会从断点继续。")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                    }
-                    .padding(.top, 24)
-                    .padding(.bottom, 16)
-
-                    // Question cards
-                    if let payload {
-                        ForEach(payload.questions.indices, id: \.self) { idx in
-                            let q = payload.questions[idx]
-                            questionCard(question: q, index: idx)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 12)
-                        }
-                    }
-                }
-            }
-
-            // Buttons — pinned to the bottom, always tappable.
-            VStack(spacing: 10) {
-                if !isSessionReady {
-                    Text("会话加载中，稍候即可作答…")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                Button {
-                    submit()
-                } label: {
-                    Text("提交回答")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(ChatColors.accent)
-                .disabled(!isSessionReady)
-
-                Button {
-                    ToolSuspensionService.shared.respond(id: request.id, decision: .skipped)
-                } label: {
-                    Text("全部跳过")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                }
-                .buttonStyle(.bordered)
-                .tint(.secondary)
-                .disabled(!isSessionReady)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 30)
-            .background(Color(.systemGroupedBackground))
+    private var displayTitle: String {
+        if let current = currentQuestion {
+            return current.question
         }
-        .background(Color(.systemGroupedBackground))
+        return payload?.title ?? "AI 想问你几个问题"
+    }
+
+    private var canSubmit: Bool {
+        guard !states.isEmpty else { return false }
+        for st in states {
+            if !st.selected.isEmpty || !st.otherText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return true
+            }
+        }
+        return false
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            // 背景半透明遮罩 (Scrim)
+            CSSThemeVariables.scrim(isDark: isDark)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismiss()
+                }
+
+            // 抽屉卡片主体
+            VStack(spacing: 0) {
+                // 顶部抓手条 (Grabber)
+                Capsule()
+                    .fill(CSSThemeVariables.divider(isDark: isDark))
+                    .frame(width: 40, height: 5)
+                    .padding(.top, 8)
+                    .padding(.bottom, 2)
+
+                // 抽屉头部 (Head)
+                ZStack(alignment: .trailing) {
+                    VStack(spacing: 4) {
+                        Text(displayTitle)
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(1)
+                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(3)
+
+                        if questions.count > 1 {
+                            Text("问题 \(activeQuestionIndex + 1) / \(questions.count)")
+                                .font(.system(size: 11))
+                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                        } else if isRestored {
+                            Text("之前未答完的问题，答完后继续")
+                                .font(.system(size: 11))
+                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 64)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+
+                    // 右上角圆形关闭按钮 (Close Button)
+                    Button(action: dismiss) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                            .frame(width: 44, height: 44)
+                            .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .clipShape(Circle())
+                    }
+                    .padding(.trailing, 14)
+                }
+
+                // 抽屉主体：选项列表与自填输入行 (Body)
+                ScrollView {
+                    VStack(spacing: 0) {
+                        if let q = currentQuestion, activeQuestionIndex < states.count {
+                            let isMulti = q.type == "multi"
+                            let currentState = states[activeQuestionIndex]
+
+                            // 选项列表
+                            ForEach(Array(q.options.enumerated()), id: \.offset) { optIdx, option in
+                                let isSelected = currentState.selected.contains(optIdx)
+                                Button {
+                                    toggleOption(questionIndex: activeQuestionIndex, optionIndex: optIdx, isMulti: isMulti)
+                                } label: {
+                                    HStack(spacing: 0) {
+                                        Text(option)
+                                            .font(.system(size: 14))
+                                            .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                                            .multilineTextAlignment(.leading)
+                                        Spacer()
+                                        if isSelected {
+                                            Image(systemName: isMulti ? "checkmark.square.fill" : "checkmark")
+                                                .font(.system(size: 13, weight: .semibold))
+                                                .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .frame(minHeight: 56)
+                                    .background(isSelected ? CSSThemeVariables.accentSoft(isDark: isDark) : Color.clear)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+
+                                Divider()
+                                    .background(CSSThemeVariables.divider(isDark: isDark))
+                            }
+
+                            // 自填回答输入行 (Free Input Row)
+                            HStack(spacing: 8) {
+                                TextField("输入回答…", text: Binding(
+                                    get: {
+                                        activeQuestionIndex < states.count ? states[activeQuestionIndex].otherText : ""
+                                    },
+                                    set: { val in
+                                        if activeQuestionIndex < states.count {
+                                            states[activeQuestionIndex].otherText = val
+                                            if !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                                // 自填有输入时清空普通选项勾选，以自填为准
+                                                if !isMulti {
+                                                    states[activeQuestionIndex].selected.removeAll()
+                                                }
+                                                states[activeQuestionIndex].otherSelected = true
+                                            }
+                                        }
+                                    }
+                                ))
+                                .font(.system(size: 14))
+                                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                                .submitLabel(.send)
+                                .onSubmit {
+                                    if canSubmit && isSessionReady {
+                                        submit()
+                                    }
+                                }
+
+                                if !states[activeQuestionIndex].otherText.isEmpty {
+                                    Button {
+                                        states[activeQuestionIndex].otherText = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .frame(minHeight: 52)
+
+                            Divider()
+                                .background(CSSThemeVariables.divider(isDark: isDark))
+                        }
+                    }
+                }
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.46)
+
+                // 抽屉底部操作栏 (Foot)
+                HStack(spacing: 12) {
+                    if questions.count > 1 {
+                        // 多题目时的上一题 / 下一题切换
+                        if activeQuestionIndex > 0 {
+                            Button("上一题") {
+                                activeQuestionIndex -= 1
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                            .padding(.leading, 20)
+                        }
+
+                        if activeQuestionIndex < questions.count - 1 {
+                            Button("下一题") {
+                                activeQuestionIndex += 1
+                            }
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                            .padding(.leading, activeQuestionIndex == 0 ? 20 : 0)
+                        }
+                    }
+
+                    Spacer()
+
+                    // 右下角大胶囊发送按钮 (Send Button)
+                    Button(action: submit) {
+                        Text("发送")
+                            .font(.system(size: 15, weight: .semibold))
+                            .tracking(2)
+                            .foregroundColor(.white)
+                            .frame(minWidth: 132, minHeight: 48)
+                            .background(CSSThemeVariables.accent(isDark: isDark))
+                            .clipShape(Capsule())
+                    }
+                    .disabled(!canSubmit || !isSessionReady)
+                    .opacity((canSubmit && isSessionReady) ? 1.0 : 0.45)
+                    .padding(.trailing, 20)
+                }
+                .padding(.top, 14)
+                .padding(.bottom, 16)
+            }
+            .background(CSSThemeVariables.card(isDark: isDark))
+            .clipShape(AskRoundedCorner(radius: 24, corners: [.topLeft, .topRight]))
+            .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark), radius: 24, x: 0, y: -8)
+            .transition(.move(edge: .bottom))
+        }
         .onAppear {
             if let payload, states.count != payload.questions.count {
                 states = Array(repeating: QuestionAnswerState(), count: payload.questions.count)
             }
         }
-    }
-
-    private func questionCard(question: AskQuestion, index: Int) -> some View {
-        let isMulti = question.type == "multi"
-        return VStack(alignment: .leading, spacing: 10) {
-            Text(question.question)
-                .font(.subheadline.bold())
-
-            if index < states.count && !states[index].skipped {
-                // Options
-                ForEach(Array(question.options.enumerated()), id: \.offset) { optIdx, option in
-                    optionRow(
-                        label: option,
-                        selected: index < states.count && states[index].selected.contains(optIdx),
-                        icon: isMulti ? "checkmark.square" : "circle",
-                        selectedIcon: isMulti ? "checkmark.square.fill" : "circle.inset.filled"
-                    ) {
-                        toggleOption(questionIndex: index, optionIndex: optIdx, isMulti: isMulti)
-                    }
-                }
-
-                // "其他（自填）"
-                optionRow(
-                    label: "其他（自填）",
-                    selected: index < states.count && states[index].otherSelected,
-                    icon: isMulti ? "checkmark.square" : "circle",
-                    selectedIcon: isMulti ? "checkmark.square.fill" : "circle.inset.filled"
-                ) {
-                    toggleOther(questionIndex: index, isMulti: isMulti)
-                }
-
-                if index < states.count && states[index].otherSelected {
-                    TextField("在这里输入你的答案…", text: Binding(
-                        get: { states[index].otherText },
-                        set: { states[index].otherText = $0 }
-                    ))
-                    .font(.footnote)
-                    .padding(10)
-                    .background(Color(.systemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                }
-
-                // 跳过这题
-                Button {
-                    states[index].skipped = true
-                } label: {
-                    Text("跳过这题")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 2)
-            } else if index < states.count {
-                HStack {
-                    Text("已跳过")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("重新作答") {
-                        states[index].skipped = false
-                    }
-                    .font(.footnote)
-                }
-            }
-        }
-        .padding(14)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func optionRow(label: String, selected: Bool, icon: String, selectedIcon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: selected ? selectedIcon : icon)
-                    .foregroundStyle(selected ? ChatColors.accent : .secondary)
-                Text(label)
-                    .font(.footnote)
-                    .foregroundStyle(.primary)
-                    .multilineTextAlignment(.leading)
-                Spacer()
-            }
-            .padding(.vertical, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     private func toggleOption(questionIndex: Int, optionIndex: Int, isMulti: Bool) {
@@ -226,20 +355,14 @@ private struct AskUserDialogContent: View {
         } else {
             states[questionIndex].selected = [optionIndex]
             states[questionIndex].otherSelected = false
+            states[questionIndex].otherText = ""
         }
     }
 
-    private func toggleOther(questionIndex: Int, isMulti: Bool) {
-        guard questionIndex < states.count else { return }
-        if isMulti {
-            states[questionIndex].otherSelected.toggle()
-        } else {
-            states[questionIndex].otherSelected = true
-            states[questionIndex].selected = []
-        }
+    private func dismiss() {
+        ToolSuspensionService.shared.respond(id: request.id, decision: .skipped)
     }
 
-    /// 组装答案 JSON：{题 id: 选项字符串 / 选项数组 / 自填字符串 / null(跳过)}。
     private func submit() {
         guard let payload else { return }
         var answers: [String: Any] = [:]
@@ -255,10 +378,10 @@ private struct AskUserDialogContent: View {
                 var picked = st.selected.sorted().compactMap { i in
                     i < q.options.count ? q.options[i] : nil
                 }
-                if st.otherSelected, !otherText.isEmpty { picked.append(otherText) }
+                if !otherText.isEmpty { picked.append(otherText) }
                 answers[q.id] = picked.isEmpty ? NSNull() : picked
             } else {
-                if st.otherSelected, !otherText.isEmpty {
+                if !otherText.isEmpty {
                     answers[q.id] = otherText
                 } else if let first = st.selected.sorted().first, first < q.options.count {
                     answers[q.id] = q.options[first]
@@ -271,6 +394,14 @@ private struct AskUserDialogContent: View {
             .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
         ToolSuspensionService.shared.respond(id: request.id, decision: .answered(json))
     }
+}
+
+/// 单题的作答状态
+private struct QuestionAnswerState {
+    var selected: Set<Int> = []
+    var otherSelected = false
+    var otherText = ""
+    var skipped = false
 }
 
 extension View {
