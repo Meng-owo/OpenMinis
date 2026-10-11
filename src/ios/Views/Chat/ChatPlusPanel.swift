@@ -285,8 +285,6 @@ public struct PlusPanelTileButton: View {
     let isDark: Bool
     let onTap: () -> Void
 
-    @State private var isPressed: Bool = false
-
     public init(item: PlusPanelItemType, isDark: Bool, onTap: @escaping () -> Void) {
         self.item = item
         self.isDark = isDark
@@ -322,22 +320,17 @@ public struct PlusPanelTileButton: View {
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
-            .scaleEffect(isPressed ? 0.92 : 1.0)
-            .animation(.easeOut(duration: 0.12), value: isPressed)
         }
-        .buttonStyle(TilePressButtonStyle(isPressed: $isPressed))
+        .buttonStyle(TilePressButtonStyle())
         .accessibilityLabel(Text(item.title))
     }
 }
 
 private struct TilePressButtonStyle: ButtonStyle {
-    @Binding var isPressed: Bool
-
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .onChange(of: configuration.isPressed) { pressed in
-                isPressed = pressed
-            }
+            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
