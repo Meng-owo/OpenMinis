@@ -59,7 +59,6 @@ jobs:
       - name: Archive OpenMinis clone app unsigned
         run: |
           mkdir -p build
-          set -o pipefail
           xcodebuild archive \
             -project src/ios/Minis.xcodeproj \
             -scheme Minis \
@@ -69,11 +68,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" 2>&1 | tee /tmp/xcodebuild_archive.log || {
-              echo "=== ARCHIVE FAILED! LAST 300 LINES OF XCODEBUILD LOG ==="
-              tail -n 300 /tmp/xcodebuild_archive.log
-              exit 1
-            }
+            DEVELOPMENT_TEAM=""
 
       - name: Package unsigned IPA
         run: |

@@ -3368,6 +3368,17 @@ struct AIChatView: View {
         .accessibilityLabel(Text(showPlusPanel ? "收起功能面板" : "展开更多功能"))
     }
 
+    /// 加号展开面板区域
+    @ViewBuilder
+    private var plusPanelSection: some View {
+        if showPlusPanel {
+            ChatPlusPanel { item in
+                handlePlusPanelAction(item)
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
     /// 所有零碎选项均已收纳至加号宫格面板内，保持底栏极致清爽。
     private var inputBottomRow: AnyView {
@@ -3896,12 +3907,7 @@ struct AIChatView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 10)
 
-                if showPlusPanel {
-                    ChatPlusPanel { item in
-                        handlePlusPanelAction(item)
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                plusPanelSection
             }
             .contentShape(MinisThemeShape.inputBar)
             .onTapGesture {
