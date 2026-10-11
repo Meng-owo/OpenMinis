@@ -2111,8 +2111,8 @@ struct AIChatView: View {
         }
         var text = "# OpenMinis 对话记录导出\n\n"
         for msg in vm.messages {
-            let role = msg.isUser ? "我" : "小梦"
-            text += "### \(role):\n\(msg.text)\n\n"
+            let roleName = (msg.role == .user) ? "我" : "小梦"
+            text += "### \(roleName):\n\(msg.content)\n\n"
         }
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("OpenMinis-Chat-\(Int(Date().timeIntervalSince1970)).md")
         do {
