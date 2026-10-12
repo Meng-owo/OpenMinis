@@ -284,7 +284,7 @@ struct ScheduledTaskDetailSheet: View {
                 .padding()
             }
         }
-        .background(CSSThemeVariables.sheetBg(isDark: isDark))
+        .background(CSSThemeVariables.bg(isDark: isDark))
         .onAppear {
             if let j = job {
                 runsList = registry.runs(jobId: j.id)

@@ -1303,7 +1303,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var isTruncatingForRetry = false
 
     // MARK: - Browser
-    let browserTabPool = BrowserTabPool()
+    // [T-p2-shared-workspace] `var`, not `let`: a child (helper) VM runs on the
+    // PARENT's pool so a sub agent's browsing shows up in the same tab set the
+    // conversation is looking at. HelperRunner.swift (currently not in the
+    // build — 8a611fe) assigns it on the child before its first turn.
+    var browserTabPool = BrowserTabPool()
     /// When true, the agent loop pauses at the next checkpoint to let the user operate the browser.
     @Published var browserTakeoverActive = false
 

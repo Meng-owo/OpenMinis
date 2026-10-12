@@ -97,10 +97,10 @@ struct ScheduledTasksView: View {
                 }
                 .listStyle(InsetGroupedListStyle())
                 .scrollContentBackground(.hidden)
-                .background(CSSThemeVariables.sheetBg(isDark: isDark))
+                .background(CSSThemeVariables.bg(isDark: isDark))
             }
         }
-        .background(CSSThemeVariables.sheetBg(isDark: isDark))
+        .background(CSSThemeVariables.bg(isDark: isDark))
         .sheet(item: Binding<IdentifiableJobId?>(
             get: { selectedJobId.map { IdentifiableJobId(id: $0) } },
             set: { selectedJobId = $0?.id }

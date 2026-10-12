@@ -114,7 +114,7 @@ enum ScheduledJobRunner {
     /// Runs any prefilled tool (e.g. shell command) BEFORE the model is asked anything.
     private static func runPrefilledToolIfNeeded(_ job: AgentJob, targetSessionId: String) async -> String? {
         guard let prefill = job.prefilledTool, let cmd = prefill.shellCommand else { return nil }
-        let timeout = prefill.timeoutSec ?? 60
+        let timeout: TimeInterval = TimeInterval(prefill.timeoutSec ?? 60)
         do {
             let res = try await ISHExecutionCoordinator.shared.execute(
                 sessionId: targetSessionId,
@@ -122,7 +122,7 @@ enum ScheduledJobRunner {
                 timeout: timeout,
                 lineCallback: { _ in },
                 pidCallback: { _ in })
-            let out = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            let out = res.output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             return "[Prefilled command `\(cmd)` (exit \(res.exitCode))]:\n\(out)"
         } catch {
             return "[Prefilled command `\(cmd)` error]: \(error.localizedDescription)"
@@ -227,10 +227,13 @@ enum ScheduledJobRunner {
             child.sessionSource = sourceTag
             child.memoryEnabled = false
             child.suppressGeneralCompletionNotification = true
-            child.browserTabPool = parentVM.browserTabPool
-            child.helperConfig = HelperConfig(parentSessionId: parentSid, parentToolUseId: "",
-                                              jobId: job.id, maxTurns: AIChatViewModel.helperMaxTurns,
-                                              title: title, modelOrigin: .inherited)
+            // NOTE: HelperConfig / shared browser pool intentionally NOT set —
+            // HelperRunner.swift was decoupled from the build in 8a611fe to
+            // force a build past compile errors, so those symbols don't exist.
+            // The child still runs and reports back through AgentJobRegistry's
+            // default `.followUpParent` arm. Reviving the full subagent chain
+            // (HelperConfig + shared browserTabPool + model identity) is a
+            // separate task — see memory 2026-10-12.
 
             if let prefillOutput = await runPrefilledToolIfNeeded(job, targetSessionId: session.id) {
                 prompt += "\n\n" + prefillOutput
