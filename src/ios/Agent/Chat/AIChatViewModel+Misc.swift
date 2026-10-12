@@ -296,7 +296,9 @@ extension AIChatViewModel {
         //
         // Then clamp by the global ceiling so a model claiming 200K output never
         // actually causes us to request 200K.
-        let modelOrProvider = model.maxOutputTokens ?? provider.defaultMaxTokens
+        let pid = sessionPersonaId ?? PersonaStore.currentID()
+        let personaMaxTokens = PersonaStore.shared.personas.first(where: { $0.id == pid })?.maxTokens
+        let modelOrProvider = personaMaxTokens ?? model.maxOutputTokens ?? provider.defaultMaxTokens
         let upperBound = min(Self.globalMaxTokensCeiling, modelOrProvider)
 
         let contextWindow = effectiveContextWindow(for: model)

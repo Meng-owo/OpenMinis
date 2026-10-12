@@ -228,6 +228,34 @@ extension Persona {
         }
         return dict
     }
+
+    var customBodyDict: [String: Any] {
+        var dict: [String: Any] = [:]
+        for b in customBody {
+            let k = b.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !k.isEmpty else { continue }
+            let v = b.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if (v.hasPrefix("{") && v.hasSuffix("}")) || (v.hasPrefix("[") && v.hasSuffix("]")) {
+                if let data = v.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: data) {
+                    dict[k] = obj
+                    continue
+                }
+            }
+            if v.lowercased() == "true" {
+                dict[k] = true
+            } else if v.lowercased() == "false" {
+                dict[k] = false
+            } else if let intVal = Int(v) {
+                dict[k] = intVal
+            } else if let doubleVal = Double(v) {
+                dict[k] = doubleVal
+            } else {
+                dict[k] = b.value
+            }
+        }
+        return dict
+    }
 }
 
 // MARK: - LocalToolRegistry (Kelivo 本地工具列表与映射)

@@ -260,12 +260,224 @@ extension AIChatViewModel {
         // add_mcp/remove_mcp 两段式（先探、请她确认再落盘）；skill 白名单门控在人设层。
         tools.append(contentsOf: MCPManagementTools.dialogDefinitions())
 
-        // [Kelivo Alignment] 人设本地工具白名单门控
+        // [BUG-09] subagent_task 子代理调度工具
+        tools.append(AgentToolDefinition(
+            name: "subagent_task",
+            description: "Delegate a self-contained task to a sub agent — its own isolated context and tool loop, in a hidden child session running concurrently with you — and inspect or stop the ones you started. action defaults to 'delegate'. Available actions: delegate, status, steer, cancel, resume.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user on the block in the tool bar."),
+                "action": AgentToolParam(type: .string, description: "The subagent action to perform: delegate (default), status, steer, cancel, resume."),
+                "task": AgentToolParam(type: .string, description: "action=delegate only, required. The complete, self-contained brief: goal, constraints, and return format."),
+                "agent": AgentToolParam(type: .string, description: "action=delegate only. Which sub agent runs this task."),
+                "wait": AgentToolParam(type: .boolean, description: "action=delegate only. false (default) returns at once with status=running; true blocks until done."),
+                "job_id": AgentToolParam(type: .string, description: "action=status/steer/cancel. The job_id returned when the task started."),
+                "message": AgentToolParam(type: .string, description: "action=steer only, required. The correction instruction to the running sub agent.")
+            ],
+            required: ["tool_title"],
+            propertyOrdering: ["tool_title", "action", "task", "agent", "wait", "job_id", "message"]
+        ))
+
+        // [Kelivo 本地工具 13 项真定义落地]
+        // 1. timeInfo (时间信息)
+        tools.append(AgentToolDefinition(
+            name: "timeInfo",
+            description: "Read current device date, day of the week, time, timezone, UTC offset, and timestamp.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI.")
+            ],
+            propertyOrdering: ["tool_title"]
+        ))
+
+        // 2. clipboard (剪切板)
+        tools.append(AgentToolDefinition(
+            name: "clipboard",
+            description: "Read or write plain text on the device clipboard.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "action": AgentToolParam(type: .string, description: "The clipboard action: 'read' to get clipboard text, or 'write' to set it."),
+                "text": AgentToolParam(type: .string, description: "The text to copy when action is 'write'.")
+            ],
+            required: ["action"],
+            propertyOrdering: ["tool_title", "action", "text"]
+        ))
+
+        // 3. textToSpeech (文字转语音别名定义)
+        tools.append(AgentToolDefinition(
+            name: "textToSpeech",
+            description: "Synthesize and speak the given text aloud using the configured TTS voice service.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "text": AgentToolParam(type: .string, description: "The words to speak aloud.")
+            ],
+            required: ["text"],
+            propertyOrdering: ["tool_title", "text"]
+        ))
+
+        // 4. askUser (询问用户别名定义)
+        tools.append(AgentToolDefinition(
+            name: "askUser",
+            description: "Ask the user questions and wait for their answers before continuing.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "A concise summary of what you're asking about."),
+                "questions": AgentToolParam(type: .string, description: "JSON array of question objects, at most 4.")
+            ],
+            required: ["tool_title", "questions"],
+            propertyOrdering: ["tool_title", "questions"]
+        ))
+
+        // 5. calculate (计算器)
+        tools.append(AgentToolDefinition(
+            name: "calculate",
+            description: "Calculate mathematical expressions accurately (supports +, -, *, /, powers, sqrt, sin, cos, abs, etc.).",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "expression": AgentToolParam(type: .string, description: "The mathematical expression to evaluate, e.g. 'sqrt(144) + 12 * 3'.")
+            ],
+            required: ["expression"],
+            propertyOrdering: ["tool_title", "expression"]
+        ))
+
+        // 6. calendarQuery (查询日历)
+        tools.append(AgentToolDefinition(
+            name: "calendarQuery",
+            description: "Query calendar events on this device within an optional date range or keyword query.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "query": AgentToolParam(type: .string, description: "Optional keyword search query."),
+                "start_date": AgentToolParam(type: .string, description: "Optional start date filter (e.g. '2026-10-12')."),
+                "end_date": AgentToolParam(type: .string, description: "Optional end date filter (e.g. '2026-10-13').")
+            ],
+            propertyOrdering: ["tool_title", "query", "start_date", "end_date"]
+        ))
+
+        // 7. calendarCreate (创建日程)
+        tools.append(AgentToolDefinition(
+            name: "calendarCreate",
+            description: "Create a calendar event on this device.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "title": AgentToolParam(type: .string, description: "Title of the calendar event."),
+                "start_time": AgentToolParam(type: .string, description: "Start time of the event (e.g. '2026-10-12 18:00')."),
+                "end_time": AgentToolParam(type: .string, description: "End time of the event (e.g. '2026-10-12 19:00')."),
+                "notes": AgentToolParam(type: .string, description: "Optional notes or description.")
+            ],
+            required: ["title", "start_time", "end_time"],
+            propertyOrdering: ["tool_title", "title", "start_time", "end_time", "notes"]
+        ))
+
+        // 8. currentLocation (当前位置)
+        tools.append(AgentToolDefinition(
+            name: "currentLocation",
+            description: "Get current device location coordinates, city, and address.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI.")
+            ],
+            propertyOrdering: ["tool_title"]
+        ))
+
+        // 9. weather (天气)
+        tools.append(AgentToolDefinition(
+            name: "weather",
+            description: "Get current weather conditions and forecast for current or specified location via Apple WeatherKit.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "location": AgentToolParam(type: .string, description: "Optional location name or city (defaults to current location).")
+            ],
+            propertyOrdering: ["tool_title", "location"]
+        ))
+
+        // 10. remindersQuery (查询提醒)
+        tools.append(AgentToolDefinition(
+            name: "remindersQuery",
+            description: "Query reminders on this device.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "list_name": AgentToolParam(type: .string, description: "Optional reminder list name filter."),
+                "show_completed": AgentToolParam(type: .boolean, description: "Whether to include completed reminders (default false).")
+            ],
+            propertyOrdering: ["tool_title", "list_name", "show_completed"]
+        ))
+
+        // 11. remindersCreate (创建提醒)
+        tools.append(AgentToolDefinition(
+            name: "remindersCreate",
+            description: "Create a reminder on this device.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "title": AgentToolParam(type: .string, description: "Title of the reminder."),
+                "due_date": AgentToolParam(type: .string, description: "Optional due date (e.g. '2026-10-12 20:00')."),
+                "notes": AgentToolParam(type: .string, description: "Optional reminder notes."),
+                "list_name": AgentToolParam(type: .string, description: "Optional list name to add to.")
+            ],
+            required: ["title"],
+            propertyOrdering: ["tool_title", "title", "due_date", "notes", "list_name"]
+        ))
+
+        // 12. remindersComplete (完成提醒)
+        tools.append(AgentToolDefinition(
+            name: "remindersComplete",
+            description: "Mark a reminder as completed on this device.",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "title": AgentToolParam(type: .string, description: "Title of the reminder to mark complete."),
+                "reminder_id": AgentToolParam(type: .string, description: "Optional unique ID of the reminder.")
+            ],
+            propertyOrdering: ["tool_title", "title", "reminder_id"]
+        ))
+
+        // 13. healthSummary (健康摘要)
+        tools.append(AgentToolDefinition(
+            name: "healthSummary",
+            description: "Read health and activity summary on this device (step count, active energy burned, walking/running distance, sleep analysis).",
+            parameters: [
+                "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
+                "days": AgentToolParam(type: .integer, description: "Number of days of health data to query (default 1).")
+            ],
+            propertyOrdering: ["tool_title", "days"]
+        ))
+
+        // [Kelivo Alignment & BUG-01 / BUG-03] 人设本地工具白名单真实门控
         let pid = sessionPersonaId ?? PersonaStore.currentID()
         if let p = PersonaStore.shared.personas.first(where: { $0.id == pid }),
            let toolWhitelist = p.localToolIds {
+            if !toolWhitelist.contains("timeInfo") {
+                tools.removeAll { $0.name == "timeInfo" || $0.name == "get_time_info" }
+            }
+            if !toolWhitelist.contains("clipboard") {
+                tools.removeAll { $0.name == "clipboard" || $0.name == "clipboard_tool" }
+            }
+            if !toolWhitelist.contains("textToSpeech") {
+                tools.removeAll { $0.name == "textToSpeech" || $0.name == "text_to_speech" || $0.name == "send_voice" }
+            }
             if !toolWhitelist.contains("askUser") {
-                tools.removeAll { $0.name == "user_ask" }
+                tools.removeAll { $0.name == "askUser" || $0.name == "ask_user_input_v0" || $0.name == "user_ask" }
+            }
+            if !toolWhitelist.contains("calculate") {
+                tools.removeAll { $0.name == "calculate" }
+            }
+            if !toolWhitelist.contains("calendarQuery") {
+                tools.removeAll { $0.name == "calendarQuery" }
+            }
+            if !toolWhitelist.contains("calendarCreate") {
+                tools.removeAll { $0.name == "calendarCreate" }
+            }
+            if !toolWhitelist.contains("currentLocation") {
+                tools.removeAll { $0.name == "currentLocation" }
+            }
+            if !toolWhitelist.contains("weather") {
+                tools.removeAll { $0.name == "weather" }
+            }
+            if !toolWhitelist.contains("remindersQuery") {
+                tools.removeAll { $0.name == "remindersQuery" }
+            }
+            if !toolWhitelist.contains("remindersCreate") {
+                tools.removeAll { $0.name == "remindersCreate" }
+            }
+            if !toolWhitelist.contains("remindersComplete") {
+                tools.removeAll { $0.name == "remindersComplete" }
+            }
+            if !toolWhitelist.contains("healthSummary") {
+                tools.removeAll { $0.name == "healthSummary" }
             }
         }
 

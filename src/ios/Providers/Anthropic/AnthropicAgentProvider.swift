@@ -19,6 +19,8 @@ final class AnthropicAgentProvider: AgentProvider {
     var defaultMaxTokens: Int { 64_000 }
     /// [T-phase1-sampling] Effective sampling config, set by makeAgentProvider.
     var sampling: SamplingConfig?
+    /// [BUG-02] Persona-level custom body parameters & extra_body.
+    var customBody: [String: Any]?
 
     /// Max transparent retries when OPENING the stream fails with a transient
     /// network error. 2 retries = up to 3 total attempts, with 1s + 2s backoff.

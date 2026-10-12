@@ -10,46 +10,59 @@ extension AIChatViewModel {
 
     /// Construct an AgentProvider from a ModelEntry by looking up its ProviderInstance and credential.
     func makeAgentProvider(for entry: ModelEntry) async -> AgentProvider {
-        return await Self.makeAgentProvider(for: entry)
+        return await Self.makeAgentProvider(for: entry, personaId: sessionPersonaId)
     }
 
     /// Static variant — used by sub-task call sites (title generation, etc.)
     /// that don't have a viewmodel context. Same lookup logic as the instance
     /// method, since the resolution depends only on global state
     /// (ProviderConfigStore + LLMProviderFactory).
-    static func makeAgentProvider(for entry: ModelEntry) async -> AgentProvider {
+    static func makeAgentProvider(for entry: ModelEntry, personaId: String? = nil) async -> AgentProvider {
         let store = ProviderConfigStore.shared
         guard let instance = store.instance(for: entry.providerInstanceId) else {
             logger.error("No ProviderInstance found for entry \(entry.id)")
             return AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model))
         }
+        let pid = personaId ?? PersonaStore.currentID()
+        let persona = PersonaStore.shared.personas.first(where: { $0.id == pid })
+        let personaHeaders = persona?.customHeadersDict
+        let personaBody = persona?.customBodyDict
+
         // [T-phase1-sampling] Resolve the effective sampling config once per
         // provider construction (per-model overrides win per-field, instance
         // defaults fill gaps). Every call site below — including group-fallback
         // rebuilds — flows through here, so sampling follows the entry.
-        let sampling = store.resolvedSampling(for: entry)
+        var sampling = store.resolvedSampling(for: entry)
+        if let pTemp = persona?.temperature {
+            sampling.temperature = pTemp
+        }
+        if let pTopP = persona?.topP {
+            sampling.topP = pTopP
+        }
+
         func withSampling(_ provider: AgentProvider) -> AgentProvider {
             var provider = provider
             provider.sampling = sampling.isEmpty ? nil : sampling
+            provider.customBody = (personaBody?.isEmpty == false) ? personaBody : nil
             return provider
         }
         switch instance.providerType {
         case .anthropic:
-            return withSampling(AnthropicAgentProvider(provider: LLMProviderFactory.makeAnthropicProvider(instance: instance, model: entry.model)))
+            return withSampling(AnthropicAgentProvider(provider: LLMProviderFactory.makeAnthropicProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .gemini:
-            return withSampling(GeminiAgentProvider(provider: await LLMProviderFactory.makeGeminiProvider(instance: instance, model: entry.model)))
+            return withSampling(GeminiAgentProvider(provider: await LLMProviderFactory.makeGeminiProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .openAI:
-            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model)))
+            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .antigravity:
-            return withSampling(AntigravityAgentProvider(provider: await LLMProviderFactory.makeAntigravityProvider(instance: instance, model: entry.model)))
+            return withSampling(AntigravityAgentProvider(provider: await LLMProviderFactory.makeAntigravityProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .openRouter:
-            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model)))
+            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenRouterProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .openAIResponses:
-            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model)))
+            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeOpenAIResponsesProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .xAI:
-            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model)))
+            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeXAIProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .kimiCode:
-            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model)))
+            return withSampling(OpenAIAgentProvider(provider: LLMProviderFactory.makeKimiProvider(instance: instance, model: entry.model, extraHeaders: personaHeaders)))
         case .unsupported:
             logger.error("\(instance.providerType) has no agent provider; returning placeholder")
             return withSampling(AnthropicAgentProvider(provider: AnthropicProvider(apiKey: "", model: entry.model)))

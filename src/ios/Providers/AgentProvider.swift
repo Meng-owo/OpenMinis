@@ -185,6 +185,9 @@ protocol AgentProvider {
     /// it when assembling the wire body.
     var sampling: SamplingConfig? { get set }
 
+    /// [BUG-02] Persona-level custom body parameters & extra_body.
+    var customBody: [String: Any]? { get set }
+
     /// Provider-specific streaming implementation. Receives a thinking level
     /// that has already been clamped to the model's effective max by the
     /// protocol extension — implementations should NOT re-clamp.

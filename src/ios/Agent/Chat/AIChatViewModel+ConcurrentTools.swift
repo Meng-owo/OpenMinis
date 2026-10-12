@@ -1055,6 +1055,291 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
+        // [Kelivo 本地工具 13 项真实执行分发落地]
+        case "timeInfo", "get_time_info":
+            let now = Date()
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM-dd HH:mm:ss EEEE"
+            df.locale = Locale(identifier: "zh_CN")
+            let tz = TimeZone.current
+            let timeStr = df.string(from: now)
+            let dict: [String: Any] = [
+                "datetime": timeStr,
+                "timezone": tz.identifier,
+                "utc_offset_seconds": tz.secondsFromGMT(),
+                "timestamp": Int(now.timeIntervalSince1970)
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
+               let jsonString = String(data: data, encoding: .utf8) {
+                toolOutput = jsonString
+            } else {
+                toolOutput = "{\"datetime\": \"\(timeStr)\"}"
+            }
+            toolSuccess = true
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "clipboard", "clipboard_tool":
+            let action = (toolArgs["action"] as? String ?? "read").lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            if action == "write" || action == "set" {
+                let textToSet = toolArgs["text"] as? String ?? ""
+                await MainActor.run {
+                    UIPasteboard.general.string = textToSet
+                }
+                toolOutput = "Successfully wrote text to system clipboard (\(textToSet.count) characters)."
+                toolSuccess = true
+            } else {
+                let currentClip = await MainActor.run {
+                    UIPasteboard.general.string ?? ""
+                }
+                toolOutput = currentClip.isEmpty ? "(System clipboard is empty)" : currentClip
+                toolSuccess = true
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "calculate":
+            let expressionStr = (toolArgs["expression"] as? String ?? (toolArgs["expr"] as? String ?? ""))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if expressionStr.isEmpty {
+                toolOutput = "Error: Missing required 'expression' parameter."
+                toolSuccess = false
+            } else {
+                do {
+                    let expr = NSExpression(format: expressionStr)
+                    if let result = expr.expressionValue(with: nil, context: nil) {
+                        toolOutput = "\(result)"
+                        toolSuccess = true
+                    } else {
+                        throw NSError(domain: "calculate", code: -1)
+                    }
+                } catch {
+                    let escaped = expressionStr.replacingOccurrences(of: "\"", with: "\\\"")
+                    let pyCmd = "python3 -c \"import math; print(\(escaped))\" 2>&1"
+                    do {
+                        let res = try await executeCommand(pyCmd, timeout: 10) { _ in }
+                        let out = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                        toolOutput = out.isEmpty ? "Calculation finished without output." : out
+                        toolSuccess = res.exitCode == 0
+                    } catch {
+                        toolOutput = "Error: Failed to evaluate expression '\(expressionStr)': \(error.localizedDescription)"
+                        toolSuccess = false
+                    }
+                }
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "textToSpeech", "text_to_speech":
+            let speakText = (toolArgs["text"] as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if speakText.isEmpty {
+                toolOutput = "Error: Missing required 'text' parameter."
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+                break
+            }
+            guard let sid = sessionId else {
+                toolOutput = "Error: No active session."
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+                break
+            }
+            do {
+                let voice = try await AIVoiceMessageComposer.compose(for: speakText, sessionId: sid)
+                let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
+                let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+                if msgIdx < messages.count {
+                    messages[msgIdx].blocks.append(AssistantBlock(kind: .text, content: link))
+                }
+                pendingVoiceBubbles.append(link)
+                voiceBubbleSentThisTurn = true
+                if !VoiceModePreference.shared.isCapturing {
+                    if let fileURL = await resolvePathForDirectRead(AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
+                        GlobalAudioPlayer.shared.play(url: fileURL)
+                    }
+                }
+                toolOutput = "Voice message spoken successfully (\(durParam)s)."
+                toolSuccess = true
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+            }
+
+        case "askUser":
+            let askResult = await handleAskUser(toolArgs: toolArgs, toolId: tu.id, deferredAssistantRaw: deferredAssistantRaw)
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = askResult.summary
+            }
+            toolOutput = askResult.output
+            toolSuccess = askResult.success
+
+        case "calendarQuery":
+            let query = (toolArgs["query"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let start = (toolArgs["start_date"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let end = (toolArgs["end_date"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var cmd = "apple-calendar query"
+            if !query.isEmpty { cmd += " --query '\(query.replacingOccurrences(of: "'", with: "'\\''"))'" }
+            if !start.isEmpty { cmd += " --start '\(start)'" }
+            if !end.isEmpty { cmd += " --end '\(end)'" }
+            do {
+                let res = try await executeCommand(cmd, timeout: 20) { _ in }
+                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                toolSuccess = res.exitCode == 0
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "calendarCreate":
+            let title = (toolArgs["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let start = (toolArgs["start_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let end = (toolArgs["end_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let notes = (toolArgs["notes"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if title.isEmpty || start.isEmpty || end.isEmpty {
+                toolOutput = "Error: 'title', 'start_time' and 'end_time' are required."
+                toolSuccess = false
+            } else {
+                var cmd = "apple-calendar create --title '\(title.replacingOccurrences(of: "'", with: "'\\''"))' --start '\(start)' --end '\(end)'"
+                if !notes.isEmpty { cmd += " --notes '\(notes.replacingOccurrences(of: "'", with: "'\\''"))'" }
+                do {
+                    let res = try await executeCommand(cmd, timeout: 20) { _ in }
+                    toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    toolSuccess = res.exitCode == 0
+                } catch {
+                    toolOutput = "Error: \(error.localizedDescription)"
+                    toolSuccess = false
+                }
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "currentLocation":
+            do {
+                let res = try await executeCommand("apple-location -q", timeout: 20) { _ in }
+                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                toolSuccess = res.exitCode == 0
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "weather":
+            let loc = (toolArgs["location"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var cmd = "apple-weather"
+            if !loc.isEmpty { cmd += " --location '\(loc.replacingOccurrences(of: "'", with: "'\\''"))'" }
+            do {
+                let res = try await executeCommand(cmd, timeout: 25) { _ in }
+                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                toolSuccess = res.exitCode == 0
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "remindersQuery":
+            let listName = (toolArgs["list_name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var cmd = "apple-reminders list"
+            if !listName.isEmpty { cmd += " --list '\(listName.replacingOccurrences(of: "'", with: "'\\''"))'" }
+            if let showComp = toolArgs["show_completed"] as? Bool, showComp {
+                cmd += " --all"
+            }
+            do {
+                let res = try await executeCommand(cmd, timeout: 20) { _ in }
+                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                toolSuccess = res.exitCode == 0
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "remindersCreate":
+            let title = (toolArgs["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let due = (toolArgs["due_date"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let notes = (toolArgs["notes"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let listName = (toolArgs["list_name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if title.isEmpty {
+                toolOutput = "Error: 'title' is required."
+                toolSuccess = false
+            } else {
+                var cmd = "apple-reminders create --title '\(title.replacingOccurrences(of: "'", with: "'\\''"))'"
+                if !due.isEmpty { cmd += " --due '\(due)'" }
+                if !notes.isEmpty { cmd += " --notes '\(notes.replacingOccurrences(of: "'", with: "'\\''"))'" }
+                if !listName.isEmpty { cmd += " --list '\(listName.replacingOccurrences(of: "'", with: "'\\''"))'" }
+                do {
+                    let res = try await executeCommand(cmd, timeout: 20) { _ in }
+                    toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    toolSuccess = res.exitCode == 0
+                } catch {
+                    toolOutput = "Error: \(error.localizedDescription)"
+                    toolSuccess = false
+                }
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "remindersComplete":
+            let title = (toolArgs["title"] as? String ?? (toolArgs["reminder_id"] as? String ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
+            if title.isEmpty {
+                toolOutput = "Error: 'title' or 'reminder_id' is required."
+                toolSuccess = false
+            } else {
+                let cmd = "apple-reminders complete --title '\(title.replacingOccurrences(of: "'", with: "'\\''"))'"
+                do {
+                    let res = try await executeCommand(cmd, timeout: 20) { _ in }
+                    toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                    toolSuccess = res.exitCode == 0
+                } catch {
+                    toolOutput = "Error: \(error.localizedDescription)"
+                    toolSuccess = false
+                }
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        case "healthSummary":
+            let days = toolArgs["days"] as? Int ?? 1
+            let cmd = "apple-healthkit batch --types step_count,active_energy_burned,distance_walking_running,sleep_analysis --days \(days)"
+            do {
+                let res = try await executeCommand(cmd, timeout: 25) { _ in }
+                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                toolSuccess = res.exitCode == 0
+            } catch {
+                toolOutput = "Error: \(error.localizedDescription)"
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false

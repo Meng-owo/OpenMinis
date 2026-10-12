@@ -36,6 +36,8 @@ final class OpenAIAgentProvider: AgentProvider {
     var defaultMaxTokens: Int { provider.usesChatCompletionsAPI ? 16_384 : 32_768 }
     /// [T-phase1-sampling] Effective sampling config, set by makeAgentProvider.
     var sampling: SamplingConfig?
+    /// [BUG-02] Persona-level custom body parameters & extra_body.
+    var customBody: [String: Any]?
 
     init(provider: OpenAIProvider) {
         self.provider = provider
@@ -53,6 +55,20 @@ final class OpenAIAgentProvider: AgentProvider {
         if let p = s.topP { body["top_p"] = p }
         if let p = s.presencePenalty { body["presence_penalty"] = p }
         if let p = s.frequencyPenalty { body["frequency_penalty"] = p }
+    }
+
+    /// [BUG-02] Merge customBody and extra_body into the request body.
+    private func applyCustomBody(to body: inout [String: Any]) {
+        guard let custom = customBody, !custom.isEmpty else { return }
+        for (k, v) in custom {
+            if k == "extra_body", let extraDict = v as? [String: Any] {
+                var existingExtra = body["extra_body"] as? [String: Any] ?? [:]
+                for (ek, ev) in extraDict { existingExtra[ek] = ev }
+                body["extra_body"] = existingExtra
+            } else {
+                body[k] = v
+            }
+        }
     }
 
     func streamAgentMessageClamped(
@@ -175,6 +191,7 @@ final class OpenAIAgentProvider: AgentProvider {
         // penalties). Only set fields ride the wire — unset = server default,
         // which is exactly what this path did before (it never sent them).
         applySampling(to: &body)
+        applyCustomBody(to: &body)
         // Inject provider-specific thinking parameters.
         // Some families (Qwen3, DeepSeek V4, etc.) think by default server-side —
         // when the user toggles thinking off, we MUST explicitly disable, otherwise
@@ -595,6 +612,7 @@ final class OpenAIAgentProvider: AgentProvider {
         // still safe (they're standard Responses fields, not client-fingerprint
         // fields), and they're user opt-in per model.
         applySampling(to: &body)
+        applyCustomBody(to: &body)
         // [T-codex-fast-mode] Fast Mode toggle ("..." menu). This is the CHAT
         // agent-loop body builder — the injection in
         // OpenAIProvider.buildResponsesAPIRequest covers only the offload /

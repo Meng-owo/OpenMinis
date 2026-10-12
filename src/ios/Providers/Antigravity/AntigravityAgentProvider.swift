@@ -13,6 +13,8 @@ final class AntigravityAgentProvider: AgentProvider {
     var defaultMaxTokens: Int { 16_384 }
     /// [T-phase1-sampling] Effective sampling config, set by makeAgentProvider.
     var sampling: SamplingConfig?
+    /// [BUG-02] Persona-level custom body parameters & extra_body.
+    var customBody: [String: Any]?
 
     init(provider: AntigravityProvider) {
         self.provider = provider
