@@ -20,6 +20,12 @@
 		E5SCH0001 /* ScheduledJobRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0011 /* ScheduledJobRunner.swift */; };
 		E5SCH0002 /* ScheduledOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0012 /* ScheduledOffload.m */; };
 		E5SCH0003 /* ScheduledOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0013 /* ScheduledOffloadBridge.swift */; };
+		E5STK0002 /* StickersOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5STK0012 /* StickersOffload.m */; };
+		E5STK0003 /* StickersOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STK0013 /* StickersOffloadBridge.swift */; };
+		E5FDB0002 /* FeedbackOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5FDB0012 /* FeedbackOffload.m */; };
+		E5FDB0003 /* FeedbackOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FDB0013 /* FeedbackOffloadBridge.swift */; };
+		E5TTS0002 /* TTSOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5TTS0012 /* TTSOffload.m */; };
+		E5TTS0003 /* TTSOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TTS0013 /* TTSOffloadBridge.swift */; };
 		E5SRS0001 /* SessionRefreshScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRS0011 /* SessionRefreshScheduler.swift */; };
 		E5PCV0001 /* PersonaContactsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PCV0011 /* PersonaContactsView.swift */; };
 		21FED4B7BB6F6D9476C9992E /* VoiceProvider+System.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88993FC8E3F0199C6638F664 /* VoiceProvider+System.swift */; };
@@ -707,6 +713,15 @@
 		E5SCH0011 /* ScheduledJobRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledJobRunner.swift"; path = "Agent/Jobs/ScheduledJobRunner.swift"; sourceTree = SOURCE_ROOT; };
 		E5SCH0012 /* ScheduledOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "ScheduledOffload.m"; path = "NativeOffloads/ScheduledOffload.m"; sourceTree = SOURCE_ROOT; };
 		E5SCH0013 /* ScheduledOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledOffloadBridge.swift"; path = "NativeOffloads/ScheduledOffloadBridge.swift"; sourceTree = SOURCE_ROOT; };
+		E5STK0011 /* StickersOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "StickersOffload.h"; path = "NativeOffloads/StickersOffload.h"; sourceTree = SOURCE_ROOT; };
+		E5STK0012 /* StickersOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "StickersOffload.m"; path = "NativeOffloads/StickersOffload.m"; sourceTree = SOURCE_ROOT; };
+		E5STK0013 /* StickersOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "StickersOffloadBridge.swift"; path = "NativeOffloads/StickersOffloadBridge.swift"; sourceTree = SOURCE_ROOT; };
+		E5FDB0011 /* FeedbackOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "FeedbackOffload.h"; path = "NativeOffloads/FeedbackOffload.h"; sourceTree = SOURCE_ROOT; };
+		E5FDB0012 /* FeedbackOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "FeedbackOffload.m"; path = "NativeOffloads/FeedbackOffload.m"; sourceTree = SOURCE_ROOT; };
+		E5FDB0013 /* FeedbackOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "FeedbackOffloadBridge.swift"; path = "NativeOffloads/FeedbackOffloadBridge.swift"; sourceTree = SOURCE_ROOT; };
+		E5TTS0011 /* TTSOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "TTSOffload.h"; path = "NativeOffloads/TTSOffload.h"; sourceTree = SOURCE_ROOT; };
+		E5TTS0012 /* TTSOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "TTSOffload.m"; path = "NativeOffloads/TTSOffload.m"; sourceTree = SOURCE_ROOT; };
+		E5TTS0013 /* TTSOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "TTSOffloadBridge.swift"; path = "NativeOffloads/TTSOffloadBridge.swift"; sourceTree = SOURCE_ROOT; };
 		E5SRS0011 /* SessionRefreshScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SessionRefreshScheduler.swift"; path = "Views/SessionRefreshScheduler.swift"; sourceTree = SOURCE_ROOT; };
 		E5PCV0011 /* PersonaContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "PersonaContactsView.swift"; path = "Views/Chat/PersonaContactsView.swift"; sourceTree = SOURCE_ROOT; };
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
@@ -2485,6 +2500,15 @@
 				E5SCH0011 /* ScheduledJobRunner.swift */,
 				E5SCH0012 /* ScheduledOffload.m */,
 				E5SCH0013 /* ScheduledOffloadBridge.swift */,
+				E5STK0011 /* StickersOffload.h */,
+				E5STK0012 /* StickersOffload.m */,
+				E5STK0013 /* StickersOffloadBridge.swift */,
+				E5FDB0011 /* FeedbackOffload.h */,
+				E5FDB0012 /* FeedbackOffload.m */,
+				E5FDB0013 /* FeedbackOffloadBridge.swift */,
+				E5TTS0011 /* TTSOffload.h */,
+				E5TTS0012 /* TTSOffload.m */,
+				E5TTS0013 /* TTSOffloadBridge.swift */,
 				E5SRS0011 /* SessionRefreshScheduler.swift */,
 				E5PCV0011 /* PersonaContactsView.swift */,
 
@@ -2985,6 +3009,12 @@
 				E5SCH0001 /* ScheduledJobRunner.swift in Sources */,
 				E5SCH0002 /* ScheduledOffload.m in Sources */,
 				E5SCH0003 /* ScheduledOffloadBridge.swift in Sources */,
+				E5STK0002 /* StickersOffload.m in Sources */,
+				E5STK0003 /* StickersOffloadBridge.swift in Sources */,
+				E5FDB0002 /* FeedbackOffload.m in Sources */,
+				E5FDB0003 /* FeedbackOffloadBridge.swift in Sources */,
+				E5TTS0002 /* TTSOffload.m in Sources */,
+				E5TTS0003 /* TTSOffloadBridge.swift in Sources */,
 				E5SRS0001 /* SessionRefreshScheduler.swift in Sources */,
 				E5PCV0001 /* PersonaContactsView.swift in Sources */,
 				E5TSV0001 /* ToolsSettingsView.swift in Sources */,

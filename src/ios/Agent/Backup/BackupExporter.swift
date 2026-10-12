@@ -334,6 +334,9 @@ actor BackupExporter {
         try await run(.appearance, AppLocalized("Exporting appearance…")) {
             try await exportAppearance(dataDir: dataDir, trees: trees)
         }
+        try await run(.stickers, AppLocalized("Exporting stickers…")) {
+            try exportStickers(trees: trees)
+        }
         // [2026-08-15] Not reached in normal use: `.voiceCorrections` is absent
         // from `BackupCategory.backupable`, so it never appears in
         // `options.categories` and `run` skips it. Kept wired up rather than
@@ -711,6 +714,17 @@ actor BackupExporter {
         let r = try trees.export(root: AIChatViewModel.minisSharedPersistentDir,
                                  logicalPrefix: "shared",
                                  category: .sharedFiles)
+        return BackupManifest.CategoryStat(
+            entries: r.filesIncluded, bytes: r.bytesIncluded, encrypted: false)
+    }
+
+    // MARK: - Stickers
+
+    private func exportStickers(trees: BackupFileTreeExporter) throws
+        -> BackupManifest.CategoryStat {
+        let r = try trees.export(root: AIChatViewModel.minisStickersPersistentDir,
+                                 logicalPrefix: "stickers",
+                                 category: .stickers)
         return BackupManifest.CategoryStat(
             entries: r.filesIncluded, bytes: r.bytesIncluded, encrypted: false)
     }

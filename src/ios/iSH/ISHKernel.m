@@ -67,6 +67,9 @@
 #import "BrowserUseOffload.h"
 #import "ScheduledOffload.h"
 #import "DebugOffload.h"
+#import "StickersOffload.h"
+#import "FeedbackOffload.h"
+#import "TTSOffload.h"
 
 NSNotificationName const ISHProcessExitedNotification = @"ISHProcessExited";
 NSNotificationName const ISHTerminalOutputNotification = @"ISHTerminalOutput";
@@ -683,6 +686,9 @@ static void handle_process_exit(struct task *task, int code) {
     browser_use_offload_register();
     config_offload_register();
     theme_offload_register();
+    stickers_offload_register();
+    feedback_offload_register();
+    tts_offload_register();
     // Registered in every build: the `minis-debug logs` subcommand reads the
     // app's own runtime log in-process (OSLogStore + LoggingManager) and must
     // work on Release devices (T-ios-minis-debug-logs-oslogstore). The

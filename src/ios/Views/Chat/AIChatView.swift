@@ -7703,6 +7703,10 @@ public final class StickerStore: ObservableObject {
         loadFromDisk()
     }
 
+    public func reloadFromDisk() {
+        loadFromDisk()
+    }
+
     private func loadFromDisk() {
         let fm = FileManager.default
         let appSupportStickers = catalogURL
@@ -7867,14 +7871,22 @@ public final class StickerStore: ObservableObject {
 
     public func deleteSticker(id: String) {
         guard let idx = stickers.firstIndex(where: { $0.id == id }) else { return }
+        let filename = stickers[idx].imageFilename
         stickers.remove(at: idx)
         deletedIds.insert(id)
         imageCache.removeObject(forKey: id as NSString)
+        // [BUG-07] 物理清理沙盒中的原图文件，杜绝磁盘存储泄漏
+        let fileURL = stickersDir.appendingPathComponent(filename)
+        try? FileManager.default.removeItem(at: fileURL)
         saveToDisk()
     }
 
     public func deleteStickers(ids: Set<String>) {
         guard !ids.isEmpty else { return }
+        for item in stickers where ids.contains(item.id) {
+            let fileURL = stickersDir.appendingPathComponent(item.imageFilename)
+            try? FileManager.default.removeItem(at: fileURL)
+        }
         stickers.removeAll { ids.contains($0.id) }
         for id in ids {
             deletedIds.insert(id)

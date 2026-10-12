@@ -43,25 +43,43 @@
                                      attachmentPaths:(NSArray<NSString *> * _Nonnull)attachmentPaths;
 + (NSDictionary * _Nonnull)getSessionStatusWithSessionId:(NSString * _Nonnull)sessionId;
 + (NSDictionary * _Nonnull)openSessionWithSessionId:(NSString * _Nonnull)sessionId;
++ (NSDictionary * _Nonnull)listFolders;
++ (NSDictionary * _Nonnull)createFolderWithName:(NSString * _Nonnull)name desc:(NSString * _Nullable)desc;
++ (NSDictionary * _Nonnull)deleteFolderWithId:(NSString * _Nonnull)id;
++ (NSDictionary * _Nonnull)moveSessionWithSessionId:(NSString * _Nonnull)sessionId folder:(NSString * _Nullable)folder;
++ (NSDictionary * _Nonnull)renameSessionWithSessionId:(NSString * _Nonnull)sessionId title:(NSString * _Nonnull)title;
++ (NSDictionary * _Nonnull)deleteSessionWithSessionId:(NSString * _Nonnull)sessionId;
 @end
 #endif
 
 static NSString *const TOOL_NAME = @"minis-sessions-cli";
 
 static NSString *const HELP_TEXT =
-    @"minis-sessions-cli - Query and send 我的小家 chat sessions\n"
+    @"minis-sessions-cli - Query and send chat sessions and manage folders\n"
      "\n"
      "USAGE:\n"
      "  minis-sessions-cli <command> [options]\n"
      "\n"
      "COMMANDS:\n"
-     "  list      List recent sessions (default: 50, max: 100)\n"
-     "  search    Search message content across sessions (requires --keywords)\n"
-     "  messages  Read messages from a specific session (requires --id)\n"
-     "  send      Send a prompt (new session or follow-up an existing one)\n"
-     "  retry     Re-run from a specific user message\n"
-     "  status    Get current status of a session\n"
-     "  open      Navigate the app UI to a session (positional <session_id>)\n"
+     "  list           List recent sessions (default: 50, max: 100)\n"
+     "  search         Search message content across sessions (requires --keywords)\n"
+     "  messages       Read messages from a specific session (requires --id)\n"
+     "  send           Send a prompt (new session or follow-up an existing one)\n"
+     "  retry          Re-run from a specific user message\n"
+     "  status         Get current status of a session\n"
+     "  open           Navigate the app UI to a session (positional <session_id>)\n"
+     "  folders        List all folders and member counts\n"
+     "  create-folder  Create a new folder (--name <name> [--desc <desc>])\n"
+     "  delete-folder  Dissolve a folder without deleting sessions (--id <folder_id>)\n"
+     "  move           Move session into folder (--session <id> [--folder <name_or_id>])\n"
+     "  rename         Rename a session (--session <id> --title <title>)\n"
+     "  delete         Delete a session (--session <id>)\n"
+     "\n"
+     "FOLDER OPTIONS:\n"
+     "  --name <name>            Folder name (create-folder)\n"
+     "  --desc <desc>            Folder description (create-folder)\n"
+     "  --folder <id_or_name>    Target folder name or ID; omit/none to unfile (move)\n"
+     "  --title <title>          New title for the session (rename)\n"
      "\n"
      "QUERY OPTIONS:\n"
      "  --keywords <words>    Space-separated keywords (AND logic, required for search)\n"
@@ -462,6 +480,132 @@ static int cmd_messages(int argc, char **argv, int stdout_fd, int stderr_fd,
     return NOFF_EXIT_SUCCESS;
 }
 
+// ── Subcommand: folders & session management ──
+
+static int cmd_folders(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
+    NSDictionary *data = [SessionsOffloadBridge listFolders];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"folders", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+static int cmd_create_folder(int argc, char **argv, int stdout_fd, int stderr_fd,
+                             BOOL compact, BOOL quiet) {
+    NSString *name = noff_find_arg(argc, argv, "--name");
+    if (!name || name.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"create-folder",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--name <folder_name> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *desc = noff_find_arg(argc, argv, "--desc");
+    NSDictionary *data = [SessionsOffloadBridge createFolderWithName:name desc:desc];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"create-folder", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+static int cmd_delete_folder(int argc, char **argv, int stdout_fd, int stderr_fd,
+                             BOOL compact, BOOL quiet) {
+    NSString *folderId = noff_find_arg(argc, argv, "--id");
+    if (!folderId || folderId.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"delete-folder",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--id <folder_id> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSDictionary *data = [SessionsOffloadBridge deleteFolderWithId:folderId];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"delete-folder", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+static int cmd_move(int argc, char **argv, int stdout_fd, int stderr_fd,
+                    BOOL compact, BOOL quiet) {
+    NSString *sessionRaw = noff_find_arg(argc, argv, "--session");
+    if (!sessionRaw || sessionRaw.length == 0) sessionRaw = noff_find_arg(argc, argv, "--id");
+    if (!sessionRaw || sessionRaw.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"move",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--session <session_id> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *sessionId = resolve_session_token(sessionRaw);
+    if (!sessionId) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"move",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"Invalid or missing session.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *folder = noff_find_arg(argc, argv, "--folder");
+    NSDictionary *data = [SessionsOffloadBridge moveSessionWithSessionId:sessionId folder:folder];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"move", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+static int cmd_rename(int argc, char **argv, int stdout_fd, int stderr_fd,
+                      BOOL compact, BOOL quiet) {
+    NSString *sessionRaw = noff_find_arg(argc, argv, "--session");
+    if (!sessionRaw || sessionRaw.length == 0) sessionRaw = noff_find_arg(argc, argv, "--id");
+    if (!sessionRaw || sessionRaw.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"rename",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--session <session_id> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *sessionId = resolve_session_token(sessionRaw);
+    if (!sessionId) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"rename",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"Invalid or missing session.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *title = noff_find_arg(argc, argv, "--title");
+    if (!title || title.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"rename",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--title <title> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSDictionary *data = [SessionsOffloadBridge renameSessionWithSessionId:sessionId title:title];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"rename", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+static int cmd_delete(int argc, char **argv, int stdout_fd, int stderr_fd,
+                      BOOL compact, BOOL quiet) {
+    NSString *sessionRaw = noff_find_arg(argc, argv, "--session");
+    if (!sessionRaw || sessionRaw.length == 0) sessionRaw = noff_find_arg(argc, argv, "--id");
+    if (!sessionRaw || sessionRaw.length == 0) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"delete",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"--session <session_id> is required.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSString *sessionId = resolve_session_token(sessionRaw);
+    if (!sessionId) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"delete",
+                                             NOFF_ERR_INVALID_ARGS,
+                                             @"Invalid or missing session.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSDictionary *data = [SessionsOffloadBridge deleteSessionWithSessionId:sessionId];
+    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"delete", data);
+    noff_emit_json(stdout_fd, result, compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
 // ── Main handler ──
 
 static int sessions_handler(int argc, char **argv,
@@ -496,13 +640,25 @@ static int sessions_handler(int argc, char **argv,
         return cmd_status(argc, argv, stdout_fd, stderr_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"open"]) {
         return cmd_open(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"folders"]) {
+        return cmd_folders(argc, argv, stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"create-folder"]) {
+        return cmd_create_folder(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"delete-folder"]) {
+        return cmd_delete_folder(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"move"]) {
+        return cmd_move(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"rename"]) {
+        return cmd_rename(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"delete"]) {
+        return cmd_delete(argc, argv, stdout_fd, stderr_fd, compact, quiet);
     }
 
     noff_emit_help(stderr_fd, HELP_TEXT);
     NSDictionary *err = noff_json_error(TOOL_NAME, subcmd,
                                          NOFF_ERR_INVALID_ARGS,
                                          [NSString stringWithFormat:
-                                          @"Unknown command '%@'. Valid commands: list, search, messages, send, retry, status, open. "
+                                          @"Unknown command '%@'. Valid commands: list, search, messages, send, retry, status, open, folders, create-folder, delete-folder, move, rename, delete. "
                                            "Use --help for details.", subcmd]);
     noff_emit_json(stdout_fd, err, compact, quiet);
     return NOFF_EXIT_INVALID_ARGS;

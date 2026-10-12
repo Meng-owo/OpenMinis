@@ -61,6 +61,7 @@ extension BackupImporter {
         let liveDirs: [URL]
         switch category {
         case .sharedFiles: liveDirs = [AIChatViewModel.minisSharedPersistentDir]
+        case .stickers: liveDirs = [AIChatViewModel.minisStickersPersistentDir]
         case .memory: liveDirs = [AIChatViewModel.minisMemoryPersistentDir]
         // [PIC-2] The appearance tree is directory-backed like shared
         // files, so it gets the same copy-aside rollback.
@@ -168,6 +169,7 @@ extension BackupImporter {
         switch category {
         case .chats: return try await importChats(root: root, fileIndex: fileIndex, options: options)
         case .sharedFiles: return try importSharedFiles(root: root, fileIndex: fileIndex)
+        case .stickers: return try importStickers(root: root, fileIndex: fileIndex)
         case .skills: return try await importSkills(root: root, fileIndex: fileIndex)
         case .memory: return try await importMemory(root: root)
         case .providers: return try await importProviders(root: root)
@@ -331,6 +333,28 @@ extension BackupImporter {
         // Per §3.2 no meta.db write is needed: every mount re-walks this
         // directory and re-registers rows, so the guest sees the files after the
         // next boot.
+        return report
+    }
+
+    // MARK: - Stickers
+
+    private func importStickers(root: URL, fileIndex: [BackupFileIndexEntry]) throws
+        -> CategoryReport {
+        var report = CategoryReport(category: BackupCategory.stickers.rawValue)
+        let base = AIChatViewModel.minisStickersPersistentDir
+        let files = try restoreFileTree(
+            root: root, fileIndex: fileIndex, category: .stickers,
+            destinationFor: { path in
+                guard path.hasPrefix("stickers/") else { return nil }
+                return base.appendingPathComponent(String(path.dropFirst("stickers/".count)))
+            })
+        report.filesWritten = files.written
+        report.bytesWritten = files.bytes
+        report.missingBlobs = files.missingBlobs
+        Task { @MainActor in
+            // 通知表情包数据已恢复，重新从磁盘载入
+            StickerStore.shared.reloadFromDisk()
+        }
         return report
     }
 
@@ -973,6 +997,7 @@ extension BackupImporter {
         switch category {
         case .chats: return AIChatViewModel.minisPersistentBase
         case .sharedFiles: return AIChatViewModel.minisSharedPersistentDir
+        case .stickers: return AIChatViewModel.minisStickersPersistentDir
         case .skills: return AIChatViewModel.minisSkillsPersistentDir
         case .memory: return AIChatViewModel.minisMemoryPersistentDir
         case .appearance: return AppearanceStudio.appearanceAssetsDirectory

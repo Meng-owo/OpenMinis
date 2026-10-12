@@ -514,6 +514,11 @@ final class PersonaStore: ObservableObject {
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(list) {
             try? data.write(to: url, options: .atomic)
+            // 同步写入镜像到 /var/minis/personas/personas.json，打通 AI 数据孤岛
+            let mirrorURL = AIChatViewModel.minisPersonasPersistentDir.appendingPathComponent(Self.fileName)
+            try? FileManager.default.createDirectory(
+                at: mirrorURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: mirrorURL, options: .atomic)
         }
     }
 

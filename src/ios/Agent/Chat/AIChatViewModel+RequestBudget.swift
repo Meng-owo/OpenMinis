@@ -370,6 +370,25 @@ extension AIChatViewModel {
         minisConfigRoot.appendingPathComponent("mcp-servers", isDirectory: true)
     }
 
+    /// Persistent storage directory for stickers (mapped to /var/minis/stickers).
+    nonisolated static var minisStickersPersistentDir: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let dir = base.appendingPathComponent("stickers", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
+    /// Persistent storage directory for personas registry & assets (mapped to /var/minis/personas).
+    nonisolated static var minisPersonasPersistentDir: URL {
+        let dir = minisConfigRoot.appendingPathComponent("personas", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return dir
+    }
+
     /// Resolve a `minis-clone://` URL to a host filesystem URL.
     /// Shared resolution logic used by Markdown link handlers and the browser's WKURLSchemeHandler.
     nonisolated static func resolveMinisURL(_ url: URL) -> URL? {
@@ -390,11 +409,13 @@ extension AIChatViewModel {
             }
         }
 
-        // Global directories (skills, memory, shared)
+        // Global directories (skills, memory, shared, stickers, personas)
         let globalDirs: [(String, URL)] = [
             ("skills", minisSkillsPersistentDir),
             ("memory", minisMemoryPersistentDir),
             ("shared", minisSharedPersistentDir),
+            ("stickers", minisStickersPersistentDir),
+            ("personas", minisPersonasPersistentDir),
         ]
         for (subdir, dir) in globalDirs where host == subdir {
             for subPath in subPaths {

@@ -62,6 +62,9 @@ enum BackupCategory: String, Codable, CaseIterable, Sendable {
     /// Memory. Pure addition to the format: older readers ignore the
     /// unknown category key, older packages simply don't have it.
     case appearance
+    /// Stickers: the whole stickers directory (ApplicationSupport/stickers/
+    /// containing catalog JSON and all image files).
+    case stickers
 
     /// Default checkbox state on the backup screen (§3 table).
     var defaultsOn: Bool { true }
@@ -83,7 +86,7 @@ enum BackupCategory: String, Codable, CaseIterable, Sendable {
     /// the §3.4 size cap applies to.
     var carriesFileTree: Bool {
         switch self {
-        case .chats, .sharedFiles, .skills, .appearance: return true
+        case .chats, .sharedFiles, .skills, .appearance, .stickers: return true
         case .memory, .providers, .mcpServers, .voiceCorrections,
              .environmentVariables: return false
         }

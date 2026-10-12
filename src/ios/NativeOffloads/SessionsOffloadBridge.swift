@@ -601,4 +601,172 @@ private let logger = AppLogger(category: "SessionsOffload")
         sem.wait()
         return output as NSDictionary
     }
+
+    // MARK: - Folders & Session Management
+
+    @objc public static func listFolders() -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var result: [[String: Any]] = []
+
+        Task.detached {
+            let folders = await ChatStore.shared.allFolders()
+            let dateFmt = DateFormatter()
+            dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
+
+            for f in folders {
+                let memberIds = await ChatStore.shared.sessionIdsInFolder(f.id)
+                var dict: [String: Any] = [
+                    "id": f.id,
+                    "name": f.name,
+                    "member_count": memberIds.count,
+                    "updated_at": dateFmt.string(from: f.updatedAt),
+                ]
+                if let d = f.desc { dict["description"] = d }
+                result.append(dict)
+            }
+            sem.signal()
+        }
+        sem.wait()
+
+        return [
+            "ok": true,
+            "count": result.count,
+            "folders": result,
+        ] as NSDictionary
+    }
+
+    @objc public static func createFolder(name: String, desc: String?) -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var output: [String: Any] = [:]
+
+        Task.detached {
+            let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedName.isEmpty else {
+                output = ["ok": false, "error": "Folder name cannot be empty"]
+                sem.signal()
+                return
+            }
+            let folder = await ChatStore.shared.createFolder(
+                name: trimmedName, icon: nil, color: nil, origin: "cli", desc: desc
+            )
+            output = [
+                "ok": true,
+                "folder": [
+                    "id": folder.id,
+                    "name": folder.name,
+                    "description": folder.desc ?? "",
+                ]
+            ]
+            sem.signal()
+        }
+        sem.wait()
+        return output as NSDictionary
+    }
+
+    @objc public static func deleteFolder(id: String) -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var output: [String: Any] = [:]
+
+        Task.detached {
+            let freed = await ChatStore.shared.dissolveFolder(id)
+            output = [
+                "ok": true,
+                "folder_id": id,
+                "freed_sessions_count": freed.count,
+            ]
+            sem.signal()
+        }
+        sem.wait()
+        return output as NSDictionary
+    }
+
+    @objc public static func moveSession(sessionId: String, folder: String?) -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var output: [String: Any] = [:]
+
+        Task.detached {
+            let raw = folder?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if raw == nil || raw!.isEmpty || raw!.lowercased() == "none" || raw!.lowercased() == "null" {
+                // Move out of any folder (ungrouped)
+                await ChatStore.shared.setFolder(nil, forSessions: [sessionId])
+                output = [
+                    "ok": true,
+                    "session_id": sessionId,
+                    "folder_id": NSNull(),
+                    "folder_name": "ungrouped"
+                ]
+                sem.signal()
+                return
+            }
+
+            let targetStr = raw!
+            // First check if targetStr is a folder id
+            let all = await ChatStore.shared.allFolders()
+            var matched = all.first { $0.id == targetStr }
+            if matched == nil {
+                // Check by name
+                matched = await ChatStore.shared.resolveFolder(named: targetStr)
+            }
+
+            guard let targetFolder = matched else {
+                output = [
+                    "ok": false,
+                    "error": "Folder not found: \(targetStr)"
+                ]
+                sem.signal()
+                return
+            }
+
+            await ChatStore.shared.setFolder(targetFolder.id, forSessions: [sessionId])
+            output = [
+                "ok": true,
+                "session_id": sessionId,
+                "folder_id": targetFolder.id,
+                "folder_name": targetFolder.name
+            ]
+            sem.signal()
+        }
+        sem.wait()
+        return output as NSDictionary
+    }
+
+    @objc public static func renameSession(sessionId: String, title: String) -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var output: [String: Any] = [:]
+
+        Task.detached {
+            let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                output = ["ok": false, "error": "Title cannot be empty"]
+                sem.signal()
+                return
+            }
+            await ChatStore.shared.updateSessionTitle(sessionId, title: trimmed)
+            output = [
+                "ok": true,
+                "session_id": sessionId,
+                "title": trimmed
+            ]
+            sem.signal()
+        }
+        sem.wait()
+        return output as NSDictionary
+    }
+
+    @objc public static func deleteSession(sessionId: String) -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var output: [String: Any] = [:]
+
+        Task.detached {
+            await ChatStore.shared.deleteSession(sessionId)
+            output = [
+                "ok": true,
+                "session_id": sessionId,
+                "deleted": true
+            ]
+            sem.signal()
+        }
+        sem.wait()
+        return output as NSDictionary
+    }
 }
