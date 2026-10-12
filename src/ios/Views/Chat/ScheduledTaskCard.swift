@@ -8,6 +8,111 @@
 
 import SwiftUI
 
+// MARK: - [AUD-17] 定时任务的人话文案
+//
+// The list and the detail sheet printed the machine shapes straight at the user:
+// `loop(3600s×∞)`, `cron(9:0 days=[2, 3, 4, 5, 6])`, raw ISO timestamps, and an
+// English delivery paragraph. Nothing here is new data — it is the same job
+// fields, said the way a person would say them.
+
+enum ScheduledTimeText {
+    /// "即将触发" / "约 5 分钟后" / "约 2 小时后" / "明天 09:00" / "10-15 08:30"
+    static func upcoming(_ date: Date) -> String {
+        let diff = date.timeIntervalSinceNow
+        if diff < 60 { return "即将触发" }
+        if diff < 3600 { return "约 \(Int(diff / 60)) 分钟后" }
+        if diff < 86400 { return "约 \(Int(diff / 3600)) 小时后" }
+        if Calendar.current.isDateInTomorrow(date) { return "明天 " + clockText(date) }
+        if Calendar.current.isDateInToday(date) { return "今天 " + clockText(date) }
+        return absoluteText(date)
+    }
+
+    /// "刚刚" / "5 分钟前" / "2 小时前" / "昨天 09:00" / "10-15 08:30"
+    static func past(_ date: Date) -> String {
+        let diff = Date().timeIntervalSince(date)
+        if diff < 60 { return "刚刚" }
+        if diff < 3600 { return "\(Int(diff / 60)) 分钟前" }
+        if diff < 86400 { return "\(Int(diff / 3600)) 小时前" }
+        if Calendar.current.isDateInYesterday(date) { return "昨天 " + clockText(date) }
+        return absoluteText(date)
+    }
+
+    /// "14:03"
+    static func clockText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f.string(from: date)
+    }
+
+    /// "10-15 08:30"
+    static func absoluteText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm"
+        return f.string(from: date)
+    }
+}
+
+extension AgentJobTrigger {
+    /// "立即执行" / "30 分钟后执行一次" / "每 1 小时，共 3 次" / "工作日 09:00" /
+    /// "上一个任务完成后". The `logLabel` form stays for logs and the CLI.
+    var humanLabel: String {
+        switch self {
+        case .immediate:
+            return "立即执行"
+        case .once(let after):
+            return Self.durationText(after) + "后执行一次"
+        case .loop(let interval, let count):
+            let every = "每 " + Self.durationText(interval)
+            guard let count else { return every + "重复" }
+            return every + "，共 \(count) 次"
+        case .cron(let hour, let minute, let days, let start, let end):
+            let time = String(format: "%02d:%02d", hour, minute)
+            let allowed = days.isEmpty ? Set(1...7) : days
+            var text: String
+            if allowed == Set(1...7) {
+                text = "每天 " + time
+            } else if allowed == Set(2...6) {
+                text = "工作日 " + time
+            } else {
+                let names = ["日", "一", "二", "三", "四", "五", "六"]
+                let list = allowed.sorted().map { names[($0 - 1) % 7] }.joined(separator: "、")
+                text = "每周" + list + " " + time
+            }
+            if start != nil || end != nil { text += "（限定时段）" }
+            return text
+        case .onCompletion:
+            return "上一个任务完成后"
+        }
+    }
+
+    /// "90 秒" / "30 分钟" / "2 小时" / "1 天"
+    static func durationText(_ seconds: TimeInterval) -> String {
+        let total = Int(seconds.rounded())
+        if total >= 86400, total % 86400 == 0 { return "\(total / 86400) 天" }
+        if total >= 3600, total % 3600 == 0 { return "\(total / 3600) 小时" }
+        if total >= 60, total % 60 == 0 { return "\(total / 60) 分钟" }
+        return "\(total) 秒"
+    }
+}
+
+extension AgentJob {
+    /// [AUD-17] Where a fire lands, in plain Chinese. The stored
+    /// `deliverySentence` stays the CLI receipt's machine-shaped wording; a
+    /// person should not have to read that to know where the result goes.
+    var deliverySentenceHuman: String {
+        switch target {
+        case .new:
+            return "每次触发都会新开一个会话运行，结果不会出现在这里。"
+        case .followUp:
+            return "每次触发都会在目标会话里接着往下运行，结果出现在那个会话里。"
+        case .rerun:
+            return "每次触发都会重跑那条历史消息。"
+        case .childOfCurrent:
+            return "每次触发都会在本会话下开一个隐藏的子任务，跑完把结果发回这里。"
+        }
+    }
+}
+
 // [AUD-10] One wording for the two delete entry points (the list swipe and the
 // detail sheet's trash button), because they delete the same thing.
 extension AgentJob {
@@ -70,7 +175,7 @@ struct ScheduledTaskCard: View {
                         }
 
                         HStack(spacing: 8) {
-                            Text(job.trigger.logLabel)
+                            Text(job.trigger.humanLabel)
                                 .font(.system(size: 12))
                                 .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
@@ -113,20 +218,9 @@ struct ScheduledTaskCard: View {
         }
     }
 
-    private func formatNext(_ date: Date) -> String {
-        let diff = date.timeIntervalSinceNow
-        if diff < 60 {
-            return "即将触发"
-        } else if diff < 3600 {
-            return "\(Int(diff / 60))分钟后"
-        } else if diff < 86400 {
-            return "\(Int(diff / 3600))小时后"
-        } else {
-            let f = DateFormatter()
-            f.dateFormat = "MM-dd HH:mm"
-            return f.string(from: date)
-        }
-    }
+    /// [AUD-17] Third copy of the same phrasing — now the shared one, so the card,
+    /// the list and the detail sheet cannot tell the user three different things.
+    private func formatNext(_ date: Date) -> String { ScheduledTimeText.upcoming(date) }
 }
 
 // MARK: - 自主脉搏触发卡片（聊天流内，仅脉搏类任务渲染）

@@ -153,15 +153,15 @@ struct ScheduledTaskDetailSheet: View {
 
                         // Properties Card
                         VStack(spacing: 12) {
-                            detailRow(label: "触发规则", value: job.trigger.logLabel, icon: "repeat")
+                            detailRow(label: "触发规则", value: job.trigger.humanLabel, icon: "repeat")
                             if let next = job.nextFireAt {
-                                detailRow(label: "下次触发", value: ScheduledJobRunner.iso(next), icon: "timer")
+                                detailRow(label: "下次触发", value: ScheduledTimeText.upcoming(next), icon: "timer")
                             }
                             detailRow(label: "已触发次数", value: "\(job.firedCount) 次", icon: "number")
                             if let r = job.remaining {
                                 detailRow(label: "剩余次数", value: "\(r) 次", icon: "hourglass")
                             }
-                            if let dlv = job.deliverySentence {
+                            if let dlv = job.deliverySentenceHuman {
                                 detailRow(label: "递送说明", value: dlv, icon: "paperplane")
                             }
                             if let cmd = job.prefilledTool?.shellCommand {
@@ -170,7 +170,7 @@ struct ScheduledTaskDetailSheet: View {
                                         Image(systemName: "terminal")
                                             .font(.system(size: 12))
                                             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
-                                        Text("预填命令 (Prefilled Tool)")
+                                        Text("预填命令")
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                                     }
@@ -232,7 +232,7 @@ struct ScheduledTaskDetailSheet: View {
                                                 : CSSThemeVariables.danger(isDark: isDark))
 
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text(ScheduledJobRunner.iso(run.firedAt))
+                                            Text(ScheduledTimeText.past(run.firedAt) + " · " + ScheduledTimeText.clockText(run.firedAt))
                                                 .font(.system(size: 12, weight: .medium))
                                                 .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                                             if let prev = run.preview {

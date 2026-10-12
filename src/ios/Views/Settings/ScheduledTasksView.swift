@@ -70,7 +70,7 @@ guard let id = pendingDeleteId else { return }
                     Text("暂无挂载的定时任务或脉搏")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
-                    Text("可在聊天中由小梦调度创建，或使用 minis-scheduled 命令管理")
+                    Text("可以在聊天里直接创建一个。")
                         .font(.system(size: 12))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
                         .multilineTextAlignment(.center)
@@ -185,7 +185,7 @@ guard let id = pendingDeleteId else { return }
                 }
 
                 HStack(spacing: 8) {
-                    Text(job.trigger.logLabel)
+                    Text(job.trigger.humanLabel)
                         .font(.system(size: 12))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
@@ -209,20 +209,9 @@ guard let id = pendingDeleteId else { return }
         .padding(.vertical, 4)
     }
 
-    private func formatNext(_ date: Date) -> String {
-        let diff = date.timeIntervalSinceNow
-        if diff < 60 {
-            return "即将触发"
-        } else if diff < 3600 {
-            return "\(Int(diff / 60))m"
-        } else if diff < 86400 {
-            return "\(Int(diff / 3600))h"
-        } else {
-            let f = DateFormatter()
-            f.dateFormat = "MM-dd HH:mm"
-            return f.string(from: date)
-        }
-    }
+    /// [AUD-17] Was a private "5m / 2h" shorthand; now the shared human phrasing
+    /// so the list and the detail sheet cannot drift apart.
+    private func formatNext(_ date: Date) -> String { ScheduledTimeText.upcoming(date) }
 }
 
 private struct IdentifiableJobId: Identifiable {
