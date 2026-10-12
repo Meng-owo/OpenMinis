@@ -4303,7 +4303,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // Drop the backlog FIRST: cancelling a running job drains the queue,
             // which would otherwise start the very delegations just stopped.
             AgentJobRegistry.shared.dropQueuedDelegations(parent: sid, reason: "user stop")
-            AgentJobRegistry.shared.cancelAll(parent: sid, reason: "user stop", silent: true)
+            // ONLY delegations the model made (`origin == .tool`). A scheduled
+            // task that happens to target this conversation is the user's own
+            // alarm, not part of the turn just stopped — it keeps its schedule.
+            for job in AgentJobRegistry.shared.activeChildren(parent: sid) where job.origin == .tool {
+                AgentJobRegistry.shared.cancel(jobId: job.id, reason: "user stop", silent: true)
+            }
         }
         currentTask?.cancel()
         currentTask = nil
