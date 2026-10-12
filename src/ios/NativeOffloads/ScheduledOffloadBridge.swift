@@ -258,36 +258,40 @@ private let logger = AppLogger(category: "ScheduledOffload")
     @objc public static func delete(id: String) -> NSDictionary {
         onMain {
             let registry = AgentJobRegistry.shared
-            guard let job = registry.job(id: id) ?? registry.job(label: id) else {
+            let (resolved, labelNote) = Self.resolveJob(registry, id)
+            guard let job = resolved else {
                 return ["ok": false, "error": "not_found", "message": "no task with id=\(id)"] as NSDictionary
             }
             registry.cancel(jobId: job.id, reason: "cli delete")
             registry.remove(jobId: job.id)
-            return ["deleted": job.id] as NSDictionary
+            return ["deleted": job.id].merging(labelNote) { _, new in new } as NSDictionary
         }
     }
 
     @objc public static func setEnabled(id: String, enabled: Bool) -> NSDictionary {
         onMain {
             let registry = AgentJobRegistry.shared
-            guard let job = registry.job(id: id) ?? registry.job(label: id) else {
+            let (resolved, labelNote) = Self.resolveJob(registry, id)
+            guard let job = resolved else {
                 return ["ok": false, "error": "not_found", "message": "no task with id=\(id)"] as NSDictionary
             }
             registry.setEnabled(jobId: job.id, enabled: enabled)
-            return ["id": job.id, "enabled": enabled] as NSDictionary
+            return ["id": job.id, "enabled": enabled].merging(labelNote) { _, new in new } as NSDictionary
         }
     }
 
     @objc public static func run(id: String) -> NSDictionary {
         onMain {
             let registry = AgentJobRegistry.shared
-            guard let job = registry.job(id: id) ?? registry.job(label: id) else {
+            let (resolved, labelNote) = Self.resolveJob(registry, id)
+            guard let job = resolved else {
                 return ["ok": false, "error": "not_found", "message": "no task with id=\(id)"] as NSDictionary
             }
             let outcome = await ScheduledJobRunner.fireNow(job)
             var out: [String: Any] = ["id": job.id, "ran": outcome["fired"] ?? false]
             if let sid = outcome["session_id"] as? String { out["sessionId"] = sid }
             out["note"] = "Returned as soon as the prompt was handed to the session; poll `minis-sessions-cli status --id <sessionId>` for completion."
+            out.merge(labelNote) { _, new in new }
             return out as NSDictionary
         }
     }
@@ -295,12 +299,34 @@ private let logger = AppLogger(category: "ScheduledOffload")
     @objc public static func runsWithId(_ id: String) -> NSDictionary {
         onMain {
             let registry = AgentJobRegistry.shared
-            guard let job = registry.job(id: id) ?? registry.job(label: id) else {
+            let (resolved, labelNote) = Self.resolveJob(registry, id)
+            guard let job = resolved else {
                 return ["ok": false, "error": "not_found", "message": "no task with id=\(id)"] as NSDictionary
             }
             let list = registry.runs(jobId: job.id).map { $0.toDict() }
-            return ["id": job.id, "runs": list, "count": list.count] as NSDictionary
+            return ["id": job.id, "runs": list, "count": list.count].merging(labelNote) { _, new in new } as NSDictionary
         }
+    }
+
+    /// [AUD-09] Resolve `--id <uuid|label>` for list / delete / enable / run.
+    ///
+    /// A label is not a key: several tasks can carry the same one, and a
+    /// finished task used to be invisible to label lookups even while the list
+    /// still showed it. This resolves across every state and hands back the note
+    /// the receipt should carry when the label was ambiguous, so the caller
+    /// learns which task was actually acted on instead of guessing.
+    private static func resolveJob(_ registry: AgentJobRegistry,
+                                   _ input: String) -> (job: AgentJob?, labelNote: [String: Any]) {
+        if let byId = registry.job(id: input) { return (byId, [:]) }
+        let matches = registry.jobMatches(label: input)
+        guard let winner = matches.first else { return (nil, [:]) }
+        guard matches.count > 1 else { return (winner, [:]) }
+        return (winner, [
+            "ambiguous_label": true,
+            "matched_jobs": matches.map(\.id),
+            "using_job": winner.id,
+            "label_note": "\(matches.count) tasks share the label \"\(input)\"; acted on the most recent live one. Use a job UUID to pick a different one.",
+        ])
     }
 
     // MARK: - parsing

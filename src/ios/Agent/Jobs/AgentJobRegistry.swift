@@ -502,11 +502,31 @@ final class AgentJobRegistry: ObservableObject {
 
     func job(id: String) -> AgentJob? { jobs[id] }
 
-    func job(label: String) -> AgentJob? {
+    /// Resolve a `--id <label>` reference.
+    ///
+    /// [AUD-09] Searches EVERY state, not just the live ones. A finished task
+    /// stays in the list (`minis-scheduled list` still shows it), so
+    /// `runs` / `delete` / `enable` / `disable` / `run` must still find it —
+    /// before, a finished task answered "no task with id=<label>" and only its
+    /// UUID worked, which reads as "my task vanished".
+    ///
+    /// Live jobs win over finished ones with the same label (a live task is
+    /// what the caller means), then newest first.
+    func job(label: String) -> AgentJob? { jobMatches(label: label).first }
+
+    /// Every job carrying `label`, best candidate first: live before finished,
+    /// then newest first. More than one element means the label is ambiguous
+    /// and the caller should say which one it acted on — see `resolveJob` in
+    /// `ScheduledOffloadBridge`.
+    func jobMatches(label: String) -> [AgentJob] {
         jobs.values
-            .filter { $0.label == label && ($0.state == .pending || $0.state == .running) }
-            .sorted { $0.createdAt > $1.createdAt }
-            .first
+            .filter { $0.label == label }
+            .sorted { a, b in
+                let aLive = a.state == .pending || a.state == .running
+                let bLive = b.state == .pending || b.state == .running
+                if aLive != bLive { return aLive }
+                return a.createdAt > b.createdAt
+            }
     }
 
     /// A timer fired (schedule jobs): bump counters without changing state.
