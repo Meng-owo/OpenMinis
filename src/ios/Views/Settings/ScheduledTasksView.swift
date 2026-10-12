@@ -1,0 +1,207 @@
+//
+//  ScheduledTasksView.swift
+//  MinisApp
+//
+//  Complete management screen for scheduled tasks and proactive pulses.
+//  Aligns with and surpasses Android's ScheduledTasksScreen.
+//  Driven 100% by CSSThemeVariables.
+//
+
+import SwiftUI
+
+struct ScheduledTasksView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var registry = AgentJobRegistry.shared
+
+    @State private var selectedJobId: String? = nil
+
+    private var isDark: Bool { colorScheme == .dark }
+    private var allJobs: [AgentJob] { registry.list() }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("定时任务与脉搏")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .frame(width: 32, height: 32)
+                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                        .clipShape(Circle())
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            Divider()
+                .overlay(CSSThemeVariables.divider(isDark: isDark))
+
+            // Body
+            if allJobs.isEmpty {
+                VStack(spacing: 14) {
+                    Image(systemName: "clock.badge.questionmark")
+                        .font(.system(size: 44))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.6))
+                    Text("暂无挂载的定时任务或脉搏")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    Text("可在聊天中由小梦调度创建，或使用 minis-scheduled 命令管理")
+                        .font(.system(size: 12))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            } else {
+                List {
+                    // Summary Section
+                    Section {
+                        HStack(spacing: 16) {
+                            summaryCard(title: "总任务数", count: allJobs.count, icon: "list.bullet")
+                            summaryCard(title: "活跃运行中", count: allJobs.filter { $0.isEnabled && $0.state != .done }.count, icon: "play.circle.fill")
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .padding(.vertical, 8)
+                    }
+
+                    // Task Items Section
+                    Section {
+                        ForEach(allJobs) { job in
+                            taskRow(for: job)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedJobId = job.id
+                                }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        registry.remove(jobId: job.id)
+                                    } label: {
+                                        Label("删除", systemImage: "trash")
+                                    }
+                                }
+                        }
+                    }
+                }
+                .listStyle(InsetGroupedListStyle())
+                .scrollContentBackground(.hidden)
+                .background(CSSThemeVariables.sheetBg(isDark: isDark))
+            }
+        }
+        .background(CSSThemeVariables.sheetBg(isDark: isDark))
+        .sheet(item: Binding<IdentifiableJobId?>(
+            get: { selectedJobId.map { IdentifiableJobId(id: $0) } },
+            set: { selectedJobId = $0?.id }
+        )) { ident in
+            ScheduledTaskDetailSheet(jobId: ident.id)
+        }
+    }
+
+    private func summaryCard(title: String, count: Int, icon: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 11))
+                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                Text("\(count)")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(CSSThemeVariables.card(isDark: isDark))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func taskRow(for job: AgentJob) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                .frame(width: 34, height: 34)
+                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(job.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                        .lineLimit(1)
+
+                    if job.isPulse {
+                        Text("脉搏")
+                            .font(.system(size: 10, weight: .bold))
+                            .padding(.horizontal, 4)
+                            .padding(.vertical, 1)
+                            .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                            .clipShape(Capsule())
+                    }
+                }
+
+                HStack(spacing: 8) {
+                    Text(job.trigger.logLabel)
+                        .font(.system(size: 12))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+
+                    if let next = job.nextFireAt {
+                        Text("下次: \(formatNext(next))")
+                            .font(.system(size: 11))
+                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                    }
+                }
+            }
+
+            Spacer()
+
+            Toggle("", isOn: Binding<Bool>(
+                get: { job.isEnabled },
+                set: { registry.setEnabled(jobId: job.id, enabled: $0) }
+            ))
+            .labelsHidden()
+            .toggleStyle(SwitchToggleStyle(tint: CSSThemeVariables.accent(isDark: isDark)))
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func formatNext(_ date: Date) -> String {
+        let diff = date.timeIntervalSinceNow
+        if diff < 60 {
+            return "即将触发"
+        } else if diff < 3600 {
+            return "\(Int(diff / 60))m"
+        } else if diff < 86400 {
+            return "\(Int(diff / 3600))h"
+        } else {
+            let f = DateFormatter()
+            f.dateFormat = "MM-dd HH:mm"
+            return f.string(from: date)
+        }
+    }
+}
+
+private struct IdentifiableJobId: Identifiable {
+    let id: String
+}

@@ -28,6 +28,63 @@ struct HelperModelIdentity: Equatable, Codable {
     mutating func merge(_ record: Any?) {}
 }
 
+/// One recorded run of a scheduled task or proactive pulse.
+public struct ScheduledRun: Codable, Equatable, Identifiable {
+    public var id: String { "\(firedAt.timeIntervalSince1970)_\(sessionId ?? "")" }
+    public let firedAt: Date
+    public let sessionId: String?
+    public let preview: String?
+    public let ok: Bool
+
+    public init(firedAt: Date = Date(), sessionId: String?, preview: String?, ok: Bool) {
+        self.firedAt = firedAt
+        self.sessionId = sessionId
+        self.preview = preview
+        self.ok = ok
+    }
+
+    public func toDict() -> [String: Any] {
+        var d: [String: Any] = [
+            "firedAt": ScheduledJobRunner.iso(firedAt),
+            "ok": ok
+        ]
+        if let s = sessionId { d["sessionId"] = s }
+        if let p = preview { d["preview"] = p }
+        return d
+    }
+}
+
+/// A tool call a scheduled task makes BEFORE the model is asked anything.
+/// Realizes `--command` / `--tool` to save token roundtrips and execute up-front.
+public struct PrefilledToolCall: Codable, Equatable {
+    public let toolName: String
+    public let argsJson: String
+    public let timeoutSec: Int?
+
+    public init(toolName: String, argsJson: String, timeoutSec: Int? = nil) {
+        self.toolName = toolName
+        self.argsJson = argsJson
+        self.timeoutSec = timeoutSec
+    }
+
+    public var shellCommand: String? {
+        let t = toolName.lowercased()
+        guard t == "shell_execute" || t == "sh" || t == "shell" || t == "bash" else { return nil }
+        guard let data = argsJson.data(using: .utf8),
+              let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        return dict["command"] as? String
+    }
+
+    public func toDict() -> [String: Any] {
+        var d: [String: Any] = [
+            "tool": toolName,
+            "args": (try? JSONSerialization.jsonObject(with: argsJson.data(using: .utf8) ?? Data())) ?? [:]
+        ]
+        if let t = timeoutSec { d["timeoutSec"] = t }
+        return d
+    }
+}
+
 /// Who created the job.
 enum AgentJobOrigin: String {
     /// The model called a tool (`delegate_task`).
@@ -187,6 +244,11 @@ final class AgentJob: Identifiable {
     /// keeps whatever its group default gives it. Only an explicit flag
     /// overrides, so every existing job behaves exactly as before.
     var thinkingLevel: ThinkingLevel?
+    // [T-scheduled-prefill-and-pulse]
+    var prefilledTool: PrefilledToolCall?
+    var isPulse: Bool = false
+    var deliverySentence: String?
+    private(set) var runs: [ScheduledRun] = []
     /// Producer hook run by `finish` before `then` (background helpers use
     /// it to write the final JSON into the parent's tool block).
     var completionHook: ((AgentJob) -> Void)?
@@ -232,12 +294,19 @@ final class AgentJob: Identifiable {
         if let r = remaining { remaining = max(0, r - 1) }
     }
 
-    fileprivate func recordFire(sessionId: String?, ok: Bool) {
-        firedCount += 1
+    fileprivate func recordFire(sessionId: String?, ok: Bool, preview: String? = nil, bumpCounter: Bool = true) {
+        if bumpCounter {
+            firedCount += 1
+            if let r = remaining { remaining = max(0, r - 1) }
+        }
         lastFireOk = ok
         if let sessionId { runSessionId = sessionId }
-        if let r = remaining { remaining = max(0, r - 1) }
         startedAt = startedAt ?? Date()
+        let run = ScheduledRun(firedAt: Date(), sessionId: sessionId, preview: preview, ok: ok)
+        runs.insert(run, at: 0)
+        if runs.count > 50 {
+            runs.removeLast(runs.count - 50)
+        }
     }
 
     fileprivate func markFinished(_ final: AgentJobState, result: String?) {
@@ -411,10 +480,14 @@ final class AgentJobRegistry: ObservableObject {
     }
 
     /// A timer fired (schedule jobs): bump counters without changing state.
-    func recordFire(_ jobId: String, sessionId: String?, ok: Bool) {
+    func recordFire(_ jobId: String, sessionId: String?, ok: Bool, preview: String? = nil, bumpCounter: Bool = true) {
         guard let job = jobs[jobId] else { return }
-        job.recordFire(sessionId: sessionId, ok: ok)
+        job.recordFire(sessionId: sessionId, ok: ok, preview: preview, bumpCounter: bumpCounter)
         logger.info("[Jobs] FIRED \(job.logLabel) session=\(sessionId?.prefix(8) ?? "nil") ok=\(ok) fired=\(job.firedCount) remaining=\(job.remaining.map(String.init) ?? "∞")")
+    }
+
+    func runs(jobId: String) -> [ScheduledRun] {
+        return jobs[jobId]?.runs ?? []
     }
 
     /// `minis-scheduled enable|disable` — re-arms or disarms the trigger.
@@ -468,6 +541,10 @@ final class AgentJobRegistry: ObservableObject {
         if let id = job.modelIdentity { d["modelIdentity"] = id.payload() }
         if let ok = job.lastFireOk { d["lastFireOk"] = ok }
         if let p = job.prompt { d["prompt"] = String(p.prefix(200)) }
+        if let pf = job.prefilledTool { d["prefilledTool"] = pf.toDict() }
+        if job.isPulse { d["isPulse"] = true }
+        if let dlv = job.deliverySentence { d["delivery"] = dlv }
+        d["runsCount"] = job.runs.count
         return d
     }
 

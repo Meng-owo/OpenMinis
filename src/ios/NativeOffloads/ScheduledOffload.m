@@ -24,6 +24,7 @@
 + (NSDictionary * _Nonnull)deleteWithId:(NSString * _Nonnull)id;
 + (NSDictionary * _Nonnull)setEnabledWithId:(NSString * _Nonnull)id enabled:(BOOL)enabled;
 + (NSDictionary * _Nonnull)runWithId:(NSString * _Nonnull)id;
++ (NSDictionary * _Nonnull)runsWithId:(NSString * _Nonnull)id;
 @end
 #endif
 
@@ -34,6 +35,7 @@ static NSString *const HELP_TEXT =
      "\n"
      "USAGE:\n"
      "  minis-scheduled list\n"
+     "  minis-scheduled runs --id <jobId|label>            # history of a task\n"
      "  minis-scheduled create --prompt \"...\" [--label L] [--target new|follow-up|rerun|child-of-current]\n"
      "                         [--trigger once|loop|cron|on-completion]\n"
      "                         [--after 30m]                          # once, relative\n"
@@ -43,10 +45,19 @@ static NSString *const HELP_TEXT =
      "                         [--of <jobId>]                         # on-completion\n"
      "                         [--session <id>] [--message <id>] [--model <entry_id>] [--disabled]\n"
      "                         [--thinking off|low|medium|high|xhigh]\n"
+     "                         [--command \"<shell>\" [--timeout N]]    # prefill: run BEFORE the model wakes\n"
+     "                         [--tool <name>] [--tool-args <json>]   # prefill: any tool\n"
+     "                         [--pulse]                              # autonomous heartbeat mode\n"
      "  minis-scheduled delete  --id <jobId|label>\n"
      "  minis-scheduled enable  --id <jobId|label>\n"
      "  minis-scheduled disable --id <jobId|label>\n"
      "  minis-scheduled run     --id <jobId|label>     # fire now, off-schedule\n"
+     "\n"
+     "PREFILL & PULSE:\n"
+     "  --command/--tool  run the tool FIRST and hand the model the real output as already-run\n"
+     "                    context; saves a whole model round-trip. Supported: shell_execute.\n"
+     "  --pulse           wake the assistant with an autonomy heartbeat;  the assistant decides\n"
+     "                    from the moment + context whether to speak or reply `<silent/>` to stay quiet.\n"
      "\n"
      "TRIGGER (inferred when --trigger is omitted: --after→once, --interval→loop, --time→cron, --of→on-completion):\n"
      "  once           fire once after --after <duration> (30m, 2h, 90s) or at the next --time HH:MM\n"
@@ -54,8 +65,8 @@ static NSString *const HELP_TEXT =
      "  cron           fire at --time on --repeat daily (default) | weekdays | custom --days\n"
      "  on-completion  fire when job --of <jobId> finishes; {{result}} in --prompt is replaced by its result\n"
      "\n"
-     "TARGET:\n"
-     "  new              (default) a new top-level chat, visible in the session list\n"
+     "TARGET (default: follow-up IN THIS CHAT when run from a chat; new when no chat behind the command):\n"
+     "  new              a new top-level chat, visible in the session list\n"
      "  follow-up        appended as a new turn to --session (default: the chat this command runs in)\n"
      "  rerun            re-run --session from user message --message\n"
      "  child-of-current a hidden helper session under the current chat; its final answer is\n"
@@ -67,10 +78,13 @@ static NSString *const HELP_TEXT =
      "Shortcuts automation instead.\n"
      "\n"
      "EXAMPLES:\n"
+     "  minis-scheduled create --prompt \"Summarize this build result\" --command \"make status\" --label build-watch --target follow-up\n"
+     "  minis-scheduled create --prompt \"Decide whether to speak\" --pulse --interval 2h --label xiaomeng-pulse --target follow-up\n"
      "  minis-scheduled create --prompt \"Check the build status\" --interval 10m --count 6 --label build-watch --target follow-up\n"
      "  minis-scheduled create --prompt \"Remind me to drink water\" --after 30m\n"
      "  minis-scheduled create --prompt \"Morning summary of my notes\" --time 09:00 --repeat weekdays\n"
      "  minis-scheduled list\n"
+     "  minis-scheduled runs --id build-watch\n"
      "  minis-scheduled delete --id build-watch\n";
 
 static NSString *arg(int argc, char **argv, const char *name) {
@@ -102,6 +116,12 @@ static int cmd_create(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL 
     put(args, @"model",    arg(argc, argv, "--model")    ?: arg(argc, argv, "-m"));
     // [T-scheduled-thinking-level] Optional; absent leaves the level alone.
     put(args, @"thinking", arg(argc, argv, "--thinking"));
+    // [T-scheduled-prefill-and-pulse] Prefill tool / shell command / proactive pulse
+    put(args, @"command",  arg(argc, argv, "--command")  ?: arg(argc, argv, "-c") ?: arg(argc, argv, "--shell"));
+    put(args, @"tool",     arg(argc, argv, "--tool"));
+    put(args, @"toolArgs", arg(argc, argv, "--tool-args"));
+    put(args, @"timeout",  arg(argc, argv, "--timeout"));
+    if (noff_has_flag(argc, argv, "--pulse")) args[@"pulse"] = @YES;
     args[@"disabled"] = @(noff_has_flag(argc, argv, "--disabled"));
 
     NSDictionary *data = [ScheduledOffloadBridge createWithArgs:args];
@@ -132,6 +152,7 @@ static int cmd_with_id(NSString *action, int argc, char **argv, int stdout_fd, i
     if ([action isEqualToString:@"delete"])       data = [ScheduledOffloadBridge deleteWithId:jobId];
     else if ([action isEqualToString:@"enable"])  data = [ScheduledOffloadBridge setEnabledWithId:jobId enabled:YES];
     else if ([action isEqualToString:@"disable"]) data = [ScheduledOffloadBridge setEnabledWithId:jobId enabled:NO];
+    else if ([action isEqualToString:@"runs"])    data = [ScheduledOffloadBridge runsWithId:jobId];
     else                                          data = [ScheduledOffloadBridge runWithId:jobId];
     if ([data[@"ok"] isKindOfClass:[NSNumber class]] && ![data[@"ok"] boolValue]) {
         NSDictionary *err = noff_json_error(TOOL_NAME, action, NOFF_ERR_INVALID_ARGS,
@@ -165,10 +186,13 @@ static int scheduled_handler(int argc, char **argv, int stdin_fd, int stdout_fd,
     if ([sub isEqualToString:@"enable"])  return cmd_with_id(@"enable", argc, argv, stdout_fd, stderr_fd, compact, quiet);
     if ([sub isEqualToString:@"disable"]) return cmd_with_id(@"disable", argc, argv, stdout_fd, stderr_fd, compact, quiet);
     if ([sub isEqualToString:@"run"])     return cmd_with_id(@"run", argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    if ([sub isEqualToString:@"runs"] || [sub isEqualToString:@"history"]) {
+        return cmd_with_id(@"runs", argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    }
 
     noff_emit_help(stderr_fd, HELP_TEXT);
     NSDictionary *err = noff_json_error(TOOL_NAME, sub, NOFF_ERR_INVALID_ARGS,
-                                         [NSString stringWithFormat:@"Unknown command '%@'. Valid: list, create, delete, enable, disable, run.", sub]);
+                                         [NSString stringWithFormat:@"Unknown command '%@'. Valid: list, runs, create, delete, enable, disable, run.", sub]);
     noff_emit_json(stdout_fd, err, compact, quiet);
     return NOFF_EXIT_INVALID_ARGS;
 }

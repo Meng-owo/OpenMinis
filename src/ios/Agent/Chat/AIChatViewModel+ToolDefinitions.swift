@@ -575,9 +575,9 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 id: "minis-scheduled",
                 name: "minis-scheduled",
                 category: .system,
-                synopsis: "Schedule delayed or recurring prompt executions.",
-                quickSyntax: "minis-scheduled create --prompt \"...\" --after 10m",
-                docRef: "minis-scheduled --help"
+                synopsis: "Schedule delayed or recurring prompts; prefill shell commands; proactive autonomy pulses.",
+                quickSyntax: "minis-scheduled create --prompt \"...\" --after 10m [--command \"<cmd>\" | --pulse]",
+                docRef: "minis-scheduled --help (supports --command prefill, --pulse autonomous heartbeat, --target follow-up default in chat)"
             ),
             CatalogItem(
                 id: "minis-sessions-cli",

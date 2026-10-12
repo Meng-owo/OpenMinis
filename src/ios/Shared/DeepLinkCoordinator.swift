@@ -36,6 +36,8 @@ enum SettingsDeepLinkTarget: Equatable {
     case terminal
     /// [T-tts-first-use-nudge 09-13] Voice Services list (TTS service layer).
     case voiceServices
+    /// [T-scheduled-ui] Scheduled tasks & proactive pulses manager.
+    case scheduled
 }
 
 @MainActor

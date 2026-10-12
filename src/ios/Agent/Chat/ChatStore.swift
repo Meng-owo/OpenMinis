@@ -443,10 +443,14 @@ struct RawMessage: Identifiable, Codable, Hashable {
     }
 
     /// 系统静默提醒/指令判断：纯 `<system-reminder>` 块的消息仅供大模型作为上下文，不在 UI 聊天气泡中渲染
+    /// [T-scheduled-prefill-and-pulse] 同时支持自主脉搏的 `<silent/>` 静默标记
     var isSystemReminderOnly: Bool {
         guard parts.count == 1, case .text(let s) = parts[0] else { return false }
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>")
+        if trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>") {
+            return true
+        }
+        return trimmed.range(of: #"^<silent\s*/?>$"#, options: .regularExpression) != nil
     }
 }
 

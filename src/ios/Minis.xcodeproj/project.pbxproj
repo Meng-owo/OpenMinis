@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E5SCH0022 /* ScheduledTaskDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0021 /* ScheduledTaskDetailSheet.swift */; };
+		E5SCH0024 /* ScheduledTaskCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0023 /* ScheduledTaskCard.swift */; };
+		E5SCH0026 /* ScheduledTasksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0025 /* ScheduledTasksView.swift */; };
 		E5SAS0001 /* SubAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SAS0011 /* SubAgentStore.swift */; };
 		E5SAD0001 /* SubAgentDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SAD0011 /* SubAgentDefinition.swift */; };
 		E5TSV0001 /* ToolsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TSV0011 /* ToolsSettingsView.swift */; };
@@ -700,6 +703,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		E5SCH0021 /* ScheduledTaskDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledTaskDetailSheet.swift"; path = "Views/Chat/ScheduledTaskDetailSheet.swift"; sourceTree = SOURCE_ROOT; };
+		E5SCH0023 /* ScheduledTaskCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledTaskCard.swift"; path = "Views/Chat/ScheduledTaskCard.swift"; sourceTree = SOURCE_ROOT; };
+		E5SCH0025 /* ScheduledTasksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledTasksView.swift"; path = "Views/Settings/ScheduledTasksView.swift"; sourceTree = SOURCE_ROOT; };
 		E5SAS0011 /* SubAgentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SubAgentStore.swift"; path = "Providers/SubAgentStore.swift"; sourceTree = SOURCE_ROOT; };
 		E5SAD0011 /* SubAgentDefinition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "SubAgentDefinition.swift"; path = "Providers/SubAgentDefinition.swift"; sourceTree = SOURCE_ROOT; };
 		E5TSV0011 /* ToolsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ToolsSettingsView.swift"; path = "Views/Settings/ToolsSettingsView.swift"; sourceTree = SOURCE_ROOT; };
@@ -2285,6 +2291,8 @@
 		F1A00010 /* Chat */ = {
 			isa = PBXGroup;
 			children = (
+				E5SCH0021 /* ScheduledTaskDetailSheet.swift */,
+				E5SCH0023 /* ScheduledTaskCard.swift */,
 				E53000011 /* AIChatViewModel.swift */,
 				E5VMA0011 /* AIChatViewModel+Attachments.swift */,
 				E5VMA0012 /* AIChatViewModel+SlashCommands.swift */,
@@ -2564,6 +2572,7 @@
 				S2WSSETT00000000000001 /* WebSearchSettingsView.swift */,
 				E5LOCK102 /* FaceIDProtectionSettingsView.swift */,
 				E5LOCK103 /* AppLockOverlay.swift */,
+				E5SCH0025 /* ScheduledTasksView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -3002,6 +3011,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5SCH0022 /* ScheduledTaskDetailSheet.swift in Sources */,
+				E5SCH0024 /* ScheduledTaskCard.swift in Sources */,
+				E5SCH0026 /* ScheduledTasksView.swift in Sources */,
 				E5ACB0001 /* AgentCallback.swift in Sources */,
 				E5ACB0002 /* AgentCallbackCellView.swift in Sources */,
 				E5AJR0001 /* AgentJobRegistry.swift in Sources */,

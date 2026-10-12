@@ -137,14 +137,22 @@ final class ChatMessage: Identifiable, ObservableObject {
     }
 
     /// 系统静默提醒/指令判断：纯 `<system-reminder>` 块的消息仅供大模型作为上下文，不在 UI 聊天气泡中渲染
+    /// [T-scheduled-prefill-and-pulse] 另外支持自主脉搏的 `<silent/>` 静默标记，模型主动选择不打扰时不渲染空白气泡
+    /// 同时支持 `<silent>` 多种写法与首尾换行，确保隐藏判定足够牢靠
     var isSystemReminderOnly: Bool {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>") {
             return true
         }
+        if trimmed.range(of: #"^<silent\s*/?>$"#, options: .regularExpression) != nil {
+            return true
+        }
         if content.isEmpty, blocks.count == 1, case .text = blocks[0].kind {
             let bTrimmed = blocks[0].content.trimmingCharacters(in: .whitespacesAndNewlines)
-            return bTrimmed.hasPrefix("<system-reminder>") && bTrimmed.hasSuffix("</system-reminder>")
+            if bTrimmed.hasPrefix("<system-reminder>") && bTrimmed.hasSuffix("</system-reminder>") {
+                return true
+            }
+            return bTrimmed.range(of: #"^<silent\s*/?>$"#, options: .regularExpression) != nil
         }
         return false
     }

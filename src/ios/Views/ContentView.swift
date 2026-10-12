@@ -7279,6 +7279,8 @@ private enum SettingsDestination: Hashable {
     case terminal
     // [T-tts-first-use-nudge 09-13] Voice Services list.
     case voiceServices
+    // [T-scheduled-ui] Scheduled tasks & proactive pulses manager.
+    case scheduled
 }
 
 private struct SettingsSheet: View {
@@ -7536,6 +7538,18 @@ private struct SettingsSheet: View {
                     }
                 }
 
+                Section("Agent Runtime") {
+                    NavigationLink {
+                        ScheduledTasksView()
+                    } label: {
+                        Label {
+                            Text("Scheduled Tasks & Pulses")
+                        } icon: {
+                            QuietAppIcon(id: QuietIconSlot.terminal.id, systemName: "clock.arrow.circlepath")
+                        }
+                    }
+                }
+
                 Section("Permissions") {
                     NavigationLink {
                         OffloadPermissionSettingsView()
@@ -7692,6 +7706,9 @@ private struct SettingsSheet: View {
                 // [T-tts-first-use-nudge 09-13] Voice Services list.
                 case .voiceServices:
                     VoiceServicesView()
+                // [T-scheduled-ui] Scheduled tasks & proactive pulses manager.
+                case .scheduled:
+                    ScheduledTasksView()
                 }
             }
             .onAppear {
@@ -7789,6 +7806,9 @@ private struct SettingsSheet: View {
         // [T-tts-first-use-nudge 09-13]
         case .voiceServices:
             navPath.append(SettingsDestination.voiceServices)
+        // [T-scheduled-ui]
+        case .scheduled:
+            navPath.append(SettingsDestination.scheduled)
         }
         deepLink.pendingSettingsTarget = nil
     }

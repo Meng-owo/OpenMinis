@@ -39,7 +39,6 @@ private let logger = AppLogger(category: "ScheduledOffload")
         }
         let prompt = str("prompt") ?? ""
         let label = str("label")
-        let targetRaw = (str("target") ?? "new").lowercased()
         let modelEntryId = str("model")
         // [T-scheduled-thinking-level] Validated here rather than silently
         // coerced: a typo like `--thinking hgih` must not quietly run the job
@@ -53,26 +52,66 @@ private let logger = AppLogger(category: "ScheduledOffload")
             thinkingLevel = parsed
         }
         let disabled = (args["disabled"] as? Bool) ?? false
+        let isPulse = (args["pulse"] as? Bool) ?? false
+
+        // ── Prefilled Tool ──────────────────────────────────────────────
+        var prefilledTool: PrefilledToolCall? = nil
+        if let cmd = str("command") {
+            let timeout = str("timeout").flatMap { Int($0) }
+            let toolName = str("tool") ?? "shell_execute"
+            let argsObj: [String: Any] = ["command": cmd, "tool_title": label ?? String(cmd.prefix(40))]
+            let argsData = try? JSONSerialization.data(withJSONObject: argsObj)
+            prefilledTool = PrefilledToolCall(toolName: toolName,
+                                             argsJson: String(data: argsData ?? Data(), encoding: .utf8) ?? "{}",
+                                             timeoutSec: timeout)
+        } else if let tool = str("tool") {
+            let argsJson = str("toolArgs") ?? "{}"
+            let timeout = str("timeout").flatMap { Int($0) }
+            prefilledTool = PrefilledToolCall(toolName: tool, argsJson: argsJson, timeoutSec: timeout)
+        }
 
         // ── Target ───────────────────────────────────────────────────────
         let callerSid = ISHExecutionCoordinator.mountedSessionIdSnapshot
+        let explicitTarget = str("target")?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let targetRaw: String
+        let isTargetDefaulted: Bool
+        if let exp = explicitTarget, !exp.isEmpty {
+            targetRaw = exp
+            isTargetDefaulted = false
+        } else {
+            // Intelligent follow-up targeting when running inside a chat
+            if callerSid != nil || str("session") != nil {
+                targetRaw = "follow-up"
+            } else {
+                targetRaw = "new"
+            }
+            isTargetDefaulted = true
+        }
+
         let target: AgentJobTarget
+        let deliverySentence: String
         switch targetRaw {
         case "new":
             target = .new
+            let titled = label.map { " titled “Scheduled · \($0)”" } ?? ""
+            deliverySentence = "Delivery: each fire opens a NEW separate chat\(titled); the result will NOT appear in this conversation." +
+                (isTargetDefaulted ? " Target defaulted to new because no chat was running this command." : "")
         case "follow-up", "followup", "append":
             guard let sid = str("session") ?? callerSid else {
                 return error("--session required for follow-up target (or run from inside a session)")
             }
             target = .followUp(sessionId: sid)
+            let isThisChat = (sid == callerSid)
+            deliverySentence = isThisChat
+                ? "Delivery: each fire runs as a new turn IN THIS CHAT (session \(sid.prefix(8)))." +
+                    (isTargetDefaulted ? " Target defaulted to follow-up because this command ran inside a chat; use --target new for a separate chat." : "")
+                : "Delivery: each fire runs as a new turn in session \(sid.prefix(8)), NOT in this conversation."
         case "rerun":
             guard let sid = str("session") ?? callerSid else { return error("--session required for rerun target") }
             guard let mid = str("message") else { return error("--message required for rerun target") }
             target = .rerun(sessionId: sid, messageId: mid)
+            deliverySentence = "Delivery: each fire RE-RUNS user message \(mid.prefix(8)) in session \(sid.prefix(8))."
         case "child-of-current", "child":
-            // [T-agents-debug-only] A child-of-current job IS a helper agent
-            // (ScheduledJobRunner spawns a hidden child session with
-            // HelperConfig) — it obeys the same switch as delegate_task.
             guard AgentToolSwitch.agents.isEnabled else {
                 return error("child-of-current is unavailable: Sub Agents are turned off in Settings › Sub Agents. Use --target new or follow-up.")
             }
@@ -80,6 +119,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
                 return error("child-of-current needs a current session: run this from a chat, or pass --session")
             }
             target = .childOfCurrent(parentSessionId: sid, parentToolUseId: nil)
+            deliverySentence = "Delivery: each fire spawns a hidden helper under session \(sid.prefix(8)); its result is posted back here when finished."
         default:
             return error("--target must be new|follow-up|rerun|child-of-current")
         }
@@ -134,7 +174,9 @@ private let logger = AppLogger(category: "ScheduledOffload")
                 trigger = .once(after: next.timeIntervalSinceNow)
                 return finishCreate(prompt: prompt, label: label, trigger: trigger, target: target,
                                     modelEntryId: modelEntryId, thinkingLevel: thinkingLevel,
-                                    creatorSessionId: callerSid, disabled: disabled)
+                                    creatorSessionId: callerSid, disabled: disabled,
+                                    prefilledTool: prefilledTool, isPulse: isPulse,
+                                    deliverySentence: deliverySentence)
             case "daily": days = Set(1...7)
             case "weekdays": days = Set(2...6)
             case "custom":
@@ -155,25 +197,41 @@ private let logger = AppLogger(category: "ScheduledOffload")
         }
         return finishCreate(prompt: prompt, label: label, trigger: trigger, target: target,
                             modelEntryId: modelEntryId, thinkingLevel: thinkingLevel,
-                                    creatorSessionId: callerSid, disabled: disabled)
+                            creatorSessionId: callerSid, disabled: disabled,
+                            prefilledTool: prefilledTool, isPulse: isPulse,
+                            deliverySentence: deliverySentence)
     }
 
     private static func finishCreate(prompt: String, label: String?, trigger: AgentJobTrigger,
                                      target: AgentJobTarget, modelEntryId: String?, thinkingLevel: ThinkingLevel?,
-                                     creatorSessionId: String?, disabled: Bool) -> NSDictionary {
+                                     creatorSessionId: String?, disabled: Bool,
+                                     prefilledTool: PrefilledToolCall?, isPulse: Bool,
+                                     deliverySentence: String) -> NSDictionary {
         onMain {
             let registry = AgentJobRegistry.shared
             let job = registry.register(title: label ?? String(prompt.prefix(40)), label: label,
                                         origin: .cli, trigger: trigger, target: target, prompt: prompt)
             job.modelEntryId = modelEntryId
             job.thinkingLevel = thinkingLevel
-            // [T-scheduled-session-ownership] The conversation that ran the CLI.
             job.creatorSessionId = creatorSessionId
             job.isEnabled = !disabled
+            job.prefilledTool = prefilledTool
+            job.isPulse = isPulse
+            job.deliverySentence = deliverySentence
             ScheduledJobRunner.arm(job)
-            logger.info("[minis-scheduled] created \(job.logLabel)")
-            return ["created": registry.jobDict(job),
-                    "note": "Best effort: this timer lives only while the Minis app process is alive. A reminder notification is registered as insurance; for guaranteed background execution use an Apple Shortcuts automation."] as NSDictionary
+            logger.info("[minis-scheduled] created \(job.logLabel) (pulse=\(isPulse), delivery=\(deliverySentence))")
+            var dict = registry.jobDict(job)
+            dict["delivery"] = deliverySentence
+            var out: [String: Any] = ["created": dict,
+                    "delivery": deliverySentence,
+                    "note": "Best effort: this timer lives only while the Minis app process is alive. A reminder notification is registered as insurance; for guaranteed background execution use an Apple Shortcuts automation."]
+            if isPulse {
+                // [T-scheduled-prefill-and-pulse] The model should confirm in its own voice,
+                // not only report the CLI envelope; hand it the fact it can mention.
+                out["pulse"] = true
+                out["reply_hint"] = "This is a proactive pulse: fires are your own heartbeat, not a task report. Tell her you set it up in your own voice — what you might do with the free time — and she can tap the heart icon to see or poke it. Never announce reminders mechanically."
+            }
+            return out as NSDictionary
         }
     }
 
@@ -221,6 +279,17 @@ private let logger = AppLogger(category: "ScheduledOffload")
             if let sid = outcome["session_id"] as? String { out["sessionId"] = sid }
             out["note"] = "Returned as soon as the prompt was handed to the session; poll `minis-sessions-cli status --id <sessionId>` for completion."
             return out as NSDictionary
+        }
+    }
+
+    @objc public static func runsWithId(_ id: String) -> NSDictionary {
+        onMain {
+            let registry = AgentJobRegistry.shared
+            guard let job = registry.job(id: id) ?? registry.job(label: id) else {
+                return ["ok": false, "error": "not_found", "message": "no task with id=\(id)"] as NSDictionary
+            }
+            let list = registry.runs(jobId: job.id).map { $0.toDict() }
+            return ["id": job.id, "runs": list, "count": list.count] as NSDictionary
         }
     }
 

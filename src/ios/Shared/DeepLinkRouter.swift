@@ -193,6 +193,10 @@ enum DeepLinkRouter {
         case "voice", "voice-services", "voice_services", "tts", "tts-services":
             coord.pendingSettingsTarget = .voiceServices
 
+        // [T-scheduled-ui] Scheduled tasks & proactive pulses manager.
+        case "scheduled", "scheduled-tasks", "scheduled_tasks", "tasks", "pulses":
+            coord.pendingSettingsTarget = .scheduled
+
         case "environments":
             // `create_key` is the only required param. Missing
             // `create_value`/`create_note` default to empty so a link
