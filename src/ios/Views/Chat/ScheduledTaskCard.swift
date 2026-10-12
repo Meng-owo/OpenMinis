@@ -72,7 +72,8 @@ struct ScheduledTaskCard: View {
                     // Right Status & Chevron
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(job.isEnabled ? Color.green : Color.orange)
+                            .fill(job.isEnabled ? CSSThemeVariables.success(isDark: isDark)
+                                : CSSThemeVariables.warning(isDark: isDark))
                             .frame(width: 7, height: 7)
 
                         Image(systemName: "chevron.right")

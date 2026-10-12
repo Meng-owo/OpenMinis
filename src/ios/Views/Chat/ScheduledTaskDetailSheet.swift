@@ -101,7 +101,7 @@ struct ScheduledTaskDetailSheet: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .background(CSSThemeVariables.accent(isDark: isDark))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(CSSThemeVariables.accentFg(isDark: isDark))
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .disabled(isRunningNow)
@@ -141,7 +141,7 @@ struct ScheduledTaskDetailSheet: View {
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
                                     .background(CSSThemeVariables.optionBg(isDark: isDark))
-                                    .foregroundStyle(Color.red.opacity(0.85))
+                                    .foregroundStyle(CSSThemeVariables.danger(isDark: isDark))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                                             .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
@@ -228,7 +228,8 @@ struct ScheduledTaskDetailSheet: View {
                                     HStack(spacing: 10) {
                                         Image(systemName: run.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                                             .font(.system(size: 14))
-                                            .foregroundStyle(run.ok ? Color.green : Color.red)
+                                            .foregroundStyle(run.ok ? CSSThemeVariables.success(isDark: isDark)
+                                                : CSSThemeVariables.danger(isDark: isDark))
 
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(ScheduledJobRunner.iso(run.firedAt))
@@ -297,13 +298,13 @@ struct ScheduledTaskDetailSheet: View {
         let color: Color
         if !job.isEnabled {
             text = "已暂停"
-            color = Color.orange
+            color = CSSThemeVariables.warning(isDark: isDark)
         } else if job.state == .running {
             text = "运行中"
-            color = Color.green
+            color = CSSThemeVariables.success(isDark: isDark)
         } else if job.state == .done {
             text = "已完成"
-            color = Color.blue
+            color = CSSThemeVariables.accent(isDark: isDark)
         } else {
             text = "等待中"
             color = CSSThemeVariables.accent(isDark: isDark)

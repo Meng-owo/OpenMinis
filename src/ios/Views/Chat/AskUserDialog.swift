@@ -86,6 +86,18 @@ public enum CSSThemeVariables {
     public static func dangerSoft(isDark: Bool) -> Color {
         isDark ? Color(hex: "#3D2423") : Color(hex: "#FDECEB")
     }
+
+    /// --color-success
+    ///
+    /// [AUD-18] Delegates to the theme role instead of another pair of hex
+    /// literals: `AppearanceStudio.color(_:)` already resolves per
+    /// appearance, so this variable follows the user's theme and its dark
+    /// variant for free. `isDark` stays in the signature because every other
+    /// variable here takes it and the call sites pass it uniformly.
+    public static func success(isDark: Bool) -> Color { MinisTheme.success }
+
+    /// --color-warning
+    public static func warning(isDark: Bool) -> Color { MinisTheme.warning }
 }
 
 // MARK: - 顶角圆角 Shape 工具
