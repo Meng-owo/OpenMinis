@@ -118,6 +118,19 @@ enum AgentJobTrigger: Equatable {
         case .onCompletion(let id): return "onCompletion(\(id.prefix(8)))"
         }
     }
+
+    /// [AUD-06] True for the triggers that own a repeating timer for the whole
+    /// life of the job (`.loop` / `.cron`).
+    ///
+    /// One fire's child loop ending is a FIRE ending, not the job ending: a job
+    /// finished from the child's loop-end observer would have `task?.cancel()`
+    /// called on it, which IS the schedule — the second fire would never happen.
+    var isRepeating: Bool {
+        switch self {
+        case .loop, .cron: return true
+        case .immediate, .once, .onCompletion: return false
+        }
+    }
 }
 
 /// Where the job's prompt lands.
@@ -309,14 +322,31 @@ final class AgentJob: Identifiable {
         }
     }
 
-    fileprivate func markFinished(_ final: AgentJobState, result: String?) {
+    fileprivate func markFinished(_ final: AgentJobState, result: String?, cancelTask: Bool = true) {
         state = final
         finishedAt = Date()
         resultText = result
-        task?.cancel()
-        task = nil
+        if cancelTask {
+            task?.cancel()
+            task = nil
+        }
         progressTask?.cancel()
         progressTask = nil
+    }
+
+    /// [AUD-06] ONE fire of a repeating job ended; the job itself is still
+    /// armed, so nothing terminal survives here.
+    ///
+    /// Called AFTER the fire's result has been delivered, so the callback still
+    /// read `status: done` and carried the child session. Only then does the job
+    /// go back to `.pending` — the state a loop/cron job occupies between fires
+    /// — and let go of the finished run's session, so a later fire cannot be
+    /// mistaken for it. `task` is deliberately untouched: it IS the schedule.
+    fileprivate func rearm() {
+        state = .pending
+        runSessionId = nil
+        startedAt = nil
+        finishedAt = nil
     }
 
     /// [T-sub-agents-busy] Running far past any budget it could have been
@@ -621,6 +651,13 @@ final class AgentJobRegistry: ObservableObject {
     /// Close a job with its final state. Runs `then` for successful
     /// completions, fires any `.onCompletion(ofJobId:)` dependents, and drops
     /// the session mapping. Idempotent.
+    ///
+    /// [AUD-06] One exception: a repeating job (`.loop` / `.cron`) that is still
+    /// enabled and has fires left does NOT terminate here. The end of one of its
+    /// child runs is the end of a FIRE, so the result is still delivered and the
+    /// slot released, but the job goes back to `.pending` with its timer task
+    /// intact — cancelling that task would silence the schedule after its very
+    /// first fire.
     func finish(_ jobId: String, state final: AgentJobState, result: String?,
                 keepIfChildRunning: Bool = false) {
         guard let job = jobs[jobId], job.state == .running || job.state == .pending else { return }
@@ -631,10 +668,23 @@ final class AgentJobRegistry: ObservableObject {
             logger.info("[Jobs] finish deferred — child \(sid.prefix(8)) still running for \(job.id.prefix(8))")
             return
         }
+        // [AUD-06] A repeating job (`--interval` / `--cron`) owns its timer for
+        // its whole life: ONE child loop ending is one FIRE ending, not the job
+        // ending. Called with `.done` from the ordinary child-loop-end path it
+        // must do the same bookkeeping and hand the result to the parent, then
+        // go back to `.pending` with its timer intact — a real finish would call
+        // `task?.cancel()`, and the second fire would never happen (the list
+        // would show "done" while nothing ever fires again).
+        let runSid = job.runSessionId
+        let rearm: Bool = {
+            guard final == .done, job.isEnabled, job.trigger.isRepeating else { return false }
+            guard let remaining = job.remaining else { return true }   // unbounded loop
+            return remaining > 0
+        }()
         // [T-sub-agents-steer] A steer the child never reached (it finished
         // first) has to be reported, not dropped: the parent was told "queued"
         // and would otherwise assume its correction was applied to this result.
-        if let sid = job.runSessionId, let child = ViewModelCache.shared.get(for: sid),
+        if let sid = runSid, let child = ViewModelCache.shared.get(for: sid),
            !child.pendingSteerMessages.isEmpty {
             let missed = child.pendingSteerMessages
             child.pendingSteerMessages.removeAll()
@@ -645,19 +695,21 @@ final class AgentJobRegistry: ObservableObject {
         // outcome passes through (completed / failed / cancelled).
         // PerfProbe.subAgentEnd(job: job.id, agent: job.subAgentName,
         //                       outcome: final.rawValue, started: job.startedAt)
-        job.markFinished(final, result: result)
+        // [AUD-06] `cancelTask: !rearm` — a repeating job's task IS its
+        // schedule and must outlive each single fire.
+        job.markFinished(final, result: result, cancelTask: !rearm)
         // [T-agent-model-identity] Last chance to read what the child really
         // ran on before the callback / completion hook serialise it.
-        if let sid = job.runSessionId, let vm = ViewModelCache.shared.get(for: sid) {
+        if let sid = runSid, let vm = ViewModelCache.shared.get(for: sid) {
             job.modelIdentity?.merge(vm.lastEffectiveModel)
         }
-        if let sid = job.runSessionId { jobBySession[sid] = nil }
+        if let sid = runSid { jobBySession[sid] = nil }
         JobInsuranceNotification.cancel(jobId: jobId)
         logger.info("[Jobs] FINISH \(job.logLabel) elapsed=\(Int(job.elapsed ?? 0))s result=\(result?.count ?? 0)ch")
         // [T-browser-agent-isolation] Give the agent's browser tabs back to
         // the shared pool the moment its job ends, whatever produced it
         // (delegate_task wait/background, minis-scheduled child-of-current).
-        if job.target.isChildOfCurrent, let sid = job.runSessionId,
+        if job.target.isChildOfCurrent, let sid = runSid,
            let vm = ViewModelCache.shared.get(for: sid) {
             vm.browserTabPool.releaseAllTabs()
         }
@@ -667,6 +719,17 @@ final class AgentJobRegistry: ObservableObject {
         // background must learn about a cancel / timeout / failure just as it
         // learns about success (the header carries `status`).
         runThen(for: job)
+        if rearm {
+            // A fire ended, the schedule did not: the result has been delivered
+            // by `runThen` above, so now put the job back to `.pending` with its
+            // timer intact. No `agentJobDidFinish` either — an `.onCompletion`
+            // dependent waits for the LOOP to end, not for one of its fires —
+            // but the slot this run held is free, so the delegation queue moves.
+            job.rearm()
+            logger.info("[Jobs] RE-ARM after fire \(job.logLabel) remaining=\(job.remaining.map(String.init) ?? "∞")")
+            drainQueuedDelegations()
+            return
+        }
         // ONE notification per finish (the Android review caught the old
         // double post): `state` always, plus the ids of any `.onCompletion`
         // jobs this one arms, so an observer keyed on `object == jobId`
@@ -682,8 +745,9 @@ final class AgentJobRegistry: ObservableObject {
                                         userInfo: ["state": final.rawValue, "dependentJobIds": dependents])
         // [T-sub-agents-queue] A slot just freed — start whatever was waiting.
         drainQueuedDelegations()
-        // Terminal jobs stay listable until the parent is gone; a loop job
-        // with fires left is re-armed by its producer, not here.
+        // Terminal jobs stay listable until the parent is gone; a repeating job
+        // (`.loop` / `.cron`) does not come through here for every fire — it is
+        // re-armed above and only finishes when it is cancelled or exhausts.
     }
 
     /// [T-sub-agents-queue] Start queued delegations while slots are free.
