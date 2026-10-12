@@ -261,12 +261,17 @@ extension AIChatViewModel {
         tools.append(contentsOf: MCPManagementTools.dialogDefinitions())
 
         // [BUG-09] subagent_task 子代理调度工具
+        // [T-sub-agents-v1] Actions wired in this build: delegate, cancel.
+        // status/steer/resume used to be advertised while nothing answered them;
+        // the description now says what is actually reachable, and the runtime
+        // answers those three with an explicit "not available yet" instead of
+        // silently dropping them.
         tools.append(AgentToolDefinition(
             name: "subagent_task",
-            description: "Delegate a self-contained task to a sub agent — its own isolated context and tool loop, in a hidden child session running concurrently with you — and inspect or stop the ones you started. action defaults to 'delegate'. Available actions: delegate, status, steer, cancel, resume.",
+            description: "Delegate a self-contained task to a sub agent — its own isolated context and tool loop, in a hidden child session running concurrently with you — and stop the ones you started. action defaults to 'delegate'. Available actions: delegate, cancel. Do not call status, steer or resume — they are not available in this build.",
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user on the block in the tool bar."),
-                "action": AgentToolParam(type: .string, description: "The subagent action to perform: delegate (default), status, steer, cancel, resume."),
+                "action": AgentToolParam(type: .string, description: "The subagent action to perform: delegate (default) or cancel."),
                 "task": AgentToolParam(type: .string, description: "action=delegate only, required. The complete, self-contained brief: goal, constraints, and return format."),
                 "agent": AgentToolParam(type: .string, description: "action=delegate only. Which sub agent runs this task."),
                 "wait": AgentToolParam(type: .boolean, description: "action=delegate only. false (default) returns at once with status=running; true blocks until done."),

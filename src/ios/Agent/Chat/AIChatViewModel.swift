@@ -1940,7 +1940,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     private var baseSystemPrompt: String {
         // [T-soul-md] Layer 1: SOUL.md personality and identity
-        SystemPromptBuilder.identitySection(for: sessionPersonaId ?? PersonaStore.currentID())
+        // [T-sub-agents-v1] A sub agent session has no claim on the app's own
+        // identity: its first layer is the delegation preamble instead.
+        (isSubAgentChild
+            ? subAgentIdentitySection
+            : SystemPromptBuilder.identitySection(for: sessionPersonaId ?? PersonaStore.currentID()))
             + "You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), "
             + "writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.\n\n"
             + "Execution discipline for long-running or dispatched work: make tool calls immediately instead of describing intentions, and keep working until the task is complete. "
@@ -2129,6 +2133,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var helperWrapUpRequested: Bool = false
     var pendingSteerMessages: [String] = []
     var lastEffectiveModel: EffectiveModelRecord? = nil
+
+    /// [T-sub-agents-v1] Set on a CHILD session's view model before its first
+    /// turn: the delegation this session is running. Present == this vm is a
+    /// sub agent, which is what swaps the SOUL identity section for the sub
+    /// agent one in `baseSystemPrompt`.
+    var subAgentBrief: SubAgentBrief? = nil
+
+    /// [T-stop-sibling-subagent] Set when the USER stops this conversation,
+    /// cleared when they send their next own message. Read at DELIVERY time by
+    /// `AgentJobRegistry.runThen`, so a sub agent that finishes a moment after
+    /// Stop cannot wake the conversation that was just stopped.
+    var delegationResultsMuted = false
 
     /// Model group to bind when creating a new session (from long-press FAB).
     var initialGroupId: String?
@@ -2330,6 +2346,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     func send(overrideText: String? = nil) {
         // Read-only mode — cannot send messages
         guard remoteDeviceId == nil else { return }
+
+        // [T-stop-sibling-subagent] The user's own new message re-opens
+        // delivery: sub agents muted by their Stop may report again. A
+        // programmatic turn (a callback, a scheduled fire) must NOT reopen it —
+        // that is the very case the mute exists for.
+        if overrideText == nil { delegationResultsMuted = false }
 
         // [T-ios-retry-keyboard] A real send clears the retry origin, so the
         // flag can never leak from a retried turn into the next fresh one and
@@ -4270,6 +4292,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             foregroundObserver = nil
         }
         userDidCancel = true
+        // [T-stop-sibling-subagent] Stop means the whole turn is over: the sub
+        // agents this conversation started are stopped with it (silently — their
+        // late results are exactly what the user just stopped), and any result
+        // still in flight is dropped at delivery instead of waking this
+        // conversation with a "cancelled" report the parent would read as a
+        // failed sub-task and immediately re-delegate.
+        delegationResultsMuted = true
+        if let sid = sessionId {
+            // Drop the backlog FIRST: cancelling a running job drains the queue,
+            // which would otherwise start the very delegations just stopped.
+            AgentJobRegistry.shared.dropQueuedDelegations(parent: sid, reason: "user stop")
+            AgentJobRegistry.shared.cancelAll(parent: sid, reason: "user stop", silent: true)
+        }
         currentTask?.cancel()
         currentTask = nil
         autoRetryAttempt = 0

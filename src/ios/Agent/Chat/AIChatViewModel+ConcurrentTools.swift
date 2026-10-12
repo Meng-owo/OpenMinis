@@ -1340,6 +1340,22 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
+        case "subagent_task":
+            // [T-sub-agents-v1] `subagent_task` is defined in the tool table
+            // (AIChatViewModel+ToolDefinitions) and dispatched HERE. Until this
+            // case existed, every delegation fell through to `default:` and
+            // returned "Unknown tool" while the system prompt encouraged the
+            // model to use it.
+            let (delegateOutput, delegateOK) = await executeSubAgentTask(args: toolArgs,
+                                                                        toolUseId: tu.id,
+                                                                        msgIdx: msgIdx,
+                                                                        blockIdx: blockIdx)
+            toolOutput = delegateOutput
+            toolSuccess = delegateOK
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false

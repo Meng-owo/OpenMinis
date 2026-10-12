@@ -232,8 +232,418 @@ extension AIChatViewModel {
 
     static let helperMaxMinutes: Int = 10
     static let helperWrapUpGraceSeconds: TimeInterval = 30.0
-    static func emptyResultNote(status: String) -> String { "" }
-    static func parseDelegateResult(_ content: String) -> [String: Any]? { nil }
-    var delegationResultsAreMuted: Bool { false }
-    func executeDelegateTaskQueued(args: [String: Any], toolUseId: String) async -> Bool { false }
+    /// What the parent is told when a sub agent produced no final text.
+    ///
+    /// [T-sub-agents-empty-result] Never hand the parent an empty result: from
+    /// "" it cannot tell "finished and had nothing to say" from "was stopped"
+    /// from "crashed", so it either re-delegates the same task or reports that
+    /// nothing happened. Every terminal state gets a sentence instead.
+    static func emptyResultNote(status: String) -> String {
+        switch status {
+        case "cancelled":
+            return "(The sub agent was stopped before it produced a result. Treat its work as unfinished — delegate it again if it is still needed.)"
+        case "timeout":
+            return "(The sub agent hit its time budget before writing a result. Delegate a narrower task, or do the work in this conversation.)"
+        case "failed":
+            return "(The sub agent's run failed before producing a result. Do not assume the work was done — delegate again or do it here.)"
+        default:
+            return "(The sub agent ended without writing a final answer. Treat its result as unknown — do not assume the work was done.)"
+        }
+    }
+
+    /// Parsed `subagent_task` result JSON — the parent's tool block content.
+    /// Used by the block's completed rendering and the history entry point.
+    nonisolated static func parseDelegateResult(_ content: String) -> [String: Any]? {
+        guard content.hasPrefix("{"), let data = content.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return obj
+    }
+
+    /// [T-stop-sibling-subagent] True after the USER stopped this conversation
+    /// and before they send their next own message.
+    ///
+    /// `AgentJobRegistry.runThen` reads this at DELIVERY time: a sub agent that
+    /// finished a moment after the user pressed Stop must not wake the very
+    /// conversation that was stopped (its "cancelled" result reads as a failed
+    /// sub-task, so the parent would immediately delegate it again).
+    var delegationResultsAreMuted: Bool { delegationResultsMuted }
+
+    /// [T-sub-agents-queue] Start a delegation that had been waiting for a slot.
+    ///
+    /// Called by `AgentJobRegistry.drainQueuedDelegations()`. The tool call that
+    /// queued it returned `status: queued` long ago, so there is no tool block
+    /// to write and no tool result to produce here — the run reports through the
+    /// job's normal completion callback like any other.
+    @discardableResult
+    func executeDelegateTaskQueued(args: [String: Any], toolUseId: String) async -> Bool {
+        let (_, ok) = await executeDelegateTask(args: args, toolUseId: toolUseId, msgIdx: -1, blockIdx: -1)
+        return ok
+    }
+}
+
+// MARK: - Sub agents: the delegate task  [T-sub-agents-v1]
+//
+// [BUG-09] `subagent_task` was DEFINED in the tool table and dispatched
+// nowhere: every call fell through to `default:` and returned
+// `Error: Unknown tool 'subagent_task'`, while the system prompt encouraged the
+// model to use it. This section is the execution end.
+//
+// Shape borrowed from the mature implementations of the same idea (Claude
+// Code's sub agents / Agent tool, OpenAI Agents SDK's `agent.as_tool`):
+//
+//   * A sub agent runs in its OWN session (its own context window, its own
+//     system prompt), so the parent conversation never carries the child's
+//     searching, tool output or dead ends — only the final answer comes back.
+//   * Delegation is asynchronous by default (`wait: false`): the tool result
+//     says `status: running` at once, the parent keeps working, and the result
+//     arrives later as an `<agent_callback>` card. `wait: true` is the opt-in
+//     for "my next step needs this result before anything else".
+//   * The child's final message IS the result, verbatim — no summarising step.
+//   * Slots are bounded (3 running, 10 queued) and overflow is QUEUED rather
+//     than refused, because a turn that fans out five tasks must not see two of
+//     them come back "rejected".
+//   * Delegation depth is 1: a sub agent cannot delegate again.
+//   * Stop means quiet: stopping the parent cancels its sub agents silently and
+//     mutes late results for that turn.
+
+/// What a CHILD session's view model knows about the delegation it runs.
+///
+/// Set before the child's first turn. Its presence is what `isSubAgentChild`
+/// keys off — the child gets the sub agent identity section in place of the
+/// app's own SOUL, exactly as the old `helperConfig` did.
+struct SubAgentBrief: Equatable, Sendable {
+    let parentSessionId: String
+    let parentToolUseId: String
+    let jobId: String
+    /// The parent's `tool_title`, or the head of the task.
+    let title: String
+    /// The sub agent definition's standing instructions (may be empty).
+    let instructions: String
+    /// Wall-clock budget in minutes before the run is stopped.
+    let budgetMinutes: Int
+}
+
+extension AIChatViewModel {
+
+    /// Stable snake_case JSON, one line — tool results are persisted and
+    /// diffed, so key order must not wobble between runs.
+    static func delegateJSON(_ obj: [String: Any]) -> String {
+        guard JSONSerialization.isValidJSONObject(obj),
+              let data = try? JSONSerialization.data(withJSONObject: obj, options: [.sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return #"{"ok":false,"status":"error","reason":"encoding_failed"}"#
+        }
+        return text
+    }
+
+    static func argString(_ args: [String: Any], _ key: String) -> String {
+        ((args[key] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Write the delegation JSON into the parent's tool block.
+    ///
+    /// `msgIdx < 0` means there is no block to write: a delegation re-entered
+    /// from the queue, or one started after the turn that asked for it ended.
+    @MainActor
+    func writeDelegateBlock(msgIdx: Int, blockIdx: Int, _ json: String) {
+        guard msgIdx >= 0, blockIdx >= 0,
+              msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
+        messages[msgIdx].blocks[blockIdx].content = json
+    }
+
+    /// Whether this view model is the child of a delegation.
+    var isSubAgentChild: Bool { subAgentBrief != nil }
+
+    /// System-prompt preamble for a sub agent — replaces the SOUL identity
+    /// section, the same way `minis-model-use` describes an environment without
+    /// assigning an identity (OpenMinis#103: identity pollution).
+    var subAgentIdentitySection: String {
+        guard let brief = subAgentBrief else { return "" }
+        let instructions = brief.instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        var section = """
+        You are running as a sub agent inside an app called Minis, on an iOS device with a fully functional iSH Linux shell (Alpine Linux, aarch64). This is the calling environment, not your identity — keep your own model identity unchanged.
+        A parent agent delegated ONE focused task to you: "\(brief.title)". You cannot see the parent conversation and it cannot see yours; everything you need is in the task text. Work the task to completion using your tools, then finish with a single clear final answer — that final message is returned verbatim to the parent agent as the result, and it is the ONLY thing the parent receives. So the final message must contain the complete deliverable itself: the full report, document, list, code or answer the task asked for, in full — never a summary of what you did, a pointer to a file you wrote, or "see above". If you produced a file, paste its full content into the final message as well. Do not ask the parent or the user questions; make reasonable assumptions and state them. Do not restate the task or add meta-commentary.
+        You have about \(brief.budgetMinutes) minutes of wall-clock time; write the deliverable before the run is stopped.
+        """
+        if !instructions.isEmpty {
+            section += "\n\n--- Sub agent instructions (set by the user) ---\n\(instructions)"
+        }
+        return section
+    }
+
+    /// `subagent_task` — the router for the actions the tool advertises.
+    @MainActor
+    func executeSubAgentTask(args: [String: Any],
+                             toolUseId: String,
+                             msgIdx: Int,
+                             blockIdx: Int) async -> (output: String, success: Bool) {
+        let action = Self.argString(args, "action").lowercased()
+        switch action {
+        case "", "delegate":
+            return await executeDelegateTask(args: args, toolUseId: toolUseId, msgIdx: msgIdx, blockIdx: blockIdx)
+        case "cancel":
+            return cancelSubAgentTask(args: args)
+        case "status", "steer", "resume":
+            // Honest staging, not a silent drop: these three are the next slice
+            // of this feature (the registry already carries the state they
+            // need). Say so plainly so the model neither retries nor assumes
+            // the action happened.
+            let json = Self.delegateJSON([
+                "ok": false, "status": "unsupported", "action": action, "reason": "not_wired",
+                "detail": "action '\(action)' is not available yet in this build. A delegated run continues on its own and its result arrives as a callback message — do not retry this action, and do not assume it took effect.",
+            ])
+            logger.warning("[subagent_task] action=\(action) is not wired yet")
+            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
+            return (json, false)
+        default:
+            let json = Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "unknown_action",
+                "detail": "Unknown action '\(action)'. This build accepts: delegate (default), cancel.",
+            ])
+            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
+            return (json, false)
+        }
+    }
+
+    /// `action=cancel` — stop ONE delegated run by its `job_id`.
+    ///
+    /// Cancelling reports back to the parent (that is how it learns the result
+    /// will never come), which is the opposite of the user's own Stop, where the
+    /// quiet is the point.
+    @MainActor
+    func cancelSubAgentTask(args: [String: Any]) -> (output: String, success: Bool) {
+        let jobId = Self.argString(args, "job_id")
+        guard !jobId.isEmpty else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "missing_job_id",
+                "detail": "action=cancel needs `job_id` (it is returned by every delegate call).",
+            ]), false)
+        }
+        let registry = AgentJobRegistry.shared
+        guard let job = registry.job(id: jobId) else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "not_found",
+                "detail": "No live delegation with job_id=\(jobId). It may have finished already; its result (or a cancellation note) is in this conversation.",
+            ]), false)
+        }
+        guard job.state == .running || job.state == .pending else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "already_finished",
+                "detail": "job_id=\(jobId) is already \(job.state.rawValue) — nothing to cancel.",
+            ]), false)
+        }
+        registry.cancel(jobId: jobId, reason: "model cancel", silent: false)
+        logger.info("[subagent_task] CANCEL \(jobId.prefix(8)) by model request")
+        return (Self.delegateJSON([
+            "ok": true, "status": "cancelled", "job_id": jobId,
+            "detail": "The run was stopped and will not deliver a result beyond the cancellation notice.",
+        ]), true)
+    }
+
+    /// `action=delegate` — the delegation itself.
+    @MainActor
+    func executeDelegateTask(args: [String: Any],
+                             toolUseId: String,
+                             msgIdx: Int,
+                             blockIdx: Int) async -> (output: String, success: Bool) {
+        let title = Self.argString(args, "tool_title")
+        let task = Self.argString(args, "task")
+        let requestedAgentName = (args["agent"] as? String)
+        let wait = (args["wait"] as? Bool) ?? false
+
+        func reject(_ reason: String, _ detail: String) -> (output: String, success: Bool) {
+            let json = Self.delegateJSON(["ok": false, "status": "rejected", "reason": reason, "detail": detail])
+            logger.warning("[subagent_task] REJECTED \(reason): \(detail)")
+            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
+            return (json, false)
+        }
+
+        guard !task.isEmpty else {
+            return reject("empty_task", "`task` is required and must be the complete brief: goal, constraints and return format.")
+        }
+        guard !isSubAgentChild else {
+            return reject("depth_limit", "Sub agents cannot delegate further (the maximum depth is 1). Do the work yourself.")
+        }
+        guard remoteDeviceId == nil, let parentSid = sessionId else {
+            return reject("no_parent_session", "This conversation cannot start a sub agent (read-only remote session, or no session yet).")
+        }
+
+        // Which sub agent runs this. Omitted = the built-in general one.
+        let roster = SubAgentStore.shared.subAgents
+        guard let subAgent = SubAgentRoster.resolve(name: requestedAgentName, in: roster) else {
+            let known = roster.map(\.name).joined(separator: ", ")
+            return reject("unknown_agent", "No sub agent named \"\(requestedAgentName ?? "")\". Available: \(known). Omit `agent` to use the general one.")
+        }
+
+        // Slots. Overflow is QUEUED, never refused silently: the queue starts it
+        // when a slot frees and its result arrives through the same callback.
+        let registry = AgentJobRegistry.shared
+        if !registry.canStartChildJob {
+            let queued = registry.enqueueDelegation(
+                .init(parentSessionId: parentSid, args: args, toolUseId: toolUseId))
+            guard queued else {
+                return reject("sub_agent_limit",
+                              "\(AgentJobRegistry.maxConcurrentChildJobs) sub agents are already running and the queue is full (\(AgentJobRegistry.maxQueuedDelegations)). Wait for some to finish, then delegate this task again — it was NOT queued.")
+            }
+            let json = Self.delegateJSON([
+                "ok": true, "status": "queued",
+                "queued_behind": max(0, registry.runningChildJobCount + registry.queuedCount(parent: parentSid) - 1),
+                "detail": "All \(AgentJobRegistry.maxConcurrentChildJobs) slots are busy. This task is QUEUED and starts automatically as soon as one frees; its result arrives as a new message like any other. Do not re-delegate it.",
+            ])
+            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
+            logger.info("[subagent_task] QUEUED tool=\(toolUseId.prefix(12)) behind \(registry.runningChildJobCount) running")
+            return (json, true)
+        }
+
+        // Which model the child runs on: the definition's pinned Model Group, or
+        // the parent conversation's binding. Never the delegating model's guess.
+        guard let resolution = SubAgentModelResolver.resolve(subAgent: subAgent, parent: self) else {
+            return reject("no_model", "This conversation has no resolvable model, so a sub agent cannot run. Pick a model for this session first.")
+        }
+
+        let budgetMinutes = AIChatViewModel.helperMaxMinutes
+        let childTitle = AgentJobRegistry.childSessionTitle(
+            title.isEmpty ? String(task.prefix(40)) : title,
+            subAgentName: subAgent.isBuiltIn ? nil : subAgent.name)
+
+        // A hidden child session of this conversation: same database, own
+        // context window, never listed as a top-level conversation.
+        let session = ChatStore.shared.createSession(modelId: resolution.entry.model.id,
+                                                     title: childTitle,
+                                                     source: "helper",
+                                                     parentSessionId: parentSid,
+                                                     parentToolUseId: toolUseId)
+        ProviderConfigStore.shared.setBinding(
+            SessionModelBinding(sessionId: session.id, primarySource: resolution.source),
+            for: session.id)
+        applySubAgentThinkingLevel(subAgent: subAgent, childSessionId: session.id, parentSessionId: parentSid, entry: resolution.entry)
+
+        let promptText = Self.delegationPrompt(task: task, title: title, subAgent: subAgent)
+        let job = registry.register(title: childTitle,
+                                    origin: .tool,
+                                    trigger: .immediate,
+                                    target: .childOfCurrent(parentSessionId: parentSid, parentToolUseId: toolUseId),
+                                    prompt: promptText,
+                                    then: wait ? AgentJobThen.none : AgentJobThen.followUpParent(template: nil))
+        job.subAgentName = subAgent.name
+        job.modelOrigin = resolution.origin.rawValue
+        job.creatorSessionId = parentSid
+
+        let (child, _) = ViewModelCache.shared.getOrCreate(for: session.id)
+        await child.loadSession()
+        child.sessionSource = "helper"
+        child.memoryEnabled = false
+        child.suppressGeneralCompletionNotification = true
+        child.subAgentBrief = SubAgentBrief(parentSessionId: parentSid,
+                                            parentToolUseId: toolUseId,
+                                            jobId: job.id,
+                                            title: childTitle,
+                                            instructions: subAgent.instructions,
+                                            budgetMinutes: budgetMinutes)
+
+        let outcome = child.submitProgrammaticPrompt(promptText, origin: .job(jobId: job.id), silent: true)
+        guard outcome == .sent || outcome == .queued else {
+            registry.finish(job.id, state: .failed, result: nil)
+            return reject("child_start_failed", "The sub agent's session could not be started (\(outcome)). Nothing was delegated.")
+        }
+        registry.markRunning(job.id, sessionId: session.id)
+
+        // Wall-clock budget. There is no per-run turn cap in the compiled tree
+        // (the old HelperRunner cap left with that file), so the budget is the
+        // one limit that can actually be enforced from here: at the deadline the
+        // child's loop is stopped, which closes the job through the ordinary
+        // loop-end path and delivers whatever it produced — with the
+        // empty-result note when it produced nothing.
+        let childSessionId = session.id
+        job.task = Task { @MainActor [weak child] in
+            try? await Task.sleep(nanoseconds: UInt64(budgetMinutes) * 60 * 1_000_000_000)
+            guard !Task.isCancelled, let child, child.isProcessing else { return }
+            logger.warning("[subagent_task] budget \(budgetMinutes)min elapsed — stopping child \(childSessionId.prefix(8))")
+            child.cancel()
+        }
+
+        if wait {
+            // Blocking mode: the caller's next step needs this result. The job
+            // carries `then: .none`, so the result is returned HERE instead of
+            // arriving as a separate callback.
+            _ = await child.awaitProgrammaticTurn(queuedPromptId: nil)
+            let text = (await AgentJobRegistry.lastAssistantText(sessionId: session.id) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let state: AgentJobState = child.userDidCancel ? .cancelled : .done
+            job.task?.cancel()
+            job.task = nil
+            registry.finish(job.id, state: state, result: text)
+            let result = text.isEmpty ? Self.emptyResultNote(status: state.rawValue) : text
+            let json = Self.delegateJSON([
+                "ok": !text.isEmpty,
+                "status": state.rawValue,
+                "job_id": job.id,
+                "agent": subAgent.name,
+                "session_id": session.id,
+                "summary": job.summaryLine ?? "",
+                "result": result,
+            ])
+            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
+            logger.info("[subagent_task] WAIT-DONE job=\(job.id.prefix(8)) state=\(state.rawValue) result=\(text.count)ch")
+            return (json, !text.isEmpty)
+        }
+
+        var json: [String: Any] = [
+            "ok": true,
+            "status": "running",
+            "job_id": job.id,
+            "agent": subAgent.name,
+            "session_id": session.id,
+            "model": resolution.modelLabel,
+            "model_origin": resolution.origin.rawValue,
+            "detail": "The sub agent is working in the background in its own session. Its result arrives as a new message in this conversation (a completion card) — do NOT re-delegate the task, and do not wait: continue with anything else the user asked for. Stop it with action=cancel and its job_id.",
+        ]
+        if resolution.modelGroupUnavailable {
+            json["model_group_unavailable"] = true
+        }
+        let out = Self.delegateJSON(json)
+        writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, out)
+        logger.info("[subagent_task] STARTED job=\(job.id.prefix(8)) agent=\(subAgent.name) child=\(session.id.prefix(8)) model=\(resolution.modelLabel)")
+        return (out, true)
+    }
+
+    /// The text a sub agent session is started with. Deliberately thin: the
+    /// standing instructions travel in the child's identity section (they are
+    /// behaviour, not a message), so the task text stays exactly what the
+    /// parent wrote — it is what ends up in the transcript and in the model's
+    /// context for the child's whole run.
+    static func delegationPrompt(task: String, title: String, subAgent: SubAgentDefinition) -> String {
+        guard !title.isEmpty else { return task }
+        return "# \(title)\n\n\(task)"
+    }
+
+    /// Give the child session a thinking level, from where its MODEL came from.
+    ///
+    /// A pinned Model Group → that group's default; the definition's own
+    /// override wins over both. Otherwise the parent conversation's level, so a
+    /// delegation made from a high-effort conversation reasons like the
+    /// conversation it came from. Clamped to what the resolved entry can do.
+    @MainActor
+    func applySubAgentThinkingLevel(subAgent: SubAgentDefinition,
+                                    childSessionId: String,
+                                    parentSessionId: String,
+                                    entry: ModelEntry) {
+        let store = ProviderConfigStore.shared
+        let requested: ThinkingLevel? = {
+            if let pinned = subAgent.thinkingLevelOverride { return pinned }
+            if let gid = subAgent.modelGroupId, let group = store.group(for: gid) {
+                return group.defaultThinkingLevel
+            }
+            return store.inferenceConfig(for: parentSessionId)?.thinkingLevel
+        }()
+        guard let requested, requested != .off else { return }
+        let level = min(requested, entry.effectiveMaxThinkingLevel)
+        var cfg = store.inferenceConfig(for: childSessionId) ?? SessionInferenceConfig()
+        guard cfg.thinkingLevel != level else { return }
+        cfg.thinkingLevel = level
+        store.setInferenceConfig(cfg, for: childSessionId)
+        logger.info("[subagent_task] thinking=\(level.rawValue) on child \(childSessionId.prefix(8))")
+    }
 }
