@@ -133,15 +133,14 @@ extension AIChatViewModel {
             chatMsg.queuedPromptId = prompt.id
             messages.append(chatMsg)
             scrollToBottomSignal.send()
-            inputText = ""
             attachments = []
             logger.info("\(tag) QUEUED — position \(self.promptQueue.count), loop still running")
             return .queued
         }
 
-        // Idle: start a loop.
-        inputText = text
-        send()
+        // Idle: start a loop. `overrideText` carries the prompt, so `send()`
+        // never reads (and never clears) the composer's draft.
+        send(overrideText: text)
         guard isProcessing else {
             let reason = showContextExhaustedPrompt ? "context_exhausted" : "send_declined"
             logger.warning("\(tag) REJECTED — send() did not start a loop (\(reason))")

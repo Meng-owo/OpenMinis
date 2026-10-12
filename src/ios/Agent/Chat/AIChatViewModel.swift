@@ -2320,7 +2320,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         send()
     }
 
-    func send() {
+    /// - Parameter overrideText: when non-nil, this text is sent INSTEAD of the
+    ///   composer's `inputText`, and the composer draft is left untouched.
+    ///   Used by `submitProgrammaticPrompt` for prompts nobody typed (a
+    ///   scheduled fire, the sessions CLI, a helper callback) so that a
+    ///   background turn can never eat a half-written draft. Attachments staged
+    ///   on `attachments` are still consumed — that sharing is deliberate
+    ///   (SessionsOffloadBridge.stageAttachments / SendPromptIntent stage there).
+    func send(overrideText: String? = nil) {
         // Read-only mode — cannot send messages
         guard remoteDeviceId == nil else { return }
 
@@ -2336,8 +2343,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         attachments.removeAll { $0.loadState != .ready }
 
         // 待发表情包整合 (图文混排一并发出)
-        var text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let sticker = pendingSticker {
+        // [T-programmatic-prompt-draft] `overrideText` (a programmatic prompt)
+        // wins over the composer; the composer's draft is not the transport.
+        var text = (overrideText ?? inputText).trimmingCharacters(in: .whitespacesAndNewlines)
+        // [T-programmatic-prompt-draft] A pending sticker is composer state too:
+        // an override send must not consume the user's staged sticker (nor clear
+        // the draft along with it).
+        if overrideText == nil, let sticker = pendingSticker {
             let tag = "[贴:\(sticker.id) \(sticker.shortDesc)]"
             text = text.isEmpty ? tag : "\(text) \(tag)"
             inputText = ""
@@ -2434,14 +2446,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     logger.info("[Context] Near capacity — auto-compacting (\(sessionSource == "shortcut" ? "shortcut session" : "autoCompactEnabled"))")
                     pendingSendText = text
                     pendingSendAttachments = pendingAttachments
-                    inputText = ""
+                    if overrideText == nil { inputText = "" }
                     attachments = []
                     compactAndSend()
                     return
                 }
                 pendingSendText = text
                 pendingSendAttachments = pendingAttachments
-                inputText = ""
+                if overrideText == nil { inputText = "" }
                 attachments = []
                 showCompactBeforeSendPrompt = true
                 logger.info("[Context] Near capacity — prompting user to compact before send")
@@ -2457,7 +2469,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
                 pendingSendText = text
                 pendingSendAttachments = pendingAttachments
-                inputText = ""
+                if overrideText == nil { inputText = "" }
                 attachments = []
                 showContextExhaustedPrompt = true
                 logger.info("[Context] Exhausted — prompting user to start new session or clear chat")
@@ -2473,7 +2485,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         prevCommittedBlockCount = 0
         userDidCancel = false
 
-        inputText = ""
+        // [T-programmatic-prompt-draft] An override send carries text nobody
+        // typed; the composer's draft belongs to the user and stays put.
+        if overrideText == nil { inputText = "" }
 
         // If editing a previous message, truncate conversation from that point first
         if let editIdx = editingMessageIndex {
