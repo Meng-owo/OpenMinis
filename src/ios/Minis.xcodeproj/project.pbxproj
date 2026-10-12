@@ -3011,7 +3011,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E5AJR0002 /* HelperRunner.swift in Sources */,
 				E5SCH0022 /* ScheduledTaskDetailSheet.swift in Sources */,
 				E5SCH0024 /* ScheduledTaskCard.swift in Sources */,
 				E5SCH0026 /* ScheduledTasksView.swift in Sources */,
