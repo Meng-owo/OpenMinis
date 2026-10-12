@@ -123,10 +123,40 @@ enum ScheduledJobRunner {
                 lineCallback: { _ in },
                 pidCallback: { _ in })
             let out = res.output.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            return "[Prefilled command `\(cmd)` (exit \(res.exitCode))]:\n\(out)"
+            return "[Prefilled command `\(cmd)` (exit \(res.exitCode))]:\n\(Self.truncatePrefillOutput(out))"
         } catch {
             return "[Prefilled command `\(cmd)` error]: \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Prefill output cap  [AUD-07]
+
+    /// How much of a prefilled command's output may enter the prompt, as
+    /// characters: the head and the tail, with the middle elided.
+    ///
+    /// [AUD-07] The output used to be pasted in full, so
+    /// `minis-scheduled create … --command "cat huge.log"` built a prompt the
+    /// size of the file — every single fire, because the command produces the
+    /// same output every time. The fire then either cost a fortune or blew the
+    /// context budget and failed, and it kept failing on every schedule.
+    static let prefillHeadChars = 8 * 1024
+    static let prefillTailChars = 4 * 1024
+
+    /// Head + tail with an explicit marker where the middle was dropped.
+    ///
+    /// The marker states the exact number dropped and how to see it, so the
+    /// model can narrow the command instead of guessing what it did not get.
+    /// Characters, not bytes, so a multi-byte character is never cut in half.
+    nonisolated static func truncatePrefillOutput(_ out: String,
+                                                  head: Int = prefillHeadChars,
+                                                  tail: Int = prefillTailChars) -> String {
+        guard out.count > head + tail else { return out }
+        let dropped = out.count - head - tail
+        let headText = String(out.prefix(head))
+        let tailText = String(out.suffix(tail))
+        return headText
+            + "\n\n[... \(dropped) characters truncated: showing the first \(head) and the last \(tail). Rerun with a narrower command (grep/head/tail) if the elided middle matters ...]\n\n"
+            + tailText
     }
 
     /// Land the prompt on the target. Returns the session the prompt went to.
