@@ -15,9 +15,23 @@ struct ScheduledTasksView: View {
     @ObservedObject var registry = AgentJobRegistry.shared
 
     @State private var selectedJobId: String? = nil
+    @State private var pendingDeleteId: String? = nil
 
     private var isDark: Bool { colorScheme == .dark }
     private var allJobs: [AgentJob] { registry.list() }
+
+    /// [AUD-10] The row waiting for its delete confirmation.
+    private var pendingJob: AgentJob? { pendingDeleteId.flatMap { registry.job(id: $0) } }
+
+    /// [AUD-10] Delete = cancel + remove, the same pair the CLI uses. `remove`
+    /// on its own dropped the timer and left a running child session working
+    /// for a result nobody would ever receive.
+    private func performDelete() {
+guard let id = pendingDeleteId else { return }
+        registry.cancel(jobId: id, reason: "ui delete")
+        registry.remove(jobId: id)
+        pendingDeleteId = nil
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -87,7 +101,7 @@ struct ScheduledTasksView: View {
                                 }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
-                                        registry.remove(jobId: job.id)
+                                        pendingDeleteId = job.id
                                     } label: {
                                         Label("删除", systemImage: "trash")
                                     }
@@ -96,6 +110,15 @@ struct ScheduledTasksView: View {
                     }
                 }
                 .listStyle(InsetGroupedListStyle())
+                .alert("删除这个任务？", isPresented: Binding(
+                    get: { pendingDeleteId != nil },
+                    set: { if !$0 { pendingDeleteId = nil } }
+                )) {
+                    Button("取消", role: .cancel) { pendingDeleteId = nil }
+                    Button("删除", role: .destructive) { performDelete() }
+                } message: {
+                    Text(pendingJob?.deleteConfirmMessage ?? "删除后无法恢复。")
+                }
                 .scrollContentBackground(.hidden)
                 .background(CSSThemeVariables.bg(isDark: isDark))
             }

@@ -357,6 +357,12 @@ final class AgentJob: Identifiable {
         return Date().timeIntervalSince(startedAt ?? createdAt) > AgentJobRegistry.stuckAfter
     }
 
+    /// [AUD-10] True while this job's CHILD session is actually working.
+    ///
+    /// Deleting such a job stops that run as well, so the delete confirmation
+    /// says so instead of quietly pulling the rug from under it.
+    var hasRunningChild: Bool { state == .running && target.isChildOfCurrent }
+
     var elapsed: TimeInterval? {
         guard let s = startedAt else { return nil }
         return (finishedAt ?? Date()).timeIntervalSince(s)
@@ -555,8 +561,15 @@ final class AgentJobRegistry: ObservableObject {
         logger.info("[Jobs] \(enabled ? "ENABLE" : "DISABLE") \(job.logLabel)")
     }
 
-    /// Drop a job entirely (after cancel).
+    /// Drop a job entirely.
+    ///
+    /// [AUD-10] Cancels first, by construction. A job removed while its child
+    /// session was still working used to leave that run orphaned: the timer died
+    /// but the agent kept going, and its result had nobody left to arrive at.
+    /// Callers that already cancel (the CLI does) see nothing new — cancel is a
+    /// no-op on a job that is not running or pending.
     func remove(jobId: String) {
+        cancel(jobId: jobId, reason: "removed", silent: false)
         jobs[jobId]?.task?.cancel()
         jobs[jobId] = nil
         JobInsuranceNotification.cancel(jobId: jobId)

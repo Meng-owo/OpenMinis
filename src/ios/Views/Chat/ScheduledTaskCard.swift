@@ -8,6 +8,21 @@
 
 import SwiftUI
 
+// [AUD-10] One wording for the two delete entry points (the list swipe and the
+// detail sheet's trash button), because they delete the same thing.
+extension AgentJob {
+    /// The question the delete confirmation asks, including what else dies with it.
+    var deleteConfirmMessage: String {
+        if hasRunningChild {
+            return "「\(title)」的子任务还在运行。删除会把这次运行一并停掉，它的结果不会再回到会话里。"
+        }
+        if state == .running || state == .pending {
+            return "「\(title)」还在等待触发，删除后不会再运行，历史记录也会一起消失。"
+        }
+        return "「\(title)」的运行记录会一起消失，删除后无法恢复。"
+    }
+}
+
 struct ScheduledTaskCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var registry = AgentJobRegistry.shared

@@ -16,6 +16,7 @@ struct ScheduledTaskDetailSheet: View {
     let jobId: String
     @State private var runsList: [ScheduledRun] = []
     @State private var isRunningNow = false
+    @State private var confirmDelete = false
 
     private var isDark: Bool { colorScheme == .dark }
     private var job: AgentJob? { registry.job(id: jobId) }
@@ -133,8 +134,7 @@ struct ScheduledTaskDetailSheet: View {
                             Button {
                                 let impact = UINotificationFeedbackGenerator()
                                 impact.notificationOccurred(.warning)
-                                registry.remove(jobId: job.id)
-                                dismiss()
+                                confirmDelete = true
                             } label: {
                                 Image(systemName: "trash")
                                     .font(.system(size: 14))
@@ -286,11 +286,27 @@ struct ScheduledTaskDetailSheet: View {
             }
         }
         .background(CSSThemeVariables.bg(isDark: isDark))
+        .alert("删除这个任务？", isPresented: $confirmDelete) {
+            Button("取消", role: .cancel) { }
+            Button("删除", role: .destructive) { deleteJob() }
+        } message: {
+            Text(job?.deleteConfirmMessage ?? "删除后无法恢复。")
+        }
         .onAppear {
             if let j = job {
                 runsList = registry.runs(jobId: j.id)
             }
         }
+    }
+
+    /// [AUD-10] Delete = cancel + remove, the same pair the CLI uses. `remove`
+    /// alone dropped the timer and left a running child session working for a
+    /// result nobody would ever receive.
+    private func deleteJob() {
+        guard let job else { return }
+        registry.cancel(jobId: job.id, reason: "ui delete")
+        registry.remove(jobId: job.id)
+        dismiss()
     }
 
     private func statusBadge(for job: AgentJob) -> some View {
