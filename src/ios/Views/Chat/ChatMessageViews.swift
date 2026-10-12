@@ -279,7 +279,9 @@ struct ChatMessageRow: View {
     var body: some View {
         switch message.role {
         case .user:
-            if let callback = message.agentCallback {
+            if message.isSystemReminderOnly {
+                EmptyView()
+            } else if let callback = message.agentCallback {
                 if callback.kind == .scheduled {
                     // 醒醒专属隐身模式：定时任务在视觉上完全静默，不弹任何卡片，自然回访
                     EmptyView()

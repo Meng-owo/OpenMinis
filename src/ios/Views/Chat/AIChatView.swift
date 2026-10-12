@@ -3434,6 +3434,14 @@ struct AIChatView: View {
                         showStickerPanel = false
                         showPlusPanel = true
                     }
+                },
+                onSelectSticker: { sticker in
+                    vm.pendingSticker = sticker
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        showStickerPanel = false
+                        showPlusPanel = false
+                    }
+                    inputFocused = true
                 }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -3491,16 +3499,17 @@ struct AIChatView: View {
         guard let sticker = vm.pendingSticker, let img = StickerStore.shared.image(for: sticker) else {
             return AnyView(EmptyView())
         }
-        let view = HStack {
+        let isDark = colorScheme == .dark
+        let view = HStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 Image(uiImage: img)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 52, height: 52)
+                    .frame(width: 48, height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(CSSThemeVariables.accent(isDark: colorScheme == .dark).opacity(0.35), lineWidth: 1)
+                            .stroke(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1)
                     )
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -3510,13 +3519,22 @@ struct AIChatView: View {
                         .font(.system(size: 16))
                         .foregroundStyle(Color.white, Color.black.opacity(0.6))
                 }
-                .offset(x: 6, y: -6)
+                .offset(x: 5, y: -5)
             }
-            .padding(.leading, 12)
-            .padding(.top, 4)
-            .padding(.bottom, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(sticker.shortDesc.isEmpty ? sticker.title : sticker.shortDesc)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    .lineLimit(1)
+                Text("将随消息一同发送")
+                    .font(.system(size: 10))
+                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
+            }
             Spacer()
         }
+        .padding(.horizontal, 14)
+        .padding(.top, 4)
+        .padding(.bottom, 2)
         return AnyView(view)
     }
 
@@ -4062,16 +4080,6 @@ struct AIChatView: View {
 
                     // 微信式单行聊天输入条 (AnyView 类型擦除，杜绝深层泛型栈溢出)
                     singleLineInputRow
-                }
-                .contentShape(MinisThemeShape.inputBar)
-                .onTapGesture {
-                    inputFocused = true
-                    if showPlusPanel || showStickerPanel {
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            showPlusPanel = false
-                            showStickerPanel = false
-                        }
-                    }
                 }
 
                 // 底部抽屉功能/表情包面板（完全独立，不被输入框点击手势干扰）
@@ -7064,10 +7072,13 @@ struct ChatStickerPanel: View {
         GridItem(.flexible(), spacing: 10)
     ]
 
-    init(vm: AIChatViewModel, onBackToPlus: @escaping () -> Void) {
+    init(vm: AIChatViewModel, onBackToPlus: @escaping () -> Void, onSelectSticker: ((StickerItem) -> Void)? = nil) {
         self.vm = vm
         self.onBackToPlus = onBackToPlus
+        self.onSelectSticker = onSelectSticker
     }
+
+    var onSelectSticker: ((StickerItem) -> Void)?
 
     public var body: some View {
         VStack(spacing: 0) {
@@ -7352,9 +7363,13 @@ struct ChatStickerPanel: View {
                                     selectedStickerIds.insert(sticker.id)
                                 }
                             } else {
-                                // 和发图片一样：挂载到待发区，醒醒可配文字一并发
-                                vm.pendingSticker = sticker
-                                onBackToPlus()
+                                // 挂载到待发区，顺滑收起面板并聚焦输入框，支持单独发送或图文混排一并发
+                                if let onSelectSticker {
+                                    onSelectSticker(sticker)
+                                } else {
+                                    vm.pendingSticker = sticker
+                                    onBackToPlus()
+                                }
                             }
                         } label: {
                             VStack(spacing: 4) {

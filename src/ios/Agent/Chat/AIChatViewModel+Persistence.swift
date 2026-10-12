@@ -290,7 +290,7 @@ extension AIChatViewModel {
             // restart. currentAssistant is deliberately left untouched — the
             // bridge is invisible, so it must not affect the merge chain
             // either (the queued user message that follows breaks it anyway).
-            if raw.isInternalBridge {
+            if raw.isInternalBridge || raw.isSystemReminderOnly {
                 continue
             }
 

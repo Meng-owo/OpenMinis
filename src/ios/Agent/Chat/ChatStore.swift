@@ -441,6 +441,13 @@ struct RawMessage: Identifiable, Codable, Hashable {
               case .text(let s) = parts[0] else { return false }
         return Self.isInternalBridgeText(s)
     }
+
+    /// 系统静默提醒/指令判断：纯 `<system-reminder>` 块的消息仅供大模型作为上下文，不在 UI 聊天气泡中渲染
+    var isSystemReminderOnly: Bool {
+        guard parts.count == 1, case .text(let s) = parts[0] else { return false }
+        let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>")
+    }
 }
 
 // MARK: - ChatStore Actor

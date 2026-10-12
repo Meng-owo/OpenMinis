@@ -2689,9 +2689,7 @@ extension CollectionViewMessageListV3 {
             // chat bubble regardless of which path produced it — replacing the
             // former reliance on a single filter inside loadSession, which other
             // rebuild paths bypassed (the leak seen 2026-07-24).
-            let messages = rawMessages.contains(where: { $0.isInternalBridge })
-                ? rawMessages.filter { !$0.isInternalBridge }
-                : rawMessages
+            let messages = rawMessages.filter { !$0.isInternalBridge && !$0.isSystemReminderOnly }
 
             // Content changed (new/removed messages) — the up-button's turn-walk
             // anchor may no longer line up, so restart it on the next tap.

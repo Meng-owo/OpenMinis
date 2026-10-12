@@ -136,6 +136,19 @@ final class ChatMessage: Identifiable, ObservableObject {
         return false
     }
 
+    /// 系统静默提醒/指令判断：纯 `<system-reminder>` 块的消息仅供大模型作为上下文，不在 UI 聊天气泡中渲染
+    var isSystemReminderOnly: Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>") {
+            return true
+        }
+        if content.isEmpty, blocks.count == 1, case .text = blocks[0].kind {
+            let bTrimmed = blocks[0].content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return bTrimmed.hasPrefix("<system-reminder>") && bTrimmed.hasSuffix("</system-reminder>")
+        }
+        return false
+    }
+
     /// [T-ios-typing-indicator-scope] Whether the typing indicator should be
     /// drawn for this message, given it is the active (last, still-processing)
     /// one. The single source of truth — the footer's render branch, its
