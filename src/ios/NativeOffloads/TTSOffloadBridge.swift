@@ -32,7 +32,7 @@ import Foundation
                 [
                     "id": g.id,
                     "name": g.name,
-                    "service_ids": g.serviceIds,
+                    "service_ids": g.memberServiceIds,
                     "is_default": (g.id == groupStore.defaultGroupId)
                 ] as [String: Any]
             }

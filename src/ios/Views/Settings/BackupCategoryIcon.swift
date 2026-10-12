@@ -54,6 +54,7 @@ struct BackupCategoryIcon: View {
         switch c {
         case .chats: return "bubble.left.and.bubble.right.fill"
         case .sharedFiles: return "doc.fill"
+        case .stickers: return "face.smiling.fill"
         case .skills: return "puzzlepiece.fill"
         case .memory: return "brain.head.profile"
         case .providers: return "link"
@@ -68,6 +69,7 @@ struct BackupCategoryIcon: View {
         switch c {
         case .chats: return .blue
         case .sharedFiles: return .indigo
+        case .stickers: return .yellow
         case .skills: return .orange
         case .memory: return .pink
         case .providers: return .teal

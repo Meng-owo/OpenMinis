@@ -82,9 +82,9 @@ import Foundation
             let matches = await ChatStore.shared.searchMessages(
                 sessionIds: nil,
                 keywords: ["system_runtime_feedback"],
+                limit: maxLimit * 2,
                 startDate: startDate,
-                endDate: nil,
-                limit: maxLimit * 2
+                endDate: nil
             )
 
             let dateFmt = DateFormatter()
@@ -92,7 +92,7 @@ import Foundation
 
             var parsedItems: [[String: Any]] = []
             for m in matches {
-                let items = extractFeedback(from: m.content, sessionId: m.sessionId, messageId: m.id, date: m.timestamp)
+                let items = extractFeedback(from: m.snippet, sessionId: m.sessionId, messageId: m.messageId, date: m.createdAt)
                 for item in items {
                     var dict: [String: Any] = [
                         "session_id": item.sessionId,
@@ -127,16 +127,16 @@ import Foundation
             let matches = await ChatStore.shared.searchMessages(
                 sessionIds: nil,
                 keywords: ["system_runtime_feedback"],
+                limit: 200,
                 startDate: startDate,
-                endDate: nil,
-                limit: 200
+                endDate: nil
             )
 
             var tagCounts: [String: Int] = [:]
             var comments: [String] = []
 
             for m in matches {
-                let items = extractFeedback(from: m.content, sessionId: m.sessionId, messageId: m.id, date: m.timestamp)
+                let items = extractFeedback(from: m.snippet, sessionId: m.sessionId, messageId: m.messageId, date: m.createdAt)
                 for item in items {
                     tagCounts[item.tag, default: 0] += 1
                     if let c = item.userComment, !c.isEmpty {

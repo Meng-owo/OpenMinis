@@ -609,7 +609,7 @@ private let logger = AppLogger(category: "SessionsOffload")
         var result: [[String: Any]] = []
 
         Task.detached {
-            let folders = await ChatStore.shared.allFolders()
+            let folders = await ChatStore.shared.listFolders()
             let dateFmt = DateFormatter()
             dateFmt.dateFormat = "yyyy-MM-dd HH:mm"
 
@@ -701,11 +701,11 @@ private let logger = AppLogger(category: "SessionsOffload")
 
             let targetStr = raw!
             // First check if targetStr is a folder id
-            let all = await ChatStore.shared.allFolders()
+            let all = await ChatStore.shared.listFolders()
             var matched = all.first { $0.id == targetStr }
             if matched == nil {
                 // Check by name
-                matched = await ChatStore.shared.resolveFolder(named: targetStr)
+                matched = await ChatStore.shared.findFolderByName(targetStr)
             }
 
             guard let targetFolder = matched else {

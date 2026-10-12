@@ -1193,6 +1193,7 @@ struct BackupSettingsView: View {
         switch c {
         case .chats: return AppLocalized("Chats")
         case .sharedFiles: return AppLocalized("Shared Files")
+        case .stickers: return AppLocalized("Stickers")
         case .skills: return AppLocalized("Skills")
         case .memory: return AppLocalized("Memory & Soul")
         case .providers: return AppLocalized("Providers")
