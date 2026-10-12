@@ -285,6 +285,7 @@ extension AIChatViewModel {
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI.")
             ],
+            required: [],
             propertyOrdering: ["tool_title"]
         ))
 
@@ -347,6 +348,7 @@ extension AIChatViewModel {
                 "start_date": AgentToolParam(type: .string, description: "Optional start date filter (e.g. '2026-10-12')."),
                 "end_date": AgentToolParam(type: .string, description: "Optional end date filter (e.g. '2026-10-13').")
             ],
+            required: [],
             propertyOrdering: ["tool_title", "query", "start_date", "end_date"]
         ))
 
@@ -372,6 +374,7 @@ extension AIChatViewModel {
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI.")
             ],
+            required: [],
             propertyOrdering: ["tool_title"]
         ))
 
@@ -383,6 +386,7 @@ extension AIChatViewModel {
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "location": AgentToolParam(type: .string, description: "Optional location name or city (defaults to current location).")
             ],
+            required: [],
             propertyOrdering: ["tool_title", "location"]
         ))
 
@@ -395,6 +399,7 @@ extension AIChatViewModel {
                 "list_name": AgentToolParam(type: .string, description: "Optional reminder list name filter."),
                 "show_completed": AgentToolParam(type: .boolean, description: "Whether to include completed reminders (default false).")
             ],
+            required: [],
             propertyOrdering: ["tool_title", "list_name", "show_completed"]
         ))
 
@@ -422,6 +427,7 @@ extension AIChatViewModel {
                 "title": AgentToolParam(type: .string, description: "Title of the reminder to mark complete."),
                 "reminder_id": AgentToolParam(type: .string, description: "Optional unique ID of the reminder.")
             ],
+            required: [],
             propertyOrdering: ["tool_title", "title", "reminder_id"]
         ))
 
@@ -433,6 +439,7 @@ extension AIChatViewModel {
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "days": AgentToolParam(type: .integer, description: "Number of days of health data to query (default 1).")
             ],
+            required: [],
             propertyOrdering: ["tool_title", "days"]
         ))
 

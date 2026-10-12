@@ -1153,7 +1153,7 @@ extension AIChatViewModel {
                 break
             }
             do {
-                let voice = try await AIVoiceMessageComposer.compose(for: speakText, sessionId: sid)
+                let voice = try await AIVoiceMessageComposer.compose(for: speakText, sessionId: sid, voice: nil, group: nil)
                 let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
                 let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
                 if msgIdx < messages.count {
