@@ -70,6 +70,16 @@ private let logger = AppLogger(category: "ScheduledOffload")
             prefilledTool = PrefilledToolCall(toolName: tool, argsJson: argsJson, timeoutSec: timeout)
         }
 
+        // [AUD-08] Only shell tools can actually be prefilled today —
+        // `PrefilledToolCall.shellCommand` returns nil for anything else, and
+        // the fire path then silently skips the prefill. That made
+        // `--tool weather …` a task that looked created (receipt, `list`, the
+        // stored prefilledTool) and then quietly ran nothing. Say so at create
+        // time instead, where the caller can still act on it.
+        if let prefill = prefilledTool, prefill.shellCommand == nil {
+            return error("--tool \(prefill.toolName) is not supported: scheduled prefill runs shell commands only (shell_execute / sh / shell / bash). Drop --tool to use shell_execute, or pass --tool shell_execute with --toolArgs '{\"command\": \"…\"}'.")
+        }
+
         // ── Target ───────────────────────────────────────────────────────
         let callerSid = ISHExecutionCoordinator.mountedSessionIdSnapshot
         let explicitTarget = str("target")?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

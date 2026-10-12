@@ -46,7 +46,7 @@ static NSString *const HELP_TEXT =
      "                         [--session <id>] [--message <id>] [--model <entry_id>] [--disabled]\n"
      "                         [--thinking off|low|medium|high|xhigh]\n"
      "                         [--command \"<shell>\" [--timeout N]]    # prefill: run BEFORE the model wakes\n"
-     "                         [--tool <name>] [--tool-args <json>]   # prefill: any tool\n"
+     "                         [--tool shell_execute|sh|shell|bash] [--tool-args <json>]  # prefill (shell only)\n"
      "                         [--pulse]                              # autonomous heartbeat mode\n"
      "  minis-scheduled delete  --id <jobId|label>\n"
      "  minis-scheduled enable  --id <jobId|label>\n"
