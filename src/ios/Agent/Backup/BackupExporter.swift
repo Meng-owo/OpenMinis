@@ -5,13 +5,19 @@ private let logger = AppLogger(category: "Backup")
 
 /// Builds a `.minisbak` package (docs/backup-restore-design.md §2, §9 stage 1).
 ///
-/// Current scope: export only, **unencrypted**. The Providers category now
-/// carries credentials (§3.3, stage 3a) as base64 in `secrets.json` — base64 is
-/// an encoding, not protection, so until §5's AES-GCM layer lands a package is
-/// a plaintext copy of the user's API keys. `manifest.categories.providers`
-/// reports `encrypted: false` alongside `includesCredentials: true` so that is
-/// stated rather than implied, and a package can never claim to hold keys it
-/// doesn't (or to protect keys it doesn't).
+/// Current scope: export (the matching restore lives in `BackupImporter`).
+///
+/// Encryption is implemented and wired to the UI — this header still described
+/// stage 1, when it was not. When the caller supplies a passphrase, every
+/// category's bytes are sealed (AES-256-GCM) by `encryptStagedMembers` BEFORE
+/// the manifest is built, and the manifest records the ciphertext hashes plus
+/// the KDF parameters. `manifest.json` and the rescue index stay plaintext on
+/// purpose (§2.1 / §5.3): the first so the user can see what a package holds
+/// before being asked for a passphrase, the second so a lost passphrase is
+/// survivable. Without a passphrase the package is written unencrypted — and
+/// then carries no credentials at all: the UI ties `includeCredentials` to
+/// `encryptBackup`, and the exporter refuses outright to write credentials
+/// without a passphrase so no other caller can bypass that.
 ///
 /// Shape: stage everything into a temp directory, then zip that directory once.
 /// Staging (rather than streaming straight into an archive) is what the

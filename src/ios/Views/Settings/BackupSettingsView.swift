@@ -583,11 +583,14 @@ struct BackupSettingsView: View {
 
     // MARK: - Validation
 
-    /// A passphrase is now unconditionally required.
+    /// A passphrase is required exactly when encryption is ON.
     ///
-    /// §3.3 made it conditional on credentials being included; credentials are
-    /// no longer optional, so the condition collapsed. The exporter enforces
-    /// this too — this only stops the user reaching a button that would fail.
+    /// §3.3 made it conditional on credentials being included; it is still
+    /// conditional — now on `encryptBackup` (see `passphraseValid` below and the
+    /// screen's own "Encryption is a CHOICE" note). With encryption off the
+    /// package ships without credentials, so there is nothing a passphrase
+    /// would protect. The exporter enforces the same rule — this only stops
+    /// the user reaching a button that would fail.
     /// Whether anywhere outside this app's sandbox has been configured to
     /// receive the backup.
     ///
