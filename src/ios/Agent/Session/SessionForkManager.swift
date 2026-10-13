@@ -23,7 +23,7 @@ final class SessionForkManager {
         }
 
         // Create new local session
-        let forkTitle = (remoteSession.title ?? "Untitled") + " (Fork)"
+        let forkTitle = (remoteSession.title ?? AppLocalized("Untitled")) + AppLocalized(" (Fork)")
         let newSession = await store.createSession(modelId: remoteSession.modelId, title: forkTitle)
 
         // Update category if present
@@ -81,7 +81,7 @@ final class SessionForkManager {
             return nil
         }
 
-        let dupTitle = (session.title ?? "Untitled") + " (Copy)"
+        let dupTitle = (session.title ?? AppLocalized("Untitled")) + AppLocalized(" (Copy)")
         let newSession = await store.createSession(modelId: session.modelId, title: dupTitle)
 
         if let category = session.category {
@@ -95,6 +95,24 @@ final class SessionForkManager {
         }
         if let folderId = session.folderId {
             await store.setFolder(folderId, forSessions: [newSession.id])
+        }
+
+        // [AUD2-07] Carry the rest of the session-level configuration across.
+        // createSession writes the GLOBAL memory default, so a copy of a
+        // session that had memory switched off silently turned it back on; and
+        // the model binding (which provider/model this conversation is pinned
+        // to) was never copied, so the copy fell back to the default model.
+        let sourceMemoryEnabled = await store.getMemoryEnabled(sessionId: sessionId)
+        await store.setMemoryEnabled(sessionId: newSession.id, enabled: sourceMemoryEnabled)
+        if let binding = ProviderConfigStore.shared.binding(for: sessionId) {
+            ProviderConfigStore.shared.setBinding(
+                SessionModelBinding(
+                    sessionId: newSession.id,
+                    primarySource: binding.primarySource,
+                    subModelSource: binding.subModelSource
+                ),
+                for: newSession.id
+            )
         }
 
         let messages = await store.loadMessages(sessionId: sessionId)
