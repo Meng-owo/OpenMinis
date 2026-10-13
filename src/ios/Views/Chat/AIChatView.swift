@@ -7719,10 +7719,18 @@ public final class StickerStore: ObservableObject {
 
         let candidateCatalogs = [appSupportStickers, docStickers, libStickers, docRootStickers].compactMap { $0 }
 
+        // [sticker-fix] saveToDisk encodes dates with .iso8601, but this load
+        // used a default JSONDecoder (deferredToDate): `createdAt` never
+        // decoded, so the catalog was silently discarded on every reload and
+        // the stub-rebuild below overwrote descriptions, categories and use
+        // counts. Keep the decode strategy in lockstep with the encoder.
+        let catalogDecoder = JSONDecoder()
+        catalogDecoder.dateDecodingStrategy = .iso8601
+
         for catURL in candidateCatalogs {
             if fm.fileExists(atPath: catURL.path),
                let data = try? Data(contentsOf: catURL),
-               let catalog = try? JSONDecoder().decode(StickerCatalogData.self, from: data),
+               let catalog = try? catalogDecoder.decode(StickerCatalogData.self, from: data),
                !catalog.stickers.isEmpty {
                 self.stickers = catalog.stickers
                 if !catalog.categories.isEmpty { self.categories = catalog.categories }
