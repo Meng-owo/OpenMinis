@@ -266,7 +266,7 @@ iOS Files 里的文件夹可以挂进来看（Obsidian vault / Downloads / 别�
 
 位置：**设置 → iCloud 同步**(Settings → iCloud Sync)
 
-- **同步什么** — 会话记录、设置、技能、记忆。**不同步 Provider 密钥**（钥匙串的，Apple 不让跨设备带过去）
+- **同步什么** — 会话记录、设置、技能、记忆。**Provider 密钥也会同步**（base64 编码、非端到端加密；可在上传设置里关掉）
 - **换机** — 新机登同个 Apple ID → 打开 iCloud → 拉下来
 - **推到云端** — 「Force Sync」强制推一次（默认是改动后自动推）
 - **冲突** — 以云端为准覆盖本地（单向，不是双向合并）
