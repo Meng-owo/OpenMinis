@@ -4337,7 +4337,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let stoppedTimers = AgentJobRegistry.shared.cancelScheduled(
                 createdBy: sid, reason: "user stop", inConversationOnly: true)
             if stoppedTimers > 0 {
-                transientNotice = String(format: AppLocalized("Stopped %d scheduled task(s) that fired into this conversation"),
+                transientNotice = String(format: AppLocalized("已停止 %d 个向本会话触发过的定时任务"),
                                          stoppedTimers)
             }
         }

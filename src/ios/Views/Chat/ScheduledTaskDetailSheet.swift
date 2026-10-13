@@ -91,7 +91,7 @@ struct ScheduledTaskDetailSheet: View {
                                 HStack(spacing: 6) {
                                     if isRunningNow {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .progressViewStyle(CircularProgressViewStyle(tint: CSSThemeVariables.accentFg(isDark: isDark)))
                                             .scaleEffect(0.8)
                                     } else {
                                         Image(systemName: job.isPulse ? "hand.tap.fill" : "play.fill")

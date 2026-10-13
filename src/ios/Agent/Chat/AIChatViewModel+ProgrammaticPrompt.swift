@@ -759,7 +759,7 @@ extension AIChatViewModel {
             child.cancel()
         }
         if let missing = namedAgentMissing {
-            transientNotice = String(format: AppLocalized("Sub agent \"%@\" no longer exists — resumed with the built-in agent"), missing)
+            transientNotice = String(format: AppLocalized("子代理「%@」已不存在，改用内置代理继续"), missing)
         }
         logger.info("[subagent_task] RESUME job=\(newJob.id.prefix(8)) from=\(jobId.prefix(8)) child=\(childId.prefix(8)) agent=\(subAgent.name)")
         return (Self.delegateJSON([

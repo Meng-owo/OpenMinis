@@ -23,7 +23,9 @@ final class SessionForkManager {
         }
 
         // Create new local session
-        let forkTitle = (remoteSession.title ?? AppLocalized("Untitled")) + AppLocalized(" (Fork)")
+        // [S4d] The leading space belongs to the concatenation, not to the
+        // localisation key — a key of " (Fork)" cannot be looked up or reused.
+        let forkTitle = (remoteSession.title ?? AppLocalized("Untitled")) + " " + AppLocalized("(Fork)")
         let newSession = await store.createSession(modelId: remoteSession.modelId, title: forkTitle)
 
         // Update category if present
@@ -81,7 +83,7 @@ final class SessionForkManager {
             return nil
         }
 
-        let dupTitle = (session.title ?? AppLocalized("Untitled")) + AppLocalized(" (Copy)")
+        let dupTitle = (session.title ?? AppLocalized("Untitled")) + " " + AppLocalized("(Copy)")
         let newSession = await store.createSession(modelId: session.modelId, title: dupTitle)
 
         if let category = session.category {

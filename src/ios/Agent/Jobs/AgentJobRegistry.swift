@@ -15,10 +15,13 @@ import Foundation
 // `target.isChildOfCurrent`, "who made it" is `origin`. A separate kind enum
 // would have to be kept consistent with both and adds nothing.
 //
-// P0 ships the data model, lifecycle (register / start / finish / cancel),
+// P0 shipped the data model, lifecycle (register / start / finish / cancel),
 // the loop-end observer that closes running jobs, and the `.followUpParent`
-// hook wired to component A. Nothing registers a job yet — P1's
-// `delegate_task` and P2's `minis-scheduled` are the producers.
+// hook wired to component A. The producers are in place now: `delegate_task`
+// (a helper / child-session job) and `minis-scheduled` together with the
+// in-chat scheduled-task UI. Task definitions and run history are written to
+// UserDefaults and rebuilt at launch — see `persistScheduledJobs` and
+// `restorePersistedJobs`, which are the live counterparts of this paragraph.
 
 /// [T-agent-model-identity] Which model an agent (helper / child session) is
 /// running on, kept as THREE distinct facts that must never be conflated:
@@ -1987,7 +1990,7 @@ extension AgentJobRegistry {
                     case .pending, .running: break
                     }
                     job.recordFire(sessionId: nil, ok: false,
-                                   preview: AppLocalized("错过：目标会话已删除"),
+                                   preview: AppLocalized("已错过：目标会话已删除"),
                                    bumpCounter: false)
                     job.markFinished(.done, result: nil, cancelTask: true)
                     logger.warning("[Jobs] restore: \(job.logLabel) — parent session \(parentSid.prefix(8)) is gone, closing the task out")
@@ -2004,7 +2007,7 @@ extension AgentJobRegistry {
             }()
             if let due = missedDue {
                 job.recordFire(sessionId: nil, ok: false,
-                               preview: AppLocalized("Missed — the app was not running when this fire was due"),
+                               preview: AppLocalized("已错过：到点时应用没在运行"),
                                bumpCounter: false)
                 missed += 1
                 logger.warning("[Jobs] restore: \(job.logLabel) missed a fire due \(Int(now.timeIntervalSince(due)))s ago")
