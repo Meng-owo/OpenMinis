@@ -15289,61 +15289,61 @@
         }
       }
     },
-    "API keys and tokens are stored only in the iOS Keychain on your device and are never sent to us": {
+    "API keys and tokens are stored in the iOS Keychain on your device. If iCloud sync is on, a copy syncs through your own iCloud account (base64-encoded, not end-to-end encrypted). They are never sent to us": {
       "extractionState": "stale",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "API Keys und Tokens werden nur im iOS-Schlüsselbund auf Ihrem Gerät gespeichert und niemals an uns gesendet"
+            "value": "API-Schlüssel und Tokens werden im iOS-Schlüsselbund auf Ihrem Gerät gespeichert. Ist die iCloud-Synchronisierung aktiv, wird eine Kopie über Ihr eigenes iCloud-Konto synchronisiert (Base64-kodiert, nicht Ende-zu-Ende-verschlüsselt). An uns werden sie niemals gesendet"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "API keys and tokens are stored only in the iOS Keychain on your device and are never sent to us"
+            "value": "API keys and tokens are stored in the iOS Keychain on your device. If iCloud sync is on, a copy syncs through your own iCloud account (base64-encoded, not end-to-end encrypted). They are never sent to us"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Las claves de API y los tokens se guardan únicamente en el Keychain de iOS de tu dispositivo y nunca se nos envían"
+            "value": "Las claves de API y los tokens se guardan en el Keychain de iOS de tu dispositivo. Si la sincronización con iCloud está activada, una copia se sincroniza a través de tu propia cuenta de iCloud (codificada en base64, sin cifrado de extremo a extremo). Nunca se nos envían"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les clés API et tokens sont stockés uniquement dans le trousseau iOS de votre appareil et ne nous sont jamais envoyés"
+            "value": "Les clés API et tokens sont stockés dans le trousseau iOS de votre appareil. Si la synchronisation iCloud est activée, une copie est synchronisée via votre propre compte iCloud (encodée en base64, sans chiffrement de bout en bout). Ils ne nous sont jamais envoyés"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "API KeyとTokenはデバイスのiOS キーチェーンにのみ保存され、私たちに送信されることはありません"
+            "value": "API KeyとTokenはデバイスのiOS キーチェーンに保存されます。iCloud 同期がオンの場合、コピーはご自身の iCloud アカウント経由で同期されます（Base64 エンコード、エンドツーエンド暗号化ではありません）。私たちに送信されることはありません"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "API Key와 Token은 기기의 iOS 키체인에만 저장되며 저희에게 전송되지 않습니다"
+            "value": "API Key와 Token은 기기의 iOS 키체인에 저장됩니다. iCloud 동기화가 켜져 있으면 사본이 본인의 iCloud 계정을 통해 동기화됩니다(Base64 인코딩, 종단 간 암호화 아님). 저희에게 전송되지 않습니다"
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ключи API и токены хранятся только в Keychain iOS на вашем устройстве и никогда не отправляются нам"
+            "value": "Ключи API и токены хранятся в Keychain iOS на вашем устройстве. Если синхронизация iCloud включена, копия синхронизируется через вашу учётную запись iCloud (в кодировке Base64, без сквозного шифрования). Нам они никогда не отправляются"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "API Key 和 Token 仅存储在设备的 iOS 钥匙串中，绝不会发送给我们"
+            "value": "API Key 和 Token 存储在设备的 iOS 钥匙串中。开启 iCloud 同步后，副本会经你自己的 iCloud 账户同步（base64 编码，非端到端加密）。绝不会发送给我们"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "API Key 和 Token 僅存儲在設備的 iOS 鑰匙串中，絕不會發送給我們"
+            "value": "API Key 和 Token 儲存在裝置的 iOS 鑰匙圈中。開啟 iCloud 同步後，副本會經你自己的 iCloud 帳戶同步（base64 編碼，非端對端加密）。絕不會發送給我們"
           }
         }
       }
@@ -102582,60 +102582,60 @@
         }
       }
     },
-    "Your key is stored securely in the iOS Keychain and never leaves the device.": {
+    "Your key is stored in the iOS Keychain. If iCloud sync is on, a copy syncs through your own iCloud account (base64-encoded, not end-to-end encrypted); otherwise it stays on this device.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ihr Schlüssel wird sicher im iOS-Schlüsselbund gespeichert und verlässt das Gerät nie."
+            "value": "Ihr Schlüssel wird im iOS-Schlüsselbund gespeichert. Ist die iCloud-Synchronisierung aktiv, wird eine Kopie über Ihr eigenes iCloud-Konto synchronisiert (Base64-kodiert, nicht Ende-zu-Ende-verschlüsselt); andernfalls verbleibt er auf diesem Gerät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your key is stored securely in the iOS Keychain and never leaves the device."
+            "value": "Your key is stored in the iOS Keychain. If iCloud sync is on, a copy syncs through your own iCloud account (base64-encoded, not end-to-end encrypted); otherwise it stays on this device."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu clave se guarda de forma segura en el Keychain de iOS y nunca sale del dispositivo."
+            "value": "Tu clave se guarda en el Keychain de iOS. Si la sincronización con iCloud está activada, una copia se sincroniza a través de tu propia cuenta de iCloud (codificada en base64, sin cifrado de extremo a extremo); de lo contrario, permanece en este dispositivo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre clé est stockée en toute sécurité dans le trousseau iOS et ne quitte jamais l'appareil."
+            "value": "Votre clé est stockée dans le trousseau iOS. Si la synchronisation iCloud est activée, une copie est synchronisée via votre propre compte iCloud (encodée en base64, sans chiffrement de bout en bout) ; sinon, elle reste sur cet appareil."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "キーはiOS キーチェーンに安全に保存され、デバイスから送信されることはありません。"
+            "value": "キーは iOS キーチェーンに保存されます。iCloud 同期がオンの場合、コピーはご自身の iCloud アカウント経由で同期されます（Base64 エンコード、エンドツーエンド暗号化ではありません）。オフの場合はこのデバイスにとどまります。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "키는 iOS 키체인에 안전하게 저장되며 기기를 벗어나지 않습니다."
+            "value": "키는 iOS 키체인에 저장됩니다. iCloud 동기화가 켜져 있으면 사본이 본인의 iCloud 계정을 통해 동기화됩니다(Base64 인코딩, 종단 간 암호화 아님). 꺼져 있으면 이 기기에 남아 있습니다."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ваш ключ надёжно хранится в Связке ключей iOS и никогда не покидает устройство."
+            "value": "Ваш ключ хранится в связке ключей iOS. Если синхронизация iCloud включена, копия синхронизируется через вашу учётную запись iCloud (в кодировке Base64, без сквозного шифрования); в противном случае он остаётся на этом устройстве."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "您的密钥安全存储在 iOS 钥匙串中，不会离开设备。"
+            "value": "你的密钥存储在 iOS 钥匙串中。开启 iCloud 同步后，副本会经你自己的 iCloud 账户同步（base64 编码，非端到端加密）；未开启时只留在本设备。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "您的密鑰安全存儲在 iOS 鑰匙串中，不會離開設備。"
+            "value": "你的密鑰儲存在 iOS 鑰匙圈中。開啟 iCloud 同步後，副本會經你自己的 iCloud 帳戶同步（base64 編碼，非端對端加密）；未開啟時只留在本裝置。"
           }
         }
       }
