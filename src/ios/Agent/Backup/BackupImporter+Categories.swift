@@ -867,6 +867,11 @@ extension BackupImporter {
     /// model-entry overlay or tombstone reconciliation — those matter for
     /// device-to-device convergence, not for "put my backup back" — but it
     /// must never delete, which is the property that was broken.
+    ///
+    /// NOTE: dead path in this build (deployment target ≥ iOS 26) — the
+    /// live restore merge with the same semantics lives in CloudSyncEngine:
+    /// `mergeProviderConfigForRestore` → `mergeProviderConfigBody`. If
+    /// iOS 16 support is ever revisited, mirror changes in both.
     @MainActor
     static func mergeProviderConfigFallback(_ remote: ProviderConfig) {
         let store = ProviderConfigStore.shared
