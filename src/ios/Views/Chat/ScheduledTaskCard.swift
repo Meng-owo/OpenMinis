@@ -128,6 +128,16 @@ extension AgentJob {
     }
 }
 
+/// The full card for an ordinary scheduled task.
+///
+/// [AUD-19] Currently unreferenced — and that is the consequence of a decision,
+/// not an oversight: an ordinary firing is 隐身 by the user's own rule (the chat
+/// must not fill up with them), so a `.scheduled` callback renders as
+/// `EmptyView` (ChatMessageViews) and the visible card belongs to pulses
+/// (`ScheduledPulseCardView` above). The card is left in place as the ready
+/// surface for the day ordinary tasks get a visible body; the alternatives are
+/// to wire it somewhere (the tasks list draws its own rows) or to delete it, and
+/// removing a surface the user asked for is her call, not a cleanup pass's.
 struct ScheduledTaskCard: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var registry = AgentJobRegistry.shared

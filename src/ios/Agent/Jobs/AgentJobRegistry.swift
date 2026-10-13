@@ -1474,6 +1474,13 @@ final class AgentJobRegistry: ObservableObject {
     }
 
     /// Drop terminal jobs so the map does not grow without bound.
+    ///
+    /// [AUD-19] Still no caller, and for now that is deliberate: pruning here
+    /// DELETES finished tasks and their run history — user-visible data that
+    /// AUD-04 has only just started keeping across launches. How long a finished
+    /// task should stay visible is a retention decision, not a cleanup pass's
+    /// call, so the knob is kept ready (one line at the restore path would arm
+    /// it) and the decision is left to the user rather than guessed at.
     func pruneFinished(olderThan age: TimeInterval = 3600) {
         let cutoff = Date().addingTimeInterval(-age)
         for (id, job) in jobs where job.state != .running && job.state != .pending {
