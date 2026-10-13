@@ -354,6 +354,13 @@ struct MinisApp: App {
                     // Populate ConfigRegistry once. Idempotent — every
                     // appearance after the first is a no-op.
                     ConfigRegistry.shared.registerBuiltinsIfNeeded()
+                    // [AUD-04] Bring back the scheduled tasks (definition,
+                    // counters, run history) written by the last process and
+                    // re-arm their timers. A fire that came due while the app was
+                    // not running is recorded as missed: the schedule cannot
+                    // retroactively run, and the insurance notification promised
+                    // that opening the app would show what happened.
+                    AgentJobRegistry.shared.restorePersistedJobs()
                     // Register notification delegate for shortcut task tap-to-open
                     ShortcutNotificationDelegate.shared.register()
                     // Register App Shortcuts with the system so Siri and Spotlight discover them

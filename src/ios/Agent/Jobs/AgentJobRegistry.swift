@@ -626,14 +626,17 @@ final class AgentJob: Identifiable {
     var summaryLine: String?
     /// Session the most recent fire landed in / last fire outcome.
     private(set) var lastFireOk: Bool?
-    let createdAt = Date()
+    /// [AUD-04] Carried in from a snapshot so a restored task keeps its place in
+    /// the list (newest first) and its CLI row says when it was really created.
+    let createdAt: Date
     private(set) var startedAt: Date?
     private(set) var finishedAt: Date?
     /// Final result text (last assistant message), filled by `finish`.
     private(set) var resultText: String?
 
     fileprivate init(id: String, label: String?, title: String, origin: AgentJobOrigin,
-                     trigger: AgentJobTrigger, target: AgentJobTarget, prompt: String?, then: AgentJobThen) {
+                     trigger: AgentJobTrigger, target: AgentJobTarget, prompt: String?, then: AgentJobThen,
+                     createdAt: Date? = nil) {
         self.id = id
         self.label = label
         self.title = title
@@ -642,6 +645,7 @@ final class AgentJob: Identifiable {
         self.target = target
         self.prompt = prompt
         self.then = then
+        self.createdAt = createdAt ?? Date()
         if case .loop(_, let count) = trigger { self.remaining = count }
     }
 
@@ -783,6 +787,11 @@ final class AgentJobRegistry: ObservableObject {
     /// the model re-delegates later instead of assuming it was accepted.
     static let maxQueuedDelegations = 10
 
+    /// [AUD-04] Where the scheduled tasks + their run history are kept between
+    /// processes. UserDefaults is enough: a snapshot is a few kilobytes of
+    /// definition + counters, written on every mutation.
+    static let persistedJobsKey = "agentJobRegistry.persistedJobs.v1"
+
     func enqueueDelegation(_ item: QueuedDelegation) -> Bool {
         guard queuedDelegations.count < Self.maxQueuedDelegations else {
             logger.warning("[Jobs] delegation queue full (\(Self.maxQueuedDelegations)) — refusing \(item.toolUseId.prefix(12))")
@@ -805,6 +814,10 @@ final class AgentJobRegistry: ObservableObject {
     @Published private(set) var jobs: [String: AgentJob] = [:]
     /// runSessionId → jobId, for closing jobs from the loop-end notification.
     private var jobBySession: [String: String] = [:]
+    /// [AUD-04] One restore per process — the registry is a singleton and the
+    /// scene can appear more than once (a backgrounded app returning does not
+    /// need a second rebuild, and re-arming twice would double every timer).
+    private var didRestorePersistedJobs = false
     private var loopEndObserver: Any?
     private var activityObserver: Any?
 
@@ -886,6 +899,8 @@ final class AgentJobRegistry: ObservableObject {
         guard let job = jobs[jobId] else { return }
         job.recordFire(sessionId: sessionId, ok: ok, preview: preview, bumpCounter: bumpCounter)
         logger.info("[Jobs] FIRED \(job.logLabel) session=\(sessionId?.prefix(8) ?? "nil") ok=\(ok) fired=\(job.firedCount) remaining=\(job.remaining.map(String.init) ?? "∞")")
+        // [AUD-04] The run history is part of what a restart must not erase.
+        persistScheduledJobs()
     }
 
     func runs(jobId: String) -> [ScheduledRun] {
@@ -903,6 +918,9 @@ final class AgentJobRegistry: ObservableObject {
             job.task = nil
             job.nextFireAt = nil
             JobInsuranceNotification.cancel(jobId: jobId)
+            // [AUD-04] The disarm has to survive a restart too: a disabled task
+            // must come back disabled, not armed because the snapshot was stale.
+            persistScheduledJobs()
         }
         logger.info("[Jobs] \(enabled ? "ENABLE" : "DISABLE") \(job.logLabel)")
     }
@@ -919,6 +937,9 @@ final class AgentJobRegistry: ObservableObject {
         jobs[jobId]?.task?.cancel()
         jobs[jobId] = nil
         JobInsuranceNotification.cancel(jobId: jobId)
+        // [AUD-04] A deletion must stick — otherwise the task the user just
+        // deleted comes back on the next launch, which is worse than losing it.
+        persistScheduledJobs()
     }
 
     /// CLI / RPC projection of a job — field names match Android's
@@ -1127,6 +1148,11 @@ final class AgentJobRegistry: ObservableObject {
         // Terminal jobs stay listable until the parent is gone; a repeating job
         // (`.loop` / `.cron`) does not come through here for every fire — it is
         // re-armed above and only finishes when it is cancelled or exhausts.
+        //
+        // [AUD-04] The terminal state is part of the record: a task the user
+        // cancelled, or one that exhausted its count, comes back in that state
+        // instead of looking armed and new.
+        persistScheduledJobs()
     }
 
     /// [T-sub-agents-queue] Start queued delegations while slots are free.
@@ -1584,3 +1610,320 @@ extension Notification.Name {
 }
 
 private let logger = AppLogger(category: "AgentJobRegistry")
+
+// MARK: - Persistence across launches  [AUD-04]
+//
+// The registry is in-memory by design, and iOS has no AlarmManager — but a
+// task's PROMISE is cross-time: "every morning at 9" that evaporates when the
+// app is killed is not a schedule, it is a session-scoped timer. AUD-04 found
+// the gap between that promise, the insurance notification ("Open Minis to see
+// whether it ran") and the fact that opening Minis showed nothing at all,
+// because the registry had come up empty.
+//
+// So the task DEFINITIONS and their run history are written to UserDefaults on
+// every mutation and rebuilt at launch. Only scheduled tasks are kept: a
+// `.childOfCurrent` job is a delegation — work tied to a live conversation, not
+// a schedule — and a `.immediate` job is a `run --id` that is either happening
+// now or already over.
+//
+// A fire that came due while the app was not running is recorded as MISSED.
+// The schedule cannot retroactively run at 9am, and a silent gap is exactly
+// what this fix exists to remove; the record is what makes the insurance
+// notification's promise true.
+
+/// One scheduled task as written to disk: the definition, its counters and its
+/// run history. Never the live links (timer tasks, child view models, in-flight
+/// runs) — those cannot survive a process and are rebuilt instead.
+struct PersistedJob: Codable {
+    var id: String
+    var label: String?
+    var title: String
+    var origin: String
+    var trigger: PersistedTrigger
+    var target: PersistedTarget
+    var prompt: String?
+    var followUpParent: Bool
+    var isEnabled: Bool
+    var remaining: Int?
+    var state: String
+    var createdAt: Date
+    var nextFireAt: Date?
+    var firedCount: Int
+    var lastFireOk: Bool?
+    var runs: [ScheduledRun]
+    var modelEntryId: String?
+    var thinkingLevel: String?
+    var prefilledTool: PrefilledToolCall?
+    var isPulse: Bool
+    var deliverySentence: String?
+    var creatorSessionId: String?
+
+    init(job: AgentJob) {
+        id = job.id
+        label = job.label
+        title = job.title
+        origin = job.origin.rawValue
+        trigger = PersistedTrigger(job.trigger)
+        target = PersistedTarget(job.target)
+        prompt = job.prompt
+        followUpParent = {
+            if case .followUpParent = job.then { return true }
+            return false
+        }()
+        isEnabled = job.isEnabled
+        remaining = job.remaining
+        state = job.state.rawValue
+        createdAt = job.createdAt
+        nextFireAt = job.nextFireAt
+        firedCount = job.firedCount
+        lastFireOk = job.lastFireOk
+        runs = job.runs
+        modelEntryId = job.modelEntryId
+        thinkingLevel = job.thinkingLevel?.rawValue
+        prefilledTool = job.prefilledTool
+        isPulse = job.isPulse
+        deliverySentence = job.deliverySentence
+        creatorSessionId = job.creatorSessionId
+    }
+}
+
+/// Trigger as flat fields rather than an enum's associated values — the shape
+/// stays readable in the stored JSON, and an unknown `kind` from a future build
+/// degrades to "drop this task" instead of failing the whole snapshot.
+struct PersistedTrigger: Codable {
+    var kind: String
+    var after: Double?
+    var interval: Double?
+    var count: Int?
+    var hour: Int?
+    var minute: Int?
+    var days: [Int]?
+    var start: Date?
+    var end: Date?
+    var ofJobId: String?
+
+    init(_ trigger: AgentJobTrigger) {
+        switch trigger {
+        case .immediate:
+            kind = "immediate"
+        case .once(let after):
+            kind = "once"
+            self.after = after
+        case .loop(let interval, let count):
+            kind = "loop"
+            self.interval = interval
+            self.count = count
+        case .cron(let hour, let minute, let days, let start, let end):
+            kind = "cron"
+            self.hour = hour
+            self.minute = minute
+            self.days = days.sorted()
+            self.start = start
+            self.end = end
+        case .onCompletion(let ofJobId):
+            kind = "onCompletion"
+            self.ofJobId = ofJobId
+        }
+    }
+
+    func rebuild() -> AgentJobTrigger? {
+        switch kind {
+        case "immediate": return .immediate
+        case "once": return after.map { AgentJobTrigger.once(after: $0) }
+        case "loop": return interval.map { AgentJobTrigger.loop(interval: $0, count: count) }
+        case "cron":
+            guard let hour, let minute else { return nil }
+            return .cron(hour: hour, minute: minute, days: Set(days ?? []), start: start, end: end)
+        case "onCompletion": return ofJobId.map { AgentJobTrigger.onCompletion(ofJobId: $0) }
+        default: return nil
+        }
+    }
+}
+
+/// Where the prompt lands. `childOfCurrent` never appears in a snapshot (see
+/// `isPersistable`), and `rebuild()` refuses it anyway.
+struct PersistedTarget: Codable {
+    var kind: String
+    var sessionId: String?
+    var messageId: String?
+
+    init(_ target: AgentJobTarget) {
+        switch target {
+        case .new:
+            kind = "new"
+        case .followUp(let sessionId):
+            kind = "followUp"
+            self.sessionId = sessionId
+        case .rerun(let sessionId, let messageId):
+            kind = "rerun"
+            self.sessionId = sessionId
+            self.messageId = messageId
+        case .childOfCurrent(let parentSessionId, let parentToolUseId):
+            kind = "childOfCurrent"
+            self.sessionId = parentSessionId
+            self.messageId = parentToolUseId
+        }
+    }
+
+    func rebuild() -> AgentJobTarget? {
+        switch kind {
+        case "new": return .new
+        case "followUp": return sessionId.map { AgentJobTarget.followUp(sessionId: $0) }
+        case "rerun":
+            guard let sessionId, let messageId else { return nil }
+            return .rerun(sessionId: sessionId, messageId: messageId)
+        default: return nil
+        }
+    }
+}
+
+extension AgentJob {
+    /// [AUD-04] Put back the counters and history a snapshot carries. Kept here
+    /// rather than in the registry so the job's own private state stays its own.
+    fileprivate func restoreHistory(firedCount: Int, runs: [ScheduledRun], lastFireOk: Bool?) {
+        self.firedCount = firedCount
+        self.runs = runs
+        self.lastFireOk = lastFireOk
+    }
+}
+
+extension AgentJobRegistry {
+    /// True for the jobs whose promise spans processes. A delegation belongs to
+    /// the conversation that made it (and dies with it); an `.immediate` job is
+    /// a `run --id`, not a schedule.
+    static func isPersistable(_ job: AgentJob) -> Bool {
+        if job.target.isChildOfCurrent { return false }
+        if job.origin == .tool { return false }
+        if case .immediate = job.trigger { return false }
+        return true
+    }
+
+    /// Write every scheduled task — definition, counters, run history.
+    ///
+    /// Called on every mutation (arm, fire, finish, enable/disable, delete), so
+    /// a kill at any instant loses at most the change in flight. A few KB of
+    /// JSON; `UserDefaults` is the right shelf for it.
+    func persistScheduledJobs() {
+        let snapshot = jobs.values
+            .filter { Self.isPersistable($0) }
+            .map { PersistedJob(job: $0) }
+        guard let data = try? JSONEncoder().encode(snapshot) else {
+            logger.warning("[Jobs] persist: snapshot did not encode — leaving the previous one in place")
+            return
+        }
+        UserDefaults.standard.set(data, forKey: Self.persistedJobsKey)
+    }
+
+    /// Rebuild the schedule written by the last process and re-arm it.
+    ///
+    /// Called once, at launch. An enabled task's timer is re-armed from NOW (a
+    /// timer cannot be resumed where it was), and a fire that came due while the
+    /// app was not running is recorded as missed — the schedule cannot
+    /// retroactively run, and a silent gap is the thing this fix exists to
+    /// remove.
+    func restorePersistedJobs() {
+        guard !didRestorePersistedJobs else { return }
+        didRestorePersistedJobs = true
+        guard let data = UserDefaults.standard.data(forKey: Self.persistedJobsKey) else {
+            logger.info("[Jobs] restore: nothing persisted yet")
+            return
+        }
+        guard let snapshot = try? JSONDecoder().decode([PersistedJob].self, from: data) else {
+            logger.warning("[Jobs] restore: persisted snapshot did not decode — starting empty")
+            return
+        }
+        let now = Date()
+        let knownIds = Set(snapshot.map(\.id))
+        var restored = 0, missed = 0, dropped = 0
+        // `.onCompletion` last: its trigger names another job, and that job has
+        // to exist before the waiter is meaningful.
+        let ordered = snapshot.sorted {
+            ($0.trigger.kind == "onCompletion" ? 1 : 0) < ($1.trigger.kind == "onCompletion" ? 1 : 0)
+        }
+        for p in ordered where jobs[p.id] == nil {
+            guard let trigger = p.trigger.rebuild(), let target = p.target.rebuild() else {
+                dropped += 1
+                logger.warning("[Jobs] restore: dropping \(p.id.prefix(8)) — unreadable trigger or target")
+                continue
+            }
+            if case .onCompletion(let upstream) = trigger,
+               !knownIds.contains(upstream), jobs[upstream] == nil {
+                dropped += 1
+                logger.warning("[Jobs] restore: dropping \(p.id.prefix(8)) — its upstream job \(upstream.prefix(8)) is gone")
+                continue
+            }
+            let job = AgentJob(id: p.id,
+                               label: p.label,
+                               title: p.title,
+                               origin: AgentJobOrigin(rawValue: p.origin) ?? .cli,
+                               trigger: trigger,
+                               target: target,
+                               prompt: p.prompt,
+                               then: p.followUpParent ? .followUpParent(template: nil) : .none,
+                               createdAt: p.createdAt)
+            job.isEnabled = p.isEnabled
+            job.remaining = p.remaining
+            job.modelEntryId = p.modelEntryId
+            job.thinkingLevel = p.thinkingLevel.flatMap { ThinkingLevel(rawValue: $0) }
+            job.prefilledTool = p.prefilledTool
+            job.isPulse = p.isPulse
+            job.deliverySentence = p.deliverySentence
+            job.creatorSessionId = p.creatorSessionId
+            job.restoreHistory(firedCount: p.firedCount, runs: p.runs, lastFireOk: p.lastFireOk)
+            jobs[job.id] = job
+
+            // Was a fire due while this process was not running? `nextFireAt` is
+            // only ever written once it points at a FUTURE fire, so anything
+            // already in the past was genuinely skipped.
+            let wasPending = (p.state == "pending" || p.state == "running")
+            let missedDue: Date? = {
+                guard wasPending, p.isEnabled, let due = p.nextFireAt, due < now else { return nil }
+                return due
+            }()
+            if let due = missedDue {
+                job.recordFire(sessionId: nil, ok: false,
+                               preview: AppLocalized("Missed — the app was not running when this fire was due"),
+                               bumpCounter: false)
+                missed += 1
+                logger.warning("[Jobs] restore: \(job.logLabel) missed a fire due \(Int(now.timeIntervalSince(due)))s ago")
+            }
+
+            switch p.state {
+            case "done":
+                job.markFinished(.done, result: nil, cancelTask: false)
+            case "cancelled":
+                job.markFinished(.cancelled, result: nil, cancelTask: false)
+            case "failed":
+                job.markFinished(.failed, result: nil, cancelTask: false)
+            case "timeout":
+                job.markFinished(.timeout, result: nil, cancelTask: false)
+            default:
+                if job.isEnabled {
+                    if missedDue != nil, case .once = trigger {
+                        // A single-shot task whose one moment passed while the app
+                        // was closed has nothing left to fire for; the missed
+                        // record above is its honest outcome.
+                        job.markFinished(.done, result: nil, cancelTask: false)
+                    } else {
+                        ScheduledJobRunner.arm(job)
+                    }
+                }
+            }
+            restored += 1
+            // A task that came back finished — or a single-shot whose one
+            // moment passed while the app was closed — has no fire left to
+            // insure: clear whatever notification the previous process left
+            // armed, so nothing later claims a run that cannot happen.
+            switch job.state {
+            case .done, .cancelled, .failed, .timeout:
+                JobInsuranceNotification.cancel(jobId: job.id)
+            default:
+                break
+            }
+        }
+        logger.info("[Jobs] restore: \(restored) task(s) back, \(missed) missed fire(s) recorded, \(dropped) dropped")
+        // Write back: the dropped entries stay dropped, and the re-armed tasks'
+        // recomputed `nextFireAt` replaces the stale one immediately.
+        persistScheduledJobs()
+    }
+}

@@ -25,6 +25,12 @@ enum ScheduledJobRunner {
     static func arm(_ job: AgentJob) {
         job.task?.cancel()
         job.task = nil
+        // [AUD-04] Arming IS what "this task is scheduled" means, so the
+        // snapshot is written here — before the enabled-guard, because a task
+        // created disabled must also survive (it comes back disabled, not
+        // missing). `nextFireAt` is written again below, once it points at a
+        // real future fire.
+        AgentJobRegistry.shared.persistScheduledJobs()
         guard job.isEnabled, job.state == .pending else {
             logger.info("[Sched] not arming \(job.logLabel) enabled=\(job.isEnabled)")
             return
@@ -37,6 +43,10 @@ enum ScheduledJobRunner {
         case .once(let after):
             let at = Date().addingTimeInterval(after)
             job.nextFireAt = at
+            // [AUD-04] Persist the DUE INSTANT: a snapshot is what lets the next
+            // launch tell "an interrupted timer" (due in the future) from "a
+            // fire that was skipped" (due in the past).
+            AgentJobRegistry.shared.persistScheduledJobs()
             scheduleInsurance(job, at: at)
             job.task = Task { @MainActor in
                 guard await sleepUntil(at) else { return }
@@ -47,6 +57,7 @@ enum ScheduledJobRunner {
         case .loop(let interval, _):
             let first = Date().addingTimeInterval(interval)
             job.nextFireAt = first
+            AgentJobRegistry.shared.persistScheduledJobs()
             scheduleInsurance(job, at: first)
             job.task = Task { @MainActor in
                 var next = first
@@ -59,6 +70,7 @@ enum ScheduledJobRunner {
                     }
                     next = Date().addingTimeInterval(interval)
                     job.nextFireAt = next
+                    AgentJobRegistry.shared.persistScheduledJobs()
                     scheduleInsurance(job, at: next)
                 }
             }
@@ -70,6 +82,7 @@ enum ScheduledJobRunner {
                 return
             }
             job.nextFireAt = first
+            AgentJobRegistry.shared.persistScheduledJobs()
             scheduleInsurance(job, at: first)
             job.task = Task { @MainActor in
                 var next = first
@@ -83,6 +96,7 @@ enum ScheduledJobRunner {
                     }
                     next = n
                     job.nextFireAt = n
+                    AgentJobRegistry.shared.persistScheduledJobs()
                     scheduleInsurance(job, at: n)
                 }
             }
