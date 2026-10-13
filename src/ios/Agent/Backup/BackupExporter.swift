@@ -343,6 +343,9 @@ actor BackupExporter {
         try await run(.stickers, AppLocalized("Exporting stickers…")) {
             try exportStickers(trees: trees)
         }
+        try await run(.scheduledTasks, AppLocalized("Exporting scheduled tasks…")) {
+            try await exportScheduledTasks(dataDir: dataDir)
+        }
         // [2026-08-15] Not reached in normal use: `.voiceCorrections` is absent
         // from `BackupCategory.backupable`, so it never appears in
         // `options.categories` and `run` skips it. Kept wired up rather than
@@ -1121,6 +1124,44 @@ actor BackupExporter {
         try BackupJSONFile.write(entries, to: url)
         let bytes = (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
         return BackupManifest.CategoryStat(entries: entries.count, bytes: bytes,
+                                           encrypted: false)
+    }
+
+    /// [AUD3-03] Scheduled tasks and proactive pulses, from the store they
+    /// already live in.
+    ///
+    /// `AgentJobRegistry` keeps the definitions, counters and run history in
+    /// UserDefaults as a `[PersistedJob]` JSON blob, rewritten on every
+    /// mutation. Decoding it into the same `PersistedJob` type (rather than
+    /// inventing a second package-only shape) means there is one definition to
+    /// keep in sync, and a task field added by a future build survives a round
+    /// trip through an older one.
+    ///
+    /// Nothing is written when there are no tasks, which keeps the category out
+    /// of the manifest exactly like an empty environment-variable store. The
+    /// blob is decoded before it is written so a corrupt snapshot fails HERE
+    /// (category omitted, logged) instead of producing a package that throws on
+    /// restore.
+    ///
+    /// Note the two date conventions: the UserDefaults blob stores `Date` as
+    /// seconds-since-2001 (Foundation's default), while every JSON file in a
+    /// package uses ISO-8601 so the format stays readable by the Android
+    /// implementation. The decode below uses the registry's strategies, the
+    /// write uses the package's; the importer mirrors that pair.
+    private func exportScheduledTasks(dataDir: URL) async throws
+        -> BackupManifest.CategoryStat? {
+        let raw: Data? = await MainActor.run {
+            UserDefaults.standard.data(forKey: AgentJobRegistry.persistedJobsKey)
+        }
+        guard let raw, !raw.isEmpty else { return nil }
+        guard let jobs = try? JSONDecoder().decode([PersistedJob].self, from: raw) else {
+            logger.warning("[Backup] scheduled tasks: persisted blob did not decode — category omitted")
+            return nil
+        }
+        let url = dataDir.appendingPathComponent("scheduled_tasks.json")
+        try BackupJSONFile.write(jobs, to: url)
+        let bytes = (try? fm.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
+        return BackupManifest.CategoryStat(entries: jobs.count, bytes: bytes,
                                            encrypted: false)
     }
 

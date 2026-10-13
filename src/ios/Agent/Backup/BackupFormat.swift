@@ -65,6 +65,17 @@ enum BackupCategory: String, Codable, CaseIterable, Sendable {
     /// Stickers: the whole stickers directory (ApplicationSupport/stickers/
     /// containing catalog JSON and all image files).
     case stickers
+    /// Scheduled tasks and proactive pulses: the task DEFINITIONS plus their
+    /// run history — exactly what `AgentJobRegistry` keeps in UserDefaults
+    /// (`agentJobRegistry.persistedJobs.v1`), carried as
+    /// `data/scheduled_tasks.json`.
+    ///
+    /// [AUD3-03] Tasks were the one thing a restore silently dropped. AUD-04 had
+    /// just made them survive a process kill, but they were in no category, so
+    /// "restore my backup on a new device" came back with no tasks at all. A
+    /// reader that predates this case ignores the unknown category key, so this
+    /// is a pure addition to the format.
+    case scheduledTasks = "scheduled_tasks"
 
     /// Default checkbox state on the backup screen (§3 table).
     var defaultsOn: Bool { true }
@@ -88,7 +99,7 @@ enum BackupCategory: String, Codable, CaseIterable, Sendable {
         switch self {
         case .chats, .sharedFiles, .skills, .appearance, .stickers: return true
         case .memory, .providers, .mcpServers, .voiceCorrections,
-             .environmentVariables: return false
+             .environmentVariables, .scheduledTasks: return false
         }
     }
 }

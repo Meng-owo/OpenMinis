@@ -73,7 +73,13 @@ extension BackupImporter {
         case .providers: liveDirs = []
         // Environment variables merge into the live store rather than
         // replacing a file, so there is nothing to snapshot.
-        case .chats, .skills, .voiceCorrections, .environmentVariables:
+        // [AUD3-03] Scheduled tasks are the same shape: the import merges task
+        // definitions into the live store (ids this device already has win)
+        // rather than overwriting a file, so there is no directory tree to copy
+        // aside. Unlike chats/memory there is no irreplaceable content here
+        // either — a task is a definition the user can retype.
+        case .chats, .skills, .voiceCorrections, .environmentVariables,
+             .scheduledTasks:
             liveDirs = []
         }
 
@@ -178,7 +184,47 @@ extension BackupImporter {
         case .environmentVariables:
             return try await importEnvironmentVariables(root: root)
         case .appearance: return try await importAppearance(root: root, fileIndex: fileIndex)
+        case .scheduledTasks: return try await importScheduledTasks(root: root)
         }
+    }
+
+    // MARK: - Scheduled tasks
+
+    /// [AUD3-03] The scheduled-task definitions a package carries, back into
+    /// the store the registry reads at launch — and armed immediately, so the
+    /// tasks are visible without a relaunch.
+    ///
+    /// The file is one JSON array written by `exportScheduledTasks` with
+    /// ISO-8601 dates (the package convention). `adoptRestoredScheduledTasks`
+    /// takes it from there: it normalizes the other device's due times away,
+    /// stores the snapshot under the registry's own key and re-runs the launch
+    /// restore so the timers exist now.
+    ///
+    /// Merge by id, local version winning — which is what falls out of the
+    /// mechanics rather than a rule this file implements: `restorePersistedJobs`
+    /// skips ids the registry already holds, and its closing
+    /// `persistScheduledJobs()` writes every live job back. So a task created on
+    /// this device since the backup survives, and only ids this device does not
+    /// currently have are taken from the package. (The one wrinkle: a task the
+    /// user deleted here but that the package still carries does come back —
+    /// that is the price of accepting the package as the source of truth for
+    /// unknown ids.)
+    private func importScheduledTasks(root: URL) async throws -> CategoryReport {
+        var report = CategoryReport(category: BackupCategory.scheduledTasks.rawValue)
+        let url = root.appendingPathComponent("data/scheduled_tasks.json")
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return report }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let jobs = try? decoder.decode([PersistedJob].self, from: data) else {
+            report.unreadable += 1
+            logger.warning("[Restore] scheduled_tasks.json (\(data.count) bytes) did not decode — no tasks restored")
+            return report
+        }
+        let adopted = await MainActor.run {
+            AgentJobRegistry.shared.adoptRestoredScheduledTasks(jobs)
+        }
+        report.imported += adopted
+        return report
     }
 
     // MARK: - Chats
@@ -1024,7 +1070,8 @@ extension BackupImporter {
         case .skills: return AIChatViewModel.minisSkillsPersistentDir
         case .memory: return AIChatViewModel.minisMemoryPersistentDir
         case .appearance: return AppearanceStudio.appearanceAssetsDirectory
-        case .providers, .mcpServers, .voiceCorrections, .environmentVariables:
+        case .providers, .mcpServers, .voiceCorrections, .environmentVariables,
+             .scheduledTasks:
             // These write single known files, not index-driven trees; give them
             // the app-group root so the check is still meaningful if one ever
             // starts using restoreFileTree.

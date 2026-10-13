@@ -62,6 +62,7 @@ struct BackupCategoryIcon: View {
         case .voiceCorrections: return "waveform"
         case .environmentVariables: return "terminal.fill"
         case .appearance: return "paintpalette.fill"
+        case .scheduledTasks: return "clock.arrow.circlepath"
         }
     }
 
@@ -77,6 +78,7 @@ struct BackupCategoryIcon: View {
         case .voiceCorrections: return .purple
         case .environmentVariables: return .brown
         case .appearance: return .mint
+        case .scheduledTasks: return .gray
         }
     }
 }

@@ -1204,6 +1204,7 @@ struct BackupSettingsView: View {
         case .voiceCorrections: return AppLocalized("Voice Corrections")
         case .environmentVariables: return AppLocalized("Environment Variables")
         case .appearance: return AppLocalized("Appearance")
+        case .scheduledTasks: return AppLocalized("Scheduled Tasks")
         }
     }
 

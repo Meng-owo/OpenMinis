@@ -2051,4 +2051,49 @@ extension AgentJobRegistry {
         // recomputed `nextFireAt` replaces the stale one immediately.
         persistScheduledJobs()
     }
+
+    /// [AUD3-03] Take the scheduled tasks that arrived inside a restored backup
+    /// package, store them, and re-arm them now.
+    ///
+    /// `restorePersistedJobs` cannot be called a second time — its one-shot
+    /// `didRestorePersistedJobs` guard is what keeps a launch restore from
+    /// running twice — so the import path needs this entry point. It clears the
+    /// guard deliberately: the registry is idempotent about ids it already
+    /// holds (`restorePersistedJobs` skips any id already in `jobs`), so the
+    /// tasks that were restored at launch are left exactly as they are and only
+    /// the newcomers are registered.
+    ///
+    /// The tasks come from ANOTHER device, so two things are normalized before
+    /// they are stored:
+    ///
+    ///   - `nextFireAt` is cleared. It belongs to the other device's clock
+    ///     history, and leaving it in place would make the restore record a
+    ///     "missed — the app was not running" run for work that never had a
+    ///     chance to run here. Every enabled task is re-armed from NOW, which
+    ///     is what a launch restore does anyway.
+    ///   - a `running` state becomes `pending`: the run it described ended with
+    ///     that device, and there is no timer behind it here.
+    ///
+    /// Returns how many tasks the payload carried; the caller reports a failed
+    /// decode as unreadable before ever getting here.
+    @discardableResult
+    func adoptRestoredScheduledTasks(_ jobs: [PersistedJob]) -> Int {
+        guard !jobs.isEmpty else { return 0 }
+        var normalized = jobs
+        for i in normalized.indices {
+            normalized[i].nextFireAt = nil
+            if normalized[i].state == AgentJobState.running.rawValue {
+                normalized[i].state = AgentJobState.pending.rawValue
+            }
+        }
+        guard let data = try? JSONEncoder().encode(normalized) else {
+            logger.warning("[Jobs] restore: adopted task list did not encode — nothing stored")
+            return 0
+        }
+        UserDefaults.standard.set(data, forKey: Self.persistedJobsKey)
+        didRestorePersistedJobs = false
+        restorePersistedJobs()
+        logger.info("[Jobs] restore: adopted \(normalized.count) task(s) from a backup package")
+        return normalized.count
+    }
 }
