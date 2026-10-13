@@ -452,7 +452,7 @@ actor BackupImporter {
         let order: [BackupCategory] = [.chats, .sharedFiles, .skills, .memory,
                                        .providers, .environmentVariables,
                                        .mcpServers, .voiceCorrections, .appearance,
-                                       .scheduledTasks]
+                                       .stickers, .scheduledTasks]
         return order.filter { wanted.contains($0) }
     }
 }

@@ -33,7 +33,12 @@ import UIKit
                     "content": item.content,
                     "use_count": item.useCount,
                     "image_file": item.imageFilename,
-                    "minis_url": "minis://stickers/\(item.imageFilename)"
+                    // [sticker-fix] Was "minis://stickers/…" — a scheme nothing
+                    // handles (the app's is "minis-clone://"), so the URL the
+                    // CLI handed back could not be opened or rendered anywhere.
+                    // Same construction as the other bridges (voice composer):
+                    // minis-clone:// + percent-encoded filename.
+                    "minis_url": "minis-clone://stickers/\(item.imageFilename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.imageFilename)"
                 ]
             }
 
@@ -67,7 +72,12 @@ import UIKit
                         "content": item.content,
                         "use_count": item.useCount,
                         "image_file": item.imageFilename,
-                        "minis_url": "minis://stickers/\(item.imageFilename)"
+                        // [sticker-fix] Was "minis://stickers/…" — a scheme nothing
+                        // handles (the app's is "minis-clone://"), so the URL the
+                        // CLI handed back could not be opened or rendered anywhere.
+                        // Same construction as the other bridges (voice composer):
+                        // minis-clone:// + percent-encoded filename.
+                        "minis_url": "minis-clone://stickers/\(item.imageFilename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? item.imageFilename)"
                     ]
                 ]
             } else {
