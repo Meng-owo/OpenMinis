@@ -108,7 +108,7 @@ struct AIDataSharingConsentView: View {
         }
     }
 
-    private func dataItem(_ text: String) -> some View {
+    private func dataItem(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
                 .foregroundStyle(.secondary)
