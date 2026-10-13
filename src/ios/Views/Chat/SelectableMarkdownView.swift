@@ -4250,8 +4250,18 @@ final class ImageAttachment: NSTextAttachment {
         // Fast path: if there's any URL scheme, bail out.
         if let colon = src.firstIndex(of: ":") {
             let maybeScheme = src[src.startIndex..<colon]
-            // Only accept alphabetic-prefixed schemes (RFC 3986 § 3.1).
-            if !maybeScheme.isEmpty && maybeScheme.allSatisfy({ $0.isLetter }) {
+            // [T-minis-clone-hyphen-scheme] RFC 3986 § 3.1: a scheme is
+            // ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ). The old letter-only
+            // check rejected `minis-clone` — its hyphen made the whole URL
+            // look like a relative path, so it was rewritten to
+            // `minis-clone://workspace/minis-clone://…`, which resolves to
+            // nothing: every local image in an AI message rendered as the
+            // file-not-found placeholder, while http(s) / data: sources
+            // (letter-only schemes) kept working.
+            let isSchemeChar: (Character) -> Bool = {
+                $0.isLetter || $0.isNumber || $0 == "+" || $0 == "-" || $0 == "."
+            }
+            if maybeScheme.first?.isLetter == true, maybeScheme.allSatisfy(isSchemeChar) {
                 // [T-minis-url-fullwidth-pipe-ios] Exception: a minis-clone:// source the
                 // model emitted with raw non-ASCII in the path (e.g. `｜`, CJK) that
                 // URL(string:) can't parse. Re-encode the path so the image resolves
