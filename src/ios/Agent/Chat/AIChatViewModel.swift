@@ -5399,6 +5399,28 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 SessionActivityTracker.shared.updateLoopIteration(sid, iteration: turnCount + 1)
             }
 
+            // [T-sub-agents-steer] A course correction queued by the parent's
+            // `subagent_task action=steer` joins THIS turn as in-loop context:
+            // appended right after the tool_result tail it folds into the
+            // current turn, so the running task changes course instead of the
+            // rest of the plan being abandoned for a standalone new turn
+            // (the #579 distinction — a queued USER prompt becomes its own
+            // turn, a STEER reshapes the one already running). Anything still
+            // pending when the run ends is reported back through
+            // `missed_steer` by AgentJobRegistry.finish — never silently dropped.
+            if isSubAgentChild, !pendingSteerMessages.isEmpty {
+                let steers = pendingSteerMessages
+                pendingSteerMessages.removeAll()
+                let steerText = "[Course correction from the delegating agent]\n" + steers.joined(separator: "\n")
+                // In-memory only: a steer is turn-scoped context for the run it
+                // reshapes, not a chat row. Persisting it would put a user row
+                // in the DB with no matching in-memory ChatMessage, and the
+                // reload/truncation paths rely on that pairing. The user-facing
+                // record of a steer is the parent's own tool block.
+                agentHistory.append(AgentMessage(role: .user, parts: [.text(steerText)]))
+                logger.info("[subagent_task] steer consumed — \(steers.count) correction(s) joined turn \(turnCount) of \(self.sessionId?.prefix(8) ?? "nil")")
+            }
+
             // [T-ios-inloop-compact-freeze] Re-anchor msgIdx by stable id every
             // iteration. External mutations while the loop runs — in-loop
             // compaction's divider insert / status-row removeAll, a mid-loop

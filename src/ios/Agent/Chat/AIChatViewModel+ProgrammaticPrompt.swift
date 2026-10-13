@@ -385,22 +385,16 @@ extension AIChatViewModel {
             return await executeDelegateTask(args: args, toolUseId: toolUseId, msgIdx: msgIdx, blockIdx: blockIdx)
         case "cancel":
             return cancelSubAgentTask(args: args)
-        case "status", "steer", "resume":
-            // Honest staging, not a silent drop: these three are the next slice
-            // of this feature (the registry already carries the state they
-            // need). Say so plainly so the model neither retries nor assumes
-            // the action happened.
-            let json = Self.delegateJSON([
-                "ok": false, "status": "unsupported", "action": action, "reason": "not_wired",
-                "detail": "action '\(action)' is not available yet in this build. A delegated run continues on its own and its result arrives as a callback message — do not retry this action, and do not assume it took effect.",
-            ])
-            logger.warning("[subagent_task] action=\(action) is not wired yet")
-            writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
-            return (json, false)
+        case "status":
+            return subAgentStatus(args: args)
+        case "steer":
+            return steerSubAgentTask(args: args)
+        case "resume":
+            return await resumeSubAgentTask(args: args)
         default:
             let json = Self.delegateJSON([
                 "ok": false, "status": "rejected", "reason": "unknown_action",
-                "detail": "Unknown action '\(action)'. This build accepts: delegate (default), cancel.",
+                "detail": "Unknown action '\(action)'. This build accepts: delegate (default), status, steer, cancel, resume.",
             ])
             writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, json)
             return (json, false)
@@ -439,6 +433,322 @@ extension AIChatViewModel {
         return (Self.delegateJSON([
             "ok": true, "status": "cancelled", "job_id": jobId,
             "detail": "The run was stopped and will not deliver a result beyond the cancellation notice.",
+        ]), true)
+    }
+
+    /// [T-subagent-steer-continues-loop] Restarts an idle child's loop so the
+    /// pending steer is delivered. Deliberately says nothing itself: the loop
+    /// prepends the actual correction at the top of the turn it starts, and a
+    /// second instruction here would compete with it.
+    static let subAgentSteerNudgePrompt =
+        "The delegating agent has sent you a course correction. Read it and continue."
+
+    /// [T-sub-agents-resume] Sent as a resumed child's first turn.
+    ///
+    /// A resumed sub agent reads a transcript of work it "remembers" doing, but
+    /// the RUNTIME behind those tool calls is gone: the app was killed, so the
+    /// browser tabs it opened are closed and the shell processes it started are
+    /// dead. Files in the shared workspace survive. Without this it happily
+    /// calls browser_use on a tab that no longer exists and burns rounds
+    /// rediscovering that.
+    static let subAgentResumeNotice = """
+    [This run was interrupted and has been resumed. The tool results above are still valid, but all live state is gone: browser tabs are closed, shell processes have ended, and anything unsaved is lost. Files in the workspace are still there. Continue from what the transcript already establishes — reopen pages or re-run commands when you need them, and do not assume anything is still open.]
+    """
+
+    /// `action=status` — look at this conversation's delegations without
+    /// waiting for their completion messages. Scope: jobs whose target parent
+    /// is THIS session — a conversation never reads another's agents.
+    @MainActor
+    func subAgentStatus(args: [String: Any]) -> (output: String, success: Bool) {
+        guard let sid = sessionId else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "no_session",
+                "detail": "This conversation has no session yet.",
+            ]), false)
+        }
+        let registry = AgentJobRegistry.shared
+        let jobIdArg = Self.argString(args, "job_id")
+        var jobs = registry.list().filter {
+            $0.target.isChildOfCurrent && $0.target.parentSessionId == sid
+        }
+        if !jobIdArg.isEmpty {
+            jobs = jobs.filter { $0.id == jobIdArg || $0.id.hasPrefix(jobIdArg) }
+            if jobs.isEmpty {
+                return (Self.delegateJSON([
+                    "ok": false, "status": "rejected", "reason": "job_not_found",
+                    "job_id": jobIdArg,
+                    "detail": "No delegation of this conversation has that job_id.",
+                ]), false)
+            }
+        }
+        let queuedWaiting = registry.queuedCount(parent: sid)
+        let entries: [[String: Any]] = jobs.map { job in
+            var d: [String: Any] = [
+                "job_id": job.id,
+                "title": job.title,
+                "state": job.state.rawValue,
+                "model_origin": job.modelOrigin ?? NSNull(),
+                "agent": job.subAgentName ?? NSNull(),
+                "elapsed_s": Int(job.elapsed ?? 0),
+                "child_session_id": job.runSessionId ?? NSNull(),
+                "delivery": job.then == .none ? "tool_result" : "new_message_when_done",
+            ]
+            // [T-sub-agents-steer] Only present when something went unread, so
+            // its absence is not a claim that a steer landed.
+            if !job.missedSteers.isEmpty {
+                d["missed_steer"] = job.missedSteers
+                d["missed_steer_note"] = "The run ended before reading these — the result does not reflect them."
+            }
+            if let cid = job.runSessionId, job.state == .running,
+               let info = SessionActivityTracker.shared.sessionToolInfo[cid] {
+                d["current_tool"] = info.toolName
+                d["current_status"] = String(info.toolStatus.prefix(120))
+                d["loop_iteration"] = info.loopIteration
+            }
+            if job.state != .running && job.state != .pending, let r = job.resultText {
+                d["result"] = String(r.prefix(2000))
+            }
+            return d
+        }
+        let out: [String: Any] = [
+            "ok": true, "count": entries.count, "agents": entries,
+            // [T-sub-agents-queue] Waiting for a slot, not yet a job — so they
+            // have no entry above. Reported so the model can see that work it
+            // delegated is still coming and must not be delegated again.
+            "queued": queuedWaiting,
+            "note": "Running agents deliver their final result automatically as a new message in this conversation; you do not need to poll for it."
+                + (queuedWaiting > 0 ? " \(queuedWaiting) more are queued and will start as slots free — do not re-delegate them." : ""),
+        ]
+        return (Self.delegateJSON(out), true)
+    }
+
+    /// `action=steer` — queue a course correction into a running sub agent
+    /// without stopping it. The message is read at the child's next turn, so
+    /// an in-flight tool call finishes first and the work done so far is kept
+    /// — the whole reason to steer rather than cancel.
+    @MainActor
+    func steerSubAgentTask(args: [String: Any]) -> (output: String, success: Bool) {
+        let jobId = Self.argString(args, "job_id")
+        let message = Self.argString(args, "message")
+        guard !jobId.isEmpty else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "missing_job_id",
+                "detail": "action=steer needs `job_id` (it is returned by every delegate call).",
+            ]), false)
+        }
+        guard !message.isEmpty else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "missing_message",
+                "detail": "action=steer needs `message` — the correction to give the running sub agent.",
+            ]), false)
+        }
+        let registry = AgentJobRegistry.shared
+        guard let job = registry.job(id: jobId), job.target.isChildOfCurrent,
+              job.target.parentSessionId == sessionId else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "not_found",
+                "detail": "No delegation of this conversation has job_id=\(jobId).",
+            ]), false)
+        }
+        // Rejected rather than queued once the run is over: a steer that
+        // cannot change anything must say so, not look accepted.
+        guard job.state == .running || job.state == .pending else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "job_id": job.id,
+                "reason": "already_finished", "state": job.state.rawValue,
+                "detail": "That sub agent has already finished — its result stands. Delegate a new task instead.",
+            ]), false)
+        }
+        guard let cid = job.runSessionId, let child = ViewModelCache.shared.get(for: cid) else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "job_id": job.id,
+                "reason": "child_not_running",
+                "detail": "That sub agent has no live session to steer.",
+            ]), false)
+        }
+        child.pendingSteerMessages.append(message)
+        // [T-subagent-steer-continues-loop] If the child's loop is between
+        // turns right now, nothing is left to consume the steer — it would
+        // sit in the queue until the run ended and then be reported as a
+        // missed correction. Nudge the loop so it takes the turn that
+        // delivers it, the same way a queued user prompt restarts an idle
+        // conversation.
+        if !child.isProcessing {
+            logger.info("[subagent_task] steer arrived while child \(cid.prefix(8)) was idle — nudging its loop")
+            _ = child.submitProgrammaticPrompt(Self.subAgentSteerNudgePrompt,
+                                               origin: .job(jobId: job.id), silent: true)
+        }
+        logger.info("[subagent_task] steer queued job=\(job.id.prefix(8)) child=\(cid.prefix(8)) chars=\(message.count)")
+        return (Self.delegateJSON([
+            "ok": true, "status": "queued", "job_id": job.id,
+            "agent": job.subAgentName ?? NSNull(),
+            "detail": "Queued. The sub agent reads it at its next turn; a tool call already running is not interrupted. It may finish before consuming it.",
+        ]), true)
+    }
+
+    /// `action=resume` — restart one interrupted delegation (cancelled /
+    /// failed / budget-stopped) from its own transcript, in its EXISTING
+    /// child session. The original job stays closed (its card and history
+    /// stand); the resume registers a NEW job bound to the same session, so
+    /// the loop-end observer closes it and delivers the result through the
+    /// same callback channel as a fresh run.
+    @MainActor
+    func resumeSubAgentTask(args: [String: Any]) async -> (output: String, success: Bool) {
+        let jobId = Self.argString(args, "job_id")
+        guard !jobId.isEmpty else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "missing_job_id",
+                "detail": "action=resume needs `job_id` — use action=status to list this conversation's delegations.",
+            ]), false)
+        }
+        guard !isSubAgentChild else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "depth_limit",
+                "detail": "Sub agents cannot resume another sub agent (the maximum depth is 1).",
+            ]), false)
+        }
+        guard remoteDeviceId == nil, let parentSid = sessionId else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "no_parent_session",
+                "detail": "This conversation cannot resume a sub agent (read-only remote session, or no session yet).",
+            ]), false)
+        }
+        let registry = AgentJobRegistry.shared
+        guard let job = registry.job(id: jobId), job.target.isChildOfCurrent,
+              job.target.parentSessionId == parentSid else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "not_found",
+                "detail": "No delegation of this conversation has job_id=\(jobId).",
+            ]), false)
+        }
+        guard job.state != .running && job.state != .pending else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "already_running", "job_id": job.id,
+                "detail": "That sub agent is \(job.state.rawValue) — it is still working; its result will arrive by itself.",
+            ]), false)
+        }
+        guard job.state != .done else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "already_finished", "job_id": job.id,
+                "detail": "That run completed — its result stands. Delegate a new task if there is more to do.",
+            ]), false)
+        }
+        // Wait-mode delegations returned their result directly to the caller
+        // and carry `then: .none`; a resumed run would have nowhere to report.
+        if job.then == .none {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "wait_mode_run", "job_id": job.id,
+                "detail": "That delegation was a wait-mode call: it returned its result directly to the caller, so a resumed run would have nowhere to report. Delegate the task again instead.",
+            ]), false)
+        }
+        guard registry.canStartChildJob else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "sub_agent_limit", "job_id": job.id,
+                "detail": "All \(AgentJobRegistry.maxConcurrentChildJobs) sub agent slots are busy. Wait for one to finish, then resume this job_id again — it was NOT queued.",
+            ]), false)
+        }
+        guard let childId = job.runSessionId, await ChatStore.shared.sessionExists(id: childId) else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "session_gone", "job_id": job.id,
+                "detail": "That sub agent's session no longer exists, so there is no transcript to continue from.",
+            ]), false)
+        }
+
+        // The definition may have been renamed or deleted while the run was
+        // away; falling back to the built-in keeps the resume possible, and
+        // the user is told which name went missing rather than being handed
+        // a General Sub Agent with no explanation.
+        let roster = SubAgentStore.shared.subAgents
+        var subAgent = roster.first { $0.isBuiltIn } ?? SubAgentDefinition.makeBuiltIn()
+        var namedAgentMissing: String?
+        if let name = job.subAgentName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !name.isEmpty, name != subAgent.name {
+            if let named = roster.first(where: { $0.name == name }) {
+                subAgent = named
+            } else {
+                namedAgentMissing = name
+                logger.warning("[subagent_task] RESUME agent \"\(name)\" no longer exists — falling back to the built-in")
+            }
+        }
+        guard let resolution = SubAgentModelResolver.resolve(subAgent: subAgent, parent: self) else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "no_model",
+                "detail": "No model is configured for the sub agent to run on.",
+            ]), false)
+        }
+
+        // Same child pool, same session setup as the fresh-delegation path.
+        let (child, fresh) = ViewModelCache.shared.getOrCreate(for: childId)
+        if fresh || child.messages.isEmpty { await child.loadSession() }
+        guard !child.isProcessing else {
+            return (Self.delegateJSON([
+                "ok": false, "status": "rejected", "reason": "child_busy", "job_id": job.id,
+                "detail": "That sub agent's session is busy with a turn right now; try again in a moment.",
+            ]), false)
+        }
+        child.sessionSource = "helper"
+        child.memoryEnabled = false
+        child.suppressGeneralCompletionNotification = true
+        let parentToolUseId: String
+        if case .childOfCurrent(_, let tu) = job.target, let tu {
+            parentToolUseId = tu
+        } else {
+            parentToolUseId = ""
+        }
+        let budgetMinutes = AIChatViewModel.helperMaxMinutes
+        let newJob = registry.register(title: job.title,
+                                       origin: .tool,
+                                       trigger: .immediate,
+                                       target: job.target,
+                                       prompt: nil,
+                                       then: .followUpParent(template: nil))
+        newJob.subAgentName = subAgent.name
+        newJob.modelOrigin = resolution.origin.rawValue
+        newJob.creatorSessionId = parentSid
+        newJob.wasResumed = true
+
+        child.subAgentBrief = SubAgentBrief(parentSessionId: parentSid,
+                                            parentToolUseId: parentToolUseId,
+                                            jobId: newJob.id,
+                                            title: job.title,
+                                            instructions: subAgent.instructions,
+                                            budgetMinutes: budgetMinutes)
+        ProviderConfigStore.shared.setBinding(
+            SessionModelBinding(sessionId: childId, primarySource: resolution.source), for: childId)
+        // A resumed run re-resolves its model, so it re-seeds the thinking
+        // level too — otherwise resume silently drops it for the rest of the run.
+        applySubAgentThinkingLevel(subAgent: subAgent, childSessionId: childId,
+                                   parentSessionId: parentSid, entry: resolution.entry)
+
+        let outcome = child.submitProgrammaticPrompt(Self.subAgentResumeNotice,
+                                                     origin: .job(jobId: newJob.id), silent: true)
+        guard outcome == .sent else {
+            // Nothing started: drop the new job at once so it never lingers as
+            // running, then report the failure — no follow-up is delivered.
+            newJob.then = AgentJobThen.none
+            registry.finish(newJob.id, state: .failed, result: nil)
+            return (Self.delegateJSON([
+                "ok": false, "status": "failed", "job_id": newJob.id,
+                "detail": "The sub agent session did not restart (\(String(describing: outcome))).",
+            ]), false)
+        }
+        registry.markRunning(newJob.id, sessionId: childId)
+        // Budget restarts: the original one died with the process, and a fresh
+        // clock is the intended behaviour.
+        newJob.task = Task { @MainActor [weak child] in
+            try? await Task.sleep(nanoseconds: UInt64(budgetMinutes) * 60 * 1_000_000_000)
+            guard !Task.isCancelled, let child, child.isProcessing else { return }
+            logger.warning("[subagent_task] budget \(budgetMinutes)min elapsed — stopping resumed child \(childId.prefix(8))")
+            child.cancel()
+        }
+        if let missing = namedAgentMissing {
+            transientNotice = String(format: AppLocalized("Sub agent \"%@\" no longer exists — resumed with the built-in agent"), missing)
+        }
+        logger.info("[subagent_task] RESUME job=\(newJob.id.prefix(8)) from=\(jobId.prefix(8)) child=\(childId.prefix(8)) agent=\(subAgent.name)")
+        return (Self.delegateJSON([
+            "ok": true, "status": "resumed", "job_id": newJob.id, "resumed_from": job.id,
+            "agent": subAgent.name,
+            "detail": "The sub agent was restarted from its own transcript and is running again; its result arrives as a new message in this conversation. Do not re-delegate the task.",
         ]), true)
     }
 
