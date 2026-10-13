@@ -17,6 +17,7 @@ struct ScheduledTasksView: View {
     @State private var selectedJobId: String? = nil
     @State private var pendingDeleteId: String? = nil
 
+    @ObservedObject private var fontSettings = FontSettings.shared
     private var isDark: Bool { colorScheme == .dark }
     private var allJobs: [AgentJob] { registry.list() }
 
@@ -38,7 +39,7 @@ guard let id = pendingDeleteId else { return }
             // Header
             HStack {
                 Text("定时任务与脉搏")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: fontSettings.scaledApp(20), weight: .bold))
                     .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
 
                 Spacer()
@@ -47,7 +48,7 @@ guard let id = pendingDeleteId else { return }
                     dismiss()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                         .frame(width: 32, height: 32)
                         .background(CSSThemeVariables.optionBg(isDark: isDark))
@@ -65,13 +66,13 @@ guard let id = pendingDeleteId else { return }
             if allJobs.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: "clock.badge.questionmark")
-                        .font(.system(size: 44))
+                        .font(.system(size: fontSettings.scaledApp(44)))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.6))
                     Text("暂无挂载的定时任务或脉搏")
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: fontSettings.scaledApp(15), weight: .medium))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                     Text("可以在聊天里直接创建一个。")
-                        .font(.system(size: 12))
+                        .font(.system(size: fontSettings.scaledApp(12)))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
@@ -135,15 +136,15 @@ guard let id = pendingDeleteId else { return }
     private func summaryCard(title: String, count: Int, icon: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: fontSettings.scaledApp(20)))
                 .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11))
+                    .font(.system(size: fontSettings.scaledApp(11)))
                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                 Text("\(count)")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.system(size: fontSettings.scaledApp(18), weight: .bold))
                     .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
             }
         }
@@ -160,7 +161,7 @@ guard let id = pendingDeleteId else { return }
     private func taskRow(for job: AgentJob) -> some View {
         HStack(spacing: 12) {
             Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: fontSettings.scaledApp(16), weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                 .frame(width: 34, height: 34)
                 .background(CSSThemeVariables.accentSoft(isDark: isDark))
@@ -169,13 +170,13 @@ guard let id = pendingDeleteId else { return }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(job.title)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: fontSettings.scaledApp(15), weight: .semibold))
                         .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                         .lineLimit(1)
 
                     if job.isPulse {
                         Text("脉搏")
-                            .font(.system(size: 10, weight: .bold))
+                            .font(.system(size: fontSettings.scaledApp(10), weight: .bold))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(CSSThemeVariables.accentSoft(isDark: isDark))
@@ -186,12 +187,12 @@ guard let id = pendingDeleteId else { return }
 
                 HStack(spacing: 8) {
                     Text(job.trigger.humanLabel)
-                        .font(.system(size: 12))
+                        .font(.system(size: fontSettings.scaledApp(12)))
                         .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
                     if let next = job.nextFireAt {
                         Text("下次: \(formatNext(next))")
-                            .font(.system(size: 11))
+                            .font(.system(size: fontSettings.scaledApp(11)))
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
                     }
                 }

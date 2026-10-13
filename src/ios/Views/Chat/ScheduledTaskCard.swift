@@ -135,6 +135,7 @@ struct ScheduledTaskCard: View {
     let jobId: String
     @State private var showingDetail = false
 
+    @ObservedObject private var fontSettings = FontSettings.shared
     private var isDark: Bool { colorScheme == .dark }
     private var job: AgentJob? { registry.job(id: jobId) }
 
@@ -153,7 +154,7 @@ struct ScheduledTaskCard: View {
                             .frame(width: 38, height: 38)
 
                         Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: fontSettings.scaledApp(17), weight: .semibold))
                             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                     }
 
@@ -161,12 +162,12 @@ struct ScheduledTaskCard: View {
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 6) {
                             Text(job.title)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.system(size: fontSettings.scaledApp(14), weight: .semibold))
                                 .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                                 .lineLimit(1)
 
                             Text(job.isPulse ? "脉搏" : "定时")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: fontSettings.scaledApp(10), weight: .bold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1.5)
                                 .background(CSSThemeVariables.accentSoft(isDark: isDark))
@@ -176,12 +177,12 @@ struct ScheduledTaskCard: View {
 
                         HStack(spacing: 8) {
                             Text(job.trigger.humanLabel)
-                                .font(.system(size: 12))
+                                .font(.system(size: fontSettings.scaledApp(12)))
                                 .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
 
                             if let next = job.nextFireAt {
                                 Text("下次: \(formatNext(next))")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: fontSettings.scaledApp(11)))
                                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
                             }
                         }
@@ -197,7 +198,7 @@ struct ScheduledTaskCard: View {
                             .frame(width: 7, height: 7)
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.system(size: fontSettings.scaledApp(12), weight: .semibold))
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                     }
                 }
@@ -238,6 +239,7 @@ struct ScheduledPulseCardView: View {
 
     @State private var showingDetail = false
 
+    @ObservedObject private var fontSettings = FontSettings.shared
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
@@ -252,29 +254,29 @@ struct ScheduledPulseCardView: View {
                         .fill(CSSThemeVariables.accentSoft(isDark: isDark))
                         .frame(width: 30, height: 30)
                     Image(systemName: "waveform.path.ecg")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
                         .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(AppLocalized("小梦 · 自主脉搏"))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
                         .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
                         Text(title)
-                            .font(.system(size: 11))
+                            .font(.system(size: fontSettings.scaledApp(11)))
                             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                             .lineLimit(1)
                         if let f = fireIndex {
                             Text("· 第\(f)次")
-                                .font(.system(size: 11))
+                                .font(.system(size: fontSettings.scaledApp(11)))
                                 .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
                         }
                         if let r = remaining, r > 0 {
                             Text("· 剩\(r)")
-                                .font(.system(size: 11))
+                                .font(.system(size: fontSettings.scaledApp(11)))
                                 .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
                         }
                     }
@@ -283,7 +285,7 @@ struct ScheduledPulseCardView: View {
                 Spacer(minLength: 4)
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: fontSettings.scaledApp(11), weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
             }
             .padding(.horizontal, 12)
