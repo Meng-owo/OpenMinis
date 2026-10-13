@@ -55,7 +55,7 @@ struct PersonaSettingsView: View {
                 }
 
                 Section("Skill") {
-                    Text("关掉的不再进它的 system prompt。")
+                    Text("关掉的不再进它的 system prompt。注意：这个开关只管「要不要展示」，不是安全隔离——被关掉的仍可能被直接读取或调用。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(SkillStore.shared.skills) { skill in
@@ -71,7 +71,7 @@ struct PersonaSettingsView: View {
                 }
 
                 Section("MCP") {
-                    Text("关掉的不再进它的 system prompt。")
+                    Text("关掉的不再进它的 system prompt。注意：这个开关只管「要不要展示」，不是安全隔离——被关掉的仍可能被直接读取或调用。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(MCPStore.shared.servers) { server in
