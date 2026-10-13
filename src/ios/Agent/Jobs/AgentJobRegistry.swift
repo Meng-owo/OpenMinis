@@ -1700,10 +1700,18 @@ private let logger = AppLogger(category: "AgentJobRegistry")
 // because the registry had come up empty.
 //
 // So the task DEFINITIONS and their run history are written to UserDefaults on
-// every mutation and rebuilt at launch. Only scheduled tasks are kept: a
-// `.childOfCurrent` job is a delegation — work tied to a live conversation, not
-// a schedule — and a `.immediate` job is a `run --id` that is either happening
-// now or already over.
+// every mutation and rebuilt at launch. A `.immediate` job is a `run --id` that
+// is either happening now or already over, so it is not kept; a model-issued
+// delegation (`origin == .tool`) belongs to the turn that spawned it and is
+// excluded too.
+//
+// [S3] `.childOfCurrent` used to be excluded wholesale as "a delegation, not a
+// schedule" — but that conflated the two producers. A `--target child-of-current
+// --interval/--time` task the user scheduled through the CLI is exactly the kind
+// of promise this fix is about, and it was vanishing on every app kill. The
+// exclusion now keys off `origin == .tool` instead, which is the real
+// delegation marker; a restored child-of-current task whose parent conversation
+// has since been deleted records a missed fire instead of disappearing.
 //
 // A fire that came due while the app was not running is recorded as MISSED.
 // The schedule cannot retroactively run at 9am, and a silent gap is exactly
@@ -1820,8 +1828,9 @@ struct PersistedTrigger: Codable {
     }
 }
 
-/// Where the prompt lands. `childOfCurrent` never appears in a snapshot (see
-/// `isPersistable`), and `rebuild()` refuses it anyway.
+/// Where the prompt lands. All four kinds survive a snapshot; a
+/// `childOfCurrent` entry whose parent session is gone is caught on restore
+/// (see `restorePersistedJobs`).
 struct PersistedTarget: Codable {
     var kind: String
     var sessionId: String?
@@ -1852,6 +1861,11 @@ struct PersistedTarget: Codable {
         case "rerun":
             guard let sessionId, let messageId else { return nil }
             return .rerun(sessionId: sessionId, messageId: messageId)
+        // [S3] A CLI-scheduled child-of-current task. `messageId` carries the
+        // parent tool-use id and is optional (the CLI path passes nil).
+        case "childOfCurrent":
+            guard let sessionId else { return nil }
+            return .childOfCurrent(parentSessionId: sessionId, parentToolUseId: messageId)
         default: return nil
         }
     }
@@ -1868,11 +1882,14 @@ extension AgentJob {
 }
 
 extension AgentJobRegistry {
-    /// True for the jobs whose promise spans processes. A delegation belongs to
-    /// the conversation that made it (and dies with it); an `.immediate` job is
-    /// a `run --id`, not a schedule.
+    /// True for the jobs whose promise spans processes. A model-issued
+    /// delegation (`origin == .tool`) belongs to the conversation that made it
+    /// (and dies with it); an `.immediate` job is a `run --id`, not a schedule.
+    ///
+    /// [S3] `.childOfCurrent` is deliberately NOT excluded any more: the CLI's
+    /// `--target child-of-current --interval/--time` tasks are schedules, and
+    /// they were dying with the process while every other kind survived.
     static func isPersistable(_ job: AgentJob) -> Bool {
-        if job.target.isChildOfCurrent { return false }
         if job.origin == .tool { return false }
         if case .immediate = job.trigger { return false }
         return true
@@ -1951,6 +1968,31 @@ extension AgentJobRegistry {
             job.creatorSessionId = p.creatorSessionId
             job.restoreHistory(firedCount: p.firedCount, runs: p.runs, lastFireOk: p.lastFireOk)
             jobs[job.id] = job
+
+            // [S3] A restored child-of-current task fires into its parent
+            // conversation, which may have been deleted while the app was
+            // closed — then the fire has nowhere to land. Record that as a
+            // missed run on the task itself (visible in the list) and close it
+            // out, rather than dropping it silently or arming a timer that can
+            // only fail. The existence check is async, so it lands a moment
+            // after this loop; a job that the loop below already closed out is
+            // left alone. `cancelTask: true` because the loop may have armed
+            // the schedule in the meantime — there is nothing to keep.
+            if case .childOfCurrent(let parentSid, _) = target {
+                Task { @MainActor in
+                    let parentAlive = await ChatStore.shared.sessionExists(id: parentSid)
+                    guard !parentAlive else { return }
+                    switch job.state {
+                    case .done, .cancelled, .failed, .timeout: return
+                    case .pending, .running: break
+                    }
+                    job.recordFire(sessionId: nil, ok: false,
+                                   preview: AppLocalized("错过：目标会话已删除"),
+                                   bumpCounter: false)
+                    job.markFinished(.done, result: nil, cancelTask: true)
+                    logger.warning("[Jobs] restore: \(job.logLabel) — parent session \(parentSid.prefix(8)) is gone, closing the task out")
+                }
+            }
 
             // Was a fire due while this process was not running? `nextFireAt` is
             // only ever written once it points at a FUTURE fire, so anything
