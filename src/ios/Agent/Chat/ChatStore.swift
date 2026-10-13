@@ -2048,12 +2048,25 @@ actor ChatStore {
         sqlite3_finalize(stmt)
     }
 
+    /// [AUD2-06] Longest accepted session title. The sidebar row clips to a
+    /// single line anyway; capping at the source keeps a pasted wall of text
+    /// out of the store and out of every list/search payload.
+    static let maxSessionTitleLength = 120
+
     func updateSessionTitle(_ id: String, title: String, category: String? = nil) {
+        // [AUD2-06] Normalise at the single write choke point so no caller
+        // (edit sheet, CLI bridge, title generation, fork) can persist a blank
+        // or unbounded title. The list row only falls back on nil
+        // (`title ?? "New Chat"`), so an empty string used to render as a bare
+        // gap; trimming here also stops whitespace-only titles.
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let capped = String(trimmed.prefix(Self.maxSessionTitleLength))
+        let safeTitle = capped.isEmpty ? AppLocalized("New Chat") : capped
         invalidateSessionListCache()
         let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (title as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(stmt, 1, (safeTitle as NSString).utf8String, -1, nil)
             bindOptionalText(stmt, index: 2, value: category)
             sqlite3_bind_double(stmt, 3, Date().timeIntervalSince1970)
             sqlite3_bind_text(stmt, 4, (id as NSString).utf8String, -1, nil)
