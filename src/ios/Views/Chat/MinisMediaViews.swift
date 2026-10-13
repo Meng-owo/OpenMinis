@@ -156,6 +156,10 @@ func resolveMinisFileURLCached(url: URL) -> URL? {
 /// above us, and a stale in-memory hit there is acceptable for this tool.
 /// Returns `nil` only when the source cannot be parsed as a URL.
 func minisMediaCacheKey(for source: String) -> String {
+    // [T-ios-data-uri-image] A data: URI can be thousands of chars; skip URL
+    // parsing entirely and key on (length, value-hash) — stable within the
+    // process, which is all this in-memory cache needs.
+    if source.hasPrefix("data:") { return "d:\(source.count):\(source.hashValue)" }
     guard let url = URL(string: source) else { return source }
     return minisMediaCacheKey(for: url)
 }

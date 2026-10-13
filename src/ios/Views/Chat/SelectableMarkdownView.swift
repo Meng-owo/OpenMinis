@@ -4526,7 +4526,26 @@ final class ImageAttachment: NSTextAttachment {
         Task.detached(priority: .userInitiated) {
             var fileURL: URL?
             let img: UIImage?
-            if let url = URL(string: src), url.scheme == "minis-clone" {
+            if src.hasPrefix("data:") {
+                // [T-ios-data-uri-image] Inline base64 image (data: URI). The
+                // model can embed one directly in markdown (`![x](data:…)`);
+                // there is no file or remote fetch involved — decode the
+                // payload and run it through the SAME single decode path as
+                // every other source (displayTargetPixels → downsample).
+                imgLogger.info("[MinisImage][Load] data-URI srcLen=\(src.count) — decoding inline")
+                if let comma = src.firstIndex(of: ","),
+                   let data = Data(base64Encoded: String(src[src.index(after: comma)...]), options: [.ignoreUnknownCharacters]) {
+                    img = downsampleImageData(data, maxPixelSize: displayTargetPixels(for: data, screenScale: screenScale))
+                    if let decoded = img {
+                        imgLogger.info("[MinisImage][Load] data-URI decoded OK bytes=\(data.count) size=\(decoded.size.width)x\(decoded.size.height)")
+                    } else {
+                        imgLogger.error("[MinisImage][Load] data-URI decode FAILED bytes=\(data.count)")
+                    }
+                } else {
+                    imgLogger.warning("[MinisImage][Load] data-URI parse FAILED srcLen=\(src.count)")
+                    img = nil
+                }
+            } else if let url = URL(string: src), url.scheme == "minis-clone" {
                 imgLogger.info("[MinisImage][Load] resolving minis-clone:// URL src=\(src) host=\(url.host ?? "nil") path=\(url.path)")
                 if let resolved = resolveMinisFileURLForNativeText(url: url) {
                     imgLogger.info("[MinisImage][Load] minis-clone:// resolved to localPath=\(resolved.path)")
