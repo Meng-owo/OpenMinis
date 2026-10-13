@@ -1281,6 +1281,15 @@ enum ChatStoreSyncHydrators {
 
     // MARK: - V3 Provider sync (per-record)
 
+    // [AUD5-01] Secret carry status: nothing seeds `secretBlob` locally yet —
+    // outbound V3 records ship it nil, and keys actually travel via iCloud
+    // Keychain (synchronizable items) + the V2 `secretsJsonBase64` payload.
+    // Before V2 outbound is ever retired (or a cross-platform peer needs
+    // keys), implement BOTH: seeding here (fill secretBlob/secretKind/
+    // secretUpdatedAt from the Keychain in buildProviderInstanceV3) and an
+    // inbound apply (secretBlob → Keychain, LWW via stampAPIKeySavedAt) —
+    // otherwise V3-only peers never receive keys.
+
     /// Build a SyncedProviderInstanceV3 portable record from the DB row.
     /// Returns nil if no row exists (caller treats nil as "drop dirty,
     /// nothing to push").

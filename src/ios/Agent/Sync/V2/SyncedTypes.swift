@@ -420,7 +420,7 @@ struct SyncedProviderInstanceV3: Syncable {
     var imageEndpointResolved: String?
     var isEnabled: Int                   // 0/1
     var sortOrder: Int
-    var secretBlob: String?              // base64-encoded Keychain secret (not encrypted); nil = no secret yet
+    var secretBlob: String?              // base64-encoded Keychain secret (not encrypted); nil = no secret yet / no local seed (see ChatStoreSyncHydrators [AUD5-01])
     var secretKind: String?              // 'apiKey' | 'manual-oauth-token' | 'oauth-token' | nil
     var secretUpdatedAt: Date?
     var createdAt: Date
