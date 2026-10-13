@@ -4309,6 +4309,21 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             for job in AgentJobRegistry.shared.activeChildren(parent: sid) where job.origin == .tool {
                 AgentJobRegistry.shared.cancel(jobId: job.id, reason: "user stop", silent: true)
             }
+            // [AUD-05] The timers this conversation STARTED that fire back into
+            // it are the exception, and this is the wiring that comment
+            // promised: a loop that keeps re-running here is ongoing work, and
+            // Stop is how the user stops ongoing work. Reminders aimed at their
+            // own new session keep their schedule — see
+            // `cancelScheduled(createdBy:inConversationOnly:)`. The callbacks
+            // those cancellations would normally deliver are dropped by
+            // `delegationResultsMuted` above, so the conversation still goes
+            // quiet exactly as Stop means it to.
+            let stoppedTimers = AgentJobRegistry.shared.cancelScheduled(
+                createdBy: sid, reason: "user stop", inConversationOnly: true)
+            if stoppedTimers > 0 {
+                transientNotice = String(format: AppLocalized("Stopped %d scheduled task(s) that fired into this conversation"),
+                                         stoppedTimers)
+            }
         }
         currentTask?.cancel()
         currentTask = nil

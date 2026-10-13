@@ -1288,18 +1288,40 @@ final class AgentJobRegistry: ObservableObject {
             && job.isEnabled
     }
 
-    /// Cancel every still-live scheduled job this session created.
+    /// Cancel the still-live scheduled jobs this session created.
     ///
     /// Deliberately NOT silent: the user pressed Stop, so the model should see
     /// that its timer was cancelled rather than silently stop hearing from it
     /// (`silent` exists for the opposite case — tearing a job down without
     /// disturbing a conversation).
+    ///
+    /// - Parameter inConversationOnly: [AUD-05] When true, only the jobs that
+    ///   fire INTO this conversation (`.followUp` / `.rerun` / a
+    ///   `.childOfCurrent` of it) are cancelled — the ones that keep re-running
+    ///   inside the chat whose Stop button was pressed. A timer aimed at its own
+    ///   NEW session (a morning reminder, a pulse that reports elsewhere) is not
+    ///   the stopped turn's work: Stop gets pressed mid-reply all the time, and
+    ///   silently deleting the user's daily 9am reminder with it would be a
+    ///   worse bug than the unwired function this fixes. Those keep their
+    ///   schedule and stay cancellable from the task list and from their card.
     @discardableResult
-    func cancelScheduled(createdBy sessionId: String, reason: String) -> Int {
-        let live = liveScheduledJobs(createdBy: sessionId)
+    func cancelScheduled(createdBy sessionId: String, reason: String, inConversationOnly: Bool = false) -> Int {
+        var live = liveScheduledJobs(createdBy: sessionId)
+        if inConversationOnly {
+            live = live.filter { job in
+                switch job.target {
+                case .followUp(let sid), .rerun(let sid, _):
+                    return sid == sessionId
+                case .childOfCurrent(let parent, _):
+                    return parent == sessionId
+                case .new:
+                    return false
+                }
+            }
+        }
         for job in live { cancel(jobId: job.id, reason: reason, silent: false) }
         if !live.isEmpty {
-            logger.info("[Jobs] cancelled \(live.count) scheduled job(s) created by \(sessionId.prefix(8)): \(reason)")
+            logger.info("[Jobs] cancelled \(live.count) scheduled job(s) created by \(sessionId.prefix(8))\(inConversationOnly ? " (in-conversation only)" : ""): \(reason)")
         }
         return live.count
     }

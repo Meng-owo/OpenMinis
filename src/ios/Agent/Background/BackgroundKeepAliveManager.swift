@@ -502,15 +502,25 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             }
             .store(in: &cancellables)
 
-        // Re-evaluate keep-alive whenever sessions, the master toggle, or the
-        // relay-connection demand changes (PM-P1-2: 中继连接本身就是保活对象)
-        Publishers.CombineLatest3(
+        // Re-evaluate keep-alive whenever sessions, the master toggle, the
+        // relay-connection demand (PM-P1-2: 中继连接本身就是保活对象) or the set
+        // of scheduled tasks changes.
+        //
+        // [AUD-05] The registry's job list is a keep-alive input because a
+        // scheduled task's timer is IN-PROCESS: a conversation with a fire
+        // planned needs the app alive for exactly the same reason a running
+        // turn does. Before this, only `activeSessions` counted, so the app was
+        // free to be suspended before the fire it had promised — the fire then
+        // happened late (or not at all) with only the insurance notification
+        // standing behind it.
+        Publishers.CombineLatest4(
             SessionActivityTracker.shared.$activeSessions,
             $enhancedBackgroundEnabled,
-            $relayKeepAliveNeeded
+            $relayKeepAliveNeeded,
+            AgentJobRegistry.shared.$jobs
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] sessions, enabled, relayNeeded in
+        .sink { [weak self] sessions, enabled, relayNeeded, _ in
             guard let self else { return }
             self.reevaluate(sessions: sessions, enabled: enabled, relayNeeded: relayNeeded)
         }
@@ -792,17 +802,26 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         }
 
         // PM-P1-2：中继连接本身就是保活对象——无聊天会话、只开中继时也保活。
-        let shouldBeActive = (!sessions.isEmpty || relayNeeded) && enabled
+        //
+        // [AUD-05] `sessionsAwaitingScheduledFire` is unioned in: those
+        // conversations have a timer that fires INTO them, so they need the
+        // process alive exactly like a running turn does. The union is taken
+        // here, at the single decision point, so every caller of `reevaluate`
+        // (session sets, the toggle, the relay demand, the job list) gets the
+        // same answer.
+        let scheduled = AgentJobRegistry.shared.sessionsAwaitingScheduledFire
+        let keepAliveSessions = sessions.union(scheduled)
+        let shouldBeActive = (!keepAliveSessions.isEmpty || relayNeeded) && enabled
         let sessionList = sessions.prefix(5).joined(separator: ",")
         // [T-ios-log-noise-reduction] INFO→DEBUG: reevaluate runs on every
         // session-set / toggle change and was ~482 lines/day even when nothing
         // transitioned. The actual state CHANGES (Activating / Deactivating
         // below) keep their INFO level, so production logs still show the
         // transitions without the per-call no-op chatter.
-        logger.debug("[BackgroundKeepAlive] Reevaluate: sessions=\(sessions.count) enabled=\(enabled) isActive=\(self.isActive) shouldBeActive=\(shouldBeActive) ids=[\(sessionList)]")
+        logger.debug("[BackgroundKeepAlive] Reevaluate: sessions=\(sessions.count) scheduled=\(scheduled.count) enabled=\(enabled) isActive=\(self.isActive) shouldBeActive=\(shouldBeActive) ids=[\(sessionList)]")
 
         if shouldBeActive && !isActive {
-            logger.info("[BackgroundKeepAlive] Activating keep-alive (sessions=\(sessions.count))")
+            logger.info("[BackgroundKeepAlive] Activating keep-alive (sessions=\(sessions.count) scheduled=\(scheduled.count))")
             isActive = true
             AgentLiveActivityManager.shared.startActivity(sessions: buildSessionSnapshots())
             startUpdateTimer()

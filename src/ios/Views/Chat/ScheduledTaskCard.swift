@@ -243,62 +243,94 @@ struct ScheduledPulseCardView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        Button {
-            let impact = UIImpactFeedbackGenerator(style: .light)
-            impact.impactOccurred()
-            showingDetail = true
-        } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(CSSThemeVariables.accentSoft(isDark: isDark))
-                        .frame(width: 30, height: 30)
-                    Image(systemName: "waveform.path.ecg")
-                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
-                }
+        // [AUD-05] The card is split into two siblings on purpose: the body
+        // opens the detail sheet, and the trailing control pauses/resumes the
+        // task. A control nested inside the body's own Button label would never
+        // receive the tap (the outer button swallows it) — and "the cancel
+        // entry is unreachable" is exactly what the audit found. This is the
+        // one card a scheduled task actually renders (see ChatMessageViews: the
+        // 隐身 rule hides ordinary firings), so the entry lives here.
+        HStack(spacing: 8) {
+            Button {
+                let impact = UIImpactFeedbackGenerator(style: .light)
+                impact.impactOccurred()
+                showingDetail = true
+            } label: {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .frame(width: 30, height: 30)
+                        Image(systemName: "waveform.path.ecg")
+                            .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
+                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(AppLocalized("小梦 · 自主脉搏"))
-                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
-                        .lineLimit(1)
-
-                    HStack(spacing: 6) {
-                        Text(title)
-                            .font(.system(size: fontSettings.scaledApp(11)))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(AppLocalized("小梦 · 自主脉搏"))
+                            .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
+                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                             .lineLimit(1)
-                        if let f = fireIndex {
-                            Text("· 第\(f)次")
+
+                        HStack(spacing: 6) {
+                            Text(title)
                                 .font(.system(size: fontSettings.scaledApp(11)))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
-                        }
-                        if let r = remaining, r > 0 {
-                            Text("· 剩\(r)")
-                                .font(.system(size: fontSettings.scaledApp(11)))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                .lineLimit(1)
+                            if let f = fireIndex {
+                                Text("· 第\(f)次")
+                                    .font(.system(size: fontSettings.scaledApp(11)))
+                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                            }
+                            if let r = remaining, r > 0 {
+                                Text("· 剩\(r)")
+                                    .font(.system(size: fontSettings.scaledApp(11)))
+                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                            }
                         }
                     }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: fontSettings.scaledApp(11), weight: .semibold))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
                 }
-
-                Spacer(minLength: 4)
-
-                Image(systemName: "chevron.right")
-                    .font(.system(size: fontSettings.scaledApp(11), weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(CSSThemeVariables.card(isDark: isDark))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.05), radius: 4, x: 0, y: 2)
+            .buttonStyle(.plain)
+
+            // Pause / resume in place. Deliberately reversible (the task stays
+            // in the list and comes back with one more tap) rather than a
+            // destructive cancel: this control sits on a card that appears
+            // while the user is doing something else. Cancelling or deleting
+            // remains a confirmed action in the detail sheet (AUD-10).
+            if let job = registry.job(id: jobId),
+               job.trigger != .immediate,
+               job.state == .pending || job.state == .running {
+                let isLive = registry.isLiveScheduled(jobId: jobId)
+                Button {
+                    let impact = UIImpactFeedbackGenerator(style: .light)
+                    impact.impactOccurred()
+                    registry.setEnabled(jobId: jobId, enabled: !isLive)
+                } label: {
+                    Image(systemName: isLive ? "pause.circle" : "play.circle")
+                        .font(.system(size: fontSettings.scaledApp(16), weight: .regular))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isLive ? AppLocalized("Pause") : AppLocalized("Resume"))
+            }
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(CSSThemeVariables.card(isDark: isDark))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.05), radius: 4, x: 0, y: 2)
         .padding(.vertical, 3)
         .sheet(isPresented: $showingDetail) {
             ScheduledTaskDetailSheet(jobId: jobId)

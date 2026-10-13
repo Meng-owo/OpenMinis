@@ -172,6 +172,17 @@ struct AgentCallbackCellView: View {
     /// would keep claiming the task is live long after it ended. The registry
     /// is the live truth, and after a relaunch it is empty — which is the
     /// honest answer, since the timer is genuinely gone then too.
+    ///
+    /// [AUD-05] Still no caller, and that is now deliberate: a `.scheduled`
+    /// envelope renders as `EmptyView` here (the user's 隐身 rule — ordinary
+    /// firings must not clutter the chat; see the `body` below), so this view
+    /// can never be the card that shows one. The reachable pause/resume entry
+    /// for a scheduled task lives on the card that IS rendered,
+    /// `ScheduledPulseCardView` (ScheduledTaskCard.swift), and cancelling or
+    /// deleting stays a confirmed action in the detail sheet. Kept rather than
+    /// deleted: it is the right question for this view the moment the 隐身 rule
+    /// is revisited, and the user's rule is that features are removed only by
+    /// her say-so.
     private var isCancellable: Bool {
         AgentJobRegistry.shared.isLiveScheduled(jobId: callback.jobId)
     }
