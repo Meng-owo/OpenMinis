@@ -758,6 +758,17 @@ private let logger = AppLogger(category: "SessionsOffload")
         var output: [String: Any] = [:]
 
         Task.detached {
+            // [S2b] Same teardown the UI delete paths do: the session's scheduled
+            // jobs would otherwise keep firing against a session that no longer
+            // exists, and a running sub agent would keep burning tokens until it
+            // finished on its own. `AgentJobRegistry` is main-actor isolated, so
+            // hop there; `silent: true` because we are dismantling, not
+            // interrupting, a session that is being deleted anyway.
+            await MainActor.run {
+                AgentJobRegistry.shared.cancelScheduled(createdBy: sessionId, reason: "session deleted")
+                AgentJobRegistry.shared.dropQueuedDelegations(parent: sessionId, reason: "session deleted")
+                AgentJobRegistry.shared.cancelAll(parent: sessionId, reason: "session deleted", silent: true)
+            }
             await ChatStore.shared.deleteSession(sessionId)
             output = [
                 "ok": true,

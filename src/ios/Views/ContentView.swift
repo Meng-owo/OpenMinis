@@ -5084,7 +5084,7 @@ struct ContentView: View {
             // sub agent would keep burning tokens until it naturally finished.
             AgentJobRegistry.shared.cancelScheduled(createdBy: session.id, reason: "session deleted")
             AgentJobRegistry.shared.dropQueuedDelegations(parent: session.id, reason: "session deleted")
-            AgentJobRegistry.shared.cancelAll(parent: session.id, reason: "session deleted")
+            AgentJobRegistry.shared.cancelAll(parent: session.id, reason: "session deleted", silent: true)
             await ChatStore.shared.deleteSession(session.id)
             deleteSessionFiles(session.id)
         }
@@ -5115,7 +5115,7 @@ struct ContentView: View {
                 // [AUD2-03] Same teardown as the single-delete path, per id.
                 AgentJobRegistry.shared.cancelScheduled(createdBy: id, reason: "session deleted")
                 AgentJobRegistry.shared.dropQueuedDelegations(parent: id, reason: "session deleted")
-                AgentJobRegistry.shared.cancelAll(parent: id, reason: "session deleted")
+                AgentJobRegistry.shared.cancelAll(parent: id, reason: "session deleted", silent: true)
                 await ChatStore.shared.deleteSession(id)
                 deleteSessionFiles(id)
             }
