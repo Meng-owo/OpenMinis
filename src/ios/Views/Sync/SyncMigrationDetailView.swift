@@ -699,7 +699,7 @@ struct SyncMigrationDetailView: View {
         case "minis-devices":
             return AppLocalized("V2 sync · per-device presence records so each device knows the others online.")
         case "minis-secrets":
-            return AppLocalized("V2 sync · environment variables (API keys, etc.) used by your AI tools.")
+            return AppLocalized("V2 sync · environment variables and provider API keys used by your AI tools.")
         default:
             break
         }

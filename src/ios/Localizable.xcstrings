@@ -98301,60 +98301,60 @@
         }
       }
     },
-    "V2 sync · environment variables (API keys, etc.) used by your AI tools.": {
+    "V2 sync · environment variables and provider API keys used by your AI tools.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2-Synchronisierung · Umgebungsvariablen (API-Schlüssel usw.), die von deinen KI-Tools verwendet werden."
+            "value": "V2-Synchronisierung · Umgebungsvariablen und Provider-API-Schlüssel, die von deinen KI-Tools verwendet werden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2 sync · environment variables (API keys, etc.) used by your AI tools."
+            "value": "V2 sync · environment variables and provider API keys used by your AI tools."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sincronización V2 · variables de entorno (claves de API, etc.) que usan tus herramientas de IA."
+            "value": "Sincronización V2 · variables de entorno y claves de API de proveedores usadas por tus herramientas de IA."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synchronisation V2 · variables d’environnement (clés API, etc.) utilisées par tes outils IA."
+            "value": "Synchronisation V2 · variables d’environnement et clés API de fournisseurs utilisées par tes outils IA."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2 同期 · AI ツールが使用する環境変数（API キーなど）。"
+            "value": "V2 同期 · AI ツールが使用する環境変数とプロバイダーの API キー。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2 동기화 · AI 도구가 사용하는 환경 변수(API 키 등)."
+            "value": "V2 동기화 · AI 도구가 사용하는 환경 변수 및 공급자 API 키."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Синхронизация V2 · переменные окружения (ключи API и т. д.), используемые вашими ИИ-инструментами."
+            "value": "Синхронизация V2 · переменные окружения и API-ключи провайдеров, используемые вашими ИИ-инструментами."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2 同步 · 你的 AI 工具使用的环境变量（API Key 等）。"
+            "value": "V2 同步 · 你的 AI 工具使用的环境变量与 Provider 密钥。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "V2 同步 · 你的 AI 工具使用的環境變數（API Key 等）。"
+            "value": "V2 同步 · 你的 AI 工具使用的環境變數與 Provider 金鑰。"
           }
         }
       }
