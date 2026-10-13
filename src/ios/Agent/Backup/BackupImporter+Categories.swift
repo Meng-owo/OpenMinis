@@ -699,10 +699,11 @@ extension BackupImporter {
         // merger, which keeps local-only items and leaves the per-device
         // pointer fields (voice/vision groups, session bindings, defaults)
         // untouched.
-        // CloudSyncEngine is @available(iOS 17+) (it is CloudKit-backed), while
-        // the app targets iOS 16. On 16 the merge is done inline below with the
-        // same union-by-id rules — restoring must never fall back to the
-        // destructive whole-config replace just because sync is unavailable.
+        // CloudSyncEngine is @available(iOS 17+) (it is CloudKit-backed). This
+        // build's deployment target is ≥ iOS 26, so the inline fallback below is
+        // a dead path today — kept for a possible iOS 16 revival, with the same
+        // union-by-id rules. Restoring must never fall back to the destructive
+        // whole-config replace just because sync is unavailable.
         // Disambiguate model groups whose NAME collides with one already on
         // this device. The merge is by id, so a restored group is correctly a
         // separate entity — but on screen the user then sees two rows both
