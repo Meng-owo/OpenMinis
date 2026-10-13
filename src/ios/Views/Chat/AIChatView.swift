@@ -7660,6 +7660,30 @@ public struct StickerItem: Identifiable, Codable, Equatable, Sendable {
         self.imageFilename = imageFilename
         self.createdAt = createdAt
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, content, scenario, shortDesc, category, useCount, imageFilename, createdAt
+    }
+
+    // [sticker-fix] 宽容解码：任一字段缺失/为空/类型不符时退回默认值，
+    // 不再让单条脏数据把整份表情档案解码失败（进而被占位重建清空）。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let rawId = (try? c.decode(String.self, forKey: .id)) ?? ""
+        let rawTitle = (try? c.decode(String.self, forKey: .title)) ?? "表情包"
+        let rawContent = (try? c.decode(String.self, forKey: .content)) ?? ""
+        let rawShort = (try? c.decode(String.self, forKey: .shortDesc)) ?? ""
+        let rawCategory = (try? c.decode(String.self, forKey: .category)) ?? ""
+        id = rawId
+        title = rawTitle
+        content = rawContent
+        scenario = (try? c.decode(String.self, forKey: .scenario)) ?? ""
+        shortDesc = rawShort.isEmpty ? (rawTitle + (rawContent.isEmpty ? "" : " " + String(rawContent.prefix(10)))) : rawShort
+        category = rawCategory.isEmpty ? "其他" : rawCategory
+        useCount = (try? c.decode(Int.self, forKey: .useCount)) ?? 0
+        imageFilename = (try? c.decode(String.self, forKey: .imageFilename)) ?? (rawId.isEmpty ? "" : "\(rawId).png")
+        createdAt = (try? c.decode(Date.self, forKey: .createdAt)) ?? Date()
+    }
 }
 
 struct StickerCatalogData: Codable {
@@ -7757,6 +7781,14 @@ public final class StickerStore: ObservableObject {
 
         // 兜底容错恢复：若依然为空，扫描所有可能存过表情的目录自动恢复
         if stickers.isEmpty {
+            // [sticker-fix] 重建前先留现场：磁盘上若本来就有档案文件（只是这次没能读出来），
+            // 先另存一份副本，避免占位重建把描述/分类静默覆盖后无从追溯。
+            if fm.fileExists(atPath: catalogURL.path) {
+                let preserved = stickersDir.appendingPathComponent("stickers_catalog.before-rebuild-\(Int(Date().timeIntervalSince1970)).json")
+                if !fm.fileExists(atPath: preserved.path) {
+                    try? fm.copyItem(at: catalogURL, to: preserved)
+                }
+            }
             let candidateDirs = [
                 stickersDir,
                 fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers"),
