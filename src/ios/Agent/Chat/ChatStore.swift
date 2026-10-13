@@ -1630,27 +1630,43 @@ actor ChatStore {
     func searchSessions(query: String) -> [SearchResult] {
         guard !query.isEmpty else { return [] }
         let likePattern = "%\(query)%"
-        // Find sessions where title matches OR any message text contains the query
+        // [AUD2-05] One row per (session, MATCHING message) instead of a
+        // GROUP BY s.id. The old shape kept a session whenever ANY parts_json
+        // matched — including rows the chat never renders (`<system-reminder>`,
+        // a `<silent/>` pulse reply, an `<agent_callback>` envelope) — and the
+        // snippet then leaked that same XML. Grouping in Swift lets us both
+        // filter those matches out and pick the snippet from the latest message
+        // that actually renders. The LEFT JOIN preserves title-only matches
+        // (their message columns come back NULL).
         let sql = """
-            SELECT DISTINCT s.id, s.title, s.model_id, s.created_at, s.updated_at, s.category,
-                   (SELECT m2.parts_json FROM messages m2
-                    WHERE m2.session_id = s.id AND m2.parts_json LIKE ?
-                    ORDER BY m2.sort_order DESC LIMIT 1)
+            SELECT s.id, s.title, s.model_id, s.created_at, s.updated_at, s.category,
+                   m.parts_json, m.sort_order
             FROM sessions s
-            LEFT JOIN messages m ON m.session_id = s.id
+            LEFT JOIN messages m ON m.session_id = s.id AND m.parts_json LIKE ?
             WHERE s.title LIKE ? OR m.parts_json LIKE ?
-            GROUP BY s.id
-            ORDER BY s.updated_at DESC
+            ORDER BY s.updated_at DESC, m.sort_order DESC
             """
         var stmt: OpaquePointer?
-        var results: [SearchResult] = []
+        /// Accumulated state for one session, in first-seen (= updated_at DESC) order.
+        struct Acc {
+            var title: String?
+            var modelId: String
+            var createdAt: Date
+            var updatedAt: Date
+            var category: String?
+            var titleMatched: Bool
+            var matchedVisible: Bool = false
+            var snippet: String?
+        }
+        var acc: [String: Acc] = [:]
+        var order: [String] = []
+        let lowerQuery = query.lowercased()
 
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (likePattern as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 2, (likePattern as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 3, (likePattern as NSString).utf8String, -1, nil)
 
-            let lowerQuery = query.lowercased()
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let id = String(cString: sqlite3_column_text(stmt, 0))
                 let title = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
@@ -1658,20 +1674,76 @@ actor ChatStore {
                 let createdAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3))
                 let updatedAt = Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4))
                 let category = sqlite3_column_text(stmt, 5).map { String(cString: $0) }
-                let matchedPartsJSON = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
+                let partsJSON = sqlite3_column_text(stmt, 6).map { String(cString: $0) }
 
-                let titleMatched = title?.lowercased().contains(lowerQuery) == true
-                let snippet = matchedPartsJSON.flatMap { extractTextFromPartsJSON($0) }
+                if acc[id] == nil {
+                    order.append(id)
+                    acc[id] = Acc(
+                        title: title,
+                        modelId: modelId,
+                        createdAt: createdAt,
+                        updatedAt: updatedAt,
+                        category: category,
+                        titleMatched: title?.lowercased().contains(lowerQuery) == true
+                    )
+                }
 
-                let session = ChatSession(
-                    id: id, title: title, category: category, modelId: modelId,
-                    createdAt: createdAt, updatedAt: updatedAt, lastMessage: snippet
-                )
-                results.append(SearchResult(session: session, matchSnippet: snippet, titleMatched: titleMatched))
+                // Title-only match: the LEFT JOIN left the message columns NULL.
+                guard let partsJSON else { continue }
+                // [AUD2-05] Hidden-only messages are never rendered, so they
+                // must neither keep the session in the results nor supply the
+                // snippet. Rows arrive in sort_order DESC, so the first
+                // surviving match is the newest visible one.
+                guard !Self.isHiddenOnlyPartsJSON(partsJSON) else { continue }
+                acc[id]?.matchedVisible = true
+                if acc[id]?.snippet == nil, let snippet = extractTextFromPartsJSON(partsJSON) {
+                    acc[id]?.snippet = snippet
+                }
             }
         }
         sqlite3_finalize(stmt)
+
+        var results: [SearchResult] = []
+        for id in order {
+            guard let a = acc[id], a.titleMatched || a.matchedVisible else { continue }
+            let session = ChatSession(
+                id: id, title: a.title, category: a.category, modelId: a.modelId,
+                createdAt: a.createdAt, updatedAt: a.updatedAt, lastMessage: a.snippet
+            )
+            results.append(SearchResult(session: session, matchSnippet: a.snippet, titleMatched: a.titleMatched))
+        }
         return results
+    }
+
+    /// [AUD2-05] True when a message's parts carry nothing the chat renders:
+    /// every text block is an internal directive (`<system-reminder>`,
+    /// `<silent/>`, `<agent_callback>`) and there is no media or tool content.
+    /// Such rows are invisible in the UI, so search must ignore them — both as
+    /// a match and as a snippet source.
+    private static func isHiddenOnlyPartsJSON(_ json: String) -> Bool {
+        guard let data = json.data(using: .utf8),
+              let parts = try? JSONDecoder().decode([ContentPart].self, from: data),
+              !parts.isEmpty else { return false }
+        var sawRenderable = false
+        for part in parts {
+            switch part {
+            case .mediaRef(_), .toolUse(_), .toolResult(_):
+                sawRenderable = true
+            case .text(let t):
+                if !isHiddenDirectiveText(t) { sawRenderable = true }
+            }
+        }
+        return !sawRenderable
+    }
+
+    /// A single text block that is entirely an internal directive.
+    private static func isHiddenDirectiveText(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return true }
+        if trimmed.hasPrefix("<system-reminder>") && trimmed.hasSuffix("</system-reminder>") { return true }
+        if trimmed.range(of: #"^<silent\s*/?>$"#, options: .regularExpression) != nil { return true }
+        if trimmed.hasPrefix("<agent_callback") && trimmed.hasSuffix("</agent_callback>") { return true }
+        return false
     }
 
     // MARK: - Sessions Get Tool
