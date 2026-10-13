@@ -727,10 +727,12 @@ actor ProviderConfigDB {
         }
 
         // Instances (with inline secret_blob — actual secret material
-        // still lives in Keychain; the blob is populated by S5 when
-        // the v3 sync-emit path packages it for upload. Migration
-        // only seeds the metadata; secret_blob is left NULL until a
-        // mutate happens or the v3 builder runs once.).
+        // still lives in Keychain. No local writer seeds this column:
+        // the v3 sync-emit path only reads it, so an outbound blob
+        // stays empty unless an earlier inbound sync stored one; local
+        // keys actually travel via iCloud Keychain + the V2
+        // `secretsJsonBase64` payload. Migration only seeds the
+        // metadata; secret_blob is left NULL until a write path exists.).
         for (idx, inst) in config.instances.enumerated() {
             // [R3-104] Keep the prior updated_at when the rewrite is
             // content-identical; stamp `now` only for new/changed rows.
