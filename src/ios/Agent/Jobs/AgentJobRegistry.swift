@@ -867,6 +867,56 @@ final class AgentJobRegistry: ObservableObject {
 
     func job(id: String) -> AgentJob? { jobs[id] }
 
+    /// [AUD-11] Replace one task's definition, keeping its identity.
+    ///
+    /// The id, the created time, the counters and the whole run history survive
+    /// — that is the point: a task used to be editable only by deleting it and
+    /// creating a new one, which left every `--id` reference and every
+    /// `onCompletion` link pointing at something that no longer existed, and
+    /// threw the history away.
+    ///
+    /// Rebuilding rather than mutating in place: a definition is `let` on
+    /// purpose, because an armed timer holds the job and reads its trigger as it
+    /// loops — a half-applied edit would change the cadence mid-flight. The new
+    /// job is put in place first, then armed, so a failure to arm cannot leave
+    /// the registry holding a dead timer for a definition nobody can see.
+    @discardableResult
+    func redefine(jobId: String,
+                  title: String? = nil,
+                  label: String? = nil,
+                  trigger: AgentJobTrigger? = nil,
+                  target: AgentJobTarget? = nil,
+                  prompt: String? = nil) -> AgentJob? {
+        guard let old = jobs[jobId] else { return nil }
+        let job = AgentJob(id: old.id,
+                           label: label ?? old.label,
+                           title: title ?? old.title,
+                           origin: old.origin,
+                           trigger: trigger ?? old.trigger,
+                           target: target ?? old.target,
+                           prompt: prompt ?? old.prompt,
+                           then: old.then,
+                           createdAt: old.createdAt)
+        job.isEnabled = old.isEnabled
+        job.remaining = old.remaining
+        job.modelEntryId = old.modelEntryId
+        job.thinkingLevel = old.thinkingLevel
+        job.prefilledTool = old.prefilledTool
+        job.isPulse = old.isPulse
+        job.deliverySentence = old.deliverySentence
+        job.creatorSessionId = old.creatorSessionId
+        job.restoreHistory(firedCount: old.firedCount, runs: old.runs, lastFireOk: old.lastFireOk)
+        old.task?.cancel()
+        old.task = nil
+        jobs[job.id] = job
+        if job.isEnabled {
+            ScheduledJobRunner.arm(job)
+        }
+        persistScheduledJobs()
+        logger.info("[Jobs] REDEFINE \(job.logLabel) trigger=\(job.trigger.logLabel) target=\(job.target.logLabel)")
+        return job
+    }
+
     /// Resolve a `--id <label>` reference.
     ///
     /// [AUD-09] Searches EVERY state, not just the live ones. A finished task

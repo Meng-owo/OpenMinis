@@ -72,10 +72,12 @@ static NSString *const HELP_TEXT =
      "  child-of-current a hidden helper session under the current chat; its final answer is\n"
      "                   posted back into the current chat when it finishes\n"
      "\n"
-     "IMPORTANT: timers live in the app process only. If Minis is killed by the system the timer is\n"
-     "gone; a reminder notification registered at creation is the only thing that survives, and it\n"
-     "says the task was DUE, not that it ran. For guaranteed background execution use an Apple\n"
-     "Shortcuts automation instead.\n"
+     "IMPORTANT: the timer runs inside the app process; it is armed as soon as Minis starts again.\n"
+     "A task and its run history survive a restart, and a fire that came due while the app was not\n"
+     "running is recorded as MISSED rather than silently skipped — so the list always tells the\n"
+     "truth about what did and did not run. A reminder notification is registered as insurance and\n"
+     "says the task was DUE, not that it ran. For execution that is guaranteed even while Minis stays\n"
+     "closed, use an Apple Shortcuts automation instead.\n"
      "\n"
      "EXAMPLES:\n"
      "  minis-scheduled create --prompt \"Summarize this build result\" --command \"make status\" --label build-watch --target follow-up\n"
@@ -85,6 +87,9 @@ static NSString *const HELP_TEXT =
      "  minis-scheduled create --prompt \"Morning summary of my notes\" --time 09:00 --repeat weekdays\n"
      "  minis-scheduled list\n"
      "  minis-scheduled runs --id build-watch\n"
+     "  minis-scheduled export --id build-watch --export /var/minis/workspace/build-watch.json\n"
+     "  minis-scheduled update --id build-watch --interval 5m --count 12\n"
+     "  minis-scheduled update --id build-watch --prompt \"New instruction\" --time 09:00 --repeat weekdays\n"
      "  minis-scheduled delete --id build-watch\n";
 
 static NSString *arg(int argc, char **argv, const char *name) {
@@ -133,6 +138,76 @@ static int cmd_create(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL 
         return NOFF_EXIT_INVALID_ARGS;
     }
     noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"create", data), compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+// [AUD-11] Edit a task in place: same flags as create, and only the ones given
+// are applied. The id is required (it is what identifies the task; --label
+// names the NEW label here, as it does on create).
+static int cmd_update(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
+    NSMutableDictionary *args = [NSMutableDictionary dictionary];
+    NSString *jobId = arg(argc, argv, "--id");
+    if (!jobId) {
+        NSArray *pos = noff_positional_args(argc, argv);
+        if (pos.count >= 2) jobId = pos[1];   // `minis-scheduled update <id> …`
+    }
+    if (!jobId) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"update", NOFF_ERR_INVALID_ARGS, @"--id <jobId|label> required");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    args[@"id"] = jobId;
+    put(args, @"prompt",   arg(argc, argv, "--prompt")   ?: arg(argc, argv, "-p"));
+    put(args, @"title",    arg(argc, argv, "--title"));
+    put(args, @"label",    arg(argc, argv, "--label")    ?: arg(argc, argv, "-l"));
+    put(args, @"trigger",  arg(argc, argv, "--trigger"));
+    put(args, @"after",    arg(argc, argv, "--after"));
+    put(args, @"interval", arg(argc, argv, "--interval"));
+    put(args, @"count",    arg(argc, argv, "--count"));
+    put(args, @"time",     arg(argc, argv, "--time")     ?: arg(argc, argv, "-t"));
+    put(args, @"repeat",   arg(argc, argv, "--repeat")   ?: arg(argc, argv, "-r"));
+    put(args, @"days",     arg(argc, argv, "--days"));
+    put(args, @"start",    arg(argc, argv, "--start"));
+    put(args, @"end",      arg(argc, argv, "--end"));
+    put(args, @"of",       arg(argc, argv, "--of"));
+    put(args, @"target",   arg(argc, argv, "--target"));
+    put(args, @"session",  arg(argc, argv, "--session"));
+    put(args, @"message",  arg(argc, argv, "--message"));
+    put(args, @"model",    arg(argc, argv, "--model")    ?: arg(argc, argv, "-m"));
+    put(args, @"thinking", arg(argc, argv, "--thinking"));
+    NSDictionary *data = [ScheduledOffloadBridge updateWithArgs:args];
+    if ([data[@"ok"] isKindOfClass:[NSNumber class]] && ![data[@"ok"] boolValue]) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"update", NOFF_ERR_INVALID_ARGS,
+                                             data[@"message"] ?: @"invalid arguments");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"update", data), compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
+// [AUD-11] Dump one task's run history to a file the caller names.
+static int cmd_export(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
+    NSString *jobId = arg(argc, argv, "--id") ?: arg(argc, argv, "--label");
+    if (!jobId) {
+        NSArray *pos = noff_positional_args(argc, argv);
+        if (pos.count >= 2) jobId = pos[1];
+    }
+    NSString *path = arg(argc, argv, "--export") ?: arg(argc, argv, "--out") ?: arg(argc, argv, "--path");
+    if (!jobId || !path) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"export", NOFF_ERR_INVALID_ARGS,
+                                             @"--id <jobId|label> and --export <path> required");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    NSDictionary *data = [ScheduledOffloadBridge exportRunsWithId:jobId path:path];
+    if ([data[@"ok"] isKindOfClass:[NSNumber class]] && ![data[@"ok"] boolValue]) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"export", NOFF_ERR_INVALID_ARGS,
+                                             data[@"message"] ?: @"failed");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"export", data), compact, quiet);
     return NOFF_EXIT_SUCCESS;
 }
 
@@ -189,10 +264,16 @@ static int scheduled_handler(int argc, char **argv, int stdin_fd, int stdout_fd,
     if ([sub isEqualToString:@"runs"] || [sub isEqualToString:@"history"]) {
         return cmd_with_id(@"runs", argc, argv, stdout_fd, stderr_fd, compact, quiet);
     }
+    if ([sub isEqualToString:@"update"] || [sub isEqualToString:@"edit"]) {
+        return cmd_update(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    }
+    if ([sub isEqualToString:@"export"]) {
+        return cmd_export(argc, argv, stdout_fd, stderr_fd, compact, quiet);
+    }
 
     noff_emit_help(stderr_fd, HELP_TEXT);
     NSDictionary *err = noff_json_error(TOOL_NAME, sub, NOFF_ERR_INVALID_ARGS,
-                                         [NSString stringWithFormat:@"Unknown command '%@'. Valid: list, runs, create, delete, enable, disable, run.", sub]);
+                                         [NSString stringWithFormat:@"Unknown command '%@'. Valid: list, runs, export, create, update, delete, enable, disable, run.", sub]);
     noff_emit_json(stdout_fd, err, compact, quiet);
     return NOFF_EXIT_INVALID_ARGS;
 }

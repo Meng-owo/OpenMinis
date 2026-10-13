@@ -187,7 +187,8 @@ enum ScheduledJobRunner {
         case .new:
             guard let entry = resolveModel(for: job) else {
                 logger.warning("[Sched] fire \(job.id.prefix(8)): no model to run on")
-                registry.recordFire(job.id, sessionId: nil, ok: false)
+                registry.recordFire(job.id, sessionId: nil, ok: false,
+                                    preview: AppLocalized("没跑成：这个任务没有可用的模型，去设置里给它指定一个。"))
                 return nil
             }
             let session = await ChatStore.shared.createSession(modelId: entry.model.id,
@@ -215,14 +216,24 @@ enum ScheduledJobRunner {
             let outcome = vm.submitProgrammaticPrompt(text, origin: ProgrammaticPromptOrigin.job(jobId: job.id), silent: true)
             logger.info("[Sched] FIRE \(job.logLabel) → new session \(session.id.prefix(8)) outcome=\(String(describing: outcome))")
             let ok: Bool
-            if case .rejected = outcome { ok = false } else { ok = true }
-            registry.recordFire(job.id, sessionId: session.id, ok: ok, preview: String(prompt.prefix(60)))
+            var firePreview = String(prompt.prefix(60))
+            if case .rejected(let reason) = outcome {
+                // [AUD-11] A refused fire used to be indistinguishable from a
+                // successful one in the history: the row showed the PROMPT with a
+                // red mark and no reason. Say what happened instead.
+                ok = false
+                firePreview = Self.fireFailureNote(reason)
+            } else {
+                ok = true
+            }
+            registry.recordFire(job.id, sessionId: session.id, ok: ok, preview: firePreview)
             return session.id
 
         case .followUp(let sid):
             guard await ChatStore.shared.getSession(sid) != nil else {
                 logger.warning("[Sched] fire \(job.id.prefix(8)): follow-up session \(sid.prefix(8)) is gone — abort")
-                registry.recordFire(job.id, sessionId: nil, ok: false)
+                registry.recordFire(job.id, sessionId: nil, ok: false,
+                                    preview: AppLocalized("没跑成：目标会话已经被删除了。"))
                 return nil
             }
             let (vm, fresh) = ViewModelCache.shared.getOrCreate(for: sid)
@@ -290,7 +301,10 @@ enum ScheduledJobRunner {
             let outcome = child.submitProgrammaticPrompt(text, origin: ProgrammaticPromptOrigin.job(jobId: job.id), silent: true)
             logger.info("[Sched] FIRE \(job.logLabel) → child \(session.id.prefix(8)) of \(parentSid.prefix(8)) outcome=\(String(describing: outcome))")
             guard outcome == .sent else {
-                registry.recordFire(job.id, sessionId: session.id, ok: false)
+                let why: String
+                if case .rejected(let reason) = outcome { why = reason } else { why = "queued" }
+                registry.recordFire(job.id, sessionId: session.id, ok: false,
+                                    preview: Self.fireFailureNote(why))
                 return nil
             }
             registry.markRunning(job.id, sessionId: session.id)
@@ -548,6 +562,32 @@ enum ScheduledJobRunner {
             body: body,
             userInfo: job.target.parentSessionId.map { ["sessionId": $0] }
                 ?? job.target.sessionIdForNavigation.map { ["sessionId": $0] } ?? [:])
+    }
+
+    /// [AUD-11] One readable line for a fire that was refused, carried in the
+    /// run history so the reason is visible where the record is (the detail
+    /// sheet's 运行记录) instead of only in the log.
+    ///
+    /// `reason` is the stable token `submitProgrammaticPrompt` reports. An
+    /// unknown token is passed through rather than swallowed — a reason nobody
+    /// mapped is still more useful than "failed".
+    nonisolated static func fireFailureNote(_ reason: String) -> String {
+        switch reason {
+        case "session_compacting":
+            return AppLocalized("没跑成：目标会话当时正在压缩上下文，下一次触发会照常。")
+        case "context_exhausted":
+            return AppLocalized("没跑成：目标会话的上下文已满，腾出空间后会照常。")
+        case "read_only_remote_session":
+            return AppLocalized("没跑成：那是一个只读的远程会话。")
+        case "empty_prompt":
+            return AppLocalized("没跑成：任务没有可发送的内容。")
+        case "attachments_not_ready":
+            return AppLocalized("没跑成：附件还没有准备好。")
+        case "send_declined":
+            return AppLocalized("没跑成：目标会话当时没能开始新的回合。")
+        default:
+            return AppLocalized("没跑成：") + reason
+        }
     }
 
     // MARK: - Pulse quiet hours  [AUD-14]
