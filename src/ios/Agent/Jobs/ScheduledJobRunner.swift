@@ -614,7 +614,31 @@ enum JobInsuranceNotification {
                                             trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false))
         // Replace any earlier registration for the same job (loop re-arms).
         center.removePendingNotificationRequests(withIdentifiers: [identifier(jobId)])
-        center.add(request)
+        center.add(request) { error in
+            // [AUD-21] `add` used to fail silently — a denied authorization meant
+            // the fallback this job's promise rests on simply did not exist, and
+            // nothing anywhere said so. It is logged here and surfaced to the
+            // user by the scheduled-tasks screen (`notificationsDenied()`).
+            if let error {
+                logger.warning("[Insurance] notification NOT registered for job \(jobId.prefix(8)): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// [AUD-21] True when the user has denied notifications.
+    ///
+    /// `schedule` deliberately only *requests* authorization while the state is
+    /// `.notDetermined` (a prompt belongs to the user's own action, not to a
+    /// timer being armed). Once the answer is no, every registration fails — so
+    /// this is the fact the UI needs in order to say the fallback is off instead
+    /// of leaving the promise quietly false.
+    static func notificationsDenied() async -> Bool {
+        let status = await withCheckedContinuation { cont in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                cont.resume(returning: settings.authorizationStatus)
+            }
+        }
+        return status == .denied
     }
 
     /// Both queues: a notification that already fired (app was backgrounded

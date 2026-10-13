@@ -16,10 +16,19 @@ struct ScheduledTasksView: View {
 
     @State private var selectedJobId: String? = nil
     @State private var pendingDeleteId: String? = nil
+    /// [AUD-21] Set when the system has notification permission turned off —
+    /// the "insurance notification" is the only thing standing behind a task
+    /// while the app is not running, so its absence has to be visible here.
+    @State private var notificationsDenied = false
 
     @ObservedObject private var fontSettings = FontSettings.shared
     private var isDark: Bool { colorScheme == .dark }
     private var allJobs: [AgentJob] { registry.list() }
+
+    /// A task that will still fire by itself: enabled and not finished.
+    private var liveTimerCount: Int {
+        allJobs.filter { $0.isEnabled && ($0.state == .pending || $0.state == .running) && $0.trigger != .immediate }.count
+    }
 
     /// [AUD-10] The row waiting for its delete confirmation.
     private var pendingJob: AgentJob? { pendingDeleteId.flatMap { registry.job(id: $0) } }
@@ -81,6 +90,28 @@ guard let id = pendingDeleteId else { return }
                 .padding()
             } else {
                 List {
+                    // [AUD-21] The fallback notification is off — say so, here,
+                    // where the tasks that rely on it are listed.
+                    if notificationsDenied && liveTimerCount > 0 {
+                        Section {
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "bell.slash")
+                                    .font(.system(size: fontSettings.scaledApp(15)))
+                                    .foregroundStyle(CSSThemeVariables.warning(isDark: isDark))
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("系统通知被关掉了")
+                                        .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
+                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                    Text("任务到点时应用不在前台，就没有任何提醒；打开通知可让兜底提醒恢复。")
+                                        .font(.system(size: fontSettings.scaledApp(11)))
+                                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+
                     // Summary Section
                     Section {
                         HStack(spacing: 16) {
@@ -130,6 +161,12 @@ guard let id = pendingDeleteId else { return }
             set: { selectedJobId = $0?.id }
         )) { ident in
             ScheduledTaskDetailSheet(jobId: ident.id)
+        }
+        .task {
+            // [AUD-21] Read the permission state once when the screen appears;
+            // the answer only changes from outside the app (Settings), and this
+            // screen is re-created on every visit.
+            notificationsDenied = await JobInsuranceNotification.notificationsDenied()
         }
     }
 
