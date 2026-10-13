@@ -2072,6 +2072,13 @@ final class OpenAIAgentProvider: AgentProvider {
     /// Telecom's `eaichat.ctyun.cn` deepseek-v4-oc endpoint) ship `data:{...}`
     /// with no space and our previous strict `data: ` check dropped every
     /// chunk on that provider, surfacing as "empty stream" failures.
+    ///
+    /// Scope: single-line JSON events — what every chat provider in the wild
+    /// emits, the non-standard variants above included. The SSE spec also
+    /// allows one event to span multiple `data:` lines joined with `\n`; that
+    /// continuation is NOT concatenated here. If a gateway is ever seen doing
+    /// it, add an event buffer (accumulate on `data:` lines, flush on the
+    /// blank line) at the call sites.
     private static func ssePayload(from line: String) -> String? {
         guard line.hasPrefix("data:") else { return nil }
         let after = line.dropFirst(5)
