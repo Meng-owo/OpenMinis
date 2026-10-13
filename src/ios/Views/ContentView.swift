@@ -2,6 +2,11 @@ import SwiftUI
 
 private let shareLog = AppLogger(category: "Share")
 private let draftLog = AppLogger(category: "DraftSession")
+// [AUD2-09] The delete chain used raw `print` for its traces; the project
+// convention is AppLogger (Release-suppressed .debug, and WARN/ERROR mirrored
+// into CrashReporter). One logger for the whole chain so the traces stay
+// greppable by category.
+private let deleteLog = AppLogger(category: "DeleteSession")
 
 // MARK: - Session context-menu action channel
 
@@ -1810,13 +1815,13 @@ struct ContentView: View {
         }
         .sheet(item: $sessionToDelete) { session in
             DeleteConfirmSheet(info: $singleDeleteInfo, isLoading: false) {
-                print("[DELETE] onDelete called for session: \(session.id)")
+                deleteLog.debug("[DELETE] onDelete called for session: \(session.id)")
                 deleteSession(session)
                 sessionToDelete = nil
                 singleDeleteInfo = nil
             }
             .onAppear {
-                print("[DELETE] Sheet appeared. singleDeleteInfo is \(singleDeleteInfo == nil ? "nil" : "non-nil, sessionCount=\(singleDeleteInfo!.sessionCount)")")
+                deleteLog.debug("[DELETE] Sheet appeared. singleDeleteInfo is \(singleDeleteInfo == nil ? "nil" : "non-nil, sessionCount=\(singleDeleteInfo!.sessionCount)")")
             }
             .presentationDetents([.medium])
         }
@@ -3921,16 +3926,16 @@ struct ContentView: View {
                 folderPickerRequest = FolderPickerRequest(
                     sessionIds: [sid], fromMultiSelect: false, anyFiled: filed)
             case .delete(let sid):
-                print("[DELETE] Context menu tapped for session: \(sid)")
+                deleteLog.debug("[DELETE] Context menu tapped for session: \(sid)")
                 let info = Self.computeDeleteInfo(for: [sid], totalSessions: sessions.count)
-                print("[DELETE] computeDeleteInfo returned: sessionCount=\(info.sessionCount), fileCount=\(info.totalFileCount), size=\(info.totalSize)")
+                deleteLog.debug("[DELETE] computeDeleteInfo returned: sessionCount=\(info.sessionCount), fileCount=\(info.totalFileCount), size=\(info.totalSize)")
                 singleDeleteInfo = info
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                    print("[DELETE] singleDeleteInfo set, now setting sessionToDelete")
+                    deleteLog.debug("[DELETE] singleDeleteInfo set, now setting sessionToDelete")
                     if let current = sessions.first(where: { $0.id == sid }) {
                         sessionToDelete = current
                     }
-                    print("[DELETE] sessionToDelete set, sheet should appear")
+                    deleteLog.debug("[DELETE] sessionToDelete set, sheet should appear")
                 }
             }
         }
@@ -5551,9 +5556,9 @@ private struct DeleteConfirmSheet: View {
                     ProgressView("Calculating…")
                         .controlSize(.large)
                     Spacer()
-                    let _ = print("[DELETE] DeleteConfirmSheet showing ProgressView. isLoading=\(isLoading), info is \(info == nil ? "nil" : "non-nil")")
+                    let _ = deleteLog.debug("[DELETE] DeleteConfirmSheet showing ProgressView. isLoading=\(isLoading), info is \(info == nil ? "nil" : "non-nil")")
                 } else if let info {
-                    let _ = print("[DELETE] DeleteConfirmSheet showing info. sessionCount=\(info.sessionCount)")
+                    let _ = deleteLog.debug("[DELETE] DeleteConfirmSheet showing info. sessionCount=\(info.sessionCount)")
                     ScrollView {
                         VStack(alignment: .leading, spacing: 16) {
                             // Sessions

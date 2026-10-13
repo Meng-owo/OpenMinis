@@ -2639,7 +2639,16 @@ actor ChatStore {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
+            let stepRc = sqlite3_step(stmt)
+            // [AUD2-09] The delete used to drop a failed step on the floor. The
+            // sidebar removes the row optimistically before this runs, so a
+            // failed DELETE left the session in the store with nothing in the
+            // logs — the row simply reappeared on the next refresh. Surface it.
+            if stepRc != SQLITE_DONE {
+                logger.error("[DELETE] sessions row delete failed id=\(id.prefix(8)) rc=\(stepRc): \(String(cString: sqlite3_errmsg(db)))")
+            }
+        } else {
+            logger.error("[DELETE] sessions delete prepare failed id=\(id.prefix(8)): \(String(cString: sqlite3_errmsg(db)))")
         }
         sqlite3_finalize(stmt)
         // Clean up per-session etag cache
