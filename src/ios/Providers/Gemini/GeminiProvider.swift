@@ -219,11 +219,18 @@ final class GeminiProvider: LLMProvider {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
+                    var diagFirstLines: [String] = []
+                    var diagLineCount = 0
+                    var diagDataLineCount = 0
+                    let diagCaptureLimit = 8
                     for try await line in bytes.lines {
                         guard !Task.isCancelled else { break }
-                        guard line.hasPrefix("data: ") else { continue }
-
-                        let jsonStr = String(line.dropFirst(6))
+                        diagLineCount += 1
+                        if diagFirstLines.count < diagCaptureLimit {
+                            diagFirstLines.append(line.count > 240 ? String(line.prefix(240)) + "…" : line)
+                        }
+                        guard let jsonStr = Self.ssePayload(from: line) else { continue }
+                        diagDataLineCount += 1
                         guard let jsonData = jsonStr.data(using: .utf8),
                               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
 
@@ -237,6 +244,10 @@ final class GeminiProvider: LLMProvider {
                             continuation.yield(event)
                         }
                     }
+                    if !Task.isCancelled && diagDataLineCount == 0 {
+                        let preview = diagFirstLines.joined(separator: " | ")
+                        logger.warning("[GeminiStream] empty stream diagnostic — totalLines=\(diagLineCount) dataLines=0 firstLines=\(preview)")
+                    }
                     continuation.yield(.done)
                     continuation.finish()
                 } catch {
@@ -247,6 +258,17 @@ final class GeminiProvider: LLMProvider {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// [AUD6-01] Mirror of OpenAIAgentProvider.ssePayload — strips the `data:`
+    /// SSE-line prefix, tolerating a missing optional space after the colon
+    /// (third-party gateways have been observed shipping `data:{...}`; the old
+    /// strict `data: `-only check dropped every chunk there and surfaced as
+    /// "model said nothing").
+    private static func ssePayload(from line: String) -> String? {
+        guard line.hasPrefix("data:") else { return nil }
+        let after = line.dropFirst(5)
+        return after.first == " " ? String(after.dropFirst()) : String(after)
     }
 
     /// Non-streaming call with tools — used when streaming is not needed.
