@@ -134,8 +134,10 @@ final class GeminiProvider: LLMProvider {
                     for try await line in bytes.lines {
                         guard !Task.isCancelled else { break }
 
-                        guard line.hasPrefix("data: ") else { continue }
-                        let jsonStr = String(line.dropFirst(6))
+                        // [AUD6-01] Same `data:` prefix normalization as the
+                        // streamRaw loop — a space-less gateway must not
+                        // silently empty this path either.
+                        guard let jsonStr = Self.ssePayload(from: line) else { continue }
                         guard let jsonData = jsonStr.data(using: .utf8),
                               let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else { continue }
 
