@@ -3032,6 +3032,7 @@
 				E5TSV0001 /* ToolsSettingsView.swift in Sources */,
 				E5SAD0001 /* SubAgentDefinition.swift in Sources */,
 				E5SAS0001 /* SubAgentStore.swift in Sources */,
+				E5AJR0003 /* ModelTierResolver.swift in Sources */,
 
 				AC0000202 /* ProviderCustomizationGenerated.swift in Sources */,
 				BC1000000000000000000005 /* BridgeKernelAssembly.swift in Sources */,
