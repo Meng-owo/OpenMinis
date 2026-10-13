@@ -1765,10 +1765,12 @@ final class CloudSyncEngine: ObservableObject {
 
     // MARK: - Provider Config & EnvVar Merge
 
-    // MARK: - Secret Export/Import (base64 via CloudKit)
+    // MARK: - Secret Export/Import (base64 via CloudKit; encoding, not encryption)
 
     /// Export provider API keys as JSON:
     ///   [{"instanceId": "...", "apiKey": "<b64>", "updatedAt": <unix_ts>}]
+    ///
+    /// `apiKey` is base64 — encoding, not encryption (decision #2).
     ///
     /// `updatedAt` is the local UserDefaults-tracked time this key was last saved
     /// via `ProviderKeychainHelper.saveAPIKey`. It lets receiving devices do

@@ -22177,60 +22177,60 @@
         }
       }
     },
-    "Choose which data this device pushes to iCloud. API keys and secrets are synced securely via iCloud Keychain.": {
+    "Choose which data this device pushes to iCloud. API keys and secrets sync through your iCloud account (base64-encoded, not end-to-end encrypted).": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wählen Sie aus, welche Daten dieses Gerät auf iCloud hochlädt. API-Schlüssel und Geheimnisse werden sicher über iCloud-Schlüsselbund synchronisiert."
+            "value": "Wählen Sie aus, welche Daten dieses Gerät auf iCloud hochlädt. API-Schlüssel und Geheimnisse werden über Ihr iCloud-Konto synchronisiert (Base64-kodiert, nicht Ende-zu-Ende-verschlüsselt)."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choose which data this device pushes to iCloud. API keys and secrets are synced securely via iCloud Keychain."
+            "value": "Choose which data this device pushes to iCloud. API keys and secrets sync through your iCloud account (base64-encoded, not end-to-end encrypted)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elige qué datos envía este dispositivo a iCloud. Las claves de API y los secretos se sincronizan de forma segura mediante el llavero de iCloud."
+            "value": "Elige qué datos envía este dispositivo a iCloud. Las claves de API y los secretos se sincronizan a través de tu cuenta de iCloud (codificados en base64, sin cifrado de extremo a extremo)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisissez les données que cet appareil envoie vers iCloud. Les clés API et les secrets sont synchronisés en toute sécurité via le trousseau iCloud."
+            "value": "Choisissez les données que cet appareil envoie vers iCloud. Les clés API et les secrets sont synchronisés via votre compte iCloud (encodés en base64, sans chiffrement de bout en bout)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "このデバイスから iCloud にプッシュするデータを選択します。API キーとシークレットは iCloud キーチェーン経由で安全に同期されます。"
+            "value": "このデバイスから iCloud にプッシュするデータを選択します。API キーとシークレットは iCloud アカウント経由で同期されます（Base64 エンコード、エンドツーエンド暗号化ではありません）。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "이 기기가 iCloud로 푸시할 데이터를 선택하세요. API 키와 비밀은 iCloud 키체인을 통해 안전하게 동기화됩니다."
+            "value": "이 기기가 iCloud로 푸시할 데이터를 선택하세요. API 키와 비밀은 iCloud 계정을 통해 동기화됩니다(Base64 인코딩, 종단 간 암호화 아님)."
           }
         },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Выберите, какие данные это устройство отправляет в iCloud. API-ключи и секреты безопасно синхронизируются через Связку ключей iCloud."
+            "value": "Выберите, какие данные это устройство отправляет в iCloud. API-ключи и секреты синхронизируются через вашу учётную запись iCloud (в кодировке Base64, без сквозного шифрования)."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择本设备推送到 iCloud 的数据类型。API 密钥和敏感信息通过 iCloud 钥匙串安全同步。"
+            "value": "选择本设备推送到 iCloud 的数据类型。API 密钥和敏感信息通过你的 iCloud 账户同步（base64 编码，非端到端加密）。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "選擇本裝置推送到 iCloud 的資料類型。API 金鑰和機密資訊透過 iCloud 鑰匙圈安全同步。"
+            "value": "選擇本裝置推送到 iCloud 的資料類型。API 金鑰和機密資訊透過你的 iCloud 帳戶同步（base64 編碼，非端對端加密）。"
           }
         }
       }

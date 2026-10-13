@@ -127,6 +127,10 @@ actor ProviderConfigDB {
             // builds so we don't round-trip-strip them (the exact failure
             // mode that pinned v2 into a ping-pong loop when a stale build
             // dropped the deletedInstances field).
+            //
+            // secret_blob/secret_kind/secret_updated_at carry the sync-side
+            // secret copy as base64 text — encoding, not encryption (decision
+            // #2); see SyncedProviderInstanceV3.secretBlob.
 
             exec(db: db, """
                 CREATE TABLE provider_instances (

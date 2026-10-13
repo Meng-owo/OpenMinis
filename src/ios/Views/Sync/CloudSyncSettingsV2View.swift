@@ -137,7 +137,7 @@ struct CloudSyncSettingsV2View: View {
                         }
                     }
                 } footer: {
-                    Text("Choose which data this device pushes to iCloud. API keys and secrets are synced securely via iCloud Keychain.")
+                    Text("Choose which data this device pushes to iCloud. API keys and secrets sync through your iCloud account (base64-encoded, not end-to-end encrypted).")
                         .font(.caption)
                 }
 

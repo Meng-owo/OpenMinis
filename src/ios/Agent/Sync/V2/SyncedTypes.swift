@@ -399,8 +399,9 @@ struct SyncedMCPServer: Syncable {
 // — solved here at the record-shape level, not application-layer.
 //
 // Secret storage: per the agreed design (decision #2), secrets are
-// inlined on the instance record as `secretBlob` (base64-wrapped
-// ciphertext). Changes to instance metadata (label, baseURL, etc.) and
+// inlined on the instance record as `secretBlob` (base64-encoded —
+// encoding, not encryption; see SyncedEnvVar's trust-model note).
+// Changes to instance metadata (label, baseURL, etc.) and
 // secret rotation both touch the same record, but the cost of
 // re-uploading secret bytes on a label change is negligible at the
 // payload sizes involved (single-instance record is ~hundreds of
@@ -419,7 +420,7 @@ struct SyncedProviderInstanceV3: Syncable {
     var imageEndpointResolved: String?
     var isEnabled: Int                   // 0/1
     var sortOrder: Int
-    var secretBlob: String?              // base64-wrapped Keychain secret; nil = no secret yet
+    var secretBlob: String?              // base64-encoded Keychain secret (not encrypted); nil = no secret yet
     var secretKind: String?              // 'apiKey' | 'manual-oauth-token' | 'oauth-token' | nil
     var secretUpdatedAt: Date?
     var createdAt: Date

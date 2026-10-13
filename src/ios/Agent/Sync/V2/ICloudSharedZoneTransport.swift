@@ -122,8 +122,9 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         "MemoryGlobalV2":     sharedZoneName,
         "MemoryDailyV2":      sharedZoneName,
         // [T-provider-sync-v3-zone-mapping] Per-record provider sync v3.
-        // Instances carry secretBlob (encrypted API keys), so they belong
-        // in the secrets zone alongside ProviderConfigV2. Entries and
+        // Instances carry secretBlob (base64-encoded — encoding, not
+        // encryption; decision #2), so they belong in the secrets zone
+        // alongside ProviderConfigV2. Entries and
         // groups have no secret fields, but we keep all three V3 types
         // co-located in secretsZoneName so a single push batch lands the
         // related records together (LWW conflict resolution is per-record
