@@ -73,6 +73,9 @@ struct SyncMigrationDetailView: View {
         var throttleLabel: String = ""
         var ratePerSecond: Double = 0
         var network: String = ""
+        // [AUD4-03] Newest-first permanent-failure log for the Sync Issues
+        // section (recorded by SyncCore; see PermanentSyncFailure).
+        var recentFailures: [PermanentSyncFailure] = []
 
         static var empty: VM { VM() }
     }
@@ -212,6 +215,38 @@ struct SyncMigrationDetailView: View {
                     LabeledContent(AppLocalized("Last fetch"), value: relative(vm.lastFetchAt))
                 } header: {
                     Text("Sync Activity")
+                }
+            }
+
+            // [AUD4-03] Permanent sync failures are dropped from the dirty
+            // queue and never retried, so without this section the affected
+            // data silently never syncs — this is its only visible surface.
+            if vm.v2Enabled, !vm.recentFailures.isEmpty {
+                Section {
+                    DisclosureGroup {
+                        ForEach(vm.recentFailures, id: \.self) { f in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("\(f.recordType) · \(String(f.recordId.prefix(8)))")
+                                    .font(.caption.monospaced())
+                                Text(f.reason)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(relative(f.at))
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                    } label: {
+                        LabeledContent(AppLocalized("Failed items")) {
+                            Text("\(vm.recentFailures.count)")
+                                .foregroundStyle(MinisTheme.destructive)
+                        }
+                    }
+                } header: {
+                    Text("Sync Issues")
+                } footer: {
+                    Text("These items were rejected by iCloud and are not retried automatically. The most recent failures are kept on this device.")
+                        .font(.caption)
                 }
             }
 
@@ -1005,6 +1040,7 @@ struct SyncMigrationDetailView: View {
         next.isCanceledByUser = await MigrationEngine.shared.isCanceledByUser()
         next.throttleLabel = SyncCore.shared.throttleLabel
         next.ratePerSecond = SyncCore.shared.recentRatePerSecond
+        next.recentFailures = SyncCore.shared.recentPermanentFailures
         switch SyncCore.shared.networkClass {
         case .wifi: next.network = "Wi-Fi"
         case .cellular: next.network = "Cellular"

@@ -14,6 +14,17 @@ enum SyncDirtyReason: String {
     case other
 }
 
+/// [AUD4-03] One entry of the recent-permanent-failure log surfaced in the
+/// Sync panel (`SyncCore.recentPermanentFailures`). A permanent failure is
+/// dropped from the dirty queue and never retried, so the panel is the only
+/// place a user can ever see that the record stopped syncing.
+struct PermanentSyncFailure: Codable, Hashable {
+    let recordType: String   // e.g. "MessageV2"
+    let recordId: String
+    let reason: String
+    let at: Date
+}
+
 /// Central dispatcher between application writes and the configured
 /// transports. SyncCore owns:
 ///
@@ -30,7 +41,11 @@ enum SyncDirtyReason: String {
 @MainActor
 final class SyncCore {
     static let shared = SyncCore()
-    private init() {}
+    private init() {
+        // [AUD4-03] Rehydrate the permanent-failure log — the dirty rows it
+        // describes were cleared from the queue before this launch.
+        recentPermanentFailures = Self.loadPermanentFailures()
+    }
 
     // MARK: - Configuration
 
@@ -150,6 +165,43 @@ final class SyncCore {
         pausedUntil = nil
         logger.info("[SyncCore] resumed")
         scheduleSend(delay: 1)
+    }
+
+    // MARK: - Recent permanent failures (AUD4-03)
+
+    /// Newest first. Capped at `maxPermanentFailuresKept` so the list can't
+    /// grow unbounded; persisted to UserDefaults because the dirty row
+    /// itself is already gone by the time this is recorded — a relaunch
+    /// must not erase the only trace of the failure.
+    private(set) var recentPermanentFailures: [PermanentSyncFailure] = []
+    static let maxPermanentFailuresKept = 20
+    private static let permanentFailuresKey = "cloudSync.v2.recentPermanentFailures"
+
+    /// Record one permanent failure for the Sync panel's "Sync Issues"
+    /// section. A `SyncOutcome.permanentFailure` is dropped from the dirty
+    /// queue and never retried, so without this trace the affected data
+    /// silently never syncs and the user has no way to notice.
+    private func recordPermanentFailure(id: SyncRecordID, reason: String) {
+        var list = recentPermanentFailures
+        list.insert(
+            PermanentSyncFailure(recordType: id.type, recordId: id.id, reason: reason, at: Date()),
+            at: 0
+        )
+        if list.count > Self.maxPermanentFailuresKept {
+            list.removeLast(list.count - Self.maxPermanentFailuresKept)
+        }
+        recentPermanentFailures = list
+        if let data = try? JSONEncoder().encode(list) {
+            UserDefaults.standard.set(data, forKey: Self.permanentFailuresKey)
+        }
+    }
+
+    private static func loadPermanentFailures() -> [PermanentSyncFailure] {
+        guard let data = UserDefaults.standard.data(forKey: permanentFailuresKey),
+              let list = try? JSONDecoder().decode([PermanentSyncFailure].self, from: data) else {
+            return []
+        }
+        return list
     }
 
     /// Debounce for `scheduleSend`. Mirrors v1's 3s default.
@@ -569,6 +621,9 @@ final class SyncCore {
             case .permanentFailure(let id, let reason):
                 permanent += 1
                 logger.error("[SyncCore] permanent failure \(id) via \(transport): \(reason)")
+                // [AUD4-03] Keep a visible trace before dropping the dirty
+                // row — this record will never be retried automatically.
+                recordPermanentFailure(id: id, reason: reason)
                 await ChatStore.shared.clearDirtyRecord(recordName: id.description)
             }
         }
