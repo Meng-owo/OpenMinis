@@ -1032,6 +1032,14 @@ struct ContentView: View {
     // array, so this mainly prevents redundant Task churn.
     @State private var sessionRefreshInFlight = false
     @State private var sessionRefreshPending = false
+    /// [T-ios-listsessions-perf] When the previous sidebar refresh COMPLETED.
+    /// `SessionRefreshScheduler` measures its cooldown from this instant rather
+    /// than from notification arrival, because a 1 s throttle cannot bound a
+    /// refresh that itself takes 4-9 s (it produced 63 back-to-back rebuilds and
+    /// Thermal Serious). See `requestSessionRefresh()`.
+    @State private var lastSessionRefreshFinishedAt: Date?
+    /// Cancellable handle for the deferred (cooldown-respecting) passive refresh.
+    @State private var sessionRefreshCooldownWork: DispatchWorkItem?
     /// Whether the initial session load has completed (prevents showing the list before we decide to auto-navigate).
     @State private var didInitialLoad = false
     /// Controls sidebar visibility on iPad (automatic handles iPhone collapse).
@@ -1982,21 +1990,18 @@ struct ContentView: View {
             }
         }
         .onReceive(
-            // Throttle (not debounce): session-list updates are infrequent (one
-            // per agent tool round, seconds apart), but a long multi-tool task
-            // emits a steady stream of them. `.debounce` was reset by every new
-            // event, so during a continuously-running task the list NEVER
-            // refreshed until the task fully stopped — the row stayed on its
-            // stale preview ("No messages yet") the whole time. `.throttle`
-            // fires the first event right away and then at most once per second,
-            // so the preview keeps up with each tool round without thrashing
-            // `listSessions`.
+            // [T-ios-listsessions-perf] Passive entry point. Kept as a throttle
+            // (not debounce) so the row preview still tracks each tool round,
+            // but the real rate limit now lives in `requestSessionRefresh()`:
+            // the cooldown is measured from the previous refresh's COMPLETION
+            // (see SessionRefreshScheduler), which is the only bound that holds
+            // when a single refresh outlives the throttle window.
             NotificationCenter.default.publisher(for: .sessionDidUpdate)
                 .throttle(for: .seconds(1), scheduler: RunLoop.main, latest: true)
         ) { _ in
             // [T-ios-state-publish-offmain-crash] force main-thread @State write
             Task { @MainActor in
-                refreshSessionList()
+                requestSessionRefresh()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .moveInputToSession)) { note in
@@ -4317,11 +4322,58 @@ struct ContentView: View {
             sessions = await ChatStore.shared.listSessions()
             folders = await ChatStore.shared.listFolders()
             sessionRefreshInFlight = false
-            if sessionRefreshPending {
-                sessionRefreshPending = false
-                refreshSessionList()
-            }
+            // [T-ios-listsessions-perf] Stamp the COMPLETION instant — the
+            // cooldown in SessionRefreshScheduler is keyed on this, not on when
+            // a notification arrived.
+            lastSessionRefreshFinishedAt = Date()
+            drainPendingSessionRefresh()
         }
+    }
+
+    /// [T-ios-listsessions-perf] Passive (background-stream) entry point for
+    /// session-list updates. Navigation and user-initiated refreshes still call
+    /// `refreshSessionList()` directly (a tap must never wait out a cooldown),
+    /// but the `.sessionDidUpdate` stream goes through here: run immediately if
+    /// the completion-keyed cooldown has elapsed, otherwise defer until it has
+    /// and re-check then (so repeated events coalesce into one run).
+    @MainActor
+    private func requestSessionRefresh() {
+        guard !sessionRefreshInFlight else {
+            sessionRefreshPending = true
+            return
+        }
+        switch SessionRefreshScheduler.decide(now: Date(), lastFinishedAt: lastSessionRefreshFinishedAt) {
+        case .runNow:
+            refreshSessionList()
+        case .defer(let delay):
+            scheduleCooldownSessionRefresh(after: delay)
+        }
+    }
+
+    /// Run the trailing refresh requested while one was in flight — but only
+    /// once the cooldown has elapsed. Re-running immediately here is exactly the
+    /// back-to-back loop this change removes.
+    @MainActor
+    private func drainPendingSessionRefresh() {
+        guard sessionRefreshPending else { return }
+        sessionRefreshPending = false
+        switch SessionRefreshScheduler.decide(now: Date(), lastFinishedAt: lastSessionRefreshFinishedAt) {
+        case .runNow:
+            refreshSessionList()
+        case .defer(let delay):
+            scheduleCooldownSessionRefresh(after: delay)
+        }
+    }
+
+    /// Coalesce a cooldown-limited passive refresh onto one cancellable timer.
+    /// When it fires it re-enters `requestSessionRefresh()` so it re-reads the
+    /// (possibly updated) completion stamp rather than trusting a stale delay.
+    @MainActor
+    private func scheduleCooldownSessionRefresh(after delay: TimeInterval) {
+        sessionRefreshCooldownWork?.cancel()
+        let work = DispatchWorkItem { requestSessionRefresh() }
+        sessionRefreshCooldownWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     /// Reveal the search bar (if hidden) and focus its text field. Bound to the
