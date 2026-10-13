@@ -7373,7 +7373,7 @@ private struct SettingsSheet: View {
                 } header: {
                     Text("Automation")
                 } footer: {
-                    Text("A scheduled prompt fires a local notification at the time you pick. Tapping it wakes the agent with your preset prompt — untapped, nothing runs (iOS does not allow apps to execute unattended in the background).")
+                    Text("A scheduled prompt fires a local notification at the time you pick. Tapping it wakes the agent with your preset prompt — untapped, nothing runs (iOS does not allow apps to execute unattended in the background). For timers that Minis itself runs while it is open, see Agent Runtime ▸ Scheduled Tasks & Pulses.")
                 }
 
                 Section("Appearance") {
@@ -7396,6 +7396,21 @@ private struct SettingsSheet: View {
                             Text("Skills")
                         } icon: {
                             QuietAppIcon(id: QuietIconSlot.skills.id, systemName: QuietIconSlot.skills.systemName)
+                        }
+                    }
+                    // [AUD-20] Moved up here from its own "Agent Runtime"
+                    // section further down: the same section name appearing
+                    // twice read as two features, and it split the runtime
+                    // cluster in half. It also has an icon slot of its own now
+                    // (`.scheduled`) instead of silently re-using the
+                    // terminal's.
+                    NavigationLink {
+                        ScheduledTasksView()
+                    } label: {
+                        Label {
+                            Text("Scheduled Tasks & Pulses")
+                        } icon: {
+                            QuietAppIcon(id: QuietIconSlot.scheduled.id, systemName: QuietIconSlot.scheduled.systemName)
                         }
                     }
                     // [T-home-bottom-bar][v3 醒醒 09-10] Terminal moved here
@@ -7538,17 +7553,9 @@ private struct SettingsSheet: View {
                     }
                 }
 
-                Section("Agent Runtime") {
-                    NavigationLink {
-                        ScheduledTasksView()
-                    } label: {
-                        Label {
-                            Text("Scheduled Tasks & Pulses")
-                        } icon: {
-                            QuietAppIcon(id: QuietIconSlot.terminal.id, systemName: "clock.arrow.circlepath")
-                        }
-                    }
-                }
+                // [AUD-20] "Scheduled Tasks & Pulses" lives in the Agent Runtime
+                // section above now; this second section used to duplicate that
+                // heading.
 
                 Section("Permissions") {
                     NavigationLink {

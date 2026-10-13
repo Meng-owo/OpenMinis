@@ -846,6 +846,10 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
     case webSearch
     /// [T-user-manual 09-11] Settings → About section's 使用手册 row.
     case manual
+    /// [AUD-20] Settings → Agent Runtime 的「定时任务与脉搏」行。 Was sharing
+    /// `.terminal`, so customising the terminal icon silently changed this
+    /// row's icon too — two features, one slot.
+    case scheduled
 
     var id: String { rawValue }
     var title: String {
@@ -874,6 +878,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .browser: return "浏览器"
         case .bridgeRelay: return "桥·对外连接"
         case .webSearch: return "联网搜索"
+        case .scheduled: return "定时任务与脉搏"
         }
     }
     var systemName: String {
@@ -902,6 +907,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .browser: return "globe"
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"
+        case .scheduled: return "clock.arrow.circlepath"
         }
     }
 }

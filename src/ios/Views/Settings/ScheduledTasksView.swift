@@ -66,7 +66,19 @@ guard let id = pendingDeleteId else { return }
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.bottom, 8)
+
+            // [AUD-20] One line to tell this screen apart from the older,
+            // notification-based "Scheduled Prompts" (Settings ▸ Automation):
+            // the two are named similarly and behave differently in exactly the
+            // way a user would want to know about before trusting either.
+            Text("这些任务在应用内运行：到点由 Minis 自己触发。应用不在时不会执行——下次打开会重新挂上，并把这期间错过的触发记成一笔。")
+                .font(.system(size: fontSettings.scaledApp(11)))
+                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 10)
 
             Divider()
                 .overlay(CSSThemeVariables.divider(isDark: isDark))
