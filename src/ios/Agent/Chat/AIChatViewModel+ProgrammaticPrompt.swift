@@ -499,6 +499,20 @@ extension AIChatViewModel {
                 d["missed_steer"] = job.missedSteers
                 d["missed_steer_note"] = "The run ended before reading these — the result does not reflect them."
             }
+            // [T-agent-model-identity] Fold in what the child's loop is serving
+            // its turns on right now, then report the identity in the same
+            // one-line forms the cards use. `model_resolved` is what the
+            // strategy picked, `model_effective` what has actually served a
+            // turn — they differ when group fallback moved the child.
+            if let cid = job.runSessionId, job.state == .running,
+               let vm = ViewModelCache.shared.get(for: cid) {
+                job.modelIdentity?.merge(vm.lastEffectiveModel)
+            }
+            if let identity = job.modelIdentity {
+                d["tier_requested"] = identity.tierRequested ?? NSNull()
+                d["model_resolved"] = identity.resolvedLabel ?? NSNull()
+                d["model_effective"] = identity.effectiveModel ?? NSNull()
+            }
             if let cid = job.runSessionId, job.state == .running,
                let info = SessionActivityTracker.shared.sessionToolInfo[cid] {
                 d["current_tool"] = info.toolName
@@ -704,6 +718,7 @@ extension AIChatViewModel {
                                        then: .followUpParent(template: nil))
         newJob.subAgentName = subAgent.name
         newJob.modelOrigin = resolution.origin.rawValue
+        newJob.modelIdentity = HelperModelIdentity.make(resolution: resolution)
         newJob.creatorSessionId = parentSid
         newJob.wasResumed = true
 
@@ -839,6 +854,7 @@ extension AIChatViewModel {
                                     then: wait ? AgentJobThen.none : AgentJobThen.followUpParent(template: nil))
         job.subAgentName = subAgent.name
         job.modelOrigin = resolution.origin.rawValue
+        job.modelIdentity = HelperModelIdentity.make(resolution: resolution)
         job.creatorSessionId = parentSid
 
         let (child, _) = ViewModelCache.shared.getOrCreate(for: session.id)

@@ -5421,6 +5421,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 logger.info("[subagent_task] steer consumed — \(steers.count) correction(s) joined turn \(turnCount) of \(self.sessionId?.prefix(8) ?? "nil")")
             }
 
+            // [T-agent-model-identity] Record which entry this turn is being
+            // served on. Group fallback can move `activeEntryId` mid-run, so it
+            // is re-read every iteration; the registry folds this live fact into
+            // the job's identity when the run finishes, which is what makes the
+            // completion card name the model that actually ran.
+            noteEffectiveEntry(activeEntryId)
+
             // [T-ios-inloop-compact-freeze] Re-anchor msgIdx by stable id every
             // iteration. External mutations while the loop runs — in-loop
             // compaction's divider insert / status-row removeAll, a mid-loop
@@ -5691,6 +5698,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     return false
                 }
                 logger.info("🔀AGENT_LOOP provider updated after fallback: \(prevEntryId ?? "nil") → \(newEntryId)")
+                // [T-agent-model-identity] The run is now serving turns on a
+                // different entry — record it here as well as at the top of the
+                // next iteration, so a run that ends right after a fallback
+                // still reports the model that actually answered.
+                noteEffectiveEntry(newEntryId)
                 provider = await makeAgentProvider(for: newEntry)
                 // [P1-7] Route through the single builder — the old hand-written
                 // recipe dropped skills/MCP/TTS/memory on fallback.
@@ -7045,7 +7057,68 @@ enum LLMProviderError: LocalizedError {
     }
 }
 
+/// What one served turn of an agent loop ran on — recorded by the send loop on
+/// the vm (`lastEffectiveModel`) so the registry / status projections can read
+/// it without reaching into the loop. Request side is known the moment the
+/// stream opens; `responseModel` arrives with the first response event that
+/// names the model.
+///
+/// [AUD-02] Hollowed to `entryId`-only during the decouple: `lastEffectiveModel`
+/// was never written, so `HelperModelIdentity.merge` had nothing to fold in and
+/// every card's "actual model" line was empty, silently. Restored in full.
 struct EffectiveModelRecord: Equatable {
-    var entryId: String? = nil
+    var entryId: String?
+    var providerLabel: String?
+    var providerType: String?
+    var modelId: String?
+    var modelName: String?
+    var responseModel: String?
+}
+
+extension EffectiveModelRecord {
+    /// Request-side facts for the entry the send loop is serving a turn on.
+    @MainActor
+    static func make(entryId: String, store: ProviderConfigStore = .shared) -> EffectiveModelRecord? {
+        guard let entry = store.entry(for: entryId) else { return nil }
+        var rec = EffectiveModelRecord()
+        rec.entryId = entry.id
+        rec.modelId = entry.model.id
+        rec.modelName = entry.model.displayName
+        if let inst = store.instance(for: entry.providerInstanceId) {
+            rec.providerLabel = inst.label
+            rec.providerType = inst.providerType.rawValue
+        } else {
+            rec.providerType = entry.model.provider
+        }
+        return rec
+    }
+}
+
+// MARK: - Recording on the vm
+
+extension AIChatViewModel {
+    /// The send loop is about to serve (or has just served) a turn on
+    /// `entryId` — after group fallback moved it, this is the backup entry.
+    /// A change of entry drops the previously reported response model: it
+    /// named a different provider's answer.
+    func noteEffectiveEntry(_ entryId: String?) {
+        guard let entryId, !entryId.isEmpty else { return }
+        if lastEffectiveModel?.entryId == entryId { return }
+        guard var rec = EffectiveModelRecord.make(entryId: entryId) else { return }
+        rec.responseModel = nil
+        lastEffectiveModel = rec
+        logger.info("[ModelIdentity] effective entry=\(entryId) model=\(rec.modelId ?? "?") provider=\(rec.providerLabel ?? "?") sid=\(sessionId?.prefix(8) ?? "nil")")
+    }
+
+    /// The API named the model serving the current turn.
+    func noteResponseModel(_ reported: String) {
+        let trimmed = reported.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var rec = lastEffectiveModel ?? EffectiveModelRecord()
+        guard rec.responseModel != trimmed else { return }
+        rec.responseModel = trimmed
+        lastEffectiveModel = rec
+        logger.info("[ModelIdentity] response model=\(trimmed) entry=\(rec.entryId ?? "?") sid=\(sessionId?.prefix(8) ?? "nil")")
+    }
 }
 

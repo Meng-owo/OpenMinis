@@ -20,12 +20,358 @@ import Foundation
 // hook wired to component A. Nothing registers a job yet — P1's
 // `delegate_task` and P2's `minis-scheduled` are the producers.
 
+/// [T-agent-model-identity] Which model an agent (helper / child session) is
+/// running on, kept as THREE distinct facts that must never be conflated:
+///
+///   1. origin    — [T-sub-agents-v1] "pinned" (the sub agent definition names a
+///                  Model Group) or "inherited" (it runs on the parent
+///                  conversation's binding). Replaces the old requested/used
+///                  tier pair: the delegating model no longer picks a tier, so
+///                  there is nothing to compare a request against.
+///   1b. legacy tier — `tierRequested`/`tierUsed` are what the delegating model
+///                  asked for (`model_tier: primary|sub`); `tierUsed` is what
+///                  actually ran. Read so old transcripts still render; never
+///                  written by current code.
+///   2. resolved  — the configured entry the resolver picked for the child's
+///                  binding: provider instance label + user-readable model
+///                  name (e.g. "Anthropic (53) · Claude Sonnet 5"). Known the
+///                  moment the child is created.
+///   3. effective — what the child's requests REALLY ran on. Two sources, both
+///                  from the live run, never copied from `resolved`:
+///                    · request side: the entry the send loop's
+///                      `activeEntryId` pointed at when a turn was served
+///                      (group fallback moves it) → `effectiveEntryId`,
+///                      `effectiveModelId`;
+///                    · response side: the model name the API REPORTED →
+///                      `responseModel`.
+///                  `effectiveSource` says which of the two the displayed
+///                  effective value comes from; nil = nothing confirmed yet.
+///
+/// One value type travels everywhere: the AgentJob (live), the parent's
+/// delegate_task block (UI), the tool_result JSON payload (persisted, what a
+/// reload reads back), the `<agent_callback>` attributes, and the status /
+/// debug projections.
+///
+/// [AUD-02] This struct was hollowed to a `modelOrigin`-only stub during the
+/// decouple, so `payload()` always returned `[:]` and `merge` dropped every
+/// live fact — callback cards said nothing about which model really ran, with
+/// no error anywhere. The implementation below is the real one, restored.
 struct HelperModelIdentity: Equatable, Codable {
-    var modelOrigin: String? = nil
-    init(modelOrigin: String? = nil) { self.modelOrigin = modelOrigin }
-    init(payload: [String: Any]) { self.modelOrigin = payload["model_origin"] as? String }
-    func payload() -> [String: Any] { [:] }
-    mutating func merge(_ record: Any?) {}
+    // 1. tier
+    /// [T-sub-agents-v1] Legacy: only ever set on payloads written before sub
+    /// agents replaced the tier mechanism.
+    var tierRequested: String?
+    var tierUsed: String?
+    /// [T-sub-agents-v1] "pinned" / "inherited" / "default_group" / "sub_group".
+    var modelOrigin: String?
+    // 2. resolved (resolver)
+    var resolvedEntryId: String?
+    var resolvedProviderLabel: String?
+    var resolvedProviderType: String?
+    var resolvedModelId: String?
+    var resolvedModelName: String?
+    // 3. effective — request side
+    var effectiveEntryId: String?
+    var effectiveProviderLabel: String?
+    var effectiveProviderType: String?
+    var effectiveModelId: String?
+    var effectiveModelName: String?
+    // 3. effective — response side
+    var responseModel: String?
+    /// "response" | "request" | nil (not confirmed yet / never reported).
+    var effectiveSource: String?
+    // 4. honesty
+    /// [T-subagent-ui-honesty] True when the sub agent PINNED a model group
+    /// that could not be routed, so the run fell back to inheriting the
+    /// parent's model. Surfaced as `model_group_unavailable` so the card can
+    /// say the pin did not apply instead of printing a model name that reads
+    /// like the pin worked.
+    var modelGroupUnavailable: Bool = false
+    /// [T-subagent-model-strategy] Name of the Model Group the strategy chose
+    /// (a pinned group, or the user's Default / Sub group). nil when the child
+    /// simply inherited the conversation's model, which names no group.
+    var modelGroupName: String?
+
+    init(tierRequested: String? = nil, tierUsed: String? = nil, modelOrigin: String? = nil) {
+        self.tierRequested = tierRequested
+        self.tierUsed = tierUsed
+        self.modelOrigin = modelOrigin
+    }
+
+    // MARK: - Derived views
+
+    /// "Anthropic (53) · Claude Sonnet 5" — provider instance label + model
+    /// display name; falls back to whichever half is known.
+    var resolvedLabel: String? {
+        Self.joinLabel(provider: resolvedProviderLabel, model: resolvedModelName ?? resolvedModelId)
+    }
+
+    /// The effective model as ONE id-like string: the API-reported name when
+    /// the response carried one, else the request-side model id, else nil.
+    var effectiveModel: String? {
+        if let r = responseModel, !r.isEmpty { return r }
+        if let m = effectiveModelId, !m.isEmpty { return m }
+        return nil
+    }
+
+    /// Provider label + display name of the effective entry (request side) —
+    /// what a Provider fallback shows in the detail card.
+    var effectiveLabel: String? {
+        Self.joinLabel(provider: effectiveProviderLabel, model: effectiveModelName ?? effectiveModelId)
+    }
+
+    /// True when the tier the run used differs from the one requested.
+    var tierDegraded: Bool {
+        guard let r = tierRequested, let u = tierUsed else { return false }
+        return r != u
+    }
+
+    /// True when the run served turns on a different configured entry than
+    /// the resolver picked (group fallback / provider fallback).
+    var entryFellBack: Bool {
+        guard let r = resolvedEntryId, let e = effectiveEntryId else { return false }
+        return r != e
+    }
+
+    /// True when a confirmed effective model is, after normalisation, the
+    /// same model the resolver picked — the "no surprise" case the compact
+    /// surfaces collapse into one name.
+    var effectiveMatchesResolved: Bool {
+        guard let e = effectiveModel, let r = resolvedModelId else { return false }
+        return Self.normalizedModelId(e) == Self.normalizedModelId(r)
+    }
+
+    var hasEffective: Bool { effectiveModel != nil }
+
+    // MARK: - Merging live facts
+
+    /// Fold in what the child's send loop recorded for its latest turn.
+    /// Request-side facts always update (fallback can move mid-run); the
+    /// response-reported name is kept once seen unless a newer one arrives.
+    mutating func merge(_ live: EffectiveModelRecord?) {
+        guard let live else { return }
+        if let eid = live.entryId, !eid.isEmpty {
+            effectiveEntryId = eid
+            effectiveProviderLabel = live.providerLabel
+            effectiveProviderType = live.providerType
+            effectiveModelId = live.modelId
+            effectiveModelName = live.modelName
+        }
+        if let rm = live.responseModel, !rm.isEmpty {
+            responseModel = rm
+        }
+        if responseModel != nil { effectiveSource = "response" }
+        else if effectiveModelId != nil { effectiveSource = "request" }
+    }
+
+    // MARK: - JSON payload (tool_result / status / callback attrs)
+
+    static let payloadKeys: [String] = [
+        "tier_requested", "tier_used", "model_origin",
+        "model_resolved", "model_resolved_entry_id", "model_resolved_provider", "model_resolved_provider_type",
+        "model_resolved_id", "model_resolved_name",
+        "model_effective", "model_effective_entry_id", "model_effective_provider", "model_effective_provider_type",
+        "model_effective_id", "model_effective_name", "model_effective_source", "model_response",
+        "model_group_unavailable",
+    ]
+
+    /// Snake_case keys, nil fields omitted. `model_resolved` / `model_effective`
+    /// are the one-line human forms the model reads; the `_id` / `_entry_id`
+    /// keys are what the UI re-derives fallback and equality from.
+    func payload() -> [String: Any] {
+        var d: [String: Any] = [:]
+        func put(_ k: String, _ v: String?) { if let v, !v.isEmpty { d[k] = v } }
+        put("tier_requested", tierRequested)
+        put("tier_used", tierUsed)
+        put("model_origin", modelOrigin)
+        put("model_resolved", resolvedLabel)
+        put("model_resolved_entry_id", resolvedEntryId)
+        put("model_resolved_provider", resolvedProviderLabel)
+        put("model_resolved_provider_type", resolvedProviderType)
+        put("model_resolved_id", resolvedModelId)
+        put("model_resolved_name", resolvedModelName)
+        put("model_effective", effectiveModel)
+        put("model_effective_entry_id", effectiveEntryId)
+        put("model_effective_provider", effectiveProviderLabel)
+        put("model_effective_provider_type", effectiveProviderType)
+        put("model_effective_id", effectiveModelId)
+        put("model_effective_name", effectiveModelName)
+        put("model_effective_source", effectiveSource)
+        put("model_response", responseModel)
+        // Emitted only when true: an ordinary result stays byte-identical.
+        if modelGroupUnavailable { d["model_group_unavailable"] = true }
+        put("model_group_name", modelGroupName)
+        return d
+    }
+
+    /// Reads back a payload written by `payload()` (the parent's delegate block,
+    /// a callback's attributes). A payload carrying none of the `model_*`
+    /// identity keys is NOT an identity — it is a pre-identity build's result
+    /// or a rejection (every older payload has `tier_used`), so this returns
+    /// nil rather than a struct that claims to know something.
+    init?(payload obj: [String: Any]) {
+        func s(_ k: String) -> String? { (obj[k] as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        guard Self.payloadKeys.contains(where: { $0.hasPrefix("model_") && obj[$0] != nil }) else { return nil }
+        tierRequested = s("tier_requested")
+        tierUsed = s("tier_used")
+        modelOrigin = s("model_origin")
+        modelGroupName = s("model_group_name")
+        if let b = obj["model_group_unavailable"] as? Bool {
+            modelGroupUnavailable = b
+        } else if let n = obj["model_group_unavailable"] as? NSNumber {
+            modelGroupUnavailable = n.boolValue
+        } else {
+            modelGroupUnavailable = (s("model_group_unavailable")?.lowercased() == "true")
+        }
+        resolvedEntryId = s("model_resolved_entry_id")
+        resolvedProviderLabel = s("model_resolved_provider")
+        resolvedProviderType = s("model_resolved_provider_type")
+        resolvedModelId = s("model_resolved_id")
+        resolvedModelName = s("model_resolved_name")
+        // A payload from a build that only wrote the one-line label.
+        if resolvedModelName == nil, resolvedProviderLabel == nil, let line = s("model_resolved") {
+            resolvedModelName = line
+        }
+        effectiveEntryId = s("model_effective_entry_id")
+        effectiveProviderLabel = s("model_effective_provider")
+        effectiveProviderType = s("model_effective_provider_type")
+        effectiveModelId = s("model_effective_id")
+        effectiveModelName = s("model_effective_name")
+        responseModel = s("model_response")
+        effectiveSource = s("model_effective_source")
+        if effectiveModelId == nil, responseModel == nil, let line = s("model_effective") {
+            // Older / minimal payload (callback attrs): the one-line value is
+            // all we have; treat it as the effective id.
+            effectiveModelId = line
+            if effectiveSource == nil { effectiveSource = "request" }
+        }
+    }
+
+    // MARK: - Compact text (inline block / thumbnail / nav bar)
+
+    /// The short model text for one-line surfaces. Never nil once resolved:
+    ///   · confirmed & same as resolved  → "Claude Sonnet 5 ✓"
+    ///   · confirmed & different         → "Claude Sonnet 5 → claude-sonnet-5-2"
+    ///   · not confirmed yet             → "Claude Sonnet 5"
+    func compactLine(maxModel: Int = 18) -> String? {
+        let resolvedShort = Self.shortName(resolvedModelName ?? resolvedModelId ?? "", max: maxModel)
+        guard let eff = effectiveModel else {
+            return resolvedShort.isEmpty ? nil : resolvedShort
+        }
+        if resolvedShort.isEmpty { return Self.shortName(eff, max: maxModel) }
+        if effectiveMatchesResolved { return resolvedShort + " ✓" }
+        return resolvedShort + " → " + Self.shortName(eff, max: maxModel)
+    }
+
+    /// The tightest form for a thumbnail: the effective model when confirmed,
+    /// otherwise the resolved display name.
+    func thumbnailLine(max: Int = 22) -> String? {
+        if let eff = effectiveModel {
+            if effectiveMatchesResolved, let name = resolvedModelName { return Self.shortName(name, max: max) }
+            return Self.shortName(eff, max: max)
+        }
+        if let name = resolvedModelName ?? resolvedModelId { return Self.shortName(name, max: max) }
+        return nil
+    }
+
+    // MARK: - Normalisation
+
+    /// Lower-case, alphanumerics only, trailing 8-digit date snapshot dropped —
+    /// so "claude-sonnet-5" and "Claude-Sonnet-5-20260101" compare equal while
+    /// "gpt-5" and "gpt-5-mini" do not.
+    static func normalizedModelId(_ s: String) -> String {
+        var t = s.lowercased()
+        if let slash = t.lastIndex(of: "/") { t = String(t[t.index(after: slash)...]) }
+        if t.count > 9, t.suffix(8).allSatisfy(\.isNumber), t.dropLast(8).last == "-" {
+            t = String(t.dropLast(9))
+        }
+        return t.filter { $0.isLetter || $0.isNumber }
+    }
+
+    /// [T-subagent-model-strategy] "Which model was this sub agent told to
+    /// use" in the user's terms — the first of the card's two model lines.
+    var strategyLabel: String? {
+        guard let origin = modelOrigin else { return nil }
+        let named: (String) -> String = { base in
+            guard let g = self.modelGroupName, !g.isEmpty else { return base }
+            return "\(base) · \(g)"
+        }
+        switch origin {
+        case "pinned":
+            return named(AppLocalized("Pinned group"))
+        case "inherited":
+            return AppLocalized("Auto · same as this conversation")
+        case "default_group":
+            return named(AppLocalized("Auto · default group"))
+        case "sub_group":
+            return named(AppLocalized("Auto · light group"))
+        default:
+            return origin
+        }
+    }
+
+    /// The concrete model this sub agent actually ran on, as
+    /// "Gemini 3.8 Flash (Google Gemini API)" — model first, because that is
+    /// what the user is looking for; provider in parentheses to disambiguate
+    /// the same model served by two different accounts.
+    ///
+    /// Prefers the entry that ACTUALLY served a turn (which group fallback may
+    /// have moved) over the one the strategy resolved, so the line never claims
+    /// a model that did not run.
+    var actualModelLabel: String? {
+        let name = effectiveModelName ?? resolvedModelName ?? effectiveModelId ?? resolvedModelId
+        guard let name, !name.isEmpty else { return nil }
+        let provider = effectiveProviderLabel ?? resolvedProviderLabel
+        guard let provider, !provider.isEmpty else { return name }
+        return "\(name)（\(provider)）"
+    }
+
+    static func shortName(_ s: String, max: Int) -> String {
+        guard s.count > max, max >= 5 else { return s }
+        let head = max / 2
+        let tail = max - head - 1
+        return String(s.prefix(head)) + "…" + String(s.suffix(tail))
+    }
+
+    private static func joinLabel(provider: String?, model: String?) -> String? {
+        switch (provider?.isEmpty == false ? provider : nil, model?.isEmpty == false ? model : nil) {
+        case (let p?, let m?): return "\(p) · \(m)"
+        case (nil, let m?): return m
+        case (let p?, nil): return p
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Construction from live config
+
+extension HelperModelIdentity {
+    /// The identity a child STARTS with: origin from the resolver, the resolved
+    /// entry's provider label + display name. Effective fields stay empty until
+    /// the child's loop reports a served turn — never copied from `resolved`, so
+    /// the card cannot claim a model the run never used.
+    @MainActor
+    static func make(resolution: HelperModelResolution,
+                     store: ProviderConfigStore = .shared) -> HelperModelIdentity {
+        var id = HelperModelIdentity(modelOrigin: resolution.origin.rawValue)
+        id.modelGroupUnavailable = resolution.modelGroupUnavailable
+        // The group behind the strategy, when there is one. `.group` is the
+        // only source that names one; `.directEntry` is the inherited case.
+        if case .group(let gid, _) = resolution.source {
+            id.modelGroupName = store.group(for: gid)?.name
+        }
+        let entry = resolution.entry
+        id.resolvedEntryId = entry.id
+        id.resolvedModelId = entry.model.id
+        id.resolvedModelName = entry.model.displayName
+        if let inst = store.instance(for: entry.providerInstanceId) {
+            id.resolvedProviderLabel = inst.label
+            id.resolvedProviderType = inst.providerType.rawValue
+        } else {
+            id.resolvedProviderType = entry.model.provider
+        }
+        return id
+    }
 }
 
 /// One recorded run of a scheduled task or proactive pulse.
