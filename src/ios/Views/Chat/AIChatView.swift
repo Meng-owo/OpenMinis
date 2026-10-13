@@ -2137,7 +2137,7 @@ struct AIChatView: View {
             let key = "scheduled.stealthMode"
             let cur = UserDefaults.standard.bool(forKey: key)
             UserDefaults.standard.set(!cur, forKey: key)
-            MinisToast.show(!cur ? "已开启醒醒专属隐身模式" : "已退出隐身模式", systemImage: "eye.slash.fill")
+            MinisToast.show(!cur ? "隐身模式已开启" : "隐身模式已退出", systemImage: "eye.slash.fill")
         case .compact:
             vm.compactAll()
         case .clear:
@@ -2152,7 +2152,10 @@ struct AIChatView: View {
         }
         var text = "# OpenMinis 对话记录导出\n\n"
         for msg in vm.messages {
-            let roleName = (msg.role == .user) ? "我" : "小梦"
+            // [AUD-16] The export says who spoke, so it uses the persona's
+            // own name from SOUL rather than a literal.
+            let personaName = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let roleName = (msg.role == .user) ? "我" : (personaName.isEmpty ? "助手" : personaName)
             text += "### \(roleName):\n\(msg.content)\n\n"
         }
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("OpenMinis-Chat-\(Int(Date().timeIntervalSince1970)).md")
@@ -7566,7 +7569,7 @@ struct ChatVoiceSettingsSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("AI 语音回复")
                                 .font(.body.weight(.medium))
-                            Text("小梦以专属微信式语音气泡发送语音消息")
+                            Text("以语音气泡发送语音消息")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -8387,7 +8390,7 @@ struct StickerPickerSheet: View {
                     }
                 }
             }
-            .navigationTitle("醒醒专属表情包")
+            .navigationTitle("表情包")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -8529,7 +8532,7 @@ struct StickerEditSheet: View {
                         }
                     } footer: {
                         Text(VisionGroupResolver.isConfigured
-                             ? "开启后选图即由小梦后台识图并自动预填，可随时修改。"
+                             ? "开启后选图即由助手后台识图并自动预填，可随时修改。"
                              : "可前往 Minis 设置配置识图助手以支持自动识图。")
                     }
                 }

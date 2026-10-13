@@ -79,7 +79,7 @@ static NSString *const HELP_TEXT =
      "\n"
      "EXAMPLES:\n"
      "  minis-scheduled create --prompt \"Summarize this build result\" --command \"make status\" --label build-watch --target follow-up\n"
-     "  minis-scheduled create --prompt \"Decide whether to speak\" --pulse --interval 2h --label xiaomeng-pulse --target follow-up\n"
+     "  minis-scheduled create --prompt \"Decide whether to speak\" --pulse --interval 2h --label pulse-check --target follow-up\n"
      "  minis-scheduled create --prompt \"Check the build status\" --interval 10m --count 6 --label build-watch --target follow-up\n"
      "  minis-scheduled create --prompt \"Remind me to drink water\" --after 30m\n"
      "  minis-scheduled create --prompt \"Morning summary of my notes\" --time 09:00 --repeat weekdays\n"

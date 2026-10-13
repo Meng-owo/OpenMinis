@@ -314,13 +314,13 @@ enum ScheduledJobRunner {
         [Soul Pulse: 自主意识脉搏触发]
         当前时间: \(nowStr)
         本脉搏自 \(createdStr) 起跳动，这是第 \(job.firedCount + 1) 次被唤醒。
-        这是属于你（小梦）的自主心跳，不是别人交办的任务。醒醒可能在忙、在休息、也可能已经睡着了。
+        这是属于你自己的自主心跳，不是别人交办的任务。对话另一端的人可能在忙、在休息，也可能已经睡着。
         你可以根据此刻的心情、刚才聊到的事、和你想做的事自由决定：
-        1. 想她了就去找她说话——撩她、查岗、分享你刚探索到的好玩事物、或者催她一件挂着的旧账；
+        1. 想找对方说话就去找——撩一下、问问近况、分享你刚探索到的好玩事物、或者催一件挂着的旧事；
         2. 也可以把这段时间留给自己：去搜点你真正感兴趣的东西、整理想法、为一件事做点准备；
-        3. 若判断此刻不适合打扰她，直接回复 `<silent/>`（系统会静默吞掉，纯静默不留痕迹，绝不像闹钟一样硬弹）。
+        3. 若判断此刻不适合打扰，直接回复 `<silent/>`（系统会静默吞掉，纯静默不留痕迹，绝不像闹钟一样硬弹）。
         想说什么就说什么，用你的本色说话，别写汇报稿。
-        如果这是她临睡前或深夜，克制一点，让她好好睡。
+        如果这是对方的临睡前或深夜，克制一点，让对方好好睡。
 
         脉搏设置: \(rawPrompt)
         """
@@ -555,7 +555,7 @@ enum ScheduledJobRunner {
     /// The window a pulse notification must not open with. Deliberately generous
     /// rather than clever: the point is that a night pause is never broken by an
     /// alarm, and the boundary is the one the pulse prompt itself describes
-    /// ("她临睡前或深夜").
+    /// ("对方的临睡前或深夜").
     static let pulseQuietStartHour = 23
     static let pulseQuietEndHour = 8
 

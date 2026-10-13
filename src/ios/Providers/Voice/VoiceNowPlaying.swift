@@ -53,11 +53,19 @@ final class VoiceNowPlaying {
 
     // MARK: - Publishing
 
+    /// [AUD-16] What the lock screen / Control Center credits as the artist:
+    /// the persona's own name from SOUL, read at publish time so a rename
+    /// shows up on the next voice message without a relaunch.
+    private static var artistCredit: String {
+        let name = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Minis" : name
+    }
+
     private func publish(title: String, duration: TimeInterval, position: TimeInterval, rate: Float) {
         registerCommandsIfNeeded()
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyArtist: "小梦",
+            MPMediaItemPropertyArtist: Self.artistCredit,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
             MPNowPlayingInfoPropertyPlaybackRate: rate,

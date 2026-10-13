@@ -242,6 +242,13 @@ struct ScheduledPulseCardView: View {
     @ObservedObject private var fontSettings = FontSettings.shared
     private var isDark: Bool { colorScheme == .dark }
 
+    /// [AUD-16] Whose pulse this is — the persona's own name from SOUL,
+    /// not a literal. Falls back to the plain noun when nothing is set.
+    private var pulseHeadline: String {
+        let name = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? AppLocalized("自主脉搏") : "\(name) · " + AppLocalized("自主脉搏")
+    }
+
     var body: some View {
         // [AUD-05] The card is split into two siblings on purpose: the body
         // opens the detail sheet, and the trailing control pauses/resumes the
@@ -267,7 +274,7 @@ struct ScheduledPulseCardView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(AppLocalized("小梦 · 自主脉搏"))
+                        Text(pulseHeadline)
                             .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
                             .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                             .lineLimit(1)
