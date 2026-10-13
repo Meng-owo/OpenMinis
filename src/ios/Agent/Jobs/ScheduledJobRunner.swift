@@ -519,23 +519,66 @@ enum ScheduledJobRunner {
 
     private static func scheduleInsurance(_ job: AgentJob, at date: Date) {
         let name = job.label ?? job.title
-        // [T-scheduled-prefill-and-pulse] Pulse jobs speak in a natural, in-character voice
-        // rather than the mechanical "task is due" wording.
+        var fireAt = date.addingTimeInterval(5)
         let title: String
         let body: String
         if job.isPulse {
-            title = AppLocalized("小梦")
-            body = String(format: AppLocalized("醒醒，我有点想你了，过来看看。"), name)
+            // [AUD-14] The pulse prompt tells the model that a night decision to
+            // stay quiet means "绝不像闹钟一样硬弹" — but this notification used
+            // to fire at due+5s whatever the hour and whatever the model would
+            // have chosen. A notification cannot know what the model would have
+            // said, so the honest policy is to keep it out of the night: a pulse
+            // due inside the quiet window is announced when the window ends, and
+            // says that it is late rather than pretending it is live. The wording
+            // is a plain statement of fact for the same reason — a notification
+            // that cannot know anything must not role-play knowing it.
+            let (announce, deferred) = Self.pulseAnnounceMoment(for: date)
+            fireAt = announce.addingTimeInterval(5)
+            title = AppLocalized("自主脉搏")
+            body = deferred
+                ? AppLocalized("夜里有一个自主脉搏到过点，没有打扰你。现在告诉你一声。")
+                : AppLocalized("一个自主脉搏到点了。打开 Minis 看看它做了什么。")
         } else {
             title = AppLocalized("Minis scheduled task")
             body = String(format: AppLocalized("\"%@\" is due. Open Minis to see whether it ran."), name)
         }
         JobInsuranceNotification.schedule(
-            jobId: job.id, at: date.addingTimeInterval(5),
+            jobId: job.id, at: fireAt,
             title: title,
             body: body,
             userInfo: job.target.parentSessionId.map { ["sessionId": $0] }
                 ?? job.target.sessionIdForNavigation.map { ["sessionId": $0] } ?? [:])
+    }
+
+    // MARK: - Pulse quiet hours  [AUD-14]
+
+    /// The window a pulse notification must not open with. Deliberately generous
+    /// rather than clever: the point is that a night pause is never broken by an
+    /// alarm, and the boundary is the one the pulse prompt itself describes
+    /// ("她临睡前或深夜").
+    static let pulseQuietStartHour = 23
+    static let pulseQuietEndHour = 8
+
+    /// When a pulse due at `date` should actually be announced, and whether that
+    /// is later than it was due.
+    ///
+    /// A pulse due inside the quiet window is announced at the window's end
+    /// (next 08:00), never dropped: silence is the model's call to make with its
+    /// full context, not a notification's call to make on its behalf.
+    nonisolated static func pulseAnnounceMoment(for date: Date,
+                                                calendar: Calendar = .current) -> (date: Date, deferred: Bool) {
+        let hour = calendar.component(.hour, from: date)
+        let quiet = hour >= pulseQuietStartHour || hour < pulseQuietEndHour
+        guard quiet else { return (date, false) }
+        var comps = calendar.dateComponents([.year, .month, .day], from: date)
+        comps.hour = pulseQuietEndHour
+        comps.minute = 0
+        comps.second = 0
+        var morning = calendar.date(from: comps) ?? date
+        if morning <= date {
+            morning = calendar.date(byAdding: .day, value: 1, to: morning) ?? morning
+        }
+        return (morning, true)
     }
 
     private static func cancelInsurance(_ job: AgentJob) {
