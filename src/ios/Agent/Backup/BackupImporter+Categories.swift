@@ -289,6 +289,9 @@ extension BackupImporter {
         }
 
         // Session file trees: rebuild <sid>/ wholesale (§8.3).
+        // [AUD3-01] Remember every file that actually landed so the SessionFile
+        // dirty records below can be written for exactly those.
+        var restoredFilePaths: [String] = []
         let files = try restoreFileTree(
             root: root, fileIndex: fileIndex, category: .chats,
             destinationFor: { path in
@@ -301,7 +304,8 @@ extension BackupImporter {
                 return AIChatViewModel.minisPersistentBase
                     .appendingPathComponent(parts[1], isDirectory: true)
                     .appendingPathComponent(parts[2])
-            })
+            },
+            didWrite: { restoredFilePaths.append($0) })
         report.filesWritten = files.written
         report.bytesWritten = files.bytes
         report.missingBlobs = files.missingBlobs
@@ -311,6 +315,25 @@ extension BackupImporter {
         // inbound sync state, and nothing here writes sync_pushed_records.
         for sid in restoredSessionIds {
             await store.markDirty(recordType: "Session", recordId: sid)
+        }
+
+        // [AUD3-01] The session's FILES need the same treatment, and used not to
+        // get it. A restored package wrote media/attachments/durable files into
+        // the workspace with no SessionFile dirty record, so from iCloud's point
+        // of view those files had never changed and were never pushed. "Restore
+        // on B, wipe A, move to C" then left B as the only copy. Same record type
+        // and id scheme `saveMedia` uses ("<sessionId>:<subdir>/<name>"), and the
+        // same respect for the user's upload policy: `markDirty` skips the record
+        // when Session Files is switched off in iCloud settings.
+        //
+        // One row per written file — precise, and INSERT OR REPLACE makes a
+        // repeated restore a no-op rather than growth. `restoreFileTree` only
+        // reports files it actually wrote: files the package did not mention,
+        // and files skipped because their session is running, are not marked.
+        for path in restoredFilePaths {
+            let parts = path.split(separator: "/", maxSplits: 2).map(String.init)
+            guard parts.count >= 3, parts[0] == "chats" else { continue }
+            await store.markDirty(recordType: "SessionFile", recordId: "\(parts[1]):\(parts[2])")
         }
         return report
     }
@@ -1057,7 +1080,8 @@ extension BackupImporter {
                          fileIndex: [BackupFileIndexEntry],
                          category: BackupCategory,
                          containmentRootOverride: URL? = nil,
-                         destinationFor: (String) -> URL?)
+                         destinationFor: (String) -> URL?,
+                         didWrite: ((String) -> Void)? = nil)
         throws -> (written: Int, bytes: Int64, missingBlobs: Int) {
         let fm = FileManager.default
         var written = 0
@@ -1140,6 +1164,11 @@ extension BackupImporter {
                 }
                 written += 1
                 bytes += entry.size
+                // [AUD3-01] Let the caller know a file actually landed. The
+                // chats caller turns each one into a SessionFile dirty record —
+                // without it a restored media file looks "never changed" to
+                // iCloud and is not pushed to the user's other devices.
+                didWrite?(entry.path)
             } catch {
                 // Remove the staged temp: nothing else ever sweeps
                 // `.restore-*.tmp`, so a failed copy/swap orphaned it next
