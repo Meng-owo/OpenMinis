@@ -2794,7 +2794,20 @@ extension BrowserUseManager: WKScriptMessageHandler {
 // MARK: - MinisURLSchemeHandler
 
 /// Handles `minis-clone://` URLs in WKWebView by resolving them to local files.
-/// Supports `minis-clone://workspace/file.html`, `minis-clone://shared/...`, etc.
+/// Supports `minis-clone://workspace/file.html`, `minis-clone://attachments/x.png`,
+/// `minis-clone://shared/...`, `minis-clone://stickers/...`, etc.
+///
+/// [minis-clone-webview] Two things this must do beyond "read the file":
+///
+///  1. Answer with a real `HTTPURLResponse` carrying a Content-Type. WebKit
+///     treats a bare `URLResponse` as header-less, and several loaders (ES
+///     module scripts, `fetch()` from a page, media elements) then reject or
+///     mis-sniff the payload — an image may render while the same URL fetched
+///     from JS fails.
+///  2. Honour `Range:` requests. `<video>` / `<audio>` play by requesting byte
+///     ranges; without a 206 reply the element either refuses to play or
+///     cannot seek. Files served here are local and small, so the range is
+///     satisfied by slicing the already-loaded `Data`.
 final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
     private let logger = AppLogger(category: "MinisScheme")
 
@@ -2815,12 +2828,31 @@ final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
         }
 
         let mimeType = Self.mimeType(for: fileURL.pathExtension)
-        let response = URLResponse(
-            url: url,
-            mimeType: mimeType,
-            expectedContentLength: data.count,
-            textEncodingName: mimeType.hasPrefix("text/") ? "utf-8" : nil
-        )
+        var headers: [String: String] = [
+            "Content-Type": Self.contentType(mimeType),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        ]
+
+        // Range: RFC 7233, single range only — which is all AVFoundation asks
+        // for. "bytes=0-" (open-ended) and "bytes=start-end" both appear.
+        if let rangeHeader = urlSchemeTask.request.value(forHTTPHeaderField: "Range"),
+           let (start, end) = Self.parseRange(rangeHeader, totalBytes: data.count) {
+            let slice = data.subdata(in: start..<(end + 1))
+            headers["Content-Length"] = String(slice.count)
+            headers["Content-Range"] = "bytes \(start)-\(end)/\(data.count)"
+            let response = HTTPURLResponse(url: url, statusCode: 206,
+                                           httpVersion: "HTTP/1.1", headerFields: headers)!
+            urlSchemeTask.didReceive(response)
+            urlSchemeTask.didReceive(slice)
+            urlSchemeTask.didFinish()
+            logger.info("[MinisScheme] served \(url.absoluteString) → \(fileURL.lastPathComponent) range \(start)-\(end)/\(data.count)")
+            return
+        }
+
+        headers["Content-Length"] = String(data.count)
+        let response = HTTPURLResponse(url: url, statusCode: 200,
+                                       httpVersion: "HTTP/1.1", headerFields: headers)!
         urlSchemeTask.didReceive(response)
         urlSchemeTask.didReceive(data)
         urlSchemeTask.didFinish()
@@ -2831,11 +2863,46 @@ final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
         // No async work to cancel.
     }
 
+    /// Parse a single-range `Range:` header into an inclusive byte interval
+    /// clamped to the payload. Returns nil for anything unparseable, which the
+    /// caller answers with the full body (the correct fallback).
+    static func parseRange(_ header: String, totalBytes: Int) -> (Int, Int)? {
+        let value = header.trimmingCharacters(in: .whitespaces).lowercased()
+        guard totalBytes > 0, value.hasPrefix("bytes=") else { return nil }
+        // Multi-range requests ("bytes=0-1,5-6") are not supported; serve the
+        // whole file instead of guessing.
+        let spec = value.dropFirst("bytes=".count)
+        guard !spec.contains(",") else { return nil }
+        let parts = spec.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return nil }
+
+        if parts[0].isEmpty {
+            // Suffix form: "bytes=-N" = the LAST N bytes.
+            guard let suffix = Int(parts[1]), suffix > 0 else { return nil }
+            let start = max(0, totalBytes - suffix)
+            return (start, totalBytes - 1)
+        }
+        guard let start = Int(parts[0]), start < totalBytes else { return nil }
+        let end = parts[1].isEmpty ? totalBytes - 1 : min(Int(parts[1]) ?? totalBytes - 1, totalBytes - 1)
+        guard end >= start else { return nil }
+        return (start, end)
+    }
+
+    /// Content-Type header value. Text types carry the charset WebKit needs to
+    /// decode non-ASCII page content; everything else is the MIME alone.
+    private static func contentType(_ mimeType: String) -> String {
+        if mimeType.hasPrefix("text/") || mimeType == "application/javascript"
+            || mimeType == "application/json" {
+            return "\(mimeType); charset=utf-8"
+        }
+        return mimeType
+    }
+
     private static func mimeType(for ext: String) -> String {
         switch ext.lowercased() {
         case "html", "htm": return "text/html"
         case "css":         return "text/css"
-        case "js":          return "application/javascript"
+        case "js", "mjs":   return "application/javascript"
         case "json":        return "application/json"
         case "xml":         return "application/xml"
         case "svg":         return "image/svg+xml"
@@ -2843,14 +2910,23 @@ final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
         case "jpg", "jpeg": return "image/jpeg"
         case "gif":         return "image/gif"
         case "webp":        return "image/webp"
+        case "heic", "heif": return "image/heic"
+        case "bmp":         return "image/bmp"
+        case "tiff", "tif": return "image/tiff"
         case "ico":         return "image/x-icon"
         case "pdf":         return "application/pdf"
         case "mp3":         return "audio/mpeg"
-        case "mp4":         return "video/mp4"
+        case "m4a":         return "audio/mp4"
+        case "aac":         return "audio/aac"
+        case "wav":         return "audio/wav"
+        case "ogg", "oga", "opus": return "audio/ogg"
+        case "mp4", "m4v":  return "video/mp4"
+        case "mov":         return "video/quicktime"
         case "webm":        return "video/webm"
         case "woff":        return "font/woff"
         case "woff2":       return "font/woff2"
         case "ttf":         return "font/ttf"
+        case "otf":         return "font/otf"
         case "txt", "log":  return "text/plain"
         case "md":          return "text/markdown"
         case "csv":         return "text/csv"

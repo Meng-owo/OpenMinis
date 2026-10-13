@@ -46,6 +46,13 @@ final class WebAppWebViewController: UIViewController, WKNavigationDelegate, WKU
         view.backgroundColor = .black
 
         let cfg = WKWebViewConfiguration()
+        // [minis-clone-webview] A WebApp's HTML may reference session assets by
+        // URL (`<img src="minis-clone://attachments/x.png">`), which is the only
+        // way a page can point at them without knowing its own sandbox path.
+        // Without a handler registered for the scheme WebKit refuses the load
+        // ("unsupported URL") and the image simply never appears.
+        cfg.setURLSchemeHandler(BrowserUseManager.sharedMinisSchemeHandler,
+                                forURLScheme: "minis-clone")
         // Persistent, per-shortcut-isolated storage so cookies / localStorage /
         // sessionStorage survive across launches (no repeated logins). iOS 17+
         // gives each shortcut its own on-disk store keyed by its UUID, so two
