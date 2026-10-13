@@ -5072,7 +5072,14 @@ struct ContentView: View {
         withAnimation {
             sessions.removeAll { $0.id == session.id }
         }
-        Task {
+        Task { @MainActor in
+            // [AUD2-03] Tear down the work this session owns before it leaves
+            // the store: its scheduled jobs would otherwise keep firing against
+            // a deleted session (recordFire(ok:false) forever), and any running
+            // sub agent would keep burning tokens until it naturally finished.
+            AgentJobRegistry.shared.cancelScheduled(createdBy: session.id, reason: "session deleted")
+            AgentJobRegistry.shared.dropQueuedDelegations(parent: session.id, reason: "session deleted")
+            AgentJobRegistry.shared.cancelAll(parent: session.id, reason: "session deleted")
             await ChatStore.shared.deleteSession(session.id)
             deleteSessionFiles(session.id)
         }
@@ -5098,8 +5105,12 @@ struct ContentView: View {
         deleteInfo = nil
         let folderToDrop = pendingDeleteFolderId
         pendingDeleteFolderId = nil
-        Task {
+        Task { @MainActor in
             for id in ids {
+                // [AUD2-03] Same teardown as the single-delete path, per id.
+                AgentJobRegistry.shared.cancelScheduled(createdBy: id, reason: "session deleted")
+                AgentJobRegistry.shared.dropQueuedDelegations(parent: id, reason: "session deleted")
+                AgentJobRegistry.shared.cancelAll(parent: id, reason: "session deleted")
                 await ChatStore.shared.deleteSession(id)
                 deleteSessionFiles(id)
             }
