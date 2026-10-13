@@ -40,6 +40,7 @@ from transport.http import MCPError  # noqa: E402
 from utils import config  # noqa: E402
 
 LOG_PATH = "/var/minis/mcp-servers/mcp-cli.log"
+LOG_MAX_BYTES = 1_000_000  # rotate once the log exceeds this (keep current + one .old)
 
 PID_FILE = "/tmp/minis-mcp-daemon.pid"
 PORT_FILE = "/tmp/minis-mcp-daemon.port"  # daemon publishes its 127.0.0.1 port here
@@ -48,9 +49,21 @@ CONN_TIMEOUT = 310.0  # socket recv timeout, slightly above the 300s RPC timeout
 LOCK_STALE_SECONDS = 12.0  # reclaim a cold-start lock older than this (crashed start)
 
 
+def _rotate_log(path):
+    """Keep a log file bounded: once it exceeds LOG_MAX_BYTES, move it aside as
+    `<path>.old` (replacing any previous one). Called before appends and at
+    daemon start, so at most two files (current + .old) ever exist."""
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > LOG_MAX_BYTES:
+            os.replace(path, path + ".old")
+    except OSError:
+        pass
+
+
 def _log(msg):
     try:
         os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+        _rotate_log(LOG_PATH)
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write("[%s] %s\n" % (time.strftime("%Y-%m-%d %H:%M:%S"), msg))
     except OSError:
@@ -208,6 +221,7 @@ def maybe_start_daemon():
             os.makedirs(os.path.dirname(daemon_log), exist_ok=True)
         except OSError:
             pass
+        _rotate_log(daemon_log)
         logging.basicConfig(
             filename=daemon_log,
             level=logging.INFO,
