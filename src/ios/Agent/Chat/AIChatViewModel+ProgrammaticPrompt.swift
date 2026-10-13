@@ -59,9 +59,8 @@ enum ProgrammaticSubmitOutcome: Equatable {
 
 extension AIChatViewModel {
 
-    /// Inject `text` (plus any attachments already staged on `attachments`)
-    /// into this session as a user turn, atomically choosing between starting
-    /// a loop and queueing behind the running one.
+    /// Inject `text` into this session as a user turn, atomically choosing
+    /// between starting a loop and queueing behind the running one.
     ///
     /// Must be called on the main actor and must not be preceded by an
     /// `await` that read `isProcessing` — the whole point is that the check
@@ -86,13 +85,13 @@ extension AIChatViewModel {
             return .rejected(reason: "read_only_remote_session")
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        // send() prunes non-ready attachments before its own guard, so a
-        // pure-attachment prompt whose files never loaded would pass a naive
-        // check here and still vanish inside send(). Mirror that pruning.
-        let readyAttachments = attachments.filter { $0.loadState == .ready }
-        guard !trimmed.isEmpty || !readyAttachments.isEmpty else {
-            logger.warning("\(tag) REJECTED — empty prompt and no ready attachment (staged=\(self.attachments.count))")
-            return .rejected(reason: attachments.isEmpty ? "empty_prompt" : "attachments_not_ready")
+        // [S1-fix] A programmatic prompt no longer rides the composer's staged
+        // attachments, so only its text can qualify a submit. (The old check
+        // inspected `attachments`, which meant an empty programmatic prompt
+        // could "pass" on the strength of chips the user had merely picked.)
+        guard !trimmed.isEmpty else {
+            logger.warning("\(tag) REJECTED — empty prompt (programmatic prompts carry no attachments, staged=\(self.attachments.count))")
+            return .rejected(reason: "empty_prompt")
         }
         if isCompacting {
             // compactAndSend has its own queue + post-compact drain; a foreign
@@ -119,21 +118,24 @@ extension AIChatViewModel {
         // resets `voiceUsedInComposition`, so a write/restore pair would
         // shut an open mention popup and disturb the caret mid-typing.
         //
-        // `attachments` stays shared on purpose — the CLI and the Shortcut
-        // intent both stage files onto it before calling (see
-        // SessionsOffloadBridge.stageAttachments / SendPromptIntent), and the
-        // doc comment above promises they are included.
+        // [S1-fix] `attachments` is NO LONGER shared with this path. The old
+        // claim that the CLI and the Shortcut intent stage onto it before
+        // calling was wrong: both go through `inputText` + `send()` (see
+        // SessionsOffloadBridge / SendPromptIntent), which still consumes the
+        // composer normally. A background prompt that reached into `attachments`
+        // therefore did nothing but ship — and then destroy — a photo the user
+        // had picked but not sent.
 
         if isProcessing {
-            // Busy: hand to the queue.
+            // Busy: hand to the queue. A programmatic prompt carries no
+            // attachments, so the queue entry is text-only.
             let before = promptQueue.count
-            let prompt = QueuedPrompt(text: text, attachments: attachments)
+            let prompt = QueuedPrompt(text: text, attachments: [])
             promptQueue.append(prompt)
             let chatMsg = ChatMessage(role: .user, content: text, isQueued: true)
             chatMsg.queuedPromptId = prompt.id
             messages.append(chatMsg)
             scrollToBottomSignal.send()
-            attachments = []
             logger.info("\(tag) QUEUED — position \(self.promptQueue.count), loop still running")
             return .queued
         }

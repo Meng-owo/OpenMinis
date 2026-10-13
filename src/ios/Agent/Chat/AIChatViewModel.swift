@@ -2339,10 +2339,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// - Parameter overrideText: when non-nil, this text is sent INSTEAD of the
     ///   composer's `inputText`, and the composer draft is left untouched.
     ///   Used by `submitProgrammaticPrompt` for prompts nobody typed (a
-    ///   scheduled fire, the sessions CLI, a helper callback) so that a
-    ///   background turn can never eat a half-written draft. Attachments staged
-    ///   on `attachments` are still consumed — that sharing is deliberate
-    ///   (SessionsOffloadBridge.stageAttachments / SendPromptIntent stage there).
+    ///   scheduled fire, a helper callback) so that a background turn can never
+    ///   eat a half-written draft.
+    ///
+    ///   [S1-fix] Attachments staged on `attachments` belong to the USER and are
+    ///   NOT consumed when `overrideText != nil`. They used to be: a background
+    ///   prompt landing while the user had picked a photo but not sent it would
+    ///   ship that photo with the background turn and then wipe the composer.
+    ///   The CLI / Shortcut paths do not need the sharing — they stage files and
+    ///   then call `send()` normally (`inputText` + `send()`), which still
+    ///   consumes them as before.
     func send(overrideText: String? = nil) {
         // Read-only mode — cannot send messages
         guard remoteDeviceId == nil else { return }
@@ -2362,7 +2368,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // photo loads, or a stray still-loading placeholder) so only fully-loaded
         // files are sent. `canSend` already blocks sending while anything loads,
         // so in practice this just prunes failed chips the user left in place.
-        attachments.removeAll { $0.loadState != .ready }
+        // [S1-fix] A programmatic send leaves the composer entirely alone.
+        if overrideText == nil {
+            attachments.removeAll { $0.loadState != .ready }
+        }
 
         // 待发表情包整合 (图文混排一并发出)
         // [T-programmatic-prompt-draft] `overrideText` (a programmatic prompt)
@@ -2383,7 +2392,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let activeFeedbackDirectives = pendingFeedbackDirectives
         pendingFeedbackDirectives.removeAll()
 
-        let pendingAttachments = attachments
+        // [S1-fix] Programmatic sends carry no attachments: the composer's staged
+        // chips are the user's, not the transport's.
+        let pendingAttachments = overrideText == nil ? attachments : []
         #if DEBUG
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil") inputText='\(String(self.inputText.prefix(30)))'")
         #else
@@ -2469,14 +2480,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     pendingSendText = text
                     pendingSendAttachments = pendingAttachments
                     if overrideText == nil { inputText = "" }
-                    attachments = []
+                    // [S1-fix] The composer's staged chips stay the user's.
+                    if overrideText == nil { attachments = [] }
                     compactAndSend()
                     return
                 }
                 pendingSendText = text
                 pendingSendAttachments = pendingAttachments
                 if overrideText == nil { inputText = "" }
-                attachments = []
+                // [S1-fix] The composer's staged chips stay the user's.
+                if overrideText == nil { attachments = [] }
                 showCompactBeforeSendPrompt = true
                 logger.info("[Context] Near capacity — prompting user to compact before send")
                 return
@@ -2492,7 +2505,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 pendingSendText = text
                 pendingSendAttachments = pendingAttachments
                 if overrideText == nil { inputText = "" }
-                attachments = []
+                // [S1-fix] The composer's staged chips stay the user's.
+                if overrideText == nil { attachments = [] }
                 showContextExhaustedPrompt = true
                 logger.info("[Context] Exhausted — prompting user to start new session or clear chat")
                 return
@@ -2635,8 +2649,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         userMsg.inputAttachments = pendingAttachments
         messages.append(userMsg)
 
-        // Snapshot and clear attachments synchronously so the UI clears immediately
-        clearAttachments()
+        // Snapshot and clear attachments synchronously so the UI clears immediately.
+        // [S1-fix] Only a user send clears the composer; a programmatic send leaves
+        // whatever the user staged in place.
+        if overrideText == nil { clearAttachments() }
         scrollToBottomSignal.send()
 
         isProcessing = true
