@@ -835,7 +835,7 @@ extension AIChatViewModel {
 
         // A hidden child session of this conversation: same database, own
         // context window, never listed as a top-level conversation.
-        let session = ChatStore.shared.createSession(modelId: resolution.entry.model.id,
+        let session = await ChatStore.shared.createSession(modelId: resolution.entry.model.id,
                                                      title: childTitle,
                                                      source: "helper",
                                                      parentSessionId: parentSid,

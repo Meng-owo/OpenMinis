@@ -162,9 +162,7 @@ struct ScheduledTaskDetailSheet: View {
                             if let r = job.remaining {
                                 detailRow(label: "剩余次数", value: "\(r) 次", icon: "hourglass")
                             }
-                            if let dlv = job.deliverySentenceHuman {
-                                detailRow(label: "递送说明", value: dlv, icon: "paperplane")
-                            }
+                            detailRow(label: "递送说明", value: job.deliverySentenceHuman, icon: "paperplane")
                             if let cmd = job.prefilledTool?.shellCommand {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {

@@ -1737,6 +1737,7 @@ struct PersistedJob: Codable {
     var deliverySentence: String?
     var creatorSessionId: String?
 
+    @MainActor
     init(job: AgentJob) {
         id = job.id
         label = job.label

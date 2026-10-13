@@ -315,6 +315,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
     /// still showed it. This resolves across every state and hands back the note
     /// the receipt should carry when the label was ambiguous, so the caller
     /// learns which task was actually acted on instead of guessing.
+    @MainActor
     private static func resolveJob(_ registry: AgentJobRegistry,
                                    _ input: String) -> (job: AgentJob?, labelNote: [String: Any]) {
         if let byId = registry.job(id: input) { return (byId, [:]) }
