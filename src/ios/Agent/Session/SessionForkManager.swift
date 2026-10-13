@@ -115,6 +115,13 @@ final class SessionForkManager {
             )
         }
 
+        // [AUD2-04] Copy the source's media tree into the duplicate's own
+        // directory, then repoint the copied messages' MediaRefs at it (see
+        // `rewritingSessionMediaPaths`). Without this the copy's images/files
+        // were aliases of the original session's directory: deleting the
+        // original (or an iCloud delete on another device) broke every one.
+        await store.duplicateSessionMedia(from: sessionId, to: newSession.id)
+
         let messages = await store.loadMessages(sessionId: sessionId)
         // [T-session-duplicate-compact-marker-ios] Track old→new message id so
         // copied compact markers (which reference DB message ids) can be
@@ -128,7 +135,8 @@ final class SessionForkManager {
                 id: newId,
                 sessionId: newSession.id,
                 role: msg.role,
-                parts: msg.parts,
+                parts: ChatStore.rewritingSessionMediaPaths(
+                    in: msg.parts, from: sessionId, to: newSession.id),
                 createdAt: msg.createdAt,
                 tokenUsage: msg.tokenUsage,
                 reasoningContent: msg.reasoningContent,

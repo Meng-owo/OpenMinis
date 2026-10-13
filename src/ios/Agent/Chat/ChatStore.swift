@@ -3406,6 +3406,97 @@ actor ChatStore {
         }
     }
 
+    // MARK: - Media duplication (session copy)
+
+    /// [AUD2-04] Physically copy `sourceSessionId`'s media tree (browser /
+    /// attachments / images) into `destinationSessionId`'s, returning how many
+    /// files were copied.
+    ///
+    /// Copying the rows alone is not enough: `MediaRef.relativePath` is
+    /// `"<sessionId>/<subdir>/<fileId>.<ext>"` and resolves through
+    /// `minisBaseURL` with the originating session id baked in (see
+    /// `saveMedia`). Messages duplicated with their ORIGINAL refs kept rendering
+    /// only as long as the original session's directory lived — deleting it
+    /// (locally, or an iCloud delete on another device) blanked every image in
+    /// the copy. The caller repoints the copied messages at this new directory
+    /// with `rewritingSessionMediaPaths(in:from:to:)`.
+    @discardableResult
+    func duplicateSessionMedia(from sourceSessionId: String, to destinationSessionId: String) -> Int {
+        let fm = FileManager.default
+        var copied = 0
+        // Same subdir set deleteSessionMedia(_:) tears down.
+        for subdir in ["browser", "attachments", "images"] {
+            let srcDir = minisBaseURL.appendingPathComponent("\(sourceSessionId)/\(subdir)", isDirectory: true)
+            guard fm.fileExists(atPath: srcDir.path) else { continue }
+            let dstDir = minisBaseURL.appendingPathComponent("\(destinationSessionId)/\(subdir)", isDirectory: true)
+            do {
+                try fm.createDirectory(at: dstDir, withIntermediateDirectories: true)
+                for name in try fm.contentsOfDirectory(atPath: srcDir.path) {
+                    let src = srcDir.appendingPathComponent(name)
+                    let dst = dstDir.appendingPathComponent(name)
+                    try? fm.removeItem(at: dst)
+                    try fm.copyItem(at: src, to: dst)
+                    // The dirty record saveMedia would have written, so the
+                    // copy's files reach iCloud like any other session's media.
+                    markDirty(recordType: "SessionFile", recordId: "\(destinationSessionId):\(subdir)/\(name)")
+                    copied += 1
+                }
+            } catch {
+                logger.error("[Duplicate] media copy failed \(sourceSessionId.prefix(8))→\(destinationSessionId.prefix(8)) subdir=\(subdir): \(error)")
+            }
+        }
+        if copied > 0 {
+            logger.info("[Duplicate] copied \(copied) media file(s) \(sourceSessionId.prefix(8))→\(destinationSessionId.prefix(8))")
+        }
+        return copied
+    }
+
+    /// [AUD2-04] Repoint every MediaRef in `parts` that lives under
+    /// `sourceSessionId` at `destinationSessionId` instead. Pure: file ids and
+    /// everything else are preserved, only the leading session folder changes,
+    /// mirroring the `saveMedia` path scheme. Refs that do not start with the
+    /// source folder (legacy absolute paths) are returned untouched.
+    static func rewritingSessionMediaPaths(in parts: [ContentPart],
+                                           from sourceSessionId: String,
+                                           to destinationSessionId: String) -> [ContentPart] {
+        func rewrite(_ ref: MediaRef?) -> MediaRef? {
+            guard let ref else { return nil }
+            let prefix = sourceSessionId + "/"
+            guard ref.relativePath.hasPrefix(prefix) else { return ref }
+            return MediaRef(
+                id: ref.id,
+                relativePath: destinationSessionId + "/" + String(ref.relativePath.dropFirst(prefix.count)),
+                mimeType: ref.mimeType,
+                originalFileName: ref.originalFileName,
+                linuxPath: ref.linuxPath
+            )
+        }
+        func rewriteSnapshot(_ snap: ToolSnapshot?) -> ToolSnapshot? {
+            guard let snap else { return nil }
+            return ToolSnapshot(type: snap.type, text: snap.text,
+                                mediaRef: rewrite(snap.mediaRef), duration: snap.duration)
+        }
+        return parts.map { part in
+            switch part {
+            case .text(_), .toolUse(_):
+                return part
+            case .mediaRef(let ref):
+                guard let newRef = rewrite(ref) else { return part }
+                return .mediaRef(newRef)
+            case .toolResult(let tr):
+                return .toolResult(ToolResult(
+                    toolUseId: tr.toolUseId,
+                    output: tr.output,
+                    success: tr.success,
+                    mediaRef: rewrite(tr.mediaRef),
+                    snapshot: rewriteSnapshot(tr.snapshot),
+                    pageURL: tr.pageURL,
+                    status: tr.status
+                ))
+            }
+        }
+    }
+
     /// Returns a closure that resolves a MediaRef to a file URL.
     func mediaFileURLResolver() -> (MediaRef) -> URL {
         let minis = minisBaseURL
