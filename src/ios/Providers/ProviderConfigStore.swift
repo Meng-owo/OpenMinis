@@ -787,6 +787,13 @@ final class ProviderConfigStore: ObservableObject {
     /// deletions. The JSON branch remains for pre-migration / kill-switched
     /// devices.
     func reloadFromDisk() async {
+        // Authority matrix (keep aligned with the init gate and the
+        // CloudSyncEngine / BackupImporter merge paths):
+        //   fresh install          (no flag, empty DB)     → V2 JSON (empty)
+        //   migration completed    (flag set)              → V3 DB
+        //   fresh iCloud-restore   (no flag, DB non-empty) → V3 DB   [T-icloud-fresh-restore]
+        //   v3 off / re-enabled    (empty DB at reload)    → V2 JSON
+        // Rule: dbAuthoritative = v3Enabled && (migratedFlag || !db.isEmpty()).
         // [T-icloud-fresh-restore-provider-groups] Mirror the init gate: the V3
         // DB is authoritative when V3 is on AND (migration ran OR the DB is
         // non-empty). On a fresh iCloud-restore device the migrationCompleted
