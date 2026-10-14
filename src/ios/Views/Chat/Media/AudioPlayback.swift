@@ -36,6 +36,18 @@ class GlobalAudioPlayer: ObservableObject {
             let label = type == .began ? "began" : "ended"
             let isPlaying = self?.isPlaying ?? false
             logger.info("[AudioPlayback] interruption: type=\(label) shouldResume=\(shouldResume) wasPlaying=\(isPlaying)")
+            // [AUD8-08] This observer used to be diagnostic-only ("the decision
+            // lives elsewhere" — nothing was elsewhere). Handle it here, per
+            // system semantics: remember the pre-interruption intent on .began,
+            // and on .ended put the loaded file back when the system says
+            // resume.
+            if type == .began {
+                self?.wasPlayingBeforeInterruption = isPlaying
+            } else if shouldResume {
+                self?.resumeAfterInterruption()
+            } else {
+                self?.wasPlayingBeforeInterruption = false
+            }
         }
         // [T-ios-live-activity-audio-toggle] The Live Activity play/pause toggle
         // is handled by VoiceOutputState (read-aloud engine), NOT here — see
@@ -67,6 +79,10 @@ class GlobalAudioPlayer: ObservableObject {
     /// that its request is still the current one: bumped by every new
     /// `play` and by `stopInternal` (i.e. stop()).
     private var playRequestId = 0
+
+    /// [AUD8-08] Whether this player was actively playing when a system
+    /// interruption (call/Siri) began, so its end can restore playback.
+    private var wasPlayingBeforeInterruption = false
 
     /// Whether the given URL is the currently active audio file.
     func isActive(url: URL) -> Bool {
@@ -237,6 +253,26 @@ class GlobalAudioPlayer: ObservableObject {
             logger.info("[AudioPlayback] stopInternal: resumeSilentAudio → count will be \(max(0, preCount - 1))")
             BackgroundKeepAliveManager.shared.resumeSilentAudioForMedia()
         }
+    }
+
+    /// [AUD8-08] The system stopped our player for an interruption and now says
+    /// it has ended. The old code only logged the notification — the player
+    /// stayed stopped (and the old tick path even recorded the takeover as
+    /// "finished"). Put the loaded file back if it was playing when the
+    /// interruption began.
+    private func resumeAfterInterruption() {
+        guard wasPlayingBeforeInterruption, let p = player, !p.isPlaying else {
+            wasPlayingBeforeInterruption = false
+            return
+        }
+        wasPlayingBeforeInterruption = false
+        AudioSessionCoordinator.shared.begin(.mediaAttachment)
+        p.play()
+        p.rate = rate
+        isPlaying = true
+        startTimer()
+        VoiceNowPlaying.shared.refresh()
+        logger.info("[AudioPlayback] resumed after interruption")
     }
 
     private func startTimer() {

@@ -1564,6 +1564,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // foreground System TTS used to finish with isReadingAloud stuck true,
         // leaving the bubble icon as pause forever after audio had ended.
         speechSynthesizer.delegate = speechDelegate
+        // [AUD8-08] Keep the interruption-ended resume wired while System TTS runs.
+        registerSystemTTSInterruptionResume()
         if BackgroundKeepAliveManager.shared.backgroundSpeakEnabled {
             BackgroundKeepAliveManager.shared.stopSilentAudio()
         }
@@ -1705,6 +1707,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             BackgroundKeepAliveManager.shared.stopSilentAudio()
             speechSynthesizer.delegate = speechDelegate
         }
+        // [AUD8-08] Keep the interruption-ended resume wired while System TTS runs.
+        registerSystemTTSInterruptionResume()
         let utterance = makeUtterance(text)
         speechSynthesizer.speak(utterance)  // queues automatically, does NOT interrupt
     }
@@ -1717,6 +1721,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @MainActor
     static func ensureSpeechPlaybackSession() {
         AudioSessionCoordinator.shared.begin(.replyTTS)
+    }
+
+    /// [AUD8-08] System-TTS resume after a system interruption. The
+    /// coordinator's `onInterruptionEnded` hook was declared and invoked but
+    /// never assigned — bubble audio now self-handles, the cloud reader
+    /// resumes via the coordinator's queue logic, and the on-device
+    /// synthesizer never resumed at all. Wire it here, at the moment System
+    /// TTS actually starts (the last-started VM owns the hook — that is the
+    /// reading one).
+    private func registerSystemTTSInterruptionResume() {
+        AudioSessionCoordinator.shared.onInterruptionEnded = { [weak self] in
+            guard let self else { return }
+            if self.speechSynthesizer.isPaused {
+                self.speechSynthesizer.continueSpeaking()
+                VoiceLog.log("[AUD8-08] system TTS continued after interruption")
+            }
+        }
     }
 
     /// Whether reply TTS may speak right now: enabled AND the mic isn't capturing
