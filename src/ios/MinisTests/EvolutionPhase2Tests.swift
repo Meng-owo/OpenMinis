@@ -123,10 +123,22 @@ final class EvolutionPhase2Tests: XCTestCase {
         XCTAssertEqual(runs.count, 1)
         XCTAssertEqual(runs.first?.id, "run-1")
         XCTAssertEqual(runs.first?.status, .ok)
+        // Regression (off-by-one reads): every mapped field must round-trip.
+        XCTAssertEqual(runs.first?.toolCallCount, 2)
+        XCTAssertEqual(runs.first?.source, "chat")
+        XCTAssertNotNil(runs.first?.endedAt)
+        if let started = runs.first?.startedAt {
+            XCTAssertLessThan(abs(started.timeIntervalSinceNow), 10)
+        } else {
+            XCTFail("startedAt missing")
+        }
         let actions = await store.actions(forRun: "run-1")
         XCTAssertEqual(actions.count, 1)
         XCTAssertEqual(actions.first?.toolName, "shell_execute")
         XCTAssertEqual(actions.first?.durationMs, 42)
+        XCTAssertEqual(actions.first?.runId, "run-1")
+        XCTAssertEqual(actions.first?.status, .success)
+        XCTAssertNil(actions.first?.errorClass)
     }
 
     func testStorePersistsAcrossReopen() async throws {

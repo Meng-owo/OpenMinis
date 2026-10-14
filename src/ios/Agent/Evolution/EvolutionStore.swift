@@ -503,22 +503,22 @@ actor EvolutionStore {
         sqlite3_bind_int64(stmt, 1, Int64(limit))
         var out: [EvolutionRun] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let statusRaw = columnText(stmt, 7) ?? "error"
+            let statusRaw = columnText(stmt, 6) ?? "error"
             let run = EvolutionRun(
-                id: columnText(stmt, 1) ?? "",
-                sessionId: columnText(stmt, 2),
-                personaId: columnText(stmt, 3),
-                taskSignature: columnText(stmt, 4),
-                startedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5)),
-                endedAt: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil
-                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 6)),
+                id: columnText(stmt, 0) ?? "",
+                sessionId: columnText(stmt, 1),
+                personaId: columnText(stmt, 2),
+                taskSignature: columnText(stmt, 3),
+                startedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
+                endedAt: sqlite3_column_type(stmt, 5) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 5)),
                 status: EvolutionRunStatus(rawValue: statusRaw) ?? .error,
-                turnCount: Int(sqlite3_column_int64(stmt, 8)),
-                toolCallCount: Int(sqlite3_column_int64(stmt, 9)),
-                retryCount: Int(sqlite3_column_int64(stmt, 10)),
-                tokensEst: Int(sqlite3_column_int64(stmt, 11)),
-                modelId: columnText(stmt, 12),
-                source: columnText(stmt, 13) ?? "chat"
+                turnCount: Int(sqlite3_column_int64(stmt, 7)),
+                toolCallCount: Int(sqlite3_column_int64(stmt, 8)),
+                retryCount: Int(sqlite3_column_int64(stmt, 9)),
+                tokensEst: Int(sqlite3_column_int64(stmt, 10)),
+                modelId: columnText(stmt, 11),
+                source: columnText(stmt, 12) ?? "chat"
             )
             out.append(run)
         }
@@ -534,19 +534,19 @@ actor EvolutionStore {
         sqlite3_bind_text(stmt, 1, (runId as NSString).utf8String, -1, EVO_SQLITE_TRANSIENT)
         var out: [EvolutionAction] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let statusRaw = columnText(stmt, 6) ?? "fail"
+            let statusRaw = columnText(stmt, 5) ?? "fail"
             let action = EvolutionAction(
-                id: columnText(stmt, 1) ?? "",
-                runId: columnText(stmt, 2) ?? "",
-                seq: Int(sqlite3_column_int64(stmt, 3)),
-                toolName: columnText(stmt, 4) ?? "",
-                profile: columnText(stmt, 5) ?? "",
+                id: columnText(stmt, 0) ?? "",
+                runId: columnText(stmt, 1) ?? "",
+                seq: Int(sqlite3_column_int64(stmt, 2)),
+                toolName: columnText(stmt, 3) ?? "",
+                profile: columnText(stmt, 4) ?? "",
                 status: EvolutionActionStatus(rawValue: statusRaw) ?? .fail,
-                errorClass: columnText(stmt, 7),
-                errorDigest: columnText(stmt, 8),
-                durationMs: Int(sqlite3_column_int64(stmt, 9)),
-                retryCount: Int(sqlite3_column_int64(stmt, 10)),
-                resultDigest: columnText(stmt, 11)
+                errorClass: columnText(stmt, 6),
+                errorDigest: columnText(stmt, 7),
+                durationMs: Int(sqlite3_column_int64(stmt, 8)),
+                retryCount: Int(sqlite3_column_int64(stmt, 9)),
+                resultDigest: columnText(stmt, 10)
             )
             out.append(action)
         }
@@ -563,22 +563,22 @@ actor EvolutionStore {
         var out: [EvolutionLesson] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
             let lesson = EvolutionLesson(
-                id: columnText(stmt, 1) ?? "",
-                scope: columnText(stmt, 2) ?? "global",
-                personaId: columnText(stmt, 3),
-                taskSignature: columnText(stmt, 4),
-                conditions: columnText(stmt, 5) ?? "",
-                recommendation: columnText(stmt, 6) ?? "",
-                antiPattern: columnText(stmt, 7),
-                evidenceActions: columnText(stmt, 8) ?? "[]",
-                status: EvolutionLessonStatus(rawValue: columnText(stmt, 9) ?? "candidate") ?? .candidate,
-                successCount: Int(sqlite3_column_int64(stmt, 10)),
-                failureCount: Int(sqlite3_column_int64(stmt, 11)),
-                version: Int(sqlite3_column_int64(stmt, 12)),
-                parentId: columnText(stmt, 13),
-                lastVerifiedAt: sqlite3_column_type(stmt, 14) == SQLITE_NULL ? nil
-                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 14)),
-                injectPriority: Int(sqlite3_column_int64(stmt, 15))
+                id: columnText(stmt, 0) ?? "",
+                scope: columnText(stmt, 1) ?? "global",
+                personaId: columnText(stmt, 2),
+                taskSignature: columnText(stmt, 3),
+                conditions: columnText(stmt, 4) ?? "",
+                recommendation: columnText(stmt, 5) ?? "",
+                antiPattern: columnText(stmt, 6),
+                evidenceActions: columnText(stmt, 7) ?? "[]",
+                status: EvolutionLessonStatus(rawValue: columnText(stmt, 8) ?? "candidate") ?? .candidate,
+                successCount: Int(sqlite3_column_int64(stmt, 9)),
+                failureCount: Int(sqlite3_column_int64(stmt, 10)),
+                version: Int(sqlite3_column_int64(stmt, 11)),
+                parentId: columnText(stmt, 12),
+                lastVerifiedAt: sqlite3_column_type(stmt, 13) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 13)),
+                injectPriority: Int(sqlite3_column_int64(stmt, 14))
             )
             out.append(lesson)
         }
@@ -614,19 +614,19 @@ actor EvolutionStore {
         sqlite3_bind_int64(stmt, 1, Int64(limit))
         var out: [EvolutionAction] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let statusRaw = columnText(stmt, 6) ?? "fail"
+            let statusRaw = columnText(stmt, 5) ?? "fail"
             out.append(EvolutionAction(
-                id: columnText(stmt, 1) ?? "",
-                runId: columnText(stmt, 2) ?? "",
-                seq: Int(sqlite3_column_int64(stmt, 3)),
-                toolName: columnText(stmt, 4) ?? "",
-                profile: columnText(stmt, 5) ?? "",
+                id: columnText(stmt, 0) ?? "",
+                runId: columnText(stmt, 1) ?? "",
+                seq: Int(sqlite3_column_int64(stmt, 2)),
+                toolName: columnText(stmt, 3) ?? "",
+                profile: columnText(stmt, 4) ?? "",
                 status: EvolutionActionStatus(rawValue: statusRaw) ?? .fail,
-                errorClass: columnText(stmt, 7),
-                errorDigest: columnText(stmt, 8),
-                durationMs: Int(sqlite3_column_int64(stmt, 9)),
-                retryCount: Int(sqlite3_column_int64(stmt, 10)),
-                resultDigest: columnText(stmt, 11)
+                errorClass: columnText(stmt, 6),
+                errorDigest: columnText(stmt, 7),
+                durationMs: Int(sqlite3_column_int64(stmt, 8)),
+                retryCount: Int(sqlite3_column_int64(stmt, 9)),
+                resultDigest: columnText(stmt, 10)
             ))
         }
         return out
@@ -642,9 +642,9 @@ actor EvolutionStore {
         defer { sqlite3_finalize(stmt) }
         var out: [String: (status: String, version: Int)] = [:]
         while sqlite3_step(stmt) == SQLITE_ROW {
-            guard let id = columnText(stmt, 1) else { continue }
-            out[id] = (status: columnText(stmt, 2) ?? "candidate",
-                       version: Int(sqlite3_column_int64(stmt, 3)))
+            guard let id = columnText(stmt, 0) else { continue }
+            out[id] = (status: columnText(stmt, 1) ?? "candidate",
+                       version: Int(sqlite3_column_int64(stmt, 2)))
         }
         return out
     }

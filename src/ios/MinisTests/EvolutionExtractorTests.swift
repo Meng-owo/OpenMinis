@@ -128,6 +128,9 @@ final class EvolutionExtractorTests: XCTestCase {
         }
         let recent = await store.recentActions(limit: 10)
         XCTAssertEqual(recent.count, 3)
+        XCTAssertEqual(recent.first?.toolName, "shell_execute")
+        XCTAssertEqual(recent.first?.status, .fail)
+        XCTAssertEqual(recent.first?.errorClass, "tool_error")
 
         let queue = EvolutionExtractionQueue()
         await queue.runPass(on: store)
