@@ -431,6 +431,8 @@ struct InlineVoiceInputView: View {
             // we were away — re-read the live state so the denial UI clears
             // without requiring a panel rebuild.
             viewModel.refreshPermissionState()
+            // [AUD8-28] Validate capture survived the background stint.
+            viewModel.reconcileAfterForeground()
         }
         #if DEBUG
         // [debug-rpc voice bridge] Synthetic debug.tap can't reach SwiftUI
@@ -448,6 +450,8 @@ struct InlineVoiceInputView: View {
         #endif
         .onAppear {
             VoiceLog.log("[panel-lifecycle] onAppear expanded=\(expanded) transcript=\(viewModel.transcript.count)ch state=\(viewModel.state) effectiveH=\(Int(effectiveHeight))")
+            // [AUD8-28] Track panel visibility for the async start paths.
+            viewModel.setPanelVisible(true)
             viewModel.accumulate = true
             refreshActiveLabels()
             // Pay the jieba dictionary load (~1.9s on an iPhone 11, first call only) now,
@@ -476,6 +480,8 @@ struct InlineVoiceInputView: View {
         // manual, driven solely by the top-right AI-correction button (runManualCorrection).
         .onDisappear {
             VoiceLog.log("[panel-lifecycle] onDisappear expanded=\(expanded) transcript=\(viewModel.transcript.count)ch state=\(viewModel.state)")
+            // [AUD8-28] Panel gone — the async start paths must stand down.
+            viewModel.setPanelVisible(false)
             // [T-voice-panel-gap-after-edit] The panel can be torn down (voice→text
             // toggle, session switch) while the transcript editor still holds the
             // keyboard. Releasing focus here alone is not enough — the view is

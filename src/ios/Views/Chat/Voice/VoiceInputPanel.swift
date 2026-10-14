@@ -244,6 +244,18 @@ final class VoiceInputViewModel: ObservableObject {
     var accumulate = false
     var onTranscript: ((String) -> Void)?
 
+    /// [AUD8-28] Whether the inline panel is currently mounted, maintained by
+    /// the view (onAppear/onDisappear). Async start paths (permission
+    /// callbacks) check it so a grant landing after dismissal can't leave a
+    /// hot mic with no UI left to stop it.
+    private var panelVisible = false
+    func setPanelVisible(_ visible: Bool) {
+        if panelVisible != visible {
+            VoiceLog.log("[voice-lifecycle] panelVisible \(panelVisible) → \(visible)")
+        }
+        panelVisible = visible
+    }
+
     init() {
         vad.delegate = self
         observeLifecycle()
@@ -393,6 +405,25 @@ final class VoiceInputViewModel: ObservableObject {
         }
     }
 
+    /// [AUD8-28] Foreground watchdog: a suspended capture can come back with a
+    /// dead engine while the UI still says "recording" (the system stops the
+    /// mic without notifying us). Validate the engine and fall back to a
+    /// truthful idle state so the next tap starts a fresh capture.
+    func reconcileAfterForeground() {
+        if state == .recording && !vad.isRunning {
+            VoiceLog.log("[voice-lifecycle] foreground reconcile — recording UI but VAD dead; resetting to idle")
+            state = .waiting
+            listeningLabelToken &+= 1
+            cancelTipCycle()
+            recordingTipIndex = 0
+            cancelIdleTimer()
+            backgroundTimer?.invalidate(); backgroundTimer = nil
+            cancelTotalRecordingTimer()
+            VoiceModePreference.shared.isCapturing = false
+            startError = AppLocalized("Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
+        }
+    }
+
     /// Pre-warm the on-device recognizer when the active ASR is the System
     /// provider (no-op for cloud providers). Avoids the cold-start miss where
     /// the first request or two produce no result.
@@ -503,6 +534,12 @@ final class VoiceInputViewModel: ObservableObject {
     // MARK: - Private
 
     private func startVAD() {
+        // [AUD8-28] Never start capture for a panel that's already gone — the
+        // permission callback can land after dismissal.
+        guard panelVisible else {
+            VoiceLog.log("[VoiceInputDebug] startVAD skipped — panel not visible")
+            return
+        }
         // [AUD8-27] System ASR also needs Speech-recognition authorization on
         // top of the mic grant. Starting capture while it is denied recorded
         // audio that could only fail at transcription time (every utterance
