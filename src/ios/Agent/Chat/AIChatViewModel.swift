@@ -1552,7 +1552,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal(registerActive: true)
         // Reply TTS (System + cloud are the SAME source/intent) — declare it once
         // up front; the resolved provider then picks the engine.
-        AudioSessionCoordinator.shared.begin(.replyTTS)
+        // [AUD8-19] Route through the shared helper — it was an orphaned
+        // duplicate of this inline call (declared, documented, never invoked);
+        // the two copies are now one.
+        Self.ensureSpeechPlaybackSession()
         // This is an explicit replay, not a streaming turn: resolve the voice
         // selection fresh. A selection changed after the prior reply must apply
         // to this tap immediately rather than waiting for the next streamed turn.
@@ -1698,7 +1701,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         isReadingAloud = true
         syncSpeechStateToGlobal(registerActive: true)
-        AudioSessionCoordinator.shared.begin(.replyTTS)
+        // [AUD8-19] Shared helper — see ensureSpeechPlaybackSession.
+        Self.ensureSpeechPlaybackSession()
         if useCloudTTS {
             VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "")
             return
