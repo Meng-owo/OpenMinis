@@ -5203,6 +5203,17 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         var provider = await makeAgentProvider(for: entry)
 
+        // [S2-2][evolution] run scope — beginRun returns "" (all later
+        // record calls no-op) unless recording is enabled.
+        let evoRunId = EvolutionRecorder.beginRun(sessionId: self.sessionId, source: "chat")
+        defer {
+            EvolutionRecorder.endRun(
+                runId: evoRunId,
+                cancelled: Task.isCancelled || self.userDidCancel,
+                tokensEst: self.estimateContextTokens()
+            )
+        }
+
         // [Kelivo Alignment] 注入人设级别的采样与推理参数覆盖 (Temperature & Top P)
         let activePersonaId = self.sessionPersonaId ?? PersonaStore.currentID()
         if let activePersona = PersonaStore.shared.personas.first(where: { $0.id == activePersonaId }) {
@@ -6538,9 +6549,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                                 snapshotEntry: nil, snapshotItem: nil, cancelled: true
                             ))
                         }
+                        let evoToolStart = Date()
                         let outcome = await self.executeSingleToolUse(
                             tu: tu, msgIdx: msgIdx, tools: toolsSnapshot, batchBudget: imageBudgetActor,
                             batchFileClaims: fileClaimRegistry, deferredAssistantRaw: deferredAssistantRaw
+                        )
+                        // [S2-2][evolution] trace hook — redacted, detached,
+                        // no-op when recording is off.
+                        var evoContent = ""
+                        var evoIsError = false
+                        if case .toolResult(_, _, let c, let e) = outcome.resultPart {
+                            evoContent = c
+                            evoIsError = e
+                        }
+                        EvolutionRecorder.recordAction(
+                            runId: evoRunId, toolName: tu.name, arguments: tu.args,
+                            cancelled: outcome.cancelled, isError: evoIsError,
+                            resultText: evoContent, startedAt: evoToolStart
                         )
                         return (idx, outcome)
                     }
