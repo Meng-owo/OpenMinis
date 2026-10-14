@@ -29,7 +29,10 @@ final class VoiceNowPlaying {
         let reader = VoiceOutputPlayer.shared
         let bubble = GlobalAudioPlayer.shared
         if reader.hasLivePlayer {
-            let rate: Float = reader.isPlaying ? VoiceOutputPreferences.speedMultiplier : 0
+            // [AUD8-04] `isPlaying` means "holds a live player" — it stays true
+            // while paused, so the lock screen showed "playing" (with a live
+            // rate) during a pause. Only a live, unpaused reader counts.
+            let rate: Float = (reader.isPlaying && !reader.isPaused) ? VoiceOutputPreferences.speedMultiplier : 0
             publish(title: reader.nowPlayingTitle,
                     duration: reader.playbackDuration,
                     position: reader.playbackPosition,
@@ -173,8 +176,12 @@ extension VoiceOutputPlayer {
     }
 
     /// Route the lock-screen toggle through the existing pause/resume.
+    /// [AUD8-04] `isPlaying` stays true while paused (it means "holds a live
+    /// player"), so the old `if isPlaying { pause() }` could never resume —
+    /// the lock-screen / earbud button was a one-way pause. The toggle must
+    /// consult BOTH flags, mirroring GlobalAudioPlayer's semantics.
     func togglePlayPause() {
-        if isPlaying { pause() } else { resume() }
+        if isPlaying && !isPaused { pause() } else { resume() }
     }
 }
 
