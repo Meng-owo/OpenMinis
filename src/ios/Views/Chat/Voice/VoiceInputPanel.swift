@@ -1036,7 +1036,27 @@ final class VoiceInputViewModel: ObservableObject {
         pendingTranscriptionTasks.removeAll()
         transcriptGeneration &+= 1
         pendingTranscriptions = 0
+        // [AUD8-24] Drop the retry episode together with the cancelled
+        // transcription. A pending countdown (and its stashed audio) used to
+        // survive this call and re-transcribe the OLD utterance 5 s later
+        // under the CURRENT generation — the generation guard can't catch it
+        // because the retry request is minted fresh, so the resurrected text
+        // appended into an empty transcript ("ghost text" after send/cancel).
+        invalidateRetryEpisode()
         VoiceLog.log("transcription cancelled by user tap")
+    }
+
+    /// [AUD8-24] Tear down any pending network-retry episode: countdown timer,
+    /// stashed audio, manual-retry affordance. Every path that ends an
+    /// utterance (cancel, send) must leave no retry state behind that could
+    /// fire against a later, fresh transcript.
+    private func invalidateRetryEpisode() {
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retryCountdown = nil
+        retryAudioData = nil
+        canManualRetry = false
+        isAutoRetry = false
     }
 
     /// After a send: clear the accumulated transcript and STOP capturing. The
@@ -1053,6 +1073,10 @@ final class VoiceInputViewModel: ObservableObject {
         // doesn't transcribe into the next (now-empty) composition.
         cancelPendingForceFlush()
         pendingSegments.removeAll(keepingCapacity: true)
+        // [AUD8-24] Same for the network-retry episode: a countdown that fires
+        // after the send would re-transcribe the OLD utterance into the fresh
+        // composition (ghost text).
+        invalidateRetryEpisode()
         // Stop the mic on send (and cancel idle/background timers via stopListening).
         if vad.isRunning { stopListening() }
         state = .waiting
