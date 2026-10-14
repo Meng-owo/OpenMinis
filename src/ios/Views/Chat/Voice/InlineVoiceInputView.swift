@@ -427,6 +427,10 @@ struct InlineVoiceInputView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             VoiceLog.log("[voice-lifecycle] didBecomeActive panelY=\(Int(lastPanelFrame.minY))…\(Int(lastPanelFrame.maxY)) h=\(Int(lastPanelFrame.height)) editing=\(viewModel.isEditingTranscript) focused=\(editFocused)")
+            // [AUD8-27] The user may have granted permission in Settings while
+            // we were away — re-read the live state so the denial UI clears
+            // without requiring a panel rebuild.
+            viewModel.refreshPermissionState()
         }
         #if DEBUG
         // [debug-rpc voice bridge] Synthetic debug.tap can't reach SwiftUI
@@ -505,6 +509,15 @@ struct InlineVoiceInputView: View {
         // Observing the model's flag covers EVERY path (button, gesture, send,
         // external) in one place, and the explicit responder release guarantees
         // the keyboard is actually gone even if the TextField is already unmounted.
+        // [AUD8-27] A denial must be visible: compact mode has no status line,
+        // so force the panel back to expanded when the denial state appears
+        // (e.g. the user tapped the mic and denied at the system alert).
+        .onChange(of: viewModel.permissionDenied) { denied in
+            if denied, !expanded {
+                VoiceLog.log("permissionDenied → expand")
+                withAnimation(.easeInOut(duration: 0.28)) { expanded = true }
+            }
+        }
         .onChange(of: viewModel.isEditingTranscript) { isEditing in
             let wasFocused = editFocused
             VoiceLog.log("[voice-edit] isEditingTranscript→\(isEditing) editFocused=\(wasFocused)")
@@ -629,6 +642,21 @@ struct InlineVoiceInputView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: viewModel.state)
             .animation(.easeInOut(duration: 0.2), value: viewModel.isEditingTranscript)
+
+            // [AUD8-27] Actionable CTA for the denial state — the status line
+            // alone told the user WHAT was wrong but offered no way to fix it.
+            if viewModel.permissionDenied {
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Text("Open Settings", comment: "Voice: open system settings to grant mic or speech permission")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MinisTheme.accent)
+                }
+                .buttonStyle(.plain)
+            }
 
             // Absorbs spare vertical space so the controls below are pushed to the
             // bottom of the panel. When transcript text grows, this spacer shrinks

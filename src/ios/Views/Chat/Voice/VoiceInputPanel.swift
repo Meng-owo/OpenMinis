@@ -373,6 +373,18 @@ final class VoiceInputViewModel: ObservableObject {
         prewarmIfSystem()
     }
 
+    /// [AUD8-27] Re-read the live permission state. Called when the app becomes
+    /// active again (the user may have flipped the switch in Settings while we
+    /// were backgrounded); without this, a one-time denial stayed stuck on the
+    /// denial UI until the panel was torn down and rebuilt.
+    func refreshPermissionState() {
+        let denied = (VoiceActivityDetector.microphonePermission == .denied)
+        if permissionDenied != denied {
+            VoiceLog.log("[voice-permission] permissionDenied \(permissionDenied) → \(denied) (mic=\(VoiceActivityDetector.microphonePermission))")
+            permissionDenied = denied
+        }
+    }
+
     /// Pre-warm the on-device recognizer when the active ASR is the System
     /// provider (no-op for cloud providers). Avoids the cold-start miss where
     /// the first request or two produce no result.
@@ -483,6 +495,16 @@ final class VoiceInputViewModel: ObservableObject {
     // MARK: - Private
 
     private func startVAD() {
+        // [AUD8-27] System ASR also needs Speech-recognition authorization on
+        // top of the mic grant. Starting capture while it is denied recorded
+        // audio that could only fail at transcription time (every utterance
+        // surfaced the raw framework error). Refuse up front with the
+        // actionable message — and before stopping any reply TTS playback.
+        if willUseSystemASR, SystemVoiceProvider.speechAuthStatus == .denied {
+            VoiceLog.log("[voice-failure] startVAD refused — speech permission denied (system ASR)")
+            report(.speechPermissionDenied)
+            return
+        }
         // Mutually exclusive with TTS playback: stop any reply being read aloud so
         // it doesn't echo into the mic / fight the audio session, and mark capture
         // active so further reply TTS is suppressed until we stop.
