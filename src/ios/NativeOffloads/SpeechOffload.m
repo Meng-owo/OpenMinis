@@ -191,6 +191,33 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
     }
 
     BOOL micSource = source_is_mic(sourceArg);
+    if (micSource) {
+        // [AUD8-34] The tool previously checked only Speech authorization; with
+        // the microphone permission undetermined or denied, capture failed
+        // later as a raw -3/-4 "Microphone input unavailable" that never named
+        // the real problem. Request/verify it up front and report the state.
+        __block AVAudioApplicationRecordPermission micPerm = AVAudioApplication.sharedInstance.recordPermission;
+        if (micPerm == AVAudioApplicationRecordPermissionUndetermined) {
+            dispatch_semaphore_t micSem = dispatch_semaphore_create(0);
+            __block BOOL micGranted = NO;
+            [AVAudioApplication.sharedInstance requestRecordPermission:^(BOOL granted) {
+                micGranted = granted;
+                dispatch_semaphore_signal(micSem);
+            }];
+            long micWait = dispatch_semaphore_wait(micSem, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC));
+            micPerm = (micWait == 0 && micGranted) ? AVAudioApplicationRecordPermissionGranted
+                                                   : AVAudioApplication.sharedInstance.recordPermission;
+        }
+        if (micPerm != AVAudioApplicationRecordPermissionGranted) {
+            NSString *permStr = (micPerm == AVAudioApplicationRecordPermissionDenied) ? @"denied" : @"not determined";
+            NSDictionary *err = noff_json_error(TOOL_NAME, @"transcribe",
+                                                 NOFF_ERR_AUTHORIZATION_DENIED,
+                                                 [NSString stringWithFormat:@"Microphone access not granted (status: %@). "
+                                                  "Grant it in Settings > Privacy & Security > Microphone, then retry.", permStr]);
+            noff_emit_json(stdout_fd, err, compact, quiet);
+            return NOFF_EXIT_AUTH_DENIED;
+        }
+    }
     NSString *resolvedFilePath = nil;
     if (!micSource) {
         NSString *normalized = [[sourceArg stringByTrimmingCharactersInSet:
@@ -325,8 +352,21 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
                                  mode:AVAudioSessionModeMeasurement
                               options:AVAudioSessionCategoryOptionDuckOthers
                                 error:&sessionError];
+            if (sessionError) {
+                // [AUD8-34] The session error used to be swallowed; capture
+                // then failed later with an unrelated-looking -3/-4.
+                recognitionError = sessionError;
+                dispatch_semaphore_signal(sem);
+                return;
+            }
             [audioSession setActive:YES withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
                               error:&sessionError];
+            if (sessionError) {
+                // [AUD8-34] Same for activation.
+                recognitionError = sessionError;
+                dispatch_semaphore_signal(sem);
+                return;
+            }
 
             AVAudioEngine *audioEngine = [[AVAudioEngine alloc] init];
             SFSpeechAudioBufferRecognitionRequest *request = [[SFSpeechAudioBufferRecognitionRequest alloc] init];
@@ -381,7 +421,7 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
             if (recordingFormat.channelCount == 0 || recordingFormat.sampleRate <= 0) {
                 recognitionError = [NSError errorWithDomain:@"MinisSpeech" code:-3 userInfo:@{
                     NSLocalizedDescriptionKey: @"Microphone input unavailable (0 channels / 0 Hz). "
-                                                @"The app may be in the background or another app holds the mic."
+                                                @"Microphone permission may be missing, the app may be in the background, or another app holds the mic."
                 }];
                 dispatch_semaphore_signal(sem);
                 return;
