@@ -399,6 +399,8 @@
 		EVOB00004 /* EvolutionRedactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00002 /* EvolutionRedactor.swift */; };
 		EVOB00005 /* EvolutionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00003 /* EvolutionRecorder.swift */; };
 		EVOB00007 /* EvolutionExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00004 /* EvolutionExtractor.swift */; };
+		EVOB00009 /* EvolutionInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00005 /* EvolutionInjector.swift */; };
+		EVOB00010 /* EvolutionInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00005 /* EvolutionInjector.swift */; };
 		EVOB00008 /* EvolutionExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00004 /* EvolutionExtractor.swift */; };
 		EVOB00006 /* EvolutionRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00003 /* EvolutionRecorder.swift */; };
 		E5LOCK001 /* SessionLockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LOCK101 /* SessionLockStore.swift */; };
@@ -1182,6 +1184,7 @@
 		EVOF00002 /* EvolutionRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Evolution/EvolutionRedactor.swift; sourceTree = "<group>"; };
 		EVOF00003 /* EvolutionRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Evolution/EvolutionRecorder.swift; sourceTree = "<group>"; };
 		EVOF00004 /* EvolutionExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Evolution/EvolutionExtractor.swift; sourceTree = "<group>"; };
+		EVOF00005 /* EvolutionInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Evolution/EvolutionInjector.swift; sourceTree = "<group>"; };
 		E5LOCK101 /* SessionLockStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionLockStore.swift; sourceTree = "<group>"; };
 		E5LOCK102 /* FaceIDProtectionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FaceIDProtectionSettingsView.swift; sourceTree = "<group>"; };
 		E5LOCK103 /* AppLockOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLockOverlay.swift; sourceTree = "<group>"; };
@@ -1860,6 +1863,7 @@
 				EVOF00002 /* EvolutionRedactor.swift */,
 				EVOF00003 /* EvolutionRecorder.swift */,
 				EVOF00004 /* EvolutionExtractor.swift */,
+				EVOF00005 /* EvolutionInjector.swift */,
 			);
 			path = Agent;
 			sourceTree = "<group>";
@@ -3004,6 +3008,7 @@
 				EVOB00004 /* EvolutionRedactor.swift in Sources */,
 				EVOB00005 /* EvolutionRecorder.swift in Sources */,
 				EVOB00007 /* EvolutionExtractor.swift in Sources */,
+				EVOB00009 /* EvolutionInjector.swift in Sources */,
 				E5GWF0004 /* GeminiWireFormat.swift in Sources */,
 				E5JB10001 /* JiebaWrapper.mm in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
@@ -3168,6 +3173,7 @@
 				EVOB00003 /* EvolutionRedactor.swift in Sources */,
 				EVOB00006 /* EvolutionRecorder.swift in Sources */,
 				EVOB00008 /* EvolutionExtractor.swift in Sources */,
+				EVOB00010 /* EvolutionInjector.swift in Sources */,
 				E53000002 /* AIChatView.swift in Sources */,
 				E5CAL0001 /* CookieAuditLogger.swift in Sources */,
 				E5F200001 /* MarkdownPrepRegex.swift in Sources */,

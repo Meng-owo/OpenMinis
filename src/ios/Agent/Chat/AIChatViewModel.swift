@@ -2108,6 +2108,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).
         p += memoryStatusFragment
+        // [S3-2][evolution] Injector hook — off/shadow return "" (prompt stays
+        // byte-identical to baseline); shadow records what WOULD be injected;
+        // active appends the cached, budgeted fragment.
+        p += EvolutionInjector.shared.turnFragment(sessionId: sessionId)
         return p
     }
 
