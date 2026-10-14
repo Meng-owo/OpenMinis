@@ -21,6 +21,9 @@ enum EvolutionActionStatus: String, Codable {
 
 enum EvolutionLessonStatus: String, Codable {
     case candidate, verified, deprecated
+    /// Both signals fired for the same target (failure cluster + recovery
+    /// witnesses): frozen pending human review, never injected (S3-1 §6).
+    case conflicts
 }
 
 enum EvolutionSkillStatus: String, Codable {
@@ -597,6 +600,53 @@ actor EvolutionStore {
             "skills": Int(sqlite3_column_int64(stmt, 3)),
             "injections": Int(sqlite3_column_int64(stmt, 4)),
         ]
+    }
+
+    // MARK: S3-1 reads (extractor inputs)
+
+    /// Chronologically-latest actions across all runs — the extractor window.
+    func recentActions(limit: Int = 5000) -> [EvolutionAction] {
+        guard db != nil, limit > 0 else { return [] }
+        let sql = "SELECT id, run_id, seq, tool_name, profile, status, error_class, error_digest, duration_ms, retry_count, result_digest FROM actions ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, Int64(limit))
+        var out: [EvolutionAction] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let statusRaw = columnText(stmt, 6) ?? "fail"
+            out.append(EvolutionAction(
+                id: columnText(stmt, 1) ?? "",
+                runId: columnText(stmt, 2) ?? "",
+                seq: Int(sqlite3_column_int64(stmt, 3)),
+                toolName: columnText(stmt, 4) ?? "",
+                profile: columnText(stmt, 5) ?? "",
+                status: EvolutionActionStatus(rawValue: statusRaw) ?? .fail,
+                errorClass: columnText(stmt, 7),
+                errorDigest: columnText(stmt, 8),
+                durationMs: Int(sqlite3_column_int64(stmt, 9)),
+                retryCount: Int(sqlite3_column_int64(stmt, 10)),
+                resultDigest: columnText(stmt, 11)
+            ))
+        }
+        return out
+    }
+
+    /// id → (status, version): extraction protection — user-owned lesson
+    /// decisions (verified/deprecated) are never clobbered by a pass.
+    func lessonStateMap() -> [String: (status: String, version: Int)] {
+        guard db != nil else { return [:] }
+        let sql = "SELECT id, status, version FROM lessons"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [:] }
+        defer { sqlite3_finalize(stmt) }
+        var out: [String: (status: String, version: Int)] = [:]
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let id = columnText(stmt, 1) else { continue }
+            out[id] = (status: columnText(stmt, 2) ?? "candidate",
+                       version: Int(sqlite3_column_int64(stmt, 3)))
+        }
+        return out
     }
 
     // MARK: Maintenance

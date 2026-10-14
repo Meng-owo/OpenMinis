@@ -75,6 +75,9 @@ enum EvolutionRecorder {
                 source: stats.source
             )
             await store.insert(run)
+            // [S3-1][evolution] kick the rule extractor — throttled inside,
+            // fire-and-forget, never blocks the caller.
+            EvolutionExtractionQueue.schedule()
         }
     }
 
