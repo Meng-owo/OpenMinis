@@ -670,8 +670,13 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                 return (hit.data, c)
             }
             if let disk = TTSDiskCache.load(key: k) {
+                // [AUD8-15] The disk-hit refill used to skip the LRU trim, so
+                // repeated disk hits grew the "64-entry" memory level without
+                // bound (entries hold strong Data references). Same trim as
+                // the store path.
                 synthCache[k] = (disk, c.key)
                 synthCacheOrder.append(k)
+                trimSynthCacheIfNeeded()
                 return (disk, c)
             }
         }
@@ -686,11 +691,17 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         }
         synthCache[k] = (audio, candidate.key)
         synthCacheOrder.append(k)
+        trimSynthCacheIfNeeded()
+        TTSDiskCache.store(key: k, data: audio)
+    }
+
+    /// [AUD8-15] Shared LRU trim — the store path and the disk-hit refill must
+    /// enforce the same bound, or one side silently voids the other's cap.
+    private func trimSynthCacheIfNeeded() {
         while synthCacheOrder.count > Self.synthCacheLimit {
             let oldest = synthCacheOrder.removeFirst()
             synthCache.removeValue(forKey: oldest)
         }
-        TTSDiskCache.store(key: k, data: audio)
     }
 
     // MARK: - Synthesis with retry / split fallback
