@@ -92,7 +92,15 @@ enum VoiceTextSanitizer {
         // other markers are never meaningful mid-identifier and stay
         // unconditional. Mirrors the Android port's fix (VoiceTextSanitizer.kt).
         sub("(?<!\\w)_+|_+(?!\\w)", "")
-        sub("[*~`]{1,}", "")
+        // [AUD8-20] Sweep leftover markers, but keep single interior `~`/`*`
+        // that are meaningful prose: "5~10" was read as "510" and "2*3" as
+        // "23" because the old unconditional class deleted them. Backticks are
+        // always markdown residue (fences/inline consumed above) and stay
+        // unconditional; `~`/`*` runs are removed only when NOT flanked by a
+        // digit on either side, so ranges/multiplication keep their symbol
+        // while leftover fragments like a stray "**" still clear.
+        sub("`{1,}", "")
+        sub("(?<![0-9])[~*]{1,}(?![0-9])", "")
         return s
     }
 
