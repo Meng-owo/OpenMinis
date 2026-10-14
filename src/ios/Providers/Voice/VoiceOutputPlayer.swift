@@ -427,6 +427,10 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             playingSeq = -1
             playingSessionId = nil
             playingUnit = nil
+            // [AUD8-13] Reset the capsule's progress surface too: stopAll did,
+            // this session path didn't, so the floating control kept showing
+            // the last sentence's bar/time after a session-level stop.
+            stopProgressTick(reset: true)
             // [AUD8-07] Do NOT clear `isPaused` here: it may be an
             // external-audio latch owned by the coordinator (call/recording in
             // progress), and clearing it let the pump restart TTS under the
@@ -888,7 +892,15 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             p.enableRate = true
             p.rate = VoiceOutputPreferences.speedMultiplier
             p.prepareToPlay()
-            p.play()
+            // [AUD8-12] Don't install a dead player on a failed start: the old
+            // code ignored play()'s return, set isPlaying=true, and the
+            // non-nil player then blocked pumpPlayback forever (a stopped
+            // player never calls its delegate; the queue wedged and the
+            // capsule stayed "playing" with no error). Route a false return
+            // into the catch path below.
+            guard p.play() else {
+                throw VoiceProviderError.parseError("AVAudioPlayer refused to start")
+            }
             player = p
             isPlaying = true
             VoiceNowPlaying.shared.refresh()
