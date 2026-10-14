@@ -128,7 +128,13 @@ enum VoiceTextSanitizer {
 
     /// Replace bare http(s) URLs in plain text with "<host> 的链接".
     private static func rewriteBareURLs(_ text: String) -> String {
-        let pattern = "https?://[^\\s)\\]]+"
+        // [AUD8-21] The old class was everything-but-whitespace, so a URL glued
+        // to following CJK swallowed the rest of the sentence — "详见
+        // https://example.com/abc，然后继续" became one giant URL and
+        // "，然后继续" vanished. Restrict to the characters a URL can
+        // legitimately contain: CJK / full-width punctuation now terminate the
+        // match and survive.
+        let pattern = "https?://[A-Za-z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%]+"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
         let ns = text as NSString
         var result = ""
