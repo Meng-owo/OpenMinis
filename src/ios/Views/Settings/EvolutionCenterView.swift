@@ -4,6 +4,9 @@ import SwiftUI
 /// 数据与库直接一致（打开即读、下拉即刷）。
 struct EvolutionCenterView: View {
 
+    /// [playhub-rebuild] 嵌进「播放」页时，不再自设导航标题（避免和父页抢标题）。
+    var embedded: Bool = false
+
     @State private var counts: [String: Int] = [:]
     @State private var runs: [EvolutionRun] = []
     @State private var loading = false
@@ -58,7 +61,7 @@ struct EvolutionCenterView: View {
                 }
             }
         }
-        .navigationTitle("进化中心")
+        .modifier(EvolutionCenterEmbeddedTitle(embedded: embedded))
         .refreshable { await reload() }
         .task { await reload() }
     }
@@ -126,5 +129,20 @@ struct EvolutionCenterView: View {
         guard let store = EvolutionStore.shared else { return }
         counts = await store.counts()
         runs = await store.recentRuns(limit: 30)
+    }
+}
+
+
+/// [playhub-rebuild] 允许进化中心被「播放」页内嵌：内嵌时不抢父页标题。
+private struct EvolutionCenterEmbeddedTitle: ViewModifier {
+    let embedded: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if embedded {
+            content
+        } else {
+            content.navigationTitle("进化中心")
+        }
     }
 }
