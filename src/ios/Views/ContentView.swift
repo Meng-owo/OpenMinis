@@ -2771,12 +2771,12 @@ struct ContentView: View {
                 splitList
             }
         }
-        // [T-home-wallpaper-stack-fix][09-10 醒醒] The old .appearancePage
-        // (.home) sat OUTSIDE the NavigationStack, so the stack's own white
-        // container covered the wallpaper — the "首页壁纸不显示" report.
-        // Painting the backdrop on the CONTENT root (inside the stack, like
-        // AIChatView does for .chat) makes it the list's direct background.
-        .background(AppearanceBackdrop(scope: .home))
+        // [T-home-wallpaper-fullbleed][10-02 醒醒改口径] 主页壁纸靠自己铺满
+        // 到物理底边（穿过底部栏、盖住 home indicator 那一条），底部栏不再
+        // 替它补画。挂载处这层 ignoresSafeArea(.bottom) 不能省：组件内部那
+        // 层隔着 .background 边界传不出来，实测 backdrop 只盖到列表区和栏
+        // 的 44pt，最底部一条没图层、露栈容器的白。
+        .background(AppearanceBackdrop(scope: .home).ignoresSafeArea(edges: .bottom))
         // Wallpaper fullscreen: transparent nav bar over the home backdrop,
         // so the wallpaper runs under the soul-name title + search strip.
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -3563,19 +3563,22 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
-    /// 默认完全透明贴底穿透全局壁纸，绝不产生白边；有独立壁纸时则全屏覆盖安全区。
+    // [T-home-wallpaper-fullbleed][10-02 醒醒改口径] 专属图只盖 24pt 一条、贴栏顶；无专属图纯透明。
     @ViewBuilder private var homeBottomBarBackground: some View {
         let studio = AppearanceStudio.shared
         if let wp = studio.wallpaper(for: .bottomBar) {
-            Image(uiImage: wp)
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(studio.color(.canvas, scope: .bottomBar).opacity(studio.wallpaperShade))
-                .ignoresSafeArea(edges: .bottom)
+            VStack(spacing: 0) {
+                Image(uiImage: wp)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 24)
+                    .clipped()
+                    .overlay(studio.color(.canvas, scope: .bottomBar).opacity(studio.wallpaperShade))
+                Spacer(minLength: 0)
+            }
         } else {
             Color.clear
-                .ignoresSafeArea(edges: .bottom)
         }
     }
 

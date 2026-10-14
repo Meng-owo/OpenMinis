@@ -702,25 +702,26 @@ struct AppearanceBackdrop: View {
         ZStack {
             studio.color(.canvas, scope: scope)
             if let image = studio.wallpaper(for: scope) {
-                // [batch7 用户-P2-10] 底部栏预览必须和真机渲染一致：
-                // 真机（ContentView.homeBottomBarBackground）是 scaledToFit +
-                // clipped 全幅贴底，预览用 scaledToFill 会骗人。只改预览，
-                // 不动真机已定的效果。
+                // [T-home-wallpaper-fullbleed][10-02 醒醒改口径] 底部栏预览与真机一致（24pt 条样式）。
                 if scope == .bottomBar {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
-                        .ignoresSafeArea(edges: .bottom)
+                    VStack(spacing: 0) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 24)
+                            .clipped()
+                            .overlay(studio.color(.canvas, scope: .bottomBar).opacity(studio.wallpaperShade))
+                        Spacer(minLength: 0)
+                    }
                 } else {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
                         .clipped()
+                    studio.color(.canvas, scope: scope)
+                        .opacity(studio.wallpaperShade)
                 }
-                studio.color(.canvas, scope: scope)
-                    .opacity(studio.wallpaperShade)
             }
         }
         .id(studio.wallpaperRevision)
