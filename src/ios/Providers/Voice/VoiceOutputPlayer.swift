@@ -884,56 +884,71 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         // mid-recording would start playing under the recorder. `resume()`
         // re-enters here when the pause lifts.
         guard !isPaused else { return }
-        guard player == nil else { return }            // already playing
-        guard let front = queue.first else {           // queue drained
-            if isPlaying { isPlaying = false }
-            return
-        }
-        // Skip a failed front unit.
-        if front.failed {
-            queue.removeFirst()
-            pumpPlayback()
-            return
-        }
-        guard let audio = front.audio else { return }  // front not generated yet
-
-        queue.removeFirst()
-        playingSeq = front.seq
-        playingSessionId = front.ownerSessionId
-        playingUnit = front
-        do {
-            try activatePlaybackSession()
-            let p = try AVAudioPlayer(data: audio)
-            p.delegate = self
-            // Real-time variable speed: rate is applied at PLAYBACK (not synthesis),
-            // so changing speed takes effect on the CURRENTLY-playing audio.
-            p.enableRate = true
-            p.rate = VoiceOutputPreferences.speedMultiplier
-            p.prepareToPlay()
-            // [AUD8-12] Don't install a dead player on a failed start: the old
-            // code ignored play()'s return, set isPlaying=true, and the
-            // non-nil player then blocked pumpPlayback forever (a stopped
-            // player never calls its delegate; the queue wedged and the
-            // capsule stayed "playing" with no error). Route a false return
-            // into the catch path below.
-            guard p.play() else {
-                throw VoiceProviderError.parseError("AVAudioPlayer refused to start")
+        // [AUD8-16] Loop, don't recurse: the old catch re-entered pumpPlayback
+        // for every failed unit — N consecutive bad units burned N stack
+        // frames and were dropped with nothing but a log line (synthesis
+        // failures toast + flash; playback failures were invisible). Now the
+        // failures accumulate and surface once per pump.
+        var playbackFailures = 0
+        while player == nil {
+            guard let front = queue.first else {           // queue drained
+                if isPlaying { isPlaying = false }
+                break
             }
-            player = p
-            isPlaying = true
-            VoiceNowPlaying.shared.refresh()
-            // [T-kelivo-tts 09-10] Progress tick for the floating control's
-            // scrubber (0.1s cadence — kelivo's floating player updates at
-            // frame rate but a tenth-second is plenty for a 40pt-wide bar).
-            startProgressTick()
-            VoiceLog.log(String(format: "TTS ▶︎ play #%d owner=%@ dur=%.2fs rate=%.2f queueAhead=%d bufferedAfter=%.2fs",
-                front.seq, String(front.ownerSessionId.prefix(8)), p.duration, p.rate, queue.count, bufferedAudioSeconds))
-        } catch {
-            logger.error("TTS play failed #\(front.seq): \(error.localizedDescription)")
-            playingSeq = -1
-            playingSessionId = nil
-            playingUnit = nil
-            pumpPlayback()                              // try next
+            // Skip a failed front unit.
+            if front.failed {
+                queue.removeFirst()
+                continue
+            }
+            guard let audio = front.audio else { break }   // front not generated yet
+
+            queue.removeFirst()
+            playingSeq = front.seq
+            playingSessionId = front.ownerSessionId
+            playingUnit = front
+            do {
+                try activatePlaybackSession()
+                let p = try AVAudioPlayer(data: audio)
+                p.delegate = self
+                // Real-time variable speed: rate is applied at PLAYBACK (not synthesis),
+                // so changing speed takes effect on the CURRENTLY-playing audio.
+                p.enableRate = true
+                p.rate = VoiceOutputPreferences.speedMultiplier
+                p.prepareToPlay()
+                // [AUD8-12] Don't install a dead player on a failed start: the old
+                // code ignored play()'s return, set isPlaying=true, and the
+                // non-nil player then blocked pumpPlayback forever (a stopped
+                // player never calls its delegate; the queue wedged and the
+                // capsule stayed "playing" with no error). Route a false return
+                // into the catch path below.
+                guard p.play() else {
+                    throw VoiceProviderError.parseError("AVAudioPlayer refused to start")
+                }
+                player = p
+                isPlaying = true
+                VoiceNowPlaying.shared.refresh()
+                // [T-kelivo-tts 09-10] Progress tick for the floating control's
+                // scrubber (0.1s cadence — kelivo's floating player updates at
+                // frame rate but a tenth-second is plenty for a 40pt-wide bar).
+                startProgressTick()
+                VoiceLog.log(String(format: "TTS ▶︎ play #%d owner=%@ dur=%.2fs rate=%.2f queueAhead=%d bufferedAfter=%.2fs",
+                    front.seq, String(front.ownerSessionId.prefix(8)), p.duration, p.rate, queue.count, bufferedAudioSeconds))
+            } catch {
+                // [AUD8-16] Count and continue with the next unit instead of
+                // recursing; the user-visible signal fires once below.
+                playbackFailures += 1
+                logger.error("TTS play failed #\(front.seq) (failure \(playbackFailures) this pump): \(error.localizedDescription)")
+                playingSeq = -1
+                playingSessionId = nil
+                playingUnit = nil
+            }
+        }
+        if playbackFailures > 0 {
+            // [AUD8-16] Mirror the synthesis give-up contract: flash the
+            // control red and tell the user, instead of silently skipping.
+            synthFailureTick &+= 1
+            MinisToast.show(AppLocalized("Voice playback failed — some content may not be read aloud."),
+                            systemImage: "exclamationmark.triangle.fill")
         }
         pumpPrefetch()
     }
