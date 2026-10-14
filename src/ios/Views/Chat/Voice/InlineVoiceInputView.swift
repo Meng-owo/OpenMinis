@@ -1129,6 +1129,17 @@ struct InlineVoiceInputView: View {
                             .foregroundStyle(.black)
                     }
                 }
+                // [AUD8-29] Tiny attention dot when the last attempt failed and
+                // the panel is idle — compact mode has no status line, so
+                // besides the toast this is its only failure surface. Cleared
+                // by the next capture start / successful transcript
+                // (lastFailure is reset on both paths).
+                if viewModel.lastFailure != nil, viewModel.state == .waiting, !viewModel.isTranscribing {
+                    Circle()
+                        .fill(ChatColors.warning)
+                        .frame(width: 8, height: 8)
+                        .offset(x: micDiameter / 2 - 7, y: -(micDiameter / 2 - 7))
+                }
             }
             .frame(width: micDiameter, height: micDiameter)
             .contentShape(Circle())

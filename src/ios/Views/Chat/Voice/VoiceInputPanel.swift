@@ -34,6 +34,10 @@ enum VoiceInputFailure: Equatable {
     /// Mic is granted but Speech recognition is not — on-device ASR cannot run.
     /// Previously indistinguishable from a generic transcribe error.
     case speechPermissionDenied
+    /// Capture was interrupted by the system (call / Siri / route change) and
+    /// could not auto-resume. Previously only a state reset — invisible in
+    /// compact mode and never toasted.
+    case interrupted
     /// No usable ASR provider could be constructed (missing API key / bad
     /// config). Previously surfaced as a bogus *network* error.
     case noUsableProvider
@@ -60,6 +64,9 @@ enum VoiceInputFailure: Equatable {
         case .speechPermissionDenied:
             return AppLocalized("Speech recognition access denied — enable it in Settings",
                           comment: "Voice input: Speech recognition permission denied")
+        case .interrupted:
+            return AppLocalized("Recording was interrupted — tap the mic to resume",
+                          comment: "Voice input: capture stopped by a system interruption (call/Siri/route)")
         case .noUsableProvider:
             return AppLocalized("No usable speech-to-text model — check the voice settings",
                           comment: "Voice input: no ASR provider could be built (missing key/config)")
@@ -74,7 +81,7 @@ enum VoiceInputFailure: Equatable {
     var systemImage: String {
         switch self {
         case .noSpeechRecognized, .tooShort: return "waveform.slash"
-        case .micPermissionDenied, .speechPermissionDenied: return "mic.slash.fill"
+        case .micPermissionDenied, .speechPermissionDenied, .interrupted: return "mic.slash.fill"
         case .droppedWhileEditing: return "pencil.slash"
         default: return "exclamationmark.triangle.fill"
         }
@@ -88,6 +95,7 @@ enum VoiceInputFailure: Equatable {
         case .droppedWhileEditing: return "droppedWhileEditing"
         case .micPermissionDenied: return "micPermissionDenied"
         case .speechPermissionDenied: return "speechPermissionDenied"
+        case .interrupted: return "interrupted"
         case .noUsableProvider: return "noUsableProvider"
         case .transcribeFailed: return "transcribeFailed"
         case .startFailed: return "startFailed"
@@ -933,6 +941,8 @@ final class VoiceInputViewModel: ObservableObject {
                 // straight to manual retry instead of getting its own
                 // automatic one.
                 self.isAutoRetry = false
+                // [AUD8-29] A success clears the last-failure badge state too.
+                self.lastFailure = nil
             } catch is CancellationError {
                 VoiceLog.log("transcription task cancelled")
                 return
@@ -1221,6 +1231,10 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
         backgroundTimer?.invalidate(); backgroundTimer = nil
         VoiceModePreference.shared.isCapturing = false
         startError = AppLocalized("Recording was interrupted — tap the mic to resume", comment: "Voice capture interrupted")
+        // [AUD8-29] Interruptions were invisible in compact mode (the startError
+        // label only renders in the expanded body). report() toasts at window
+        // level, so the failure is now visible in BOTH panel states.
+        report(.interrupted)
     }
 
     private static func computeWaveformLevels(from pcmData: Data) -> [Float] {
