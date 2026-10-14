@@ -180,6 +180,11 @@ final class VoiceInputViewModel: ObservableObject {
         MinisToast.show(failure.message, duration: 2.2, systemImage: failure.systemImage)
     }
     private var retryAudioData: Data?
+    /// [AUD8-32] Overflow FIFO for utterances that ALSO hit a transient failure
+    /// while a retry episode is already pending (countdown/manual wait). Before
+    /// this queue the single `retryAudioData` slot was overwritten by the
+    /// second failure and the first utterance was lost without a trace.
+    private var retryAudioQueue: [Data] = []
     private var retryTimer: Timer?
     private var isAutoRetry = false
 
@@ -856,7 +861,11 @@ final class VoiceInputViewModel: ObservableObject {
     }
 
     private func executeRetry() {
-        guard let data = retryAudioData else { return }
+        guard let data = retryAudioData else {
+            // [AUD8-32] Slot already consumed — let the queue advance.
+            drainRetryQueueIfIdle()
+            return
+        }
         isAutoRetry = true
         retryAudioData = nil
         transcribeError = nil
@@ -864,12 +873,46 @@ final class VoiceInputViewModel: ObservableObject {
     }
 
     func manualRetry() {
-        guard let data = retryAudioData else { return }
+        guard let data = retryAudioData else {
+            // [AUD8-32] Nothing stashed — a queued utterance may still be
+            // waiting for the slot.
+            drainRetryQueueIfIdle()
+            return
+        }
         canManualRetry = false
         isAutoRetry = false
         retryAudioData = nil
         transcribeError = nil
         transcribeAudio(data)
+    }
+
+    /// [AUD8-32] Whether a retry episode currently owns the single slot
+    /// (countdown running, audio stashed, or manual retry waiting).
+    private var retryEpisodeActive: Bool {
+        retryAudioData != nil || retryCountdown != nil || canManualRetry
+    }
+
+    /// [AUD8-32] Slot or queue a transient-network retry. The slot is one item
+    /// with a live countdown/manual affordance; further failures FIFO behind it
+    /// so nothing is overwritten.
+    private func enqueueRetryAudio(_ data: Data) {
+        if !retryEpisodeActive {
+            retryAudioData = data
+            startRetryCountdown()
+        } else {
+            retryAudioQueue.append(data)
+            VoiceLog.log("retry queue +1 (depth \(retryAudioQueue.count))")
+        }
+    }
+
+    /// [AUD8-32] Hand the slot to the next queued utterance once the previous
+    /// episode has fully settled (no countdown, no stashed audio, no manual
+    /// retry waiting).
+    private func drainRetryQueueIfIdle() {
+        guard !retryEpisodeActive, !retryAudioQueue.isEmpty else { return }
+        retryAudioData = retryAudioQueue.removeFirst()
+        VoiceLog.log("retry queue drained — \(retryAudioQueue.count) remaining")
+        startRetryCountdown()
     }
 
     private func schedulePendingForceFlush() {
@@ -1030,12 +1073,22 @@ final class VoiceInputViewModel: ObservableObject {
                     self.lastFailure = failure
                 }
                 if Self.isTransientNetworkError(error) && !self.isAutoRetry {
-                    self.retryAudioData = audioData
-                    self.startRetryCountdown()
+                    // [AUD8-32] Queue instead of overwriting: a second failed
+                    // utterance arriving while the first is already waiting on
+                    // a countdown must not evict it.
+                    self.enqueueRetryAudio(audioData)
                 } else if Self.isTransientNetworkError(error) && self.isAutoRetry {
                     self.isAutoRetry = false
-                    self.canManualRetry = true
-                    self.retryAudioData = audioData
+                    if !self.retryEpisodeActive {
+                        self.canManualRetry = true
+                        self.retryAudioData = audioData
+                    } else {
+                        // [AUD8-32] A sibling failure claimed the slot while
+                        // this attempt was in flight — queue FIFO instead of
+                        // clobbering it.
+                        self.retryAudioQueue.append(audioData)
+                        VoiceLog.log("retry queue +1 (depth \(self.retryAudioQueue.count))")
+                    }
                 } else {
                     self.retryAudioData = nil
                     self.canManualRetry = false
@@ -1069,6 +1122,9 @@ final class VoiceInputViewModel: ObservableObject {
             if self.pendingTranscriptions > 0 {
                 self.pendingTranscriptions -= 1
             }
+            // [AUD8-32] A finished attempt may have freed the retry slot — let
+            // the next queued utterance take it.
+            self.drainRetryQueueIfIdle()
         }
         pendingTranscriptionTasks.removeAll { $0.isCancelled }
         pendingTranscriptionTasks.append(task)
@@ -1183,6 +1239,7 @@ final class VoiceInputViewModel: ObservableObject {
         retryTimer = nil
         retryCountdown = nil
         retryAudioData = nil
+        retryAudioQueue.removeAll()
         canManualRetry = false
         isAutoRetry = false
     }
