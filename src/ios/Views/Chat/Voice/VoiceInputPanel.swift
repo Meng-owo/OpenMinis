@@ -720,7 +720,14 @@ final class VoiceInputViewModel: ObservableObject {
     /// and the panel simply returns to idle.
     private func handleSegment(_ audioData: Data, reason: SegmentEndReason) {
         guard !audioData.isEmpty else { return }
-        if isEditingTranscript { return }
+        // [AUD8-31] Don't drop speech silently while the user edits — the
+        // late-result path already reports .droppedWhileEditing; this gate
+        // (segment arriving after the edit began) used to vanish without a
+        // trace.
+        if isEditingTranscript {
+            report(.droppedWhileEditing)
+            return
+        }
 
         pendingSegments.append(audioData)
         let totalSeconds = pendingSegments.reduce(0.0) { $0 + Self.wavDurationSeconds($1) }
@@ -917,7 +924,12 @@ final class VoiceInputViewModel: ObservableObject {
         guard !audioData.isEmpty else { return }
         // While the user hand-edits the transcript, drop new speech so it can't
         // overwrite their corrections.
-        if isEditingTranscript { return }
+        if isEditingTranscript {
+            // [AUD8-31] Same visibility rule as handleSegment and the
+            // late-result path — a dropped utterance must not be silent.
+            report(.droppedWhileEditing)
+            return
+        }
 
         // Do NOT change `state` here. Transcription runs in the background while
         // the mic keeps capturing, so the button's visual must keep following the
