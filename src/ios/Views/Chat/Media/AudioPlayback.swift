@@ -107,6 +107,11 @@ class GlobalAudioPlayer: ObservableObject {
         // load still in flight from a previous play).
         playRequestId += 1
         let requestId = playRequestId
+        // [AUD8-09] Snapshot whether read-aloud was live at REQUEST time: a
+        // reader that appears only later (during the load gap) belongs to a
+        // newer explicit intent and must not be preempted; a reader already
+        // live now is being deliberately replaced by this tap.
+        let readerWasLiveAtRequest = VoiceOutputPlayer.shared.hasLivePlayer
         // Suspend silent audio so media gets full volume
         let preCount = BackgroundKeepAliveManager.shared.silentAudioSuspendCount
         logger.info("[AudioPlayback] play: url=\(url.lastPathComponent) suspendSilentAudio → count will be \(preCount + 1)")
@@ -145,6 +150,16 @@ class GlobalAudioPlayer: ObservableObject {
                 // [TTS-13] Don't reset to 1.0 — reuse the last rate the
                 // user picked in the audio preview.
                 self.rate = VoiceBubblePlaybackState.rememberedRate
+                // [AUD8-09] A read-aloud that started DURING this load is the
+                // newer explicit intent: install the player as loaded but do
+                // not auto-play — previously the completion unconditionally
+                // began mediaAttachment and hard-preempted the just-started
+                // reading (its text dropped, no remainder).
+                if !readerWasLiveAtRequest && VoiceOutputPlayer.shared.hasLivePlayer {
+                    logger.info("[AudioPlayback] load finished while a read-aloud owns the session — autoplay deferred")
+                    VoiceNowPlaying.shared.refresh()
+                    return
+                }
                 // Start playing immediately. Declaring `.mediaAttachment` preempts
                 // reply TTS (mutually exclusive) and applies the playback profile.
                 AudioSessionCoordinator.shared.begin(.mediaAttachment)
