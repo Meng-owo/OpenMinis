@@ -92,15 +92,22 @@ final class AudioSessionCoordinator {
     }
 
     private func beginInternal(_ intent: Intent) {
-        // Media attachment preempts reply TTS (mutually exclusive voice content):
-        // stop the cloud queue directly and notify the chat VM to stop System TTS,
-        // BEFORE media takes the session. (TTS is not auto-resumed afterwards.)
+        // [AUD8-11] Insert FIRST, then preempt. The old order (stopAll → insert)
+        // opened a window where `active` could momentarily empty (`highest ==
+        // nil`), so apply() deactivated the whole session and the next line
+        // re-activated it — a deactivate→activate whir on every read-aloud →
+        // bubble switch, plus a spurious "playback can resume" signal to other
+        // apps. Preempting after the insert keeps the session continuously
+        // active: the preempted engines see the new intent already in place.
+        let was = highest
+        active.insert(intent)
+        // Media attachment preempts reply TTS (mutually exclusive voice
+        // content): stop the cloud queue directly and notify the chat VM to
+        // stop System TTS. (TTS is not auto-resumed afterwards.)
         if intent == .mediaAttachment, active.contains(.replyTTS) {
             VoiceOutputPlayer.shared.stopAll()
             NotificationCenter.default.post(name: Self.replyTTSPreemptedNotification, object: nil)
         }
-        let was = highest
-        active.insert(intent)
         if highest != was || !sessionActive {
             apply(reason: "begin(\(intent))")
         }
