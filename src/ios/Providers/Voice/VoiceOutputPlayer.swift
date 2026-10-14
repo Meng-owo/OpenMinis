@@ -765,10 +765,15 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             do {
                 return try await provider.synthesize(candidate.makeRequest(text))
             } catch {
+                // [AUD8-14] A cancelled attempt is not a retryable failure —
+                // rethrow so a stopped read-aloud stops issuing vendor
+                // requests immediately instead of burning through retries.
+                if error is CancellationError || Task.isCancelled { throw CancellationError() }
                 lastError = error
                 VoiceLog.log("TTS synth retry #\(seq) attempt \(attempt + 1)/\(synthRetriesSameText + 1) failed: \(error.localizedDescription)")
                 let backoff = synthRetryBackoff * Double(attempt + 1)
-                try? await Task.sleep(nanoseconds: UInt64(backoff * 1e9))
+                // [AUD8-14] Throwing sleep — `try?` swallowed cancellation here too.
+                try await Task.sleep(nanoseconds: UInt64(backoff * 1e9))
             }
         }
         // Phase 2: split into smaller chunks and synthesize each, then concatenate.
@@ -784,9 +789,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                     let d = try await provider.synthesize(candidate.makeRequest(chunk))
                     pieces.append(d); ok = true; break
                 } catch {
+                    // [AUD8-14] Same cancellation rule as Phase 1.
+                    if error is CancellationError || Task.isCancelled { throw CancellationError() }
                     lastError = error
                     VoiceLog.log("TTS synth #\(seq) chunk \(i + 1)/\(chunks.count) attempt \(attempt + 1) failed: \(error.localizedDescription)")
-                    try? await Task.sleep(nanoseconds: UInt64(synthRetryBackoff * 1e9))
+                    try await Task.sleep(nanoseconds: UInt64(synthRetryBackoff * 1e9))
                 }
             }
             guard ok else { throw lastError ?? VoiceProviderError.parseError("chunk synth failed") }
