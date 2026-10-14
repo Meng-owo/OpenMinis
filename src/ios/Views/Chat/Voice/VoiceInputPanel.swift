@@ -677,11 +677,13 @@ final class VoiceInputViewModel: ObservableObject {
         }
     }
 
-    /// Count of in-flight transcription tasks. Drives the `isTranscribing`
+    /// [AUD8-35] In-flight transcription task IDs. A Set (not a plain counter)
+    /// so a stale completion from a cancelled/older task can't decrement a
+    /// count that already belongs to new tasks. Drives the `isTranscribing`
     /// loading indicator WITHOUT changing the capture state — so the waveform
     /// keeps showing (mic never stops) while a loading ring spins over it.
-    private var pendingTranscriptions = 0 {
-        didSet { isTranscribing = pendingTranscriptions > 0 }
+    private var pendingTranscriptionIDs: Set<UUID> = [] {
+        didSet { isTranscribing = !pendingTranscriptionIDs.isEmpty }
     }
     /// [AUD8-30] Utterance ordering: VAD segments transcribe in parallel and
     /// finish out of order (slow A, fast B), while the transcript must read in
@@ -981,7 +983,10 @@ final class VoiceInputViewModel: ObservableObject {
         let feedTs = ProcessInfo.processInfo.systemUptime
         let feedDur = VoiceInputViewModel.wavDurationSeconds(audioData)
         VoiceLog.log(String(format: "feed inference | ts=%.3f dur=%.3fs bytes=%d", feedTs, feedDur, audioData.count))
-        pendingTranscriptions += 1
+        // [AUD8-35] Count by task ID — a stale completion must not release a
+        // spinner that belongs to newer tasks.
+        let txID = UUID()
+        pendingTranscriptionIDs.insert(txID)
         // Pass the resolved entry's model id EXPLICITLY: without it the
         // multipart body fell back to defaultVoiceInputModel() ("whisper-1"),
         // so the model the user picked never reached the request — an
@@ -1119,9 +1124,9 @@ final class VoiceInputViewModel: ObservableObject {
                 // record it, but don't nag.
                 VoiceLog.log("[voice-failure] staleGeneration: result dropped (gen \(generation) != \(self.transcriptGeneration))")
             }
-            if self.pendingTranscriptions > 0 {
-                self.pendingTranscriptions -= 1
-            }
+            // [AUD8-35] Remove only THIS task's id — a stale completion can no
+            // longer release the spinner of tasks that replaced it.
+            self.pendingTranscriptionIDs.remove(txID)
             // [AUD8-32] A finished attempt may have freed the retry slot — let
             // the next queued utterance take it.
             self.drainRetryQueueIfIdle()
@@ -1215,7 +1220,12 @@ final class VoiceInputViewModel: ObservableObject {
         for task in pendingTranscriptionTasks { task.cancel() }
         pendingTranscriptionTasks.removeAll()
         transcriptGeneration &+= 1
-        pendingTranscriptions = 0
+        pendingTranscriptionIDs.removeAll()
+        // [AUD8-35] Cancel abandons the utterance: drop the capture residue too,
+        // or a leftover force-flush timer re-merges it into the NEXT
+        // composition.
+        cancelPendingForceFlush()
+        pendingSegments.removeAll(keepingCapacity: true)
         // [AUD8-30] Stale buffered results belong to the cancelled episode —
         // drop them and re-base the sequence window at the next request.
         transcriptionBuffered.removeAll()
