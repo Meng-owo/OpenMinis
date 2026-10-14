@@ -405,6 +405,8 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         isPlaying = false
         isPaused = false
         isSynthesizing = false
+        // [AUD8-23] Full stop — hand the keep-alive engine back.
+        releaseKeepAliveForPlayback()
         releaseSessionIfSafe()
         VoiceNowPlaying.shared.refresh()
         return remainder
@@ -441,6 +443,8 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         refreshSynthesizingState()
         if queue.isEmpty && player == nil {
             isPlaying = false
+            // [AUD8-23] Whole queue idle after this stop — release keep-alive.
+            releaseKeepAliveForPlayback()
             releaseSessionIfSafe()
         }
     }
@@ -495,6 +499,24 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// won't deactivate a session a higher-priority intent still owns.
     private func releaseSessionIfSafe() {
         AudioSessionCoordinator.shared.end(.replyTTS)
+    }
+
+    /// [AUD8-23] Silent-audio keep-alive suspend/resume for the CLOUD reader:
+    /// the System-TTS path already stops the keep-alive engine before speaking
+    /// (AIChatViewModel), but the cloud path never did — the silent engine kept
+    /// running under the TTS player for the whole reading session (floor noise,
+    /// route churn, two holders on the audio session). Suspend once when
+    /// playback first starts; release when the player fully stops (stopAll /
+    /// session drain / queue finish).
+    private func suspendKeepAliveForPlayback() {
+        guard !keepAliveSuspended else { return }
+        keepAliveSuspended = true
+        BackgroundKeepAliveManager.shared.suspendSilentAudioForMedia(caller: "VoiceOutputPlayer")
+    }
+    private func releaseKeepAliveForPlayback() {
+        guard keepAliveSuspended else { return }
+        keepAliveSuspended = false
+        BackgroundKeepAliveManager.shared.resumeSilentAudioForMedia(caller: "VoiceOutputPlayer")
     }
 
     // MARK: - Pipeline
@@ -643,6 +665,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     private static let synthCacheLimit = 64
     private var synthCache: [String: (data: Data, candidateKey: String)] = [:]
     private var synthCacheOrder: [String] = []
+
+    /// [AUD8-23] Whether this player currently holds a silent-audio keep-alive
+    /// suspension for cloud read-aloud (balance guard for
+    /// suspend/resumeSilentAudioForMedia).
+    private var keepAliveSuspended = false
 
     private func cacheKey(text: String, candidate: Candidate) -> String {
         let req = candidate.makeRequest(text)
@@ -926,6 +953,9 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                 }
                 player = p
                 isPlaying = true
+                // [AUD8-23] First playback of this reading session → park the
+                // silent keep-alive engine (released on full stop below).
+                suspendKeepAliveForPlayback()
                 VoiceNowPlaying.shared.refresh()
                 // [T-kelivo-tts 09-10] Progress tick for the floating control's
                 // scrubber (0.1s cadence — kelivo's floating player updates at
@@ -1027,6 +1057,8 @@ extension VoiceOutputPlayer: AVAudioPlayerDelegate {
             // Nothing left and nothing generating → release the session (guarded
             // so it never deactivates a recording session).
             if self.queue.isEmpty && self.player == nil && !generating {
+                // [AUD8-23] Reading session over — release keep-alive.
+                self.releaseKeepAliveForPlayback()
                 self.releaseSessionIfSafe()
             }
             // [TTS-10] A unit just ended (or the queue moved on): the
