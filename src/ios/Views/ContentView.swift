@@ -7521,17 +7521,7 @@ private struct SettingsSheet: View {
                             QuietAppIcon(id: QuietIconSlot.memory.id, systemName: QuietIconSlot.memory.systemName)
                         }
                     }
-                    // [S3-3][evolution] 自我进化入口。将来「构件/影音内容」页到位后，
-                    // 这一行可整块搬过去（实现期对齐，见设计 §13-④）。
-                    NavigationLink {
-                        EvolutionCenterView()
-                    } label: {
-                        Label {
-                            Text("自我进化")
-                        } icon: {
-                            QuietAppIcon(id: QuietIconSlot.evolution.id, systemName: QuietIconSlot.evolution.systemName)
-                        }
-                    }
+                    // [T-playhub-rebuild] 自我进化入口已搬到「播放」页（PlayHubView），不再放这里。
                     NavigationLink {
                         MCPIntegrationsView()
                     } label: {
