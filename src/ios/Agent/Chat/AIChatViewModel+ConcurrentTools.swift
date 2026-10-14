@@ -945,43 +945,12 @@ extension AIChatViewModel {
             }
 
         case "send_voice":
-            // [voice-bubble-tool 2026-10-02] AI 主动发语音的正规链路：复用朗读同款 TTS
-            // 链路合成，气泡以 inline part 落进当前回复（UI block 立刻可见；DB 行在
-            // 本轮 batch 落盘后补气泡 part，见 runAgentLoop 的 pendingVoiceBubbles
-            // flush——agentHistory 永远不带气泡 part，沿用 context-clean 单一口径）。
-            // 合成走 AIVoiceMessageComposer.compose（service → group 候选链），
-            // 与"AI Voice Replies"自动气泡同一条路。
+            // [AUD8-02] Routed through the shared implementation (see the
+            // private extension at the bottom of this file) so this tool and
+            // its legacy alias textToSpeech can never drift apart again —
+            // the ruling keeps both tool names; they share ONE code path.
             let speakText = (toolArgs["text"] as? String ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if speakText.isEmpty {
-                toolOutput = "Error: Missing required 'text' parameter. Please call send_voice again with the words to speak in `text`."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            guard let sid = sessionId else {
-                toolOutput = "Error: no active session — cannot send voice."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            // [P2] "AI Voice Replies" 开关管住所有 AI 语音：send_voice 工具也受
-            // 它门控。关 = 彻底没 AI 语音——给模型明确交代，让它如实告诉主人
-            // 去开开关，而不是谎称发了。
-            guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
-                toolOutput = "Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            // [voice-bubble-tool 2026-10-02] voice/group 点名（TTS 施工员转交）：
-            // 空字符串当没传；点名走严格语义（找不到/都挂了就报错，不悄悄换声音）。
             let voiceParam: String? = {
                 let v = (toolArgs["voice"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 return v.isEmpty ? nil : v
@@ -990,48 +959,16 @@ extension AIChatViewModel {
                 let g = (toolArgs["group"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 return g.isEmpty ? nil : g
             }()
-            do {
-                let voice = try await AIVoiceMessageComposer.compose(
-                    for: speakText, sessionId: sid, voice: voiceParam, group: groupParam)
-                let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
-                let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
-                // ① UI：气泡 block 直接进当前回复（用户立刻看见）。
-                if msgIdx < messages.count {
-                    messages[msgIdx].blocks.append(AssistantBlock(kind: .text, content: link))
-                }
-                // ② DB：deferred raw 建于工具执行前，这里只记账，落盘时统一补 part。
-                pendingVoiceBubbles.append(link)
-                voiceBubbleSentThisTurn = true
-                // ③ 自动播放（与 StreamEnd 自动气泡一致；录音中不抢麦）。
-                if !VoiceModePreference.shared.isCapturing {
-                    if let fileURL = await resolvePathForDirectRead(
-                        AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
-                        GlobalAudioPlayer.shared.play(url: fileURL)
-                    }
-                }
-                let via = voice.serviceName.map { "（\($0)合成）" } ?? ""
-                ctLogger.info("[VoiceBubbleTool] sent voice bubble dur=\(durParam)s service=\(voice.serviceName ?? "default-chain")")
-                let summary = "语音消息已发出（约\(durParam)秒\(via)），以语音气泡呈现并自动播放。"
-                toolOutput = summary
-                toolSuccess = true
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = summary
-                }
-            } catch is CancellationError {
-                // [p1fix 2026-10-02] 取消信号必须透传——外层的 `catch is CancellationError`
-                // 负责收尾（用户点停止）。无差别 catch 会把它变成普通工具结果，
-                // 导致"点了停止停不下来"。
-                throw CancellationError()
-            } catch {
-                // VoiceComposeError 的 description 直接是给模型的中文交代（含可用选项）；
-                // 其他错误兜底，不让模型对着空气猜。
-                let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                toolOutput = "Error: \(msg)"
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-            }
+            let voiceResult = try await self.executeVoiceBubbleTool(
+                speakText: speakText,
+                voiceParam: voiceParam,
+                groupParam: groupParam,
+                msgIdx: msgIdx,
+                blockIdx: blockIdx,
+                missingTextError: "Error: Missing required 'text' parameter. Please call send_voice again with the words to speak in `text`."
+            )
+            toolOutput = voiceResult.output
+            toolSuccess = voiceResult.success
 
         case "browse_stickers":
             let drawer: String = {
@@ -1134,61 +1071,22 @@ extension AIChatViewModel {
             }
 
         case "textToSpeech", "text_to_speech":
+            // [AUD8-02][AUD8-01] Legacy alias of send_voice — kept registered
+            // per the ruling, sharing ONE implementation (same "AI Voice
+            // Replies" gate, same bubble pipeline; the old separate path is
+            // exactly how a disabled switch still emitted audio).
             let speakText = (toolArgs["text"] as? String ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            if speakText.isEmpty {
-                toolOutput = "Error: Missing required 'text' parameter."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            guard let sid = sessionId else {
-                toolOutput = "Error: No active session."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            // [AUD8-01] Same gate as send_voice (ruling: one switch governs ALL
-            // AI voice — this legacy alias used to bypass it, so audio still
-            // played with "AI Voice Replies" OFF).
-            guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
-                toolOutput = "Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent."
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-                break
-            }
-            do {
-                let voice = try await AIVoiceMessageComposer.compose(for: speakText, sessionId: sid, voice: nil, group: nil)
-                let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
-                let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
-                if msgIdx < messages.count {
-                    messages[msgIdx].blocks.append(AssistantBlock(kind: .text, content: link))
-                }
-                pendingVoiceBubbles.append(link)
-                voiceBubbleSentThisTurn = true
-                if !VoiceModePreference.shared.isCapturing {
-                    if let fileURL = await resolvePathForDirectRead(AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
-                        GlobalAudioPlayer.shared.play(url: fileURL)
-                    }
-                }
-                toolOutput = "Voice message spoken successfully (\(durParam)s)."
-                toolSuccess = true
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-            } catch {
-                toolOutput = "Error: \(error.localizedDescription)"
-                toolSuccess = false
-                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                    messages[msgIdx].blocks[blockIdx].content = toolOutput
-                }
-            }
+            let voiceResult = try await self.executeVoiceBubbleTool(
+                speakText: speakText,
+                voiceParam: nil,
+                groupParam: nil,
+                msgIdx: msgIdx,
+                blockIdx: blockIdx,
+                missingTextError: "Error: Missing required 'text' parameter."
+            )
+            toolOutput = voiceResult.output
+            toolSuccess = voiceResult.success
 
         case "askUser":
             let askResult = await handleAskUser(toolArgs: toolArgs, toolId: tu.id, deferredAssistantRaw: deferredAssistantRaw)
@@ -1594,5 +1492,72 @@ extension AIChatViewModel {
             snapshotItem: snapshotItem,
             cancelled: cancelledHere
         )
+    }
+}
+
+
+// MARK: - [AUD8-02] Shared voice-bubble tool implementation
+
+private extension AIChatViewModel {
+    /// Single implementation behind BOTH voice-tool names (`send_voice` and
+    /// the legacy `textToSpeech` alias). The ruling keeps both names
+    /// registered; keeping ONE code path is what guarantees the AUD8-01 gate
+    /// (`voiceRepliesEnabled`) applies identically to both and the two can
+    /// never drift apart again.
+    func executeVoiceBubbleTool(
+        speakText: String,
+        voiceParam: String?,
+        groupParam: String?,
+        msgIdx: Int,
+        blockIdx: Int,
+        missingTextError: String
+    ) async throws -> (output: String, success: Bool) {
+        func settle(_ output: String, _ success: Bool) -> (output: String, success: Bool) {
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = output
+            }
+            return (output, success)
+        }
+        if speakText.isEmpty { return settle(missingTextError, false) }
+        guard let sid = sessionId else {
+            return settle("Error: no active session — cannot send voice.", false)
+        }
+        // [AUD8-01] "AI Voice Replies" 开关管住所有 AI 语音——两个工具名共用
+        // 这一道门控。关 = 彻底没 AI 语音：给模型明确交代，让它如实告诉主人
+        // 去开开关，而不是谎称发了。
+        guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
+            return settle("Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent.", false)
+        }
+        do {
+            let voice = try await AIVoiceMessageComposer.compose(
+                for: speakText, sessionId: sid, voice: voiceParam, group: groupParam)
+            let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
+            let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+            // ① UI：气泡 block 直接进当前回复（用户立刻看见）。
+            if msgIdx < messages.count {
+                messages[msgIdx].blocks.append(AssistantBlock(kind: .text, content: link))
+            }
+            // ② DB：deferred raw 建于工具执行前，这里只记账，落盘时统一补 part。
+            pendingVoiceBubbles.append(link)
+            voiceBubbleSentThisTurn = true
+            // ③ 自动播放（与 StreamEnd 自动气泡一致；录音中不抢麦）。
+            if !VoiceModePreference.shared.isCapturing {
+                if let fileURL = await resolvePathForDirectRead(
+                    AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
+                    GlobalAudioPlayer.shared.play(url: fileURL)
+                }
+            }
+            let via = voice.serviceName.map { "（\($0)合成）" } ?? ""
+            ctLogger.info("[VoiceBubbleTool] sent voice bubble dur=\(durParam)s service=\(voice.serviceName ?? "default-chain")")
+            let summary = "语音消息已发出（约\(durParam)秒\(via)），以语音气泡呈现并自动播放。"
+            return settle(summary, true)
+        } catch is CancellationError {
+            // [p1fix 2026-10-02] 取消信号必须透传——外层 catch 负责收尾（用户点
+            // 停止）。无差别 catch 会把它变成普通工具结果，导致"点了停止停不下来"。
+            throw CancellationError()
+        } catch {
+            let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return settle("Error: \(msg)", false)
+        }
     }
 }

@@ -306,10 +306,10 @@ extension AIChatViewModel {
             propertyOrdering: ["tool_title", "action", "text"]
         ))
 
-        // 3. textToSpeech (文字转语音别名定义)
+        // 3. textToSpeech (send_voice 的旧别名 —— 裁定：两个名字都保留、共享同一实现)
         tools.append(AgentToolDefinition(
             name: "textToSpeech",
-            description: "Synthesize and speak the given text aloud using the configured TTS voice service.",
+            description: "Alias of send_voice — synthesizes the given text with the configured TTS voice and delivers it as a WeChat-style voice bubble in the chat (auto-plays). Same behavior and the same AI Voice Replies switch as send_voice; prefer send_voice for new calls. Do NOT synthesize audio yourself with shell commands.",
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "text": AgentToolParam(type: .string, description: "The words to speak aloud.")
@@ -458,6 +458,8 @@ extension AIChatViewModel {
                 tools.removeAll { $0.name == "clipboard" || $0.name == "clipboard_tool" }
             }
             if !toolWhitelist.contains("textToSpeech") {
+                // [AUD8-02] One whitelist id governs the alias pair — they
+                // share one implementation, so they share one gate.
                 tools.removeAll { $0.name == "textToSpeech" || $0.name == "text_to_speech" || $0.name == "send_voice" }
             }
             if !toolWhitelist.contains("askUser") {
