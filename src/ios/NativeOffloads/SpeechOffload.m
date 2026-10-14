@@ -200,7 +200,11 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
         if (micPerm == AVAudioApplicationRecordPermissionUndetermined) {
             dispatch_semaphore_t micSem = dispatch_semaphore_create(0);
             __block BOOL micGranted = NO;
-            [AVAudioApplication.sharedInstance requestRecordPermission:^(BOOL granted) {
+            // [build-fix] The record-permission request is a CLASS method on
+            // AVAudioApplication with the `…WithCompletionHandler:` selector —
+            // the instance-selector form (`[sharedInstance requestRecordPermission:]`)
+            // does not exist and failed the archive (Run 38569597262).
+            [AVAudioApplication requestRecordPermissionWithCompletionHandler:^(BOOL granted) {
                 micGranted = granted;
                 dispatch_semaphore_signal(micSem);
             }];
