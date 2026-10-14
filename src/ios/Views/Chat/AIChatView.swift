@@ -5002,8 +5002,16 @@ struct AIChatView: View {
 
     /// Dismiss keyboard (commit dictation/marked text) before sending.
     private func performSend() {
-        // Intercept slash commands — execute instead of sending to LLM
-        if vm.tryExecuteInputAsSlashCommand() { return }
+        // Intercept slash commands — execute instead of sending to LLM.
+        // [AUD8-33] NEVER for text that came from voice dictation: ASR output
+        // that happens to read "/clear" (or any command name) is the user's
+        // WORDS, not an instruction — executing it silently was a real hazard.
+        // In voice mode the composer mirrors the transcript verbatim, so an
+        // equality check reliably identifies voice-origin text; user-typed
+        // commands in text mode are unaffected (the panel replaces the
+        // composer, so there is no mixed state to arbitrate).
+        let isVoiceOrigin = voiceInputActive && vm.inputText == voiceVM.transcript
+        if !isVoiceOrigin, vm.tryExecuteInputAsSlashCommand() { return }
 
         minisLogger.info("🔑DRAFT performSend vm=\(vm.vmInstanceId) vm.sessionId=\(vm.sessionId ?? "nil") draftId=\(draftId ?? "nil") inputText='\(String(vm.inputText.prefix(50)))' isProcessing=\(vm.isProcessing)")
         // Keep SwiftUI focus when a hardware keyboard is connected — dropping
