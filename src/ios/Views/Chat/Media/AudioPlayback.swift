@@ -246,13 +246,23 @@ class GlobalAudioPlayer: ObservableObject {
             DispatchQueue.main.async {
                 self.currentTime = p.currentTime
                 if !p.isPlaying {
+                    // [AUD8-05] `!p.isPlaying` alone is NOT "finished": it is
+                    // also true for a user pause and for an external audio
+                    // takeover — both used to be recorded as fully listened
+                    // (duration written as position) and released the session
+                    // early. Only an end-of-media stop counts as finished;
+                    // otherwise keep the real position.
+                    let reachedEnd = self.duration > 0 && p.currentTime >= self.duration - 0.05
                     self.isPlaying = false
                     self.timer?.invalidate()
-                    // Natural end → release the media-attachment intent.
+                    // Player stopped (natural end / pause / external stop) →
+                    // release the media-attachment intent.
                     AudioSessionCoordinator.shared.end(.mediaAttachment)
-                    // [TTS-13] Mark the file finished for unlistened state.
+                    // [TTS-13] Record finish vs partial stop for unlistened state.
                     VoiceBubblePlaybackState.recordProgress(
-                        fileName: self.fileName, position: self.duration, duration: self.duration)
+                        fileName: self.fileName,
+                        position: reachedEnd ? self.duration : p.currentTime,
+                        duration: self.duration)
                     VoiceNowPlaying.shared.refresh()
                 }
             }
