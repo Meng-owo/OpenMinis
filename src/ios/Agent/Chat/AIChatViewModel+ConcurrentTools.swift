@@ -1152,6 +1152,17 @@ extension AIChatViewModel {
                 }
                 break
             }
+            // [AUD8-01] Same gate as send_voice (ruling: one switch governs ALL
+            // AI voice — this legacy alias used to bypass it, so audio still
+            // played with "AI Voice Replies" OFF).
+            guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
+                toolOutput = "Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent."
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+                break
+            }
             do {
                 let voice = try await AIVoiceMessageComposer.compose(for: speakText, sessionId: sid, voice: nil, group: nil)
                 let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
