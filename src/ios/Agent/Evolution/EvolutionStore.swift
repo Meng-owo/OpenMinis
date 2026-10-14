@@ -662,9 +662,9 @@ actor EvolutionStore {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
         defer { sqlite3_finalize(stmt) }
-        bindText(stmt, 1, (status.rawValue as NSString).utf8String)
+        bindText(stmt, 1, status.rawValue)
         bindDouble(stmt, 2, Date().timeIntervalSince1970)
-        bindText(stmt, 3, (id as NSString).utf8String)
+        bindText(stmt, 3, id)
         sqlite3_step(stmt)
         return sqlite3_changes(db) > 0
     }
