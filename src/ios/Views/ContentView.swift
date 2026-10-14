@@ -3534,10 +3534,8 @@ struct ContentView: View {
         .background(homeBottomBarBackground)
     }
 
-    /// One QQ-style tab: icon centred in a fixed design box + a 10pt caption,
-    /// both using the tab accent when active. The fixed box is what keeps the
-    /// icons optically uniform — SF glyphs vary in cap height at the same
-    /// point size (gearshape draws small, magnifyingglass draws large).
+    /// [T-home-bottom-bar-icons-only][10-15 醒醒 9b] 底栏去文字只留图标居中，
+    /// 保留 accessibilityLabel 以兼顾无障碍。
     private func homeBottomTab<Icon: View>(
         icon: () -> Icon,
         label: LocalizedStringKey,
@@ -3546,20 +3544,14 @@ struct ContentView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 2) {
-                icon()
-                    .font(.system(size: size, weight: weight))
-                    .frame(width: 24, height: 24)
-                    .foregroundStyle(MinisThemeList.accent)
-                Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(MinisThemeList.accent.opacity(0.85))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
+            icon()
+                .font(.system(size: size, weight: weight))
+                .frame(width: 24, height: 24)
+                .foregroundStyle(MinisThemeList.accent)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel(label)
         .buttonStyle(.plain)
     }
 
