@@ -6562,7 +6562,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // no-op when recording is off.
                         var evoContent = ""
                         var evoIsError = false
-                        if case .toolResult(_, _, let c, let e) = outcome.resultPart {
+                        if case .toolResult(_, _, let c, let e, _, _, _, _) = outcome.resultPart {
                             evoContent = c
                             evoIsError = e
                         }
