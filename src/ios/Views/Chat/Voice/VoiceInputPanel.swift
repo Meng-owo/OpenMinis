@@ -249,6 +249,17 @@ final class VoiceInputViewModel: ObservableObject {
         totalRecordingTimer?.invalidate()
         pendingFlushTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
+        // [AUD8-25] Watchdog for teardown paths that never reach onDisappear
+        // (view destroyed mid-capture): stop the engine and release the capture
+        // flag. A stuck `isCapturing == true` silently disables reply TTS and
+        // bubble auto-play for the rest of the process's lifetime. The detector
+        // is captured as a local (not via self) so the main-actor hop can't
+        // keep this object alive.
+        let detector = vad
+        Task { @MainActor in
+            detector.stop()
+            VoiceModePreference.shared.isCapturing = false
+        }
     }
 
     // MARK: - Idle / background auto-stop

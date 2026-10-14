@@ -158,7 +158,23 @@ final class VoiceActivityDetector: NSObject {
         super.init()
     }
 
-    deinit { unregisterSessionObservers() }
+    deinit {
+        unregisterSessionObservers()
+        // [AUD8-25] Never leave the engine running past the object's life — a
+        // detector released mid-capture (view torn down without stop()) used to
+        // keep the audio engine hot with no owner left to stop it. tearDown()
+        // hops through MainActor.assumeIsolated (session bookkeeping), so
+        // off-main releases fall back to the actor-free engine-only teardown.
+        if isRunning {
+            if Thread.isMainThread {
+                tearDown()
+            } else {
+                tearDownEngineOnly()
+                isRunning = false
+                isSpeaking = false
+            }
+        }
+    }
 
     // MARK: - Control
 
