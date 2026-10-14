@@ -427,7 +427,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             playingSeq = -1
             playingSessionId = nil
             playingUnit = nil
-            isPaused = false
+            // [AUD8-07] Do NOT clear `isPaused` here: it may be an
+            // external-audio latch owned by the coordinator (call/recording in
+            // progress), and clearing it let the pump restart TTS under the
+            // recorder the moment any session clean-up ran. A full user stop
+            // (stopAll) still clears the pause; nothing depends on this line.
             pumpPlayback()   // continue with other sessions' queued content
         }
         refreshSynthesizingState()
