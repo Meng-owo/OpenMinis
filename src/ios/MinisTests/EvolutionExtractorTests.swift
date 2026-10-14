@@ -159,7 +159,8 @@ final class EvolutionExtractorTests: XCTestCase {
         await queue.runPass(on: store)
 
         // Simulate the human审核: mark verified (same id, INSERT OR REPLACE).
-        var lesson = try XCTUnwrap(await store.lessons(status: .candidate).first)
+        let candidateRows = await store.lessons(status: .candidate)
+        var lesson = try XCTUnwrap(candidateRows.first)
         lesson.status = .verified
         await store.insert(lesson)
 
