@@ -649,6 +649,26 @@ actor EvolutionStore {
         return out
     }
 
+    // MARK: S6-2 lesson administration
+
+    /// Human decision on one lesson (通过 / 弃用 / 回到候选 / 裁决冲突).
+    /// Lifecycle is append-only (§6): the status pointer moves and version
+    /// increments — nothing is ever deleted. Returns false when the id is
+    /// unknown (and true when the row changed).
+    @discardableResult
+    func updateLessonStatus(id: String, status: EvolutionLessonStatus) -> Bool {
+        guard db != nil else { return false }
+        let sql = "UPDATE lessons SET status = ?, version = version + 1, updated_at = ? WHERE id = ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        bindText(stmt, 1, (status.rawValue as NSString).utf8String)
+        bindDouble(stmt, 2, Date().timeIntervalSince1970)
+        bindText(stmt, 3, (id as NSString).utf8String)
+        sqlite3_step(stmt)
+        return sqlite3_changes(db) > 0
+    }
+
     // MARK: Maintenance
 
     /// Bounded growth: TTL first, then row caps (most-recent kept). Called

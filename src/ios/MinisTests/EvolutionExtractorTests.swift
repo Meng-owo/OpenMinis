@@ -171,4 +171,33 @@ final class EvolutionExtractorTests: XCTestCase {
         let candidates = await store.lessons(status: .candidate)
         XCTAssertTrue(candidates.isEmpty)
     }
+
+    func testUpdateLessonStatusBumpsVersionAndReportsMiss() async throws {
+        let (store, dir) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        for i in 0..<3 {
+            await store.insert(EvolutionAction(
+                id: "f\(i)", runId: "r\(i)", seq: 1, toolName: "shell_execute", profile: "",
+                status: .fail, errorClass: "tool_error", errorDigest: nil,
+                durationMs: 1, retryCount: 0, resultDigest: nil
+            ), createdAt: Date().addingTimeInterval(Double(i)))
+        }
+        let queue = EvolutionExtractionQueue()
+        await queue.runPass(on: store)
+
+        let ok = await store.updateLessonStatus(id: "evo-tool-shell_execute", status: .verified)
+        XCTAssertTrue(ok)
+        let verified = await store.lessons(status: .verified)
+        XCTAssertEqual(verified.count, 1)
+        XCTAssertEqual(verified.first?.version, 2)
+
+        // 回滚 = 状态指针切回 + version 再 +1（只增不改）。
+        let rollback = await store.updateLessonStatus(id: "evo-tool-shell_execute", status: .candidate)
+        XCTAssertTrue(rollback)
+        let candidates = await store.lessons(status: .candidate)
+        XCTAssertEqual(candidates.first?.version, 3)
+
+        let miss = await store.updateLessonStatus(id: "does-not-exist", status: .deprecated)
+        XCTAssertFalse(miss)
+    }
 }

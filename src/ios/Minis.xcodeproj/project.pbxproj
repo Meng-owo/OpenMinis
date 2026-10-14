@@ -421,6 +421,8 @@
 		E5N0000032F3B941A00049557 /* SkillsManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000132F3B941A00049557 /* SkillsManagementView.swift */; };
 		E5N0000042F3B941A00049557 /* MemoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000142F3B941A00049557 /* MemoryManagementView.swift */; };
 		EVOB00011 /* EvolutionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00006 /* EvolutionSettingsView.swift */; };
+		EVOB00012 /* EvolutionCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00007 /* EvolutionCenterView.swift */; };
+		EVOB00013 /* EvolutionLessonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EVOF00008 /* EvolutionLessonsView.swift */; };
 		E5N0000052F3B941A00049557 /* SessionMemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000152F3B941A00049557 /* SessionMemoryView.swift */; };
 		E5PERSONA02 /* PersonaSwitcherRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA102 /* PersonaSwitcherRow.swift */; };
 		E5PERSONA03 /* PersonaListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA103 /* PersonaListSheet.swift */; };
@@ -1202,6 +1204,8 @@
 		E5N0000132F3B941A00049557 /* SkillsManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsManagementView.swift; sourceTree = "<group>"; };
 		E5N0000142F3B941A00049557 /* MemoryManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryManagementView.swift; sourceTree = "<group>"; };
 		EVOF00006 /* EvolutionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionSettingsView.swift; sourceTree = "<group>"; };
+		EVOF00007 /* EvolutionCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionCenterView.swift; sourceTree = "<group>"; };
+		EVOF00008 /* EvolutionLessonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionLessonsView.swift; sourceTree = "<group>"; };
 		E5N0000152F3B941A00049557 /* SessionMemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionMemoryView.swift; sourceTree = "<group>"; };
 		E5PERSONA102 /* PersonaSwitcherRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaSwitcherRow.swift; sourceTree = "<group>"; };
 		E5PERSONA103 /* PersonaListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaListSheet.swift; sourceTree = "<group>"; };
@@ -2572,6 +2576,8 @@
 				E5J000013 /* ConfigAuditView.swift */,
 				E5N0000142F3B941A00049557 /* MemoryManagementView.swift */,
 				EVOF00006 /* EvolutionSettingsView.swift */,
+				EVOF00007 /* EvolutionCenterView.swift */,
+				EVOF00008 /* EvolutionLessonsView.swift */,
 				E8A000013 /* OffloadPermissionSettingsView.swift */,
 				AA0838CD2F3B941A00049557 /* StorageManagementView.swift */,
 				BKP000215 /* BackupSettingsView.swift */,
@@ -3424,6 +3430,8 @@
 				E5LOCK003 /* AppLockOverlay.swift in Sources */,
 				E5N0000042F3B941A00049557 /* MemoryManagementView.swift in Sources */,
 				EVOB00011 /* EvolutionSettingsView.swift in Sources */,
+				EVOB00012 /* EvolutionCenterView.swift in Sources */,
+				EVOB00013 /* EvolutionLessonsView.swift in Sources */,
 				E5N0000052F3B941A00049557 /* SessionMemoryView.swift in Sources */,
 				E5PERSONA02 /* PersonaSwitcherRow.swift in Sources */,
 				E5PERSONA03 /* PersonaListSheet.swift in Sources */,

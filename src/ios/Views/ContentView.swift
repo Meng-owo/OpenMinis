@@ -7524,7 +7524,7 @@ private struct SettingsSheet: View {
                     // [S3-3][evolution] 自我进化入口。将来「构件/影音内容」页到位后，
                     // 这一行可整块搬过去（实现期对齐，见设计 §13-④）。
                     NavigationLink {
-                        EvolutionSettingsView()
+                        EvolutionCenterView()
                     } label: {
                         Label {
                             Text("自我进化")
