@@ -678,6 +678,13 @@ final class VoiceInputViewModel: ObservableObject {
     private var pendingTranscriptions = 0 {
         didSet { isTranscribing = pendingTranscriptions > 0 }
     }
+    /// [AUD8-30] Utterance ordering: VAD segments transcribe in parallel and
+    /// finish out of order (slow A, fast B), while the transcript must read in
+    /// the order the user SPOKE. Each request carries a monotonic sequence
+    /// number; completed text is buffered and flushed strictly in seq order.
+    private var transcriptionSeqCounter = 0
+    private var transcriptionNextToApply = 0
+    private var transcriptionBuffered: [Int: String] = [:]
     /// True while ≥1 transcription is running — overlays a spinner on the mic.
     @Published var isTranscribing = false
     private var pendingTranscriptionTasks: [Task<Void, Never>] = []
@@ -904,7 +911,8 @@ final class VoiceInputViewModel: ObservableObject {
 
     /// Transcribe ONE (possibly merged) utterance. The VAD engine keeps running
     /// the whole time, so while this is transcribed the next utterance is still
-    /// captured. Results append in completion order.
+    /// captured. Results apply in UTTERANCE order via applyOrderedTranscription
+    /// (parallel completions can land out of order — [AUD8-30]).
     private func transcribeAudio(_ audioData: Data) {
         guard !audioData.isEmpty else { return }
         // While the user hand-edits the transcript, drop new speech so it can't
@@ -952,6 +960,10 @@ final class VoiceInputViewModel: ObservableObject {
         #endif
 
         let generation = transcriptGeneration
+        // [AUD8-30] Capture the utterance's arrival ordinal before the task
+        // starts — completion order is not utterance order.
+        let seq = transcriptionSeqCounter
+        transcriptionSeqCounter += 1
         let candidates = orderedInputCandidates()
         let requestLanguage = language
         let task = Task { [weak self] in
@@ -1017,26 +1029,30 @@ final class VoiceInputViewModel: ObservableObject {
                     self.canManualRetry = false
                 }
             }
-            if generation == self.transcriptGeneration,
-               !text.isEmpty, !self.isEditingTranscript {
-                self.transcript = self.transcript.isEmpty ? text : self.transcript + " " + text
-                VoiceLog.log("UI update: text=\"\(self.transcript)\"")
-                self.onTranscript?(self.transcript)
-            } else if generation != self.transcriptGeneration {
+            if generation == self.transcriptGeneration {
+                // [AUD8-30] Apply through the ordering gate — parallel
+                // completions must land in utterance order, and dropped/empty
+                // utterances still advance the sequence so they can't wedge the
+                // ones behind them.
+                let usable = !text.isEmpty && !self.isEditingTranscript
+                self.applyOrderedTranscription(seq: seq, text: usable ? text : nil)
+                if self.isEditingTranscript {
+                    self.report(.droppedWhileEditing)
+                } else if text.isEmpty && !attemptFailed {
+                    // [T-voice-input-failure-feedback] (#134) The request
+                    // SUCCEEDED and returned an empty string. This is the path
+                    // that used to vanish without a trace: no throw, no error
+                    // pill, no transcript change. Whisper returning "", the
+                    // chat-ASR prompt honoring "output an empty string", and
+                    // SystemVoiceProvider's 8s watchdog salvaging an empty
+                    // result all land here.
+                    self.report(.noSpeechRecognized)
+                }
+            } else {
                 // Superseded by clearAndRearm()/cancelTranscription() (e.g. the
                 // user sent the message while this was in flight). Expected —
                 // record it, but don't nag.
                 VoiceLog.log("[voice-failure] staleGeneration: result dropped (gen \(generation) != \(self.transcriptGeneration))")
-            } else if self.isEditingTranscript {
-                self.report(.droppedWhileEditing)
-            } else if !attemptFailed {
-                // [T-voice-input-failure-feedback] (#134) The request SUCCEEDED
-                // and returned an empty string. This is the path that used to
-                // vanish without a trace: no throw, no error pill, no transcript
-                // change. Whisper returning "", the chat-ASR prompt honoring
-                // "output an empty string", and SystemVoiceProvider's 8s
-                // watchdog salvaging an empty result all land here.
-                self.report(.noSpeechRecognized)
             }
             if self.pendingTranscriptions > 0 {
                 self.pendingTranscriptions -= 1
@@ -1044,6 +1060,22 @@ final class VoiceInputViewModel: ObservableObject {
         }
         pendingTranscriptionTasks.removeAll { $0.isCancelled }
         pendingTranscriptionTasks.append(task)
+    }
+
+    /// [AUD8-30] Order-preserving transcript application: `seq` is the
+    /// utterance's arrival ordinal; a completed result waits in the buffer
+    /// until every earlier utterance has landed, then the contiguous run is
+    /// flushed in order. `nil` text marks a dropped/empty utterance that must
+    /// still advance the sequence so it can't block the ones behind it.
+    private func applyOrderedTranscription(seq: Int, text: String?) {
+        transcriptionBuffered[seq] = text ?? ""
+        while let next = transcriptionBuffered.removeValue(forKey: transcriptionNextToApply) {
+            transcriptionNextToApply += 1
+            guard !next.isEmpty else { continue }
+            transcript = transcript.isEmpty ? next : transcript + " " + next
+            VoiceLog.log("UI update: text=\"\(transcript)\"")
+            onTranscript?(transcript)
+        }
     }
 
     /// Transcribe one utterance with SEAMLESS fail-over across the candidate
@@ -1116,6 +1148,10 @@ final class VoiceInputViewModel: ObservableObject {
         pendingTranscriptionTasks.removeAll()
         transcriptGeneration &+= 1
         pendingTranscriptions = 0
+        // [AUD8-30] Stale buffered results belong to the cancelled episode —
+        // drop them and re-base the sequence window at the next request.
+        transcriptionBuffered.removeAll()
+        transcriptionNextToApply = transcriptionSeqCounter
         // [AUD8-24] Drop the retry episode together with the cancelled
         // transcription. A pending countdown (and its stashed audio) used to
         // survive this call and re-transcribe the OLD utterance 5 s later
@@ -1146,6 +1182,9 @@ final class VoiceInputViewModel: ObservableObject {
         // Invalidate any in-flight transcription so a late result can't refill the
         // field after the send (residual-text bug).
         transcriptGeneration &+= 1
+        // [AUD8-30] Same re-base for the ordering buffer.
+        transcriptionBuffered.removeAll()
+        transcriptionNextToApply = transcriptionSeqCounter
         transcript = ""
         if isEditingTranscript { VoiceLog.log("[voice-edit-site] clearAndRearm(send) true→false") }
         isEditingTranscript = false
