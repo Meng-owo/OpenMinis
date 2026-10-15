@@ -57,7 +57,11 @@ enum EvolutionExtractor {
                 guard end > index else { continue }
                 for probe in (index + 1)...end {
                     let candidate = ordered[probe]
-                    if candidate.toolName == action.toolName, candidate.status == .success {
+                    // P6-5: adjusted retry — same tool AND different params/profile.
+                    // Identical re-invocation that happened to succeed is not
+                    // "调整后成功" and must not feed recovery lessons.
+                    if candidate.toolName == action.toolName, candidate.status == .success,
+                       candidate.profile != action.profile {
                         toolOrder.insert(action.toolName)
                         recoveriesByTool[action.toolName, default: []].append((fail: action, success: candidate))
                         break
