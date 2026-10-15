@@ -72,9 +72,13 @@ struct PlayHubView: View {
     @State private var showPhotoPicker = false
     @State private var showFileImporter = false
     @State private var importing = false
-    @State private var pendingDelete: PlayHubMediaScanner.Hit?
     @State private var showDeleteConfirm = false
     @State private var currentFileTypes: [UTType] = [.item]
+    @State private var collapsedCategories = Set<FileCategory>()
+
+    // 批量删除（P1-3 打回：长按勾选，多选后一次确认）
+    @State private var selecting = false
+    @State private var selectedIDs = Set<String>()
 
     private static var backgroundURL: URL {
         AppearanceStudio.appearanceAssetsDirectory.appendingPathComponent("play-hub-background.jpg")
@@ -146,19 +150,15 @@ struct PlayHubView: View {
         .sheet(item: $previewFile) { url in
             filePreviewView(url)
         }
-        .confirmationDialog("删除这个文件？",
+        .confirmationDialog("删除选中的 \(selectedIDs.count) 项？",
                             isPresented: $showDeleteConfirm,
                             titleVisibility: .visible) {
             Button("删除", role: .destructive) {
-                if let url = pendingDelete?.url {
-                    try? FileManager.default.removeItem(at: url)
-                    Task { await rescan() }
-                }
-                pendingDelete = nil
+                deleteSelected()
             }
-            Button("取消", role: .cancel) { pendingDelete = nil }
+            Button("取消", role: .cancel) {}
         } message: {
-            Text("将同时删除聊天里引用的该文件，此操作不可恢复。")
+            Text("将同时删除聊天里引用的这些文件，此操作不可恢复。")
         }
         .photosPicker(isPresented: $showPhotoPicker,
                       selection: $uploadPicks,
@@ -222,6 +222,35 @@ struct PlayHubView: View {
             .buttonStyle(.plain)
             .padding(.top, 44)
         }
+        .overlay(alignment: .topTrailing) {
+            // [T-playhub-upload][10-15 醒醒打回] 上传入口移右上角，不再贴进化格。
+            // 想传什么传什么：相册收图片/视频，文件收音频/文档/任意，
+            // 落盘后按扩展名自动进对应桶。
+            Menu {
+                Button {
+                    showPhotoPicker = true
+                } label: {
+                    Label("从相册导入（图片/视频）", systemImage: "photo.on.rectangle")
+                }
+                Button {
+                    currentFileTypes = [.item]
+                    showFileImporter = true
+                } label: {
+                    Label("从文件导入（音频/文档/任意）", systemImage: "folder")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(MinisThemeList.accent)
+                    .frame(width: 34, height: 34)
+                    .background(studio.color(.raised, scope: .home), in: Circle())
+                    .overlay(
+                        Circle().stroke(studio.color(.border, scope: .home).opacity(0.55), lineWidth: 0.6)
+                    )
+            }
+            .padding(.top, 14)
+            .padding(.trailing, 14)
+        }
     }
 
     @ViewBuilder
@@ -272,28 +301,6 @@ struct PlayHubView: View {
                 }
                 .buttonStyle(.plain)
             }
-            if selection != .evolution {
-                Button {
-                    switch selection {
-                    case .audio:
-                        currentFileTypes = [.audio]
-                        showFileImporter = true
-                    case .files:
-                        currentFileTypes = [.item]
-                        showFileImporter = true
-                    default:
-                        showPhotoPicker = true
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(MinisThemeList.accent)
-                        .frame(width: 30, height: 30)
-                        .background(studio.color(.raised, scope: .home), in: Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(.leading, 8)
-            }
         }
         .padding(4)
         .background(Capsule().fill(studio.color(.mutedSurface, scope: .home).opacity(0.6)))
@@ -306,12 +313,18 @@ struct PlayHubView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch selection {
-        case .images: imagesTab
-        case .videos: videosTab
-        case .audio: audioTab
-        case .files: filesTab
-        case .evolution: EvolutionCenterView(embedded: true)
+        VStack(spacing: 0) {
+            switch selection {
+            case .images: imagesTab
+            case .videos: videosTab
+            case .audio: audioTab
+            case .files: filesTab
+            case .evolution: EvolutionCenterView(embedded: true)
+            }
+            if selecting {
+                selectionBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -327,18 +340,18 @@ struct PlayHubView: View {
                               spacing: 6) {
                         ForEach(Array(hits.enumerated()), id: \.element.id) { index, hit in
                             Button {
-                                gallery = GalleryPresentation(items: imageGalleryItems(hits),
-                                                              startIndex: index)
+                                if selecting {
+                                    toggleSelect(hit)
+                                } else {
+                                    gallery = GalleryPresentation(items: imageGalleryItems(hits),
+                                                                  startIndex: index)
+                                }
                             } label: {
                                 AsyncCacheURLImageTile(cacheURL: hit.url, tileSize: side)
+                                    .overlay(alignment: .topLeading) { selectionBadge(hit) }
                             }
                             .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("删除", role: .destructive) {
-                                    pendingDelete = hit
-                                    showDeleteConfirm = true
-                                }
-                            }
+                            .onLongPressGesture { longPressSelect(hit) }
                         }
                     }
                     .padding(.horizontal, 12)
@@ -363,14 +376,14 @@ struct PlayHubView: View {
                               spacing: 6) {
                         ForEach(hits) { hit in
                             PlayHubVideoTile(fileURL: hit.url, tileSize: side) {
-                                playingVideo = hit.url
-                            }
-                            .contextMenu {
-                                Button("删除", role: .destructive) {
-                                    pendingDelete = hit
-                                    showDeleteConfirm = true
+                                if selecting {
+                                    toggleSelect(hit)
+                                } else {
+                                    playingVideo = hit.url
                                 }
                             }
+                            .overlay(alignment: .topLeading) { selectionBadge(hit) }
+                            .onLongPressGesture { longPressSelect(hit) }
                         }
                     }
                     .padding(.horizontal, 12)
@@ -392,18 +405,18 @@ struct PlayHubView: View {
                 LazyVStack(spacing: 8) {
                     ForEach(hits) { hit in
                         Button {
-                            playingAudio = hit.url
+                            if selecting {
+                                toggleSelect(hit)
+                            } else {
+                                playingAudio = hit.url
+                            }
                         } label: {
                             mediaRow(icon: "waveform", title: hit.name,
                                      subtitle: "\(PlayHubFormat.size(hit.size)) · \(PlayHubFormat.date(hit.modified))")
+                                .overlay(alignment: .topLeading) { selectionBadge(hit) }
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("删除", role: .destructive) {
-                                pendingDelete = hit
-                                showDeleteConfirm = true
-                            }
-                        }
+                        .onLongPressGesture { longPressSelect(hit) }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -478,40 +491,144 @@ struct PlayHubView: View {
     /// 分组头可折叠；行保留长按删除（P1-3）。
     private func fileCategorySection(category: FileCategory,
                                      items: [PlayHubMediaScanner.Hit]) -> some View {
-        DisclosureGroup {
-            LazyVStack(spacing: 8) {
-                ForEach(items) { hit in
-                    Button {
-                        previewFile = hit.url
-                    } label: {
-                        mediaRow(icon: "doc.fill", title: hit.name,
-                                 subtitle: "\(hit.relative) · \(PlayHubFormat.size(hit.size))")
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("删除", role: .destructive) {
-                            pendingDelete = hit
-                            showDeleteConfirm = true
-                        }
+        let isCollapsed = collapsedCategories.contains(category)
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    if isCollapsed {
+                        collapsedCategories.remove(category)
+                    } else {
+                        collapsedCategories.insert(category)
                     }
                 }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(category.label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.subtitle)
+                    Text("\(items.count)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.subtitle.opacity(0.8))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(studio.color(.raised, scope: .home), in: Capsule())
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.subtitle)
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                }
+                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
             }
-            .padding(.top, 4)
-        } label: {
-            HStack(spacing: 8) {
-                Text(category.label)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MinisThemeList.title)
-                Text("\(items.count)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MinisThemeList.subtitle)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(studio.color(.raised, scope: .home), in: Capsule())
-                Spacer()
+            .buttonStyle(.plain)
+
+            if !isCollapsed {
+                VStack(spacing: 8) {
+                    ForEach(items) { hit in
+                        Button {
+                            if selecting {
+                                toggleSelect(hit)
+                            } else {
+                                previewFile = hit.url
+                            }
+                        } label: {
+                            mediaRow(icon: "doc.fill", title: hit.name,
+                                     subtitle: "\(hit.relative) · \(PlayHubFormat.size(hit.size))")
+                                .overlay(alignment: .topLeading) { selectionBadge(hit) }
+                        }
+                        .buttonStyle(.plain)
+                        .onLongPressGesture { longPressSelect(hit) }
+                    }
+                }
+                .padding(.vertical, 4)
+                .background(MinisThemeList.rowFill,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .padding(.vertical, 2)
         }
+    }
+
+    // MARK: - 批量删除（P1-3 打回）
+
+    /// 长按进入选择模式并预勾选该项。
+    private func longPressSelect(_ hit: PlayHubMediaScanner.Hit) {
+        if !selecting {
+            selecting = true
+            selectedIDs = [hit.id]
+        }
+    }
+
+    /// 选择模式下点击=勾选切换；勾选空了自动退出选择模式。
+    private func toggleSelect(_ hit: PlayHubMediaScanner.Hit) {
+        if selectedIDs.contains(hit.id) {
+            selectedIDs.remove(hit.id)
+        } else {
+            selectedIDs.insert(hit.id)
+        }
+        if selectedIDs.isEmpty { selecting = false }
+    }
+
+    /// 选择圈（左上角覆盖；图片/视频上白色带阴影保证可见）。
+    @ViewBuilder
+    private func selectionBadge(_ hit: PlayHubMediaScanner.Hit) -> some View {
+        if selecting {
+            Image(systemName: selectedIDs.contains(hit.id) ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 22))
+                .foregroundStyle(selectedIDs.contains(hit.id) ? MinisThemeList.accent : Color.white.opacity(0.9))
+                .padding(6)
+                .shadow(color: .black.opacity(0.35), radius: 1.5)
+        }
+    }
+
+    /// 当前桶的全部条目。
+    private var currentHits: [PlayHubMediaScanner.Hit] {
+        guard let result = scanResult else { return [] }
+        switch selection {
+        case .images: return result.images
+        case .videos: return result.videos
+        case .audio: return result.audio
+        case .files: return result.files
+        case .evolution: return []
+        }
+    }
+
+    /// 批量删除已勾选项（真删文件后重扫）。
+    private func deleteSelected() {
+        let hits = currentHits
+        for id in selectedIDs {
+            if let hit = hits.first(where: { $0.id == id }) {
+                try? FileManager.default.removeItem(at: hit.url)
+            }
+        }
+        selectedIDs = []
+        selecting = false
+        Task { await rescan() }
+    }
+
+    /// 选择模式底部操作条。
+    private var selectionBar: some View {
+        HStack(spacing: 14) {
+            Text("已选 \(selectedIDs.count) 项")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MinisThemeList.title)
+            Spacer()
+            Button(role: .destructive) {
+                showDeleteConfirm = true
+            } label: {
+                Label("删除", systemImage: "trash")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            Button("完成") { selecting = false; selectedIDs = [] }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MinisThemeList.accent)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(MinisThemeList.rowFill,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
     }
 
     // MARK: - 行 / 空态 / 载入
@@ -640,13 +757,9 @@ struct PlayHubView: View {
 
     // MARK: - 上传（P1-2）
 
-    /// 按当前桶选匹配类型：图片桶只收图、视频桶只收视频（音频走文件导入）。
+    /// 相册导入不限类型：图片/视频都收（音频走文件导入）。
     private var uploadMatching: PHPickerFilter {
-        switch selection {
-        case .images: return .images
-        case .videos: return .videos
-        default: return .images
-        }
+        .any(of: [.images, .videos])
     }
 
     private func uploadDir() -> URL {
@@ -678,15 +791,11 @@ struct PlayHubView: View {
         guard !uploadPicks.isEmpty else { return }
         importing = true
         defer { importing = false }
-        let target = selection
         for item in uploadPicks {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let ext: String
-            switch target {
-            case .images: ext = "jpg"
-            case .videos: ext = "mov"
-            default: ext = "bin"
-            }
+            // 扩展名按系统给出的实际类型推断（heic/jpg/png/mov/mp4…），
+            // 落盘后扫描器按扩展名自动进对应桶。
+            let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "bin"
             saveImported(data, ext: ext)
         }
         uploadPicks = []
