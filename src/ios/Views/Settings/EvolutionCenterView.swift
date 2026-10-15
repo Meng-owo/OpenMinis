@@ -11,62 +11,105 @@ struct EvolutionCenterView: View {
     @State private var runs: [EvolutionRun] = []
     @State private var loading = false
 
+    /// [P6-2][evolution] 订阅首次参考通知：候选被注入参考时，顶部横幅可见。
+    @ObservedObject private var noticeCenter = EvolutionNoticeCenter.shared
+
     var body: some View {
-        List {
-            Section {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()),
-                ], spacing: 10) {
-                    statCard("轨迹", counts["runs"] ?? 0)
-                    statCard("动作", counts["actions"] ?? 0)
-                    statCard("经验", counts["lessons"] ?? 0)
-                    statCard("技能", counts["skills"] ?? 0)
-                    statCard("影子命中", counts["injections"] ?? 0)
-                }
-                .padding(.vertical, 4)
-            } header: {
-                Text("数据总览")
+        VStack(spacing: 0) {
+            if let message = noticeCenter.pendingMessage {
+                noticeBanner(message)
             }
-
-            Section {
-                NavigationLink {
-                    EvolutionLessonsView()
-                } label: {
-                    Label("经验库", systemImage: "text.badge.checkmark")
+            List {
+                Section {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible()),
+                    ], spacing: 10) {
+                        statCard("轨迹", counts["runs"] ?? 0)
+                        statCard("动作", counts["actions"] ?? 0)
+                        statCard("经验", counts["lessons"] ?? 0)
+                        statCard("技能", counts["skills"] ?? 0)
+                        statCard("影子命中", counts["injections"] ?? 0)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("数据总览")
                 }
-                NavigationLink {
-                    EvolutionSettingsView()
-                } label: {
-                    Label("开关与预算", systemImage: "switch.2")
-                }
-            } footer: {
-                Text("默认「影子」：只记录、不使用——攒够对比数据、你审过之后，再考虑开「启用」。")
-            }
 
-            Section {
-                if runs.isEmpty {
-                    Text("还没有轨迹。用一会儿，任务收尾后这里就有账了。")
-                        .foregroundStyle(.secondary)
-                        .font(.footnote)
-                } else {
-                    ForEach(runs, id: \.id) { run in
-                        runRow(run)
+                Section {
+                    NavigationLink {
+                        EvolutionLessonsView()
+                    } label: {
+                        Label("经验库", systemImage: "text.badge.checkmark")
+                    }
+                    NavigationLink {
+                        EvolutionSettingsView()
+                    } label: {
+                        Label("开关与预算", systemImage: "switch.2")
+                    }
+                } footer: {
+                    Text("默认「影子」：只记录、不使用——攒够对比数据、你审过之后，再考虑开「启用」。")
+                }
+
+                Section {
+                    if runs.isEmpty {
+                        Text("还没有轨迹。用一会儿，任务收尾后这里就有账了。")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    } else {
+                        ForEach(runs, id: \.id) { run in
+                            runRow(run)
+                        }
+                    }
+                } header: {
+                    HStack {
+                        Text("最近轨迹")
+                        Spacer()
+                        if loading { ProgressView() }
                     }
                 }
-            } header: {
-                HStack {
-                    Text("最近轨迹")
-                    Spacer()
-                    if loading { ProgressView() }
-                }
             }
+            .modifier(EvolutionCenterEmbeddedTitle(embedded: embedded))
+            .refreshable { await reload() }
+            .task { await reload() }
         }
-        .modifier(EvolutionCenterEmbeddedTitle(embedded: embedded))
-        .refreshable { await reload() }
-        .task { await reload() }
     }
 
     // MARK: - Pieces
+
+    /// [P6-2][evolution] 首次参考横幅：文案即 pendingMessage，手动关闭或 3 秒自动消失。
+    private func noticeBanner(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(MinisTheme.accent)
+            Text(message)
+                .font(.footnote)
+                .foregroundStyle(MinisTheme.primaryText)
+                .lineLimit(2)
+            Spacer(minLength: 0)
+            Button {
+                EvolutionNoticeCenter.shared.clearPending()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.bold())
+                    .foregroundStyle(MinisTheme.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("关闭")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(MinisTheme.raised, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(MinisTheme.border, lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .task(id: message) {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            EvolutionNoticeCenter.shared.clearPending()
+        }
+    }
 
     private func statCard(_ title: String, _ value: Int) -> some View {
         VStack(spacing: 4) {
