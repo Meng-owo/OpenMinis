@@ -7,6 +7,7 @@ import XCTest
 /// real provider wordings for "we don't know that thinking parameter" and
 /// must NOT fire on unrelated 400s — a false positive costs the turn its
 /// thinking for no reason.
+@MainActor
 final class ThinkingParamSelfHealTests: XCTestCase {
 
     private func providerError(_ message: String) -> Error {

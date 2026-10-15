@@ -7,6 +7,7 @@ import XCTest
 /// image preparation (ImagePayloadPrep) and its message-level transforms:
 /// magic-byte labelling, the pass-through rules, the self-heal message
 /// transforms, and the vision-capability gate.
+@MainActor
 final class ImagePayloadPrepTests: XCTestCase {
 
     // MARK: - sniffMimeType
@@ -208,6 +209,6 @@ final class ImagePayloadPrepTests: XCTestCase {
         XCTAssertFalse(AIChatViewModel.errorImplicatesImagePayload(
             LLMError.rateLimited()))
         XCTAssertFalse(AIChatViewModel.errorImplicatesImagePayload(
-            LLMError.invalidAPIKey))
+            LLMError.invalidAPIKey()))
     }
 }

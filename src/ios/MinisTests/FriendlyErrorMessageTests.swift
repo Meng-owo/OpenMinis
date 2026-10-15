@@ -6,6 +6,7 @@ import XCTest
 /// provider failure must get its guidance line prepended (raw text kept
 /// below it), unknown errors must pass through untouched, and token counts
 /// in context-length errors must not false-positive other categories.
+@MainActor
 final class FriendlyErrorMessageTests: XCTestCase {
 
     private func assertGuidance(_ raw: String, contains needle: String) {
