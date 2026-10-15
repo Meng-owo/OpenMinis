@@ -507,22 +507,25 @@ struct PlayHubView: View {
             } label: {
                 HStack(spacing: 8) {
                     Text(category.label)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(MinisThemeList.subtitle)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.title)
                     Text("\(items.count)")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(MinisThemeList.subtitle.opacity(0.8))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.subtitle)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 1.5)
                         .background(studio.color(.raised, scope: .home), in: Capsule())
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(MinisThemeList.subtitle)
                         .rotationEffect(.degrees(isCollapsed ? 0 : 90))
                 }
-                .padding(.horizontal, 4)
-                .contentShape(Rectangle())
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .background(MinisThemeList.rowFill,
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
 
