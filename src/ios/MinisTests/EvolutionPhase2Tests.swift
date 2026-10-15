@@ -177,4 +177,31 @@ final class EvolutionPhase2Tests: XCTestCase {
         counts = await store.counts()
         XCTAssertEqual(counts["lessons"], 0)
     }
+
+    // MARK: - OPT-2 injection ledger round-trips
+
+    func testInjectionSessionIdRoundTripsThroughLedger() async throws {
+        let (store, dir) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        await store.insert(EvolutionInjection(
+            id: "inj-active", runId: "run-9", sessionId: "sess-42",
+            lessonId: "L1", injectedAt: Date(), tokenCost: 12,
+            mode: EvolutionMode.active.rawValue, outcomeLinked: nil))
+        // Shadow rows keep session_id nil — must survive the column round-trip.
+        await store.insert(EvolutionInjection(
+            id: "inj-shadow", runId: nil, sessionId: nil,
+            lessonId: "L2", injectedAt: Date(), tokenCost: 8,
+            mode: EvolutionMode.shadow.rawValue, outcomeLinked: nil))
+        let rows = await store.recentInjections()
+        XCTAssertEqual(rows.count, 2)
+        let active = rows.first { $0.id == "inj-active" }
+        XCTAssertEqual(active?.sessionId, "sess-42")
+        XCTAssertEqual(active?.runId, "run-9")
+        XCTAssertEqual(active?.lessonId, "L1")
+        XCTAssertEqual(active?.tokenCost, 12)
+        XCTAssertEqual(active?.mode, EvolutionMode.active.rawValue)
+        let shadow = rows.first { $0.id == "inj-shadow" }
+        XCTAssertNil(shadow?.sessionId)
+        XCTAssertEqual(shadow?.mode, EvolutionMode.shadow.rawValue)
+    }
 }

@@ -219,7 +219,36 @@ actor EvolutionStore {
         createTables(handle)
         // Schema version marker for future migrations.
         exec(handle, "PRAGMA user_version = 1")
+        // Idempotent additive-column repair (mirrors VoiceCorrectionDB §11.4):
+        // `session_id` ships inside the v1 CREATE TABLE above for fresh
+        // installs; this repairs any DB written by a build that predated it.
+        // Additive + nullable, so old builds that never SELECT it are
+        // unaffected — no user_version bump (§11.4 rule 4).
+        ensureIdempotentColumns(handle)
         return handle
+    }
+
+    /// Additive-only column repair for the injections table, run on every
+    /// open regardless of `user_version` (VoiceCorrectionDB §11.4 pattern).
+    /// Skips when the table does not exist yet — a fresh DB gets the column
+    /// from the CREATE TABLE above.
+    private static func ensureIdempotentColumns(_ db: OpaquePointer?) {
+        guard db != nil else { return }
+        var existing = Set<String>()
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(injections)", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 1) {
+                    existing.insert(String(cString: c))
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        // Empty = table not created yet (fresh DB, the CREATE above includes
+        // the column). Skip so we don't log a spurious "no such table".
+        guard !existing.isEmpty, !existing.contains("session_id") else { return }
+        exec(db, "ALTER TABLE injections ADD COLUMN session_id TEXT")
+        evoLogger.info("[Evolution][DB] schema repair: added injections.session_id")
     }
 
     private static func createTables(_ db: OpaquePointer?) {
@@ -299,6 +328,7 @@ actor EvolutionStore {
             CREATE TABLE IF NOT EXISTS injections (
                 id             TEXT PRIMARY KEY,
                 run_id         TEXT,
+                session_id     TEXT,
                 lesson_id      TEXT NOT NULL,
                 injected_at    REAL NOT NULL,
                 token_cost     INTEGER NOT NULL DEFAULT 0,
@@ -481,17 +511,18 @@ actor EvolutionStore {
     func insert(_ injection: EvolutionInjection) {
         let sql = """
             INSERT OR REPLACE INTO injections
-              (id, run_id, lesson_id, injected_at, token_cost, mode, outcome_linked)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+              (id, run_id, session_id, lesson_id, injected_at, token_cost, mode, outcome_linked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """
         write(sql) { st in
             bindText(st, 1, injection.id)
             bindText(st, 2, injection.runId)
-            bindText(st, 3, injection.lessonId)
-            bindDouble(st, 4, injection.injectedAt.timeIntervalSince1970)
-            bindInt(st, 5, injection.tokenCost)
-            bindText(st, 6, injection.mode)
-            bindText(st, 7, injection.outcomeLinked)
+            bindText(st, 3, injection.sessionId)
+            bindText(st, 4, injection.lessonId)
+            bindDouble(st, 5, injection.injectedAt.timeIntervalSince1970)
+            bindInt(st, 6, injection.tokenCost)
+            bindText(st, 7, injection.mode)
+            bindText(st, 8, injection.outcomeLinked)
         }
     }
 
@@ -603,6 +634,33 @@ actor EvolutionStore {
             "skills": Int(sqlite3_column_int64(stmt, 3)),
             "injections": Int(sqlite3_column_int64(stmt, 4)),
         ]
+    }
+
+    /// OPT-2: the actual-injection ledger — what was really used, when, in
+    /// which session and mode (shadow rows carry a nil session_id). Newest
+    /// first; the evolution center renders this as the "实际注入记账" view.
+    func recentInjections(limit: Int = 200) -> [EvolutionInjection] {
+        guard db != nil, limit > 0 else { return [] }
+        let sql = "SELECT id, run_id, session_id, lesson_id, injected_at, token_cost, mode, outcome_linked FROM injections ORDER BY injected_at DESC LIMIT ?"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_int64(stmt, 1, Int64(limit))
+        var out: [EvolutionInjection] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let modeRaw = columnText(stmt, 6) ?? "shadow"
+            out.append(EvolutionInjection(
+                id: columnText(stmt, 0) ?? "",
+                runId: columnText(stmt, 1),
+                sessionId: columnText(stmt, 2),
+                lessonId: columnText(stmt, 3) ?? "",
+                injectedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
+                tokenCost: Int(sqlite3_column_int64(stmt, 5)),
+                mode: modeRaw,
+                outcomeLinked: columnText(stmt, 7)
+            ))
+        }
+        return out
     }
 
     // MARK: S3-1 reads (extractor inputs)
