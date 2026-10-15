@@ -1,5 +1,6 @@
 import AVFoundation
 import AVKit
+import ImageIO
 import Combine
 import GameController
 import PhotosUI
@@ -3506,9 +3507,7 @@ struct AIChatView: View {
         let isDark = colorScheme == .dark
         let view = HStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                StickerAnimatedImageView(image: img)
                     .frame(width: 48, height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .overlay(
@@ -7058,6 +7057,7 @@ struct ChatStickerPanel: View {
     @State private var selectedCategory: String = "全部"
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showPhotosPicker: Bool = false
+    @State private var showFileImporter: Bool = false
     @State private var activeSheet: ActivePanelSheet?
     @State private var isManageMode: Bool = false
     @State private var selectedStickerIds: Set<String> = []
@@ -7361,6 +7361,11 @@ struct ChatStickerPanel: View {
                             } label: {
                                 Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
                             }
+                            Button {
+                                showFileImporter = true
+                            } label: {
+                                Label("从文件导入动图/表情", systemImage: "folder.fill")
+                            }
                         }
                     }
 
@@ -7387,9 +7392,7 @@ struct ChatStickerPanel: View {
                             VStack(spacing: 4) {
                                 ZStack(alignment: .topTrailing) {
                                     if let img = store.image(for: sticker) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
+                                        StickerAnimatedImageView(image: img)
                                             .frame(height: 72)
                                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                             .overlay(
@@ -7476,6 +7479,41 @@ struct ChatStickerPanel: View {
             // 阻断内部点击穿透到底层收起手势
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images)
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.image, .gif, .data],
+            allowsMultipleSelection: true
+        ) { result in
+            guard let urls = try? result.get(), !urls.isEmpty else { return }
+            let targetCategory = (selectedCategory != "常用" && selectedCategory != "全部") ? selectedCategory : "日常"
+            Task {
+                var addedCount = 0
+                for url in urls {
+                    guard url.startAccessingSecurityScopedResource() else { continue }
+                    defer { url.stopAccessingSecurityScopedResource() }
+                    guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
+                    if data.count > 15 * 1024 * 1024 { continue }
+                    let name = url.deletingPathExtension().lastPathComponent
+                    let title = name.isEmpty ? "表情包" : name
+                    _ = await MainActor.run {
+                        store.addSticker(
+                            imageData: data,
+                            title: title,
+                            content: "",
+                            scenario: "",
+                            shortDesc: title,
+                            category: targetCategory
+                        )
+                    }
+                    addedCount += 1
+                }
+                if addedCount > 0 {
+                    await MainActor.run {
+                        MinisToast.show("成功导入 \(addedCount) 个表情", systemImage: "checkmark.circle.fill")
+                    }
+                }
+            }
+        }
         .onChange(of: selectedPhotoItems) { items in
             guard !items.isEmpty else { return }
             let count = items.count
@@ -7710,9 +7748,74 @@ public struct StickerRecognitionResult: Sendable {
     public var category: String
 }
 
+// MARK: - [3-B 醒醒] GIF 动图解码与格式识别扩展
+
+public extension UIImage {
+    /// 从 GIF 数据解析多帧并生成带时长的动画 UIImage；若非动图或单帧则退回普通 UIImage
+    static func animatedImageWithGIF(data: Data) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            return UIImage(data: data)
+        }
+        let count = CGImageSourceGetCount(source)
+        guard count > 1 else {
+            return UIImage(data: data)
+        }
+        // [保护] 限制最多解析 120 帧，防止超长动图占用过多内存与电量
+        let maxFrames = min(count, 120)
+        var images: [UIImage] = []
+        var totalDuration: Double = 0
+
+        for i in 0..<maxFrames {
+            guard let cgImage = CGImageSourceCreateImageAtIndex(source, i, nil) else { continue }
+            var frameDuration: Double = 0.1
+            if let properties = CGImageSourceCopyPropertiesAtIndex(source, i, nil) as? [CFString: Any],
+               let gifInfo = properties[kCGImagePropertyGIFDictionary] as? [CFString: Any] {
+                if let unclamped = gifInfo[kCGImagePropertyGIFUnclampedDelayTime] as? Double, unclamped > 0 {
+                    frameDuration = unclamped
+                } else if let delay = gifInfo[kCGImagePropertyGIFDelayTime] as? Double, delay > 0 {
+                    frameDuration = delay
+                }
+            }
+            if frameDuration < 0.02 { frameDuration = 0.1 }
+            totalDuration += frameDuration
+            images.append(UIImage(cgImage: cgImage))
+        }
+
+        if images.isEmpty { return UIImage(data: data) }
+        return UIImage.animatedImage(with: images, duration: totalDuration > 0 ? totalDuration : Double(images.count) * 0.1)
+    }
+}
+
 @MainActor
 public final class StickerStore: ObservableObject {
     public static let shared = StickerStore()
+
+    /// 检测数据魔数是否为 GIF 动图
+    public static func isGIF(data: Data) -> Bool {
+        guard data.count >= 6 else { return false }
+        let prefix = data.prefix(6)
+        return prefix.starts(with: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) // GIF87a
+            || prefix.starts(with: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]) // GIF89a
+    }
+
+    /// 根据文件真实二进制魔数返回扩展名
+    public static func imageExtension(for data: Data) -> String {
+        if isGIF(data: data) { return "gif" }
+        if data.starts(with: [0x89, 0x50, 0x4E, 0x47]) { return "png" }
+        if data.starts(with: [0xFF, 0xD8]) { return "jpg" }
+        if data.count >= 12, let s = String(data: data[4..<12], encoding: .ascii), s.hasPrefix("ftyp") {
+            return "heic"
+        }
+        return "png"
+    }
+
+    /// 统一图片解码器：自动检测 GIF 动图多帧与常规静态图
+    public static func decodeImage(from data: Data) -> UIImage? {
+        if isGIF(data: data) {
+            return UIImage.animatedImageWithGIF(data: data) ?? UIImage(data: data)
+        }
+        return UIImage(data: data)
+    }
 
     @Published public var stickers: [StickerItem] = []
     @Published public var categories: [String] = [
@@ -7772,9 +7875,10 @@ public final class StickerStore: ObservableObject {
                 
                 // 如果是从其他候选目录读取到的，同步将图片迁移到主目录
                 let sourceDir = catURL.deletingLastPathComponent()
+                let imgExts: Set<String> = ["png", "gif", "jpg", "jpeg", "webp", "heic"]
                 if sourceDir.path != stickersDir.path {
                     if let files = try? fm.contentsOfDirectory(atPath: sourceDir.path) {
-                        for file in files where file.hasSuffix(".png") {
+                        for file in files where imgExts.contains((file as NSString).pathExtension.lowercased()) {
                             let src = sourceDir.appendingPathComponent(file)
                             let dst = stickersDir.appendingPathComponent(file)
                             if !fm.fileExists(atPath: dst.path) {
@@ -7782,6 +7886,27 @@ public final class StickerStore: ObservableObject {
                             }
                         }
                     }
+                    saveToDisk()
+                }
+
+                // [3-B 醒醒] 自动检测已入库文件的真实格式（让醒醒之前存的 GIF 表情包无需重新上传即可直接动起来）
+                var catalogNeedsSave = false
+                for i in 0..<self.stickers.count {
+                    let filename = self.stickers[i].imageFilename
+                    let fileURL = stickersDir.appendingPathComponent(filename)
+                    if let data = try? Data(contentsOf: fileURL), Self.isGIF(data: data) {
+                        if filename.hasSuffix(".png") {
+                            let gifFilename = self.stickers[i].id + ".gif"
+                            let gifURL = stickersDir.appendingPathComponent(gifFilename)
+                            if !fm.fileExists(atPath: gifURL.path) {
+                                try? fm.moveItem(at: fileURL, to: gifURL)
+                            }
+                            self.stickers[i].imageFilename = gifFilename
+                            catalogNeedsSave = true
+                        }
+                    }
+                }
+                if catalogNeedsSave {
                     saveToDisk()
                 }
                 break
@@ -7804,14 +7929,15 @@ public final class StickerStore: ObservableObject {
                 fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers")
             ].compactMap { $0 }
 
+            let imgExts: Set<String> = ["png", "gif", "jpg", "jpeg", "webp", "heic"]
             for dir in candidateDirs {
                 if let files = try? fm.contentsOfDirectory(atPath: dir.path) {
-                    let pngFiles = files.filter { $0.hasSuffix(".png") }.sorted()
-                    for png in pngFiles {
-                        let id = png.replacingOccurrences(of: ".png", with: "")
-                        let dst = stickersDir.appendingPathComponent(png)
+                    let imgFiles = files.filter { imgExts.contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
+                    for imgFile in imgFiles {
+                        let id = (imgFile as NSString).deletingPathExtension
+                        let dst = stickersDir.appendingPathComponent(imgFile)
                         if dir.path != stickersDir.path && !fm.fileExists(atPath: dst.path) {
-                            try? fm.copyItem(at: dir.appendingPathComponent(png), to: dst)
+                            try? fm.copyItem(at: dir.appendingPathComponent(imgFile), to: dst)
                         }
                         if !stickers.contains(where: { $0.id == id }) {
                             let item = StickerItem(
@@ -7822,7 +7948,7 @@ public final class StickerStore: ObservableObject {
                                 shortDesc: "表情",
                                 category: "全部",
                                 useCount: 0,
-                                imageFilename: png,
+                                imageFilename: imgFile,
                                 createdAt: Date()
                             )
                             stickers.append(item)
@@ -7867,11 +7993,12 @@ public final class StickerStore: ObservableObject {
         }
         nextNumericId += 1
 
-        let filename = "\(assignedId).png"
+        let ext = Self.imageExtension(for: imageData)
+        let filename = "\(assignedId).\(ext)"
         let fileURL = stickersDir.appendingPathComponent(filename)
         try? imageData.write(to: fileURL, options: .atomic)
 
-        if let uiImg = UIImage(data: imageData) {
+        if let uiImg = Self.decodeImage(from: imageData) {
             imageCache.setObject(uiImg, forKey: assignedId as NSString)
         }
 
@@ -7912,9 +8039,17 @@ public final class StickerStore: ObservableObject {
         stickers[idx].category = category
 
         if let data = newImageData {
+            let ext = Self.imageExtension(for: data)
+            let baseId = stickers[idx].id
+            let newFilename = "\(baseId).\(ext)"
+            if stickers[idx].imageFilename != newFilename {
+                let oldURL = stickersDir.appendingPathComponent(stickers[idx].imageFilename)
+                try? FileManager.default.removeItem(at: oldURL)
+                stickers[idx].imageFilename = newFilename
+            }
             let fileURL = stickersDir.appendingPathComponent(stickers[idx].imageFilename)
             try? data.write(to: fileURL, options: .atomic)
-            if let img = UIImage(data: data) {
+            if let img = Self.decodeImage(from: data) {
                 imageCache.setObject(img, forKey: id as NSString)
             }
         }
@@ -7972,27 +8107,31 @@ public final class StickerStore: ObservableObject {
         deletedIds.contains(id)
     }
 
-    public func image(for sticker: StickerItem) -> UIImage? {
-        if let cached = imageCache.object(forKey: sticker.id as NSString) {
-            return cached
-        }
+    public func imageData(for sticker: StickerItem) -> Data? {
         let fileURL = stickersDir.appendingPathComponent(sticker.imageFilename)
-        if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
-            imageCache.setObject(img, forKey: sticker.id as NSString)
-            return img
+        if let data = try? Data(contentsOf: fileURL) {
+            return data
         }
-        // 尝试从备用沙盒目录加载
         let fm = FileManager.default
         let backups = [
             fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(sticker.imageFilename)"),
             fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(sticker.imageFilename)")
         ].compactMap { $0 }
         for b in backups {
-            if let data = try? Data(contentsOf: b), let img = UIImage(data: data) {
-                try? data.write(to: fileURL, options: .atomic)
-                imageCache.setObject(img, forKey: sticker.id as NSString)
-                return img
+            if let data = try? Data(contentsOf: b) {
+                return data
             }
+        }
+        return nil
+    }
+
+    public func image(for sticker: StickerItem) -> UIImage? {
+        if let cached = imageCache.object(forKey: sticker.id as NSString) {
+            return cached
+        }
+        if let data = imageData(for: sticker), let img = Self.decodeImage(from: data) {
+            imageCache.setObject(img, forKey: sticker.id as NSString)
+            return img
         }
         return nil
     }
@@ -8001,19 +8140,25 @@ public final class StickerStore: ObservableObject {
         if let item = sticker(for: id) {
             return image(for: item)
         }
-        let fileURL = stickersDir.appendingPathComponent("\(id).png")
-        if let data = try? Data(contentsOf: fileURL), let img = UIImage(data: data) {
-            return img
-        }
         let fm = FileManager.default
-        let backups = [
-            fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).png"),
-            fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).png")
-        ].compactMap { $0 }
-        for b in backups {
-            if let data = try? Data(contentsOf: b), let img = UIImage(data: data) {
-                try? data.write(to: fileURL, options: .atomic)
+        let exts = ["gif", "png", "jpg", "jpeg", "heic"]
+        for ext in exts {
+            let fileURL = stickersDir.appendingPathComponent("\(id).\(ext)")
+            if let data = try? Data(contentsOf: fileURL), let img = Self.decodeImage(from: data) {
                 return img
+            }
+        }
+        for ext in exts {
+            let backups = [
+                fm.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).\(ext)"),
+                fm.urls(for: .libraryDirectory, in: .userDomainMask).first?.appendingPathComponent("stickers/\(id).\(ext)")
+            ].compactMap { $0 }
+            for b in backups {
+                if let data = try? Data(contentsOf: b), let img = Self.decodeImage(from: data) {
+                    let fileURL = stickersDir.appendingPathComponent("\(id).\(ext)")
+                    try? data.write(to: fileURL, options: .atomic)
+                    return img
+                }
             }
         }
         return nil
@@ -8159,6 +8304,56 @@ public enum StickerParser {
 
 // MARK: - 表情包展示组件与全屏预览
 
+// MARK: - [3-B 醒醒] 表情包动图渲染组件 (StickerAnimatedImageView)
+// 动图（uiImage.images != nil）走 UIImageView 自动循环播放动画；静态图走 SwiftUI Image
+
+public struct StickerAnimatedImageView: View {
+    public let image: UIImage
+    public var contentMode: ContentMode = .fit
+
+    public init(image: UIImage, contentMode: ContentMode = .fit) {
+        self.image = image
+        self.contentMode = contentMode
+    }
+
+    public var body: some View {
+        if let images = image.images, !images.isEmpty {
+            StickerRepresentable(image: image)
+                .aspectRatio(image.size.width / max(1, image.size.height), contentMode: contentMode)
+        } else {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: contentMode)
+        }
+    }
+}
+
+private struct StickerRepresentable: UIViewRepresentable {
+    let image: UIImage
+
+    func makeUIView(context: Context) -> UIImageView {
+        let view = UIImageView()
+        view.contentMode = .scaleAspectFit
+        view.clipsToBounds = true
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+        view.image = image
+        view.startAnimating()
+        return view
+    }
+
+    func updateUIView(_ uiView: UIImageView, context: Context) {
+        if uiView.image !== image {
+            uiView.image = image
+            if let images = image.images, !images.isEmpty {
+                uiView.startAnimating()
+            } else {
+                uiView.stopAnimating()
+            }
+        }
+    }
+}
+
 public struct StickerThumbnailView: View {
     public let sticker: StickerItem
     @State private var showZoomSheet = false
@@ -8172,9 +8367,7 @@ public struct StickerThumbnailView: View {
             showZoomSheet = true
         } label: {
             if let uiImage = StickerStore.shared.image(for: sticker) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
+                StickerAnimatedImageView(image: uiImage)
                     .frame(maxWidth: 130, maxHeight: 130)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
@@ -8226,9 +8419,7 @@ public struct StickerZoomPreviewSheet: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if let uiImage = StickerStore.shared.image(for: sticker) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
+                        StickerAnimatedImageView(image: uiImage)
                             .frame(maxWidth: 240, maxHeight: 240)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
@@ -8399,9 +8590,7 @@ struct StickerPickerSheet: View {
                                 } label: {
                                     VStack(spacing: 4) {
                                         if let img = store.image(for: sticker) {
-                                            Image(uiImage: img)
-                                                .resizable()
-                                                .aspectRatio(contentMode: .fit)
+                                            StickerAnimatedImageView(image: img)
                                                 .frame(width: 72, height: 72)
                                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                                 .overlay(
@@ -8489,6 +8678,7 @@ struct StickerEditSheet: View {
     @ObservedObject private var store = StickerStore.shared
 
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showFileImporter: Bool = false
     @State private var imageData: Data?
     @State private var autoAiRecognize: Bool = VisionGroupResolver.isConfigured
     @State private var isRecognizing: Bool = false
@@ -8518,10 +8708,8 @@ struct StickerEditSheet: View {
                 // Section 1: 图片选择与预览
                 Section("表情包图片") {
                     HStack(spacing: 16) {
-                        if let data = imageData, let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
+                        if let data = imageData, let uiImage = StickerStore.decodeImage(from: data) {
+                            StickerAnimatedImageView(image: uiImage)
                                 .frame(width: 84, height: 84)
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
@@ -8540,16 +8728,31 @@ struct StickerEditSheet: View {
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
-                            PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                                Text(imageData == nil ? "选择图片" : "更换图片")
-                                    .font(.subheadline.weight(.medium))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(ChatColors.accent)
-                                    .foregroundColor(.white)
-                                    .clipShape(Capsule())
+                            HStack(spacing: 8) {
+                                PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                                    Text(imageData == nil ? "相册选择" : "更换图片")
+                                        .font(.subheadline.weight(.medium))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(ChatColors.accent)
+                                        .foregroundColor(.white)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.borderless)
+
+                                Button {
+                                    showFileImporter = true
+                                } label: {
+                                    Text("从文件选择")
+                                        .font(.subheadline.weight(.medium))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(Color.secondary.opacity(0.15))
+                                        .foregroundColor(.primary)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.borderless)
                             }
-                            .buttonStyle(.borderless)
 
                             if isRecognizing {
                                 HStack(spacing: 6) {
@@ -8642,7 +8845,26 @@ struct StickerEditSheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || imageData == nil)
                 }
             }
-            .onChange(of: selectedPhotoItem) { newItem in
+            .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.image, .gif, .data],
+            allowsMultipleSelection: false
+        ) { result in
+            guard let url = try? result.get() else { return }
+            guard url.startAccessingSecurityScopedResource() else { return }
+            defer { url.stopAccessingSecurityScopedResource() }
+            if let data = try? Data(contentsOf: url), !data.isEmpty {
+                if data.count <= 15 * 1024 * 1024 {
+                    self.imageData = data
+                    let name = url.deletingPathExtension().lastPathComponent
+                    if self.title.isEmpty { self.title = name }
+                    if self.shortDesc.isEmpty { self.shortDesc = name }
+                } else {
+                    MinisToast.show("图片超过15MB上限", systemImage: "exclamationmark.triangle.fill")
+                }
+            }
+        }
+        .onChange(of: selectedPhotoItem) { newItem in
                 guard let newItem else { return }
                 Task {
                     if let loaded = await Self.loadData(from: newItem) {
@@ -8662,7 +8884,9 @@ struct StickerEditSheet: View {
                     scenario = item.scenario
                     shortDesc = item.shortDesc
                     category = item.category
-                    if let img = store.image(for: item) {
+                    if let rawData = store.imageData(for: item) {
+                        imageData = rawData
+                    } else if let img = store.image(for: item) {
                         imageData = img.pngData()
                     }
                 } else {
