@@ -20,7 +20,7 @@ struct MinisAudioPreviewView: View {
     @State private var showShareSheet = false
     @State private var showSavePicker = false
     @State private var artworkImage: UIImage? = nil
-    @State private var dominantColor: Color = Color(UIColor.secondarySystemBackground)
+    @State private var dominantColor: Color = AppearanceStudio.shared.color(.surface, scope: .chat)
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -80,7 +80,7 @@ struct MinisAudioPreviewView: View {
                     .ignoresSafeArea()
             }
         } else {
-            Color(UIColor.systemBackground)
+            AppearanceStudio.shared.color(.canvas, scope: .chat)
                 .ignoresSafeArea()
         }
     }
@@ -149,7 +149,7 @@ struct MinisAudioPreviewView: View {
         } else {
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(UIColor.secondarySystemBackground))
+                    .fill(AppearanceStudio.shared.color(.surface, scope: .chat))
                 Image(systemName: "waveform")
                     .font(.system(size: 64, weight: .light))
                     .foregroundStyle(MinisTheme.accent.opacity(0.8))
@@ -168,11 +168,11 @@ struct MinisAudioPreviewView: View {
                 Text(displayTitle)
                     .font(.title2.bold())
                     .lineLimit(1)
-                    .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                    .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
                 Text(displaySubtitle)
                     .font(.subheadline)
                     .lineLimit(1)
-                    .foregroundColor(artworkImage != nil ? .white.opacity(0.7) : Color(UIColor.secondaryLabel))
+                    .foregroundColor(artworkImage != nil ? .white.opacity(0.7) : AppearanceStudio.shared.color(.secondaryText, scope: .chat))
             }
             Spacer()
         }
@@ -190,7 +190,7 @@ struct MinisAudioPreviewView: View {
                 ZStack(alignment: .leading) {
                     // Background track
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(artworkImage != nil ? Color.white.opacity(0.3) : Color(UIColor.tertiarySystemFill))
+                        .fill(artworkImage != nil ? Color.white.opacity(0.3) : AppearanceStudio.shared.color(.mutedSurface, scope: .chat))
                         .frame(height: 5)
                     // Played portion
                     RoundedRectangle(cornerRadius: 3)
@@ -221,7 +221,7 @@ struct MinisAudioPreviewView: View {
                 Text(formatTime(player.duration))
             }
             .font(.caption2.monospacedDigit())
-            .foregroundColor(artworkImage != nil ? .white.opacity(0.7) : Color(UIColor.secondaryLabel))
+            .foregroundColor(artworkImage != nil ? .white.opacity(0.7) : AppearanceStudio.shared.color(.secondaryText, scope: .chat))
         }
     }
 
@@ -232,21 +232,21 @@ struct MinisAudioPreviewView: View {
             Button { player.skip(by: -10) } label: {
                 Image(systemName: "gobackward.10")
                     .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                    .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
             }
             .buttonStyle(.plain)
 
             Button { player.togglePlayPause() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 44, weight: .medium))
-                    .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                    .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
             }
             .buttonStyle(.plain)
 
             Button { player.skip(by: 10) } label: {
                 Image(systemName: "goforward.10")
                     .font(.system(size: 28, weight: .medium))
-                    .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                    .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
             }
             .buttonStyle(.plain)
         }
@@ -273,11 +273,11 @@ struct MinisAudioPreviewView: View {
                     Circle()
                         .fill(artworkImage != nil
                             ? Color.white.opacity(0.2)
-                            : Color(UIColor.secondarySystemBackground))
+                            : AppearanceStudio.shared.color(.surface, scope: .chat))
                         .frame(width: 44, height: 44)
                     Image(systemName: "speedometer")
                         .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                        .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
                         .frame(width: 44, height: 44)
                 }
                 .overlay(alignment: .topTrailing) {
@@ -303,11 +303,11 @@ struct MinisAudioPreviewView: View {
                     Circle()
                         .fill(artworkImage != nil
                             ? Color.white.opacity(0.2)
-                            : Color(UIColor.secondarySystemBackground))
+                            : AppearanceStudio.shared.color(.surface, scope: .chat))
                         .frame(width: 44, height: 44)
                     Image(systemName: "pip")
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundColor(artworkImage != nil ? .white : Color(UIColor.label))
+                        .foregroundColor(artworkImage != nil ? .white : AppearanceStudio.shared.color(.primaryText, scope: .chat))
                 }
             }
             .buttonStyle(.plain)
@@ -393,7 +393,7 @@ private struct CircleIconButton: View {
     var body: some View {
         Image(systemName: icon)
             .font(.system(size: 16, weight: .medium))
-            .foregroundColor(hasArtwork ? .white : Color(UIColor.secondaryLabel))
+            .foregroundColor(hasArtwork ? .white : AppearanceStudio.shared.color(.secondaryText, scope: .chat))
             .frame(width: 36, height: 36)
             .background(
                 Circle().fill(hasArtwork ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemBackground))
@@ -407,11 +407,11 @@ private extension UIImage {
     /// Returns an approximate dominant color by sampling the image at low resolution.
     func dominantSwiftUIColor() -> Color {
         guard let resized = resized(to: CGSize(width: 50, height: 50)),
-              let cgImage = resized.cgImage else { return Color(UIColor.secondarySystemBackground) }
+              let cgImage = resized.cgImage else { return AppearanceStudio.shared.color(.surface, scope: .chat) }
         let width = cgImage.width
         let height = cgImage.height
         guard let data = cgImage.dataProvider?.data,
-              let ptr = CFDataGetBytePtr(data) else { return Color(UIColor.secondarySystemBackground) }
+              let ptr = CFDataGetBytePtr(data) else { return AppearanceStudio.shared.color(.surface, scope: .chat) }
         let bytesPerPixel = cgImage.bitsPerPixel / 8
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         let total = width * height

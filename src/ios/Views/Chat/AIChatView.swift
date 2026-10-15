@@ -5973,20 +5973,20 @@ private struct MoveToSessionSheet: View {
                                     highlightedText(
                                         session.title ?? AppLocalized("New Chat"),
                                         font: .system(size: 16, weight: .semibold),
-                                        color: Color(UIColor.label)
+                                        color: AppearanceStudio.shared.color(.primaryText, scope: .chat)
                                     )
                                     .lineLimit(1)
                                     highlightedText(
                                         session.lastMessage ?? AppLocalized("No messages yet"),
                                         font: .system(size: 14),
-                                        color: Color(UIColor.secondaryLabel)
+                                        color: AppearanceStudio.shared.color(.secondaryText, scope: .chat)
                                     )
                                     .lineLimit(1)
                                 }
                                 Spacer(minLength: 1)
                                 Text(relativeDate(session.updatedAt))
                                     .font(.system(size: 13))
-                                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+                                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                             }
                         }
                     }
@@ -6174,7 +6174,7 @@ private struct SessionLockGateOverlay: View {
                 .fill(.regularMaterial)
                 .ignoresSafeArea()
                 .overlay {
-                    Color(UIColor.systemBackground).opacity(0.4)
+                    AppearanceStudio.shared.color(.canvas, scope: .chat).opacity(0.4)
                         .ignoresSafeArea()
                 }
 

@@ -311,7 +311,7 @@ private struct FolderSurface: ViewModifier {
                         .stroke(folderEdgeHighlight, lineWidth: 0.75)
                 } else {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5)
+                        .stroke(AppearanceStudio.shared.color(.border, scope: .home).opacity(0.5), lineWidth: 0.5)
                 }
             case .top:
                 FolderSegmentBorder(kind: .top)
@@ -643,18 +643,18 @@ private struct FolderPickerSheet: View {
                                 // row's text baseline lines up with the group rows.
                                 ZStack {
                                     Circle()
-                                        .fill(Color(UIColor.tertiarySystemFill))
+                                        .fill(AppearanceStudio.shared.color(.mutedSurface, scope: .home))
                                         .frame(width: 40, height: 40)
                                     Image(systemName: "folder.badge.minus")
                                         .foregroundStyle(.secondary)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("No Group")
-                                        .foregroundStyle(Color(UIColor.label))
+                                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
                                         .lineLimit(1)
                                     Text("Remove from its current group")
                                         .font(.system(size: 13))
-                                        .foregroundStyle(Color(UIColor.secondaryLabel))
+                                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .home))
                                         .lineLimit(1)
                                 }
                                 Spacer()
@@ -679,7 +679,7 @@ private struct FolderPickerSheet: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         // Folder names are user data — verbatim.
                                         Text(item.folder.name)
-                                            .foregroundStyle(Color(UIColor.label))
+                                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
                                             .lineLimit(1)
                                         Group {
                                             if let sub = item.subtitle {
@@ -691,7 +691,7 @@ private struct FolderPickerSheet: View {
                                             }
                                         }
                                         .font(.system(size: 13))
-                                        .foregroundStyle(Color(UIColor.secondaryLabel))
+                                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .home))
                                         .lineLimit(1)
                                     }
                                     Spacer()
@@ -2669,7 +2669,7 @@ struct ContentView: View {
                     // Folder names are user data — verbatim.
                     Text(folder.name)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
                         .lineLimit(1)
                 }
                 // Widen the tap zone to everything left of the chevron.
@@ -2690,9 +2690,9 @@ struct ContentView: View {
             } label: {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .home))
                     .frame(width: 32, height: 32)
-                    .background(Circle().fill(Color(UIColor.tertiarySystemFill)))
+                    .background(Circle().fill(AppearanceStudio.shared.color(.mutedSurface, scope: .home)))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("Collapse Group"))
@@ -2702,7 +2702,7 @@ struct ContentView: View {
         .frame(height: 48)
         .frame(maxWidth: 320)
         .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+        .overlay(Capsule().stroke(AppearanceStudio.shared.color(.border, scope: .home).opacity(0.5), lineWidth: 0.5))
         .shadow(color: Color.black.opacity(0.15), radius: 8, y: 2)
         .padding(.top, 8)
         .padding(.horizontal, 24)
@@ -5713,7 +5713,7 @@ private struct ExportPreviewSheet: View {
                     ScrollView {
                         Text(previewText)
                             .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(Color(UIColor.label))
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
                             .textSelection(.enabled)
