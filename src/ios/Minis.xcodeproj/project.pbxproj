@@ -1423,9 +1423,15 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Standalone/AppearanceThemePackTests.swift,
+				Standalone/BackupPackageNameTests.swift,
+				Standalone/BackupZipContainmentTests.swift,
+				Standalone/BrowserUseDOMRectCloneTests.swift,
 				Standalone/CJKPaginationThresholdTests.swift,
 				Standalone/InLoopCompactOrderTests.swift,
+				Standalone/RestoreSymlinkContainmentTests.swift,
 				Standalone/SkillDescriptionStaleTests.swift,
+				Standalone/SoulIconSourceTests.swift,
+				Standalone/UsageAttributionClobberTests.swift,
 				ThinkingLevelTests.swift,
 			);
 			target = BB1000070F700000000000AA /* MinisTests */;
