@@ -547,7 +547,7 @@ struct AppearanceStudioView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundStyle(Color.white)
                         )
-                    Text("醒醒，今天想聊点什么？")
+                    Text("今天想聊点什么？")
                         .font(.system(size: 12))
                         .foregroundStyle(studio.color(.primaryText, variant: variant))
                         .padding(.horizontal, 10)
