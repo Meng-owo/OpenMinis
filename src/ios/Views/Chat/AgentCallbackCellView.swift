@@ -133,18 +133,15 @@ struct AgentCallbackCellView: View {
     let sessionId: String?
 
     private var accent: Color {
-        // [T-scheduled-task-card] Amber for the scheduler, whatever its status:
-        // the colour distinguishes WHO injected the turn, not how it went. An
-        // agent callback keeps its status-driven palette (blue running, green
-        // done, yellow cancelled/timeout, red otherwise), so the two kinds
-        // never collide — a scheduled firing carries `status: "running"`, which
-        // would otherwise have painted it the same blue as a running agent.
-        if callback.kind == .scheduled { return .orange }
+        // [10-15 醒醒打回] 全局 CSS 变量色，禁止系统硬编码色值。
+        // 调度黄色、跑动主题色、成功 success、警告 warning、失败 destructive，
+        // 全部通过 ChatColors 接入 AppearanceStudio 动态主题。
+        if callback.kind == .scheduled { return ChatColors.warning }
         switch callback.status {
-        case "running": return .blue
-        case "done": return .green
-        case "cancelled", "timeout": return .yellow
-        default: return .red
+        case "running": return ChatColors.accent
+        case "done": return ChatColors.success
+        case "cancelled", "timeout": return ChatColors.warning
+        default: return ChatColors.destructive
         }
     }
 
@@ -296,8 +293,8 @@ struct AgentCallbackCellView: View {
             }
             .padding(.horizontal, 12)
             .frame(height: Self.cardHeight)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color(UIColor.secondarySystemBackground)))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(accent.opacity(0.25), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(ChatColors.secondaryBg))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(accent.opacity(0.35), lineWidth: 0.8))
             .contentShape(Rectangle())
             .onTapGesture {
                 var info: [String: Any] = ["callback": callback]
