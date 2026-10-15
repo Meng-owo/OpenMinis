@@ -139,7 +139,7 @@ struct SkillsManagementView: View {
                     Button {
                         showSkillsBrowser = true
                     } label: {
-                        Label(AppLocalized("我的小家 Skills"), systemImage: "globe")
+                        Label(AppLocalized("嘟嘟 Skills"), systemImage: "globe")
                     }
                     // Skill iCloud sync is wired through SyncV2; hide the
                     // force-sync entry entirely when the user has the
@@ -948,7 +948,7 @@ struct MinisSkillsBrowserView: View {
                     .animation(.spring(response: 0.3), value: coordinator.hudState)
                 }
             }
-            .navigationTitle("我的小家 Skills")
+            .navigationTitle("嘟嘟 Skills")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

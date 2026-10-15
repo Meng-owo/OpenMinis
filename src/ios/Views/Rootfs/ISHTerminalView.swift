@@ -93,7 +93,7 @@ struct ISHTerminalView: View {
             )
         }
         .background(AppearanceBackdrop(scope: .terminal))
-        .navigationTitle("我的小家 Shell")
+        .navigationTitle("嘟嘟 Shell")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showCloseButton {

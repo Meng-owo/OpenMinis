@@ -966,7 +966,7 @@ struct ContentView: View {
     /// Soul name shown as the sidebar title. Sourced from SOUL.md, falls
     /// back to "Minis". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "我的小家" : SoulStore.cachedMetadata.name
+        ? "嘟嘟" : SoulStore.cachedMetadata.name
     /// [B2 · 10-15] 顶部标题点击弹出的人设切换（复用现成 PersonaListSheet）。
     @State private var showPersonaSwitcher = false
     /// Subtitle state shown under the "Minis" sidebar title. nil hides the
@@ -2831,7 +2831,7 @@ struct ContentView: View {
         // and can't drop a .soulMdChanged notification arriving during reconstruction.
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
             let n = SoulStore.cachedMetadata.name
-            soulName = n.isEmpty ? "我的小家" : n
+            soulName = n.isEmpty ? "嘟嘟" : n
         }
     }
 
@@ -4122,7 +4122,7 @@ struct ContentView: View {
                 .padding(.bottom, 4)
 
             VStack(spacing: 8) {
-                Text("Welcome to 我的小家")
+                Text("Welcome to 嘟嘟")
                     .font(.title2.bold())
                 Text("Your first On-Device Agent is almost ready.")
                     .font(.subheadline)
@@ -5511,7 +5511,7 @@ struct ContentView: View {
                 done += 1
                 if msg.isToolResultOnly { continue }
 
-                let role = msg.role == .user ? "User" : "我的小家"
+                let role = msg.role == .user ? "User" : "嘟嘟"
                 let time = timeFmt.string(from: msg.createdAt)
                 var parts: [String] = []
                 for part in msg.parts {
@@ -7709,7 +7709,7 @@ private struct SettingsSheet: View {
                         AboutView()
                     } label: {
                         Label {
-                            Text("About 我的小家")
+                            Text("About 嘟嘟")
                         } icon: {
                             QuietAppIcon(id: QuietIconSlot.about.id, systemName: QuietIconSlot.about.systemName)
                         }
@@ -7946,7 +7946,7 @@ private struct SettingsSheet: View {
         components.scheme = "mailto"
         components.path = "dev@openminis.app"
         components.queryItems = [
-            URLQueryItem(name: "subject", value: "我的小家 Feedback"),
+            URLQueryItem(name: "subject", value: "嘟嘟 Feedback"),
             URLQueryItem(name: "body", value: body),
         ]
         return components.url
@@ -7974,7 +7974,7 @@ private struct SettingsSheet: View {
         |-------|-------|
         | Platform | iOS |
         | OS Version | iOS \(iosVersion) |
-        | 我的小家 Version | \(appVersion) (build \(build)) |
+        | 嘟嘟 Version | \(appVersion) (build \(build)) |
         | Device Model | \(device) |
 
         ## 🔁 Steps to Reproduce

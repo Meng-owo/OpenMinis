@@ -316,7 +316,7 @@ final class PersonaStore: ObservableObject {
         personas.first { $0.id == currentPersonaID }
             ?? personas.first { $0.id == Self.defaultPersonaID }
             ?? personas.first
-            ?? Persona(id: Self.defaultPersonaID, name: "我的小家", avatar: nil,
+            ?? Persona(id: Self.defaultPersonaID, name: "嘟嘟", avatar: nil,
                        modelId: nil, skillIds: nil, mcpServerIds: nil,
                        localToolIds: nil, sortOrder: 0, isBuiltIn: false)
     }
@@ -392,7 +392,7 @@ final class PersonaStore: ObservableObject {
 
         // 读老 SOUL.md（直接读老路径，不走 persona-aware 的 SoulStore）。
         let oldSoulURL = memDir.appendingPathComponent("SOUL.md")
-        var soulName = "我的小家"
+        var soulName = "嘟嘟"
         if let data = try? Data(contentsOf: oldSoulURL),
            let text = String(data: data, encoding: .utf8) {
             let parsed = SoulMDParser.parse(text)
@@ -478,7 +478,7 @@ final class PersonaStore: ObservableObject {
               !list.isEmpty else {
             // 注册表坏了：重建默认（不丢记忆文件，只重建注册表）。
             personas = [
-                Persona(id: Self.defaultPersonaID, name: "我的小家", avatar: nil,
+                Persona(id: Self.defaultPersonaID, name: "嘟嘟", avatar: nil,
                         modelId: nil, skillIds: nil, mcpServerIds: nil,
                         localToolIds: nil, sortOrder: 0, isBuiltIn: false),
                 Persona(id: Self.stewardPersonaID, name: "MCP小助手", avatar: nil,

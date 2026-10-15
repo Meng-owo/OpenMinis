@@ -248,7 +248,7 @@ struct SessionStorageDetailView: View {
 
     var body: some View {
         List {
-            Section("我的小家 Files") {
+            Section("嘟嘟 Files") {
                 if currentMinisSize > 0 {
                     NavigationLink {
                         FileBrowserView(rootPath: minisURL)

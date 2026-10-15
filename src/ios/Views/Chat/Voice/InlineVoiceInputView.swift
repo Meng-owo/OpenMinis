@@ -1018,7 +1018,7 @@ struct InlineVoiceInputView: View {
                 runManualCorrection()
             }
         } message: {
-            Text("我的小家 can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions.",
+            Text("嘟嘟 can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions.",
                  comment: "One-time prompt body: correction data collection")
         }
     }

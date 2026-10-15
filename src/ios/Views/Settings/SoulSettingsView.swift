@@ -46,7 +46,7 @@ struct SoulSettingsView: View {
 
             Section(AppLocalized("Identity")) {
                 LabeledContent(AppLocalized("Name")) {
-                    TextField("我的小家", text: $name)
+                    TextField("嘟嘟", text: $name)
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.words)
                         .submitLabel(.done)
@@ -214,7 +214,7 @@ struct SoulSettingsView: View {
                 Button(AppLocalized("Cancel"), role: .cancel) {}
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(name.isEmpty ? "我的小家" : name)
+                Text(name.isEmpty ? "嘟嘟" : name)
                     .font(.title3.weight(.semibold))
                 if !style.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(style)

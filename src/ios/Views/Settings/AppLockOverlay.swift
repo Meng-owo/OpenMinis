@@ -15,7 +15,7 @@ struct AppLockOverlay: View {
                         .font(.system(size: 48))
                         .foregroundStyle(.secondary)
 
-                    Text("我的小家 is Locked")
+                    Text("嘟嘟 is Locked")
                         .font(.title2.bold())
 
                     Text("Tap to unlock with \(BiometricAuth.biometryDisplayName)")
@@ -49,7 +49,7 @@ struct AppLockOverlay: View {
         guard !isAuthenticating else { return }
         isAuthenticating = true
         Task { @MainActor in
-            let reason = AppLocalized("Unlock 我的小家")
+            let reason = AppLocalized("Unlock 嘟嘟")
             let ok = await BiometricAuth.authenticate(reason: reason)
             if ok {
                 withAnimation(.easeOut(duration: 0.25)) {

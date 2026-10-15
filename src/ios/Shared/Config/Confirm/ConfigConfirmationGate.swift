@@ -226,8 +226,8 @@ final class ConfigConfirmationGate: ObservableObject {
             content.body = caption
         } else {
             content.body = change.items.count > 1
-                ? "\(change.items.count) changes need your review — open 我的小家 to approve or reject."
-                : "A change needs your review — open 我的小家 to approve or reject."
+                ? "\(change.items.count) changes need your review — open 嘟嘟 to approve or reject."
+                : "A change needs your review — open 嘟嘟 to approve or reject."
         }
         content.sound = .default
         content.categoryIdentifier = Self.notifyCategoryId

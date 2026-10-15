@@ -276,7 +276,7 @@ final class MCPStore: ObservableObject {
         var command: String?
         var args: [String]?
         var env: [String: String]?
-        var startupTimeoutSeconds: Int?   // 我的小家 STDIO startup timeout; round-tripped verbatim
+        var startupTimeoutSeconds: Int?   // 嘟嘟 STDIO startup timeout; round-tripped verbatim
         var toolApprovals: [String: Bool]?   // [s2-approve] 逐工具审批开关；nil=未登记=默认需批准
     }
 

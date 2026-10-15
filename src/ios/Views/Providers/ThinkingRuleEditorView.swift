@@ -75,7 +75,7 @@ struct ThinkingRuleEditorView: View {
             case .qwenRootOnly:
                 return AppLocalized("Qwen on a third-party gateway: a bare root-level enable_thinking, with no extra_body wrapper and no thinking_budget. Relays commonly reject both of those with a 400, so this is the safe choice for self-hosted vLLM/SGLang and OpenAI-compatible relays serving qwen models.")
             case .customPath:
-                return AppLocalized("Advanced: write a value at a dotted field path. Not validated by 我的小家.")
+                return AppLocalized("Advanced: write a value at a dotted field path. Not validated by 嘟嘟.")
             case .original:
                 return AppLocalized("This rule's format belongs to the Anthropic/Gemini families, whose shapes depend on the model generation, so it isn't editable here. Saving keeps the original format exactly as-is; pick another format only if you mean to replace it.")
             }

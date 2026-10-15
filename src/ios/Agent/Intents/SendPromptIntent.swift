@@ -7,7 +7,7 @@ import UserNotifications
 /// The agent continues running in the background — use Get Session Status to poll for completion.
 struct SendPromptIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Prompt"
-    static var description = IntentDescription("Sends a prompt to the 我的小家 AI agent. Returns session info immediately while the task runs in the background.")
+    static var description = IntentDescription("Sends a prompt to the 嘟嘟 AI agent. Returns session info immediately while the task runs in the background.")
     static var openAppWhenRun = false
 
     // [T-shortcuts-automation-no-prompt-field] `requestValueDialog` alone marks
@@ -19,7 +19,7 @@ struct SendPromptIntent: AppIntent {
     // makes the text field appear. `inputConnectionBehavior` additionally lets
     // the field accept the previous action's output as a variable.
     @Parameter(title: "Prompt",
-               requestValueDialog: "What would you like to ask 我的小家?",
+               requestValueDialog: "What would you like to ask 嘟嘟?",
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var prompt: String
 
@@ -188,7 +188,7 @@ struct SendPromptIntent: AppIntent {
             let promptPreview = String(prompt.prefix(50))
             ShortcutNotification.post(
                 id: "shortcut-start-\(sid)",
-                title: AppLocalized("我的小家 Task Started"),
+                title: AppLocalized("嘟嘟 Task Started"),
                 body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
                 sessionId: sid
             )
@@ -210,7 +210,7 @@ struct SendPromptIntent: AppIntent {
             if sendCompletionNotification {
                 ShortcutNotification.post(
                     id: "shortcut-done-\(sid)",
-                    title: AppLocalized("我的小家 Task Completed"),
+                    title: AppLocalized("嘟嘟 Task Completed"),
                     body: "\(modelName): \(String(responseText.prefix(200)))",
                     sessionId: sid
                 )
@@ -245,7 +245,7 @@ struct SendPromptIntent: AppIntent {
             if capturedSendCompletionNotification {
                 ShortcutNotification.post(
                     id: "shortcut-done-\(capturedSid)",
-                    title: AppLocalized("我的小家 Task Completed"),
+                    title: AppLocalized("嘟嘟 Task Completed"),
                     body: "\(capturedModelName): \(summary)",
                     sessionId: capturedSid
                 )
@@ -275,7 +275,7 @@ struct SendPromptIntent: AppIntent {
     // the "Show More" section — `\.$files` first so the attachment slot is the
     // first thing surfaced when chaining from a previous action.
     static var parameterSummary: some ParameterSummary {
-        Summary("Send \(\.$prompt) to 我的小家") {
+        Summary("Send \(\.$prompt) to 嘟嘟") {
             \.$files
             \.$session
             \.$model

@@ -136,7 +136,7 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("https://github.com/OpenMinis/OpenMinis", forHTTPHeaderField: "HTTP-Referer")
-        request.setValue("我的小家 App", forHTTPHeaderField: "X-Title")
+        request.setValue("嘟嘟 App", forHTTPHeaderField: "X-Title")
 
         let jsonData = try JSONSerialization.data(withJSONObject: body)
         request.httpBody = jsonData

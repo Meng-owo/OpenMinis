@@ -335,7 +335,7 @@ struct SyncMigrationDetailView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "pause.circle.fill")
                                 .foregroundStyle(MinisTheme.warning)
-                            Text("Paused — reopen 我的小家 to continue")
+                            Text("Paused — reopen 嘟嘟 to continue")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -638,7 +638,7 @@ struct SyncMigrationDetailView: View {
         } header: {
             Text("iCloud Zones")
         } footer: {
-            Text("Every zone 我的小家 has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.")
+            Text("Every zone 嘟嘟 has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes.")
                 .font(.caption)
         }
     }
@@ -710,7 +710,7 @@ struct SyncMigrationDetailView: View {
             }
             return AppLocalized("V1 sync (legacy) · another device's pre-v2 backup. Safe to delete if that device has migrated to V2.")
         case .system:
-            return AppLocalized("CloudKit built-in zone. Not used by 我的小家.")
+            return AppLocalized("CloudKit built-in zone. Not used by 嘟嘟.")
         case .other:
             return AppLocalized("Legacy or unknown zone. Inspect before deleting.")
         case .v2:

@@ -705,7 +705,7 @@ struct SoulMetadata: Equatable {
     var iconIsImage: Bool { SoulIconImage.isImageReference(icon) }
 
     static let `default` = SoulMetadata(
-        name: "我的小家",
+        name: "嘟嘟",
         // Default emoji is intentionally empty — the UI renders the fixed
         // SF Symbol sparkle and serialize() no longer writes the
         // `emoji:` line. Kept on the struct only so the parser can
@@ -988,7 +988,7 @@ enum SoulStore {
     /// style / lang) is seeded.
     static let defaultContent: String = """
     ---
-    name: "我的小家"
+    name: "嘟嘟"
     style: ""
     lang: "auto"
     ---
@@ -1220,7 +1220,7 @@ enum SystemPromptBuilder {
         let name: String = {
             let n = (file?.metadata.name ?? SoulMetadata.default.name)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            return n.isEmpty ? "我的小家" : n
+            return n.isEmpty ? "嘟嘟" : n
         }()
         let style: String = (file?.metadata.style ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1311,12 +1311,12 @@ enum SystemPromptBuilder {
 @MainActor
 struct AssistantSoulName: View {
     @State private var name: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "我的小家" : SoulStore.cachedMetadata.name
+        ? "嘟嘟" : SoulStore.cachedMetadata.name
     var body: some View {
         Text(name)
             .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
                 let n = SoulStore.cachedMetadata.name
-                name = n.isEmpty ? "我的小家" : n
+                name = n.isEmpty ? "嘟嘟" : n
             }
     }
 }

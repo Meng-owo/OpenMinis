@@ -887,7 +887,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         let dateStr = df.string(from: crashDate)
 
         var report = """
-        === 我的小家 Crash Report ===
+        === 嘟嘟 Crash Report ===
         Date:    \(dateStr)
         Type:    \(type)
         Build:   \(displayBuild)
@@ -908,7 +908,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         let foreign = Self.detectInjectedDylibs()
         if !foreign.isEmpty {
             report += "\n⚠️ Injected: \(foreign.joined(separator: ", "))"
-            report += "\n         (third-party tweak/hook libraries loaded in-process — crashes may originate there, not in 我的小家)"
+            report += "\n         (third-party tweak/hook libraries loaded in-process — crashes may originate there, not in 嘟嘟)"
         }
 
         if let phase = lastPhase {
