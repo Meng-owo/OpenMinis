@@ -774,7 +774,18 @@ extension View {
         modifier(AppearancePageModifier(scope: scope))
     }
 
-    // MARK: - [3-4 醒醒] 统一卡片修饰器 (MinisStandardCard)
+    /// One-line theming for a settings-scope page: palette canvas/accent/text
+    /// + transparent nav bar (via appearancePage) + List section cards that
+    /// follow the palette "卡片" (surface) color instead of the system
+    /// grouped background — so the 色盘 卡片 row actually controls them.
+    func settingsPage() -> some View {
+        self
+            .appearancePage(.settings)
+            .modifier(SettingsListRowBackgroundModifier())
+    }
+}
+
+// MARK: - [3-4 醒醒] 统一卡片修饰器 (MinisStandardCard)
 // 标准卡片：surface + 16pt (或 12pt 行内) 连续圆角 + 16x12 内距 + 0.5pt border 描边
 
 public struct MinisStandardCard: ViewModifier {
@@ -801,17 +812,6 @@ public struct MinisStandardCard: ViewModifier {
 public extension View {
     func minisStandardCard(cornerRadius: CGFloat = 16, hPadding: CGFloat = 16, vPadding: CGFloat = 12) -> some View {
         modifier(MinisStandardCard(cornerRadius: cornerRadius, paddingHorizontal: hPadding, paddingVertical: vPadding))
-    }
-}
-
-/// One-line theming for a settings-scope page: palette canvas/accent/text
-    /// + transparent nav bar (via appearancePage) + List section cards that
-    /// follow the palette "卡片" (surface) color instead of the system
-    /// grouped background — so the 色盘 卡片 row actually controls them.
-    func settingsPage() -> some View {
-        self
-            .appearancePage(.settings)
-            .modifier(SettingsListRowBackgroundModifier())
     }
 }
 
