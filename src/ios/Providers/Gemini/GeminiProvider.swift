@@ -389,7 +389,15 @@ final class GeminiProvider: LLMProvider {
             // Audio attachments ride the same inlineData shape; skipping them
             // here silently dropped voice-pipeline audio (GH#67 attachments).
             for audio in msg.audios {
-                parts.append(GeminiWireFormat.audioPart(audio))
+                // [batch0-fix] Inlined from the former GeminiWireFormat.audioPart:
+                // that helper's LLMMessage dependency broke the MinisTests target
+                // build (the file is shared into the test bundle while LLMTypes
+                // is not), so the pure mime mapping stays in GeminiWireFormat and
+                // the part shape lives here at its only call site.
+                parts.append(["inlineData": [
+                    "mimeType": GeminiWireFormat.audioMimeType(audio.format),
+                    "data": audio.base64Data
+                ]])
             }
             if !msg.content.isEmpty {
                 parts.append(["text": msg.content])

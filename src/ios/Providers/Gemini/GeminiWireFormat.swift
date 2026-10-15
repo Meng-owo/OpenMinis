@@ -37,17 +37,6 @@ enum GeminiWireFormat {
         ["text": nonEmptyText(text)]
     }
 
-    /// Build an `inlineData` part for an audio attachment. Gemini takes audio
-    /// input as inlineData with an `audio/*` MIME type, while the attachment
-    /// stores the OpenAI-style bare format ("wav", "mp3") — map it here so
-    /// callers never ship a bare format as the MIME type.
-    static func audioPart(_ audio: LLMMessage.AudioAttachment) -> [String: Any] {
-        ["inlineData": [
-            "mimeType": audioMimeType(audio.format),
-            "data": audio.base64Data
-        ]]
-    }
-
     static func audioMimeType(_ format: String) -> String {
         let f = format.lowercased()
         if f.contains("/") { return f }
