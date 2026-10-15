@@ -133,6 +133,7 @@
 		E51000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E51000014 /* Preview Assets.xcassets */; };
 		E52000001 /* LLMTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52000011 /* LLMTypes.swift */; };
 		E52000002 /* LLMError.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52000012 /* LLMError.swift */; };
+		E52000T01 /* LLMTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52000011 /* LLMTypes.swift */; };
 		E52000003 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52000013 /* LLMProvider.swift */; };
 		E52000004 /* AnthropicProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E52000014 /* AnthropicProvider.swift */; };
 		E52000005 /* SwiftAnthropic in Frameworks */ = {isa = PBXBuildFile; productRef = E52000021 /* SwiftAnthropic */; };
@@ -3019,6 +3020,7 @@
 			files = (
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5LD00002 /* ToolLoopDetector.swift in Sources */,
+				E52000T01 /* LLMTypes.swift in Sources */,
 				EVOB00002 /* EvolutionStore.swift in Sources */,
 				EVOB00004 /* EvolutionRedactor.swift in Sources */,
 				EVOB00005 /* EvolutionRecorder.swift in Sources */,

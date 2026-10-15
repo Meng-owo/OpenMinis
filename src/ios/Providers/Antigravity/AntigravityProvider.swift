@@ -324,7 +324,15 @@ final class AntigravityProvider: LLMProvider {
                     "data": img.data.base64EncodedString()
                 ]]
             }
-            parts.append(contentsOf: msg.audios.map(GeminiWireFormat.audioPart))
+            // [batch0-fix] Inlined from the former GeminiWireFormat.audioPart
+            // (its LLMMessage dependency broke the MinisTests target build;
+            // the pure mime mapping stays in GeminiWireFormat).
+            parts.append(contentsOf: msg.audios.map { audio in
+                ["inlineData": [
+                    "mimeType": GeminiWireFormat.audioMimeType(audio.format),
+                    "data": audio.base64Data
+                ]]
+            })
             parts.append(GeminiWireFormat.textPart(msg.content))
             contents.append([
                 "role": role,
