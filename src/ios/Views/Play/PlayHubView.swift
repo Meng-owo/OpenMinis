@@ -79,6 +79,9 @@ struct PlayHubView: View {
     // 批量删除（P1-3 打回：长按勾选，多选后一次确认）
     @State private var selecting = false
     @State private var selectedIDs = Set<String>()
+    // [A2 · 10-15 醒醒打回] Button 会吞外挂长按——四处改 simultaneousGesture 共存；
+    // 该字段吞掉"长按当次松手"带出的按钮预览动作，防止刚预勾选就被切掉。
+    @State private var suppressToggleForID: String?
 
     private static var backgroundURL: URL {
         AppearanceStudio.appearanceAssetsDirectory.appendingPathComponent("play-hub-background.jpg")
@@ -351,7 +354,7 @@ struct PlayHubView: View {
                                     .overlay(alignment: .topLeading) { selectionBadge(hit) }
                             }
                             .buttonStyle(.plain)
-                            .onLongPressGesture { longPressSelect(hit) }
+                            .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in longPressSelect(hit) })
                         }
                     }
                     .padding(.horizontal, 12)
@@ -383,7 +386,7 @@ struct PlayHubView: View {
                                 }
                             }
                             .overlay(alignment: .topLeading) { selectionBadge(hit) }
-                            .onLongPressGesture { longPressSelect(hit) }
+                            .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in longPressSelect(hit) })
                         }
                     }
                     .padding(.horizontal, 12)
@@ -416,7 +419,7 @@ struct PlayHubView: View {
                                 .overlay(alignment: .topLeading) { selectionBadge(hit) }
                         }
                         .buttonStyle(.plain)
-                        .onLongPressGesture { longPressSelect(hit) }
+                        .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in longPressSelect(hit) })
                     }
                 }
                 .padding(.horizontal, 16)
@@ -538,7 +541,7 @@ struct PlayHubView: View {
                                 .overlay(alignment: .topLeading) { selectionBadge(hit) }
                         }
                         .buttonStyle(.plain)
-                        .onLongPressGesture { longPressSelect(hit) }
+                        .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in longPressSelect(hit) })
                     }
                 }
                 .padding(.vertical, 4)
@@ -551,16 +554,22 @@ struct PlayHubView: View {
 
     // MARK: - 批量删除（P1-3 打回）
 
-    /// 长按进入选择模式并预勾选该项。
+    /// 长按进入选择模式并预勾选该项（轻微触感）。
     private func longPressSelect(_ hit: PlayHubMediaScanner.Hit) {
-        if !selecting {
-            selecting = true
-            selectedIDs = [hit.id]
-        }
+        guard !selecting else { return }
+        selecting = true
+        selectedIDs = [hit.id]
+        suppressToggleForID = hit.id
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     /// 选择模式下点击=勾选切换；勾选空了自动退出选择模式。
+    /// 长按当次松手带来的那一次按钮动作在这里被吞掉，不切掉刚预勾选的条目。
     private func toggleSelect(_ hit: PlayHubMediaScanner.Hit) {
+        if let suppressed = suppressToggleForID {
+            suppressToggleForID = nil
+            if suppressed == hit.id { return }
+        }
         if selectedIDs.contains(hit.id) {
             selectedIDs.remove(hit.id)
         } else {
