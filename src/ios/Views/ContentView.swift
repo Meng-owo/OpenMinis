@@ -3484,6 +3484,10 @@ struct ContentView: View {
     ///    chat-surface opacity (CSS-variable style, follows every theme
     ///    pack + dark mode + wallpaper so it reads as one surface with the
     ///    chat canvas behind it).
+    /// [T-home-bottom-bar-liquid][10-15 醒醒打回] iOS 26 Liquid Glass 风格：
+    /// 毛玻璃 + 全局变量色，顶部大圆角、底部直切延伸到物理底边——
+    /// home indicator 区由材质盖住，自定义背景时的白边一并消失。
+    /// 高度走标准 TabBar（49pt），不再 36pt 窄条。
     @ViewBuilder private var homeBottomBar: some View {
         let studio = AppearanceStudio.shared
         HStack(spacing: 0) {
@@ -3530,13 +3534,26 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(height: 36)
-        .padding(.horizontal, 14)
+        .frame(height: 49)
+        .padding(.horizontal, 8)
         .contentShape(Rectangle())
         .background(homeBottomBarBackground)
-        .background(
-            Capsule().fill(studio.color(.raised, scope: .home).opacity(0.92))
-        )
+        .background {
+            ZStack {
+                UnevenRoundedRectangle(topLeadingRadius: 24,
+                                       bottomLeadingRadius: 0,
+                                       bottomTrailingRadius: 0,
+                                       topTrailingRadius: 24)
+                    .fill(.ultraThinMaterial)
+                UnevenRoundedRectangle(topLeadingRadius: 24,
+                                       bottomLeadingRadius: 0,
+                                       bottomTrailingRadius: 0,
+                                       topTrailingRadius: 24)
+                    .fill(studio.color(.surface, scope: .home).opacity(0.55))
+            }
+            .ignoresSafeArea(edges: .bottom)
+        }
+        .padding(.horizontal, 16)
     }
 
     /// [T-home-bottom-bar-icons-only][10-15 醒醒 9b] 底栏去文字只留图标居中，
