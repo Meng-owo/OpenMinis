@@ -156,10 +156,10 @@ final class EvolutionInjector: @unchecked Sendable {
             let all = candidates + verified
             let fragment = Self.render(lessons: all, budgetTokens: budget,
                                        activeTools: activeTools)
-            self.lock.lock()
-            self.cachedLessons = Self.filterRelevant(all, activeTools: activeTools)
-            self.cachedFragment = fragment
-            self.lock.unlock()
+            self.lock.withLock {
+                self.cachedLessons = Self.filterRelevant(all, activeTools: activeTools)
+                self.cachedFragment = fragment
+            }
         }
     }
 
