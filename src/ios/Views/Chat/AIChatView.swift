@@ -7582,13 +7582,27 @@ struct ChatStickerPanel: View {
 }
 
 // MARK: - AI 语音设置弹窗组件 (ChatVoiceSettingsSheet)
+// [10-15 5-1 醒醒] 彻底收口悬浮播放器所有调节与状态展示，无悬浮遮挡
 
 struct ChatVoiceSettingsSheet: View {
     @ObservedObject var vm: AIChatViewModel
     @Environment(\.dismiss) private var dismiss
 
+    @ObservedObject private var state = VoiceOutputState.shared
+    @ObservedObject private var voicePlayer = VoiceOutputPlayer.shared
+    @State private var showModelSelector: Bool = false
+    @State private var modelLabel: String = ""
+
     init(vm: AIChatViewModel) {
         self.vm = vm
+    }
+
+    private var isSpeaking: Bool {
+        state.isReadingAloud || voicePlayer.isPlaying || voicePlayer.isSynthesizing
+    }
+
+    private var isPaused: Bool {
+        state.isPausedOrHeld
     }
 
     public var body: some View {
@@ -7623,33 +7637,22 @@ struct ChatVoiceSettingsSheet: View {
                     }
 
                     Toggle(isOn: Binding(
-                        get: { VoiceOutputPreferences.capsuleVisible },
-                        set: { v in
-                            VoiceOutputPreferences.capsuleVisible = v
-                            NotificationCenter.default.post(name: .ttsCapsuleVisibilityChanged, object: nil)
-                        }
-                    )) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("语音胶囊")
-                                .font(.body.weight(.medium))
-                            Text("在屏幕显示浮动语音播放控制器")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    Toggle(isOn: Binding(
                         get: { vm.speakEnabled },
                         set: { v in
                             vm.speakEnabled = v
                             VoiceOutputPreferences.isEnabled = v
-                            if v { vm.speechPlayerExpanded = true } else { vm.stopSpeech() }
+                            state.isEnabled = v
+                            if v {
+                                refreshModelLabel()
+                            } else {
+                                vm.stopSpeech()
+                            }
                         }
                     )) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("朗读回复")
                                 .font(.body.weight(.medium))
-                            Text("由 iOS 系统语音引擎即时流式朗读文本")
+                            Text("由语音引擎即时朗读文本回复")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -7657,7 +7660,116 @@ struct ChatVoiceSettingsSheet: View {
                 } header: {
                     Text("AI 语音与播报开关")
                 } footer: {
-                    Text("AI语音回复针对当前会话生效。")
+                    Text("AI语音回复针对当前会话生效；朗读回复针对全局生效。")
+                }
+
+                // 实时播报状态与控制（收口悬浮播放器全部调节）
+                Section {
+                    HStack {
+                        HStack(spacing: 8) {
+                            Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : "speaker.wave.2.fill"))
+                                .font(.system(size: 16))
+                                .foregroundStyle(isSpeaking ? MinisTheme.accent : MinisTheme.secondaryText)
+                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : "播报就绪"))
+                                .font(.body.weight(.medium))
+                        }
+                        Spacer()
+                        if isSpeaking || isPaused {
+                            Button {
+                                state.togglePause()
+                            } label: {
+                                Text(isPaused ? "继续" : "暂停")
+                                    .font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(MinisTheme.secondaryBg, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button {
+                                state.stop()
+                            } label: {
+                                Text("停止")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(Color.red.opacity(0.85), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                } header: {
+                    Text("实时播报状态")
+                }
+
+                Section {
+                    // 1. 播放倍速调节
+                    Picker("播放倍速", selection: Binding(
+                        get: {
+                            let cur = VoiceOutputPreferences.speedMultiplier
+                            let steps: [Float] = [1.0, 1.25, 1.5, 2.0]
+                            return steps.min(by: { abs($0 - cur) < abs($1 - cur) }) ?? 1.0
+                        },
+                        set: { speed in
+                            VoiceOutputPreferences.speedMultiplier = speed
+                            state.speechSpeed = speed
+                            VoiceOutputPlayer.shared.setRate(speed)
+                            vm.setSpeechSpeed(speed)
+                        }
+                    )) {
+                        Text("1.0×").tag(Float(1.0))
+                        Text("1.25×").tag(Float(1.25))
+                        Text("1.5×").tag(Float(1.5))
+                        Text("2.0×").tag(Float(2.0))
+                    }
+                    .pickerStyle(.segmented)
+
+                    // 2. 朗读内容范围选择
+                    Picker(selection: Binding(
+                        get: { VoiceOutputPreferences.selectionMode },
+                        set: { VoiceOutputPreferences.selectionMode = $0 }
+                    )) {
+                        ForEach(VoiceTextSanitizer.SelectionMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("朗读内容")
+                                .font(.body.weight(.medium))
+                            Text("决定朗读回复的哪一部分文本")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    // 3. 声音模型入口
+                    Button {
+                        showModelSelector = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("朗读声音")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(Color.primary)
+                                Text("选择系统或第三方语音服务")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                            Text(modelLabel.isEmpty ? "默认声音" : modelLabel)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary.opacity(0.6))
+                        }
+                    }
+                } header: {
+                    Text("朗读偏好设置")
+                } footer: {
+                    Text("无悬浮遮挡：播放、倍速与声音调节已统一收纳在此处。")
                 }
             }
             .navigationTitle("AI 语音设置")
@@ -7667,8 +7779,24 @@ struct ChatVoiceSettingsSheet: View {
                     Button("完成") { dismiss() }
                 }
             }
+            .onAppear {
+                refreshModelLabel()
+            }
+            .sheet(isPresented: $showModelSelector, onDismiss: { refreshModelLabel() }) {
+                NavigationStack {
+                    UnifiedModelPicker(config: .voiceOutput())
+                }
+            }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+    }
+
+    private func refreshModelLabel() {
+        if let instance = VoiceOutputPlayer.shared.activeModelLabel {
+            modelLabel = instance
+            return
+        }
+        modelLabel = VoiceProviderResolver.outputModelLabel()
     }
 }
 

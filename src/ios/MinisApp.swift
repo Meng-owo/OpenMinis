@@ -200,12 +200,7 @@ struct MinisApp: App {
                     .overlay(alignment: .top) {
                         BackgroundInterruptionBanner()
                     }
-                AudioPiPCapsule()
-                // Global read-replies capsule — a SINGLE app-root instance driven by
-                // VoiceOutputState, so it persists across chat → home (no per-session
-                // copy). It lays itself out full-screen (bottom-trailing capsule +
-                // tap-to-dismiss catcher), so no positioning wrapper here.
-                SpeechPlayerControl()
+                // [10-15 5-1 醒醒] 方案A：彻底移除两套悬浮播放控制器，避免打架与遮挡，所有控制收进「AI 语音设置」弹窗
                 AppLockOverlay()
             }
                 .tint(appearanceStudio.color(.accent))
