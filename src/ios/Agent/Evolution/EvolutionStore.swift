@@ -819,7 +819,14 @@ final class EvolutionSettings: ObservableObject {
 
     /// off / shadow / active.
     @Published var mode: EvolutionMode {
-        didSet { UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey) }
+        didSet {
+            UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey)
+            // OPT-3: a mode switch must take effect on the very next turn —
+            // drop the injector's cached fragment/lessons so the next refresh
+            // re-reads everything under the new mode (off drops to "", shadow
+            // stops injecting, active starts).
+            EvolutionInjector.shared.invalidate()
+        }
     }
 
     /// Master switch for the recording hooks (S2-2). Off = nothing is written.
