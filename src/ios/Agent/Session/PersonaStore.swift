@@ -609,6 +609,11 @@ final class PersonaStore: ObservableObject {
             try? SoulMDParser.serialize(file).data(using: .utf8)?
                 .write(to: url, options: .atomic)
         }
+        // [B1 · 10-15] 当前人设改名：刷新 Soul 缓存并广播（refreshCache 内部
+        // 会 post .soulMdChanged），对话侧标题、会话列表标题跟着换。
+        if id == currentPersonaID {
+            SoulStore.refreshCache()
+        }
         NotificationCenter.default.post(name: .personaDidChange, object: nil)
     }
 
@@ -626,14 +631,29 @@ final class PersonaStore: ObservableObject {
         SoulStore.refreshCache()
     }
 
-    /// 更新某人设的白名单 / 模型绑定。
+    /// 更新某人设的白名单 / 模型绑定；名字或头像有变化时同步到对话侧显示源。
     func updatePersona(_ persona: Persona) {
         guard let idx = personas.firstIndex(where: { $0.id == persona.id }) else { return }
         // 内置人设的 isBuiltIn 不许经这里翻掉
         var p = persona
         p.isBuiltIn = personas[idx].isBuiltIn
+        let old = personas[idx]
         personas[idx] = p
         persist()
+        // [B1 · 10-15] 人设列表里改名字/换头像 → 同步写进 SOUL.md——
+        // 对话侧的头像（PersonAvatarView）与标题读的都是 SOUL 元数据。
+        // save(_:for:) 只在"当前人设"时刷缓存并广播 .soulMdChanged；
+        // 非当前人设只落文件，等切过去时自然生效。
+        if old.name != p.name || old.avatar != p.avatar {
+            var soul = SoulStore.load(for: p.id) ?? SoulFile(metadata: .default, body: "")
+            if old.name != p.name {
+                soul.metadata.name = p.name
+            }
+            if old.avatar != p.avatar {
+                soul.metadata.icon = p.avatar ?? ""
+            }
+            try? SoulStore.save(soul, for: p.id)
+        }
     }
 
     // MARK: - 小管家 SOUL.md 初值（写死的 MCP 管家规则）
