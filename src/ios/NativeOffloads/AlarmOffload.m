@@ -64,7 +64,7 @@ static NSString *const HELP_TEXT =
      "  apple-alarm cancel --all\n"
      "\n"
      "DEEP LINK:\n"
-     "  minis-clone://views/alarm              Open the alarm management page in 我的小家\n";
+     "  minis-clone://views/alarm              Open the alarm management page in 嘟嘟\n";
 
 // ── Duration parsing ──
 
@@ -247,7 +247,7 @@ static int cmd_set_alarmkit(int argc, char **argv, int stdout_fd,
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"time"] = noff_format_date(fireDate);
         data[@"view_url"] = @"minis-clone://views/alarm";
-        data[@"hint"] = @"Alarm is now visible on the 我的小家 home screen. Open minis-clone://views/alarm to manage alarms.";
+        data[@"hint"] = @"Alarm is now visible on the 嘟嘟 home screen. Open minis-clone://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"set", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }
@@ -317,7 +317,7 @@ static int cmd_timer_alarmkit(int argc, char **argv, int stdout_fd,
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"fires_at"] = noff_format_date([NSDate dateWithTimeIntervalSinceNow:duration]);
         data[@"view_url"] = @"minis-clone://views/alarm";
-        data[@"hint"] = @"Timer is now visible on the 我的小家 home screen. Open minis-clone://views/alarm to manage alarms.";
+        data[@"hint"] = @"Timer is now visible on the 嘟嘟 home screen. Open minis-clone://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"timer", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }

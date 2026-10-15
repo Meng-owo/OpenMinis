@@ -410,13 +410,13 @@ static int cmd_run(int argc, char **argv, int stdin_fd, int stdout_fd, int stder
     BOOL systemPromptWasInjected = NO;
     if (!systemPrompt) {
         if ([ModelUseOffloadBridge claimFullDefaultSystemPrompt]) {
-            systemPrompt = @"You are being invoked as a sub-agent inside an app called 我的小家. "
+            systemPrompt = @"You are being invoked as a sub-agent inside an app called 嘟嘟. "
                            @"This is the calling environment, not your identity — keep your own "
                            @"model identity unchanged. You are handling a focused task delegated "
                            @"by the parent agent loop: answer the request directly and concisely, "
                            @"without restating it or adding extra meta-commentary.";
         } else {
-            systemPrompt = @"Sub-call from the 我的小家 app — that is the calling "
+            systemPrompt = @"Sub-call from the 嘟嘟 app — that is the calling "
                            @"environment, not your identity. Answer the delegated "
                            @"task directly and concisely.";
         }
