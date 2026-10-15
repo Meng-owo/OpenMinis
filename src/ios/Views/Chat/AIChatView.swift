@@ -3592,15 +3592,6 @@ struct AIChatView: View {
                 Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")
             }
             Toggle(isOn: Binding(
-                get: { VoiceOutputPreferences.capsuleVisible },
-                set: { v in
-                    VoiceOutputPreferences.capsuleVisible = v
-                    NotificationCenter.default.post(name: .ttsCapsuleVisibilityChanged, object: nil)
-                }
-            )) {
-                Label(AppLocalized("Voice Capsule"), systemImage: "speaker.wave.2.circle")
-            }
-            Toggle(isOn: Binding(
                 get: { vm.sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false },
                 set: { v in
                     // [T-voice-bubble-no-session 09-12] 修复审查问题2: 新会话
