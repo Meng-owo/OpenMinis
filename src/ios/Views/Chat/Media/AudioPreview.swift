@@ -396,7 +396,7 @@ private struct CircleIconButton: View {
             .foregroundColor(hasArtwork ? .white : AppearanceStudio.shared.color(.secondaryText, scope: .chat))
             .frame(width: 36, height: 36)
             .background(
-                Circle().fill(hasArtwork ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemBackground))
+                Circle().fill(hasArtwork ? Color.white.opacity(0.2) : AppearanceStudio.shared.color(.raised, scope: .chat))
             )
     }
 }
