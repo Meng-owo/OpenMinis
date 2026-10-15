@@ -851,8 +851,6 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
     /// `.terminal`, so customising the terminal icon silently changed this
     /// row's icon too — two features, one slot.
     case scheduled
-    /// [S3-3] Settings → Agent Runtime 的「自我进化」行。
-    case evolution
 
     var id: String { rawValue }
     var title: String {
@@ -911,7 +909,6 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"
         case .scheduled: return "clock.arrow.circlepath"
-        case .evolution: return "brain.head.profile"
         }
     }
 }
