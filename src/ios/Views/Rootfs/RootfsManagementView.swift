@@ -63,8 +63,8 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 22, height: 22)
-                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
+                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         }
                     }
                 }
@@ -82,8 +82,8 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 22, height: 22)
-                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
+                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         }
                     }
                     .disabled(viewModel.isProcessing)
@@ -96,8 +96,8 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 22, height: 22)
-                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
+                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         }
                     }
                     .disabled(viewModel.isProcessing)
@@ -110,8 +110,8 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 22, height: 22)
-                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
+                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         }
                     }
                     .disabled(viewModel.isProcessing)
@@ -126,8 +126,8 @@ struct RootfsManagementView: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 22, height: 22)
-                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
+                                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         }
                     }
                     .disabled(viewModel.isProcessing || !viewModel.isInstalled)

@@ -221,7 +221,10 @@ struct AppearanceStudioView: View {
                             .autocorrectionDisabled()
                             .font(.system(.caption, design: .monospaced))
                         HStack {
-                            ColorPicker("图标色", selection: categoryColorBinding(key), supportsOpacity: false)
+                            // [3-A-1 醒醒] 当前全App图标已统一为白底黑实心规范，分类图标色置灰保留兼容
+                            ColorPicker("图标色（统一规范为白底黑实心）", selection: categoryColorBinding(key), supportsOpacity: false)
+                                .disabled(true)
+                                .opacity(0.4)
                             if pack.categoryIcons[key] != nil || pack.categoryColors[key] != nil {
                                 Button("还原图标") { studio.clearCategoryChrome(for: key) }
                                     .foregroundStyle(studio.color(.destructive))

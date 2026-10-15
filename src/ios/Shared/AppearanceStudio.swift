@@ -839,9 +839,9 @@ struct QuietAppIcon: View {
                     .font(.system(size: max(9, size * 0.42), weight: .medium))
                     .foregroundStyle(studio.color(.primaryText))
                     .frame(width: size, height: size)
-                    .background(studio.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(studio.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
                             .stroke(studio.color(.border), lineWidth: 0.6)
                     )
             }
@@ -918,7 +918,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .manual: return "book.closed.fill"
         case .terminal: return "terminal.fill"
         case .rootfs: return "externaldrive.fill"
-        case .browser: return "globe"
+        case .browser: return "globe.fill"
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"
         case .scheduled: return "clock.arrow.circlepath"
