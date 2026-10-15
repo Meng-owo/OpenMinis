@@ -674,7 +674,7 @@ enum VoiceCatArt {
         p.addLine(to: CGPoint(x: 428, y: 118))
         p.addLine(to: CGPoint(x: 312, y: 126))
         p.addLine(to: CGPoint(x: 249, y: 90))
-        p.closeSubpath()
+        p.close()
         return p
     }
 
@@ -707,7 +707,7 @@ enum VoiceCatArt {
         p.addLine(to: CGPoint(x: 661, y: 192))
         p.addLine(to: CGPoint(x: 664, y: 188))
         p.addLine(to: CGPoint(x: 664, y: 177))
-        p.closeSubpath()
+        p.close()
         return p
     }
 
@@ -738,7 +738,7 @@ enum VoiceCatArt {
         p.addLine(to: CGPoint(x: 136, y: 213))
         p.addLine(to: CGPoint(x: 135, y: 214))
         p.addLine(to: CGPoint(x: 126, y: 215))
-        p.closeSubpath()
+        p.close()
         return p
     }
 
@@ -1471,7 +1471,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
-    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
         let velocity = pan.velocity(in: pan.view)
         return abs(velocity.x) > abs(velocity.y)
