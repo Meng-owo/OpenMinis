@@ -57,14 +57,16 @@ public enum CSSThemeVariables {
         isDark ? Color(hex: "#FFFFFF") : Color(hex: "#FFFFFF")
     }
 
-    /// --color-option-bg (未选中胶囊底色)
+    /// --color-option-bg (输入框/未选中胶囊底色)
+    /// [10-15 1-3 醒醒] 输入框与选项底色接入全局 input 角色（同族统一，不再硬编码 hex）
     public static func optionBg(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#241F1D") : Color(hex: "#F7F3EE")
+        studio.color(.input, scope: .chat, variant: isDark ? .dark : .light)
     }
 
-    /// --color-option-border (未选中胶囊边框)
+    /// --color-option-border (输入框/未选中胶囊边框)
+    /// [10-15 1-3 醒醒] 输入框与选项边线接入全局 border 角色
     public static func optionBorder(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#3A3330") : Color(hex: "#ECE4DE")
+        studio.color(.border, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-scrim / rgba(42, 42, 46, 0.28)
