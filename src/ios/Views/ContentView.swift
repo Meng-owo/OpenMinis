@@ -6546,13 +6546,13 @@ private struct SessionRow: View, Equatable {
         } else {
             let size: CGFloat = (icon.systemName == "bubble.left.fill" || icon.systemName == "terminal.fill") ? 18 : 20
             Image(systemName: icon.systemName)
-                .font(.system(size: size))
-                .foregroundStyle(icon.color)
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
         }
     }
 
     private var iconBackgroundColor: Color {
-        categoryIcon.color
+        AppearanceStudio.shared.color(.surface, scope: .home)
     }
 
     private func relativeDate(_ date: Date) -> String {
@@ -6687,8 +6687,8 @@ private struct RemoteSessionRow: View {
         } else {
             let size: CGFloat = (icon.systemName == "bubble.left.fill" || icon.systemName == "terminal.fill") ? 18 : 20
             Image(systemName: icon.systemName)
-                .font(.system(size: size))
-                .foregroundStyle(icon.color)
+                .font(.system(size: size, weight: .medium))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
         }
     }
 }

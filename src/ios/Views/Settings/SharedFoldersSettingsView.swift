@@ -78,10 +78,14 @@ private struct SharedFolderRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: entry.iconName)
-                .font(.system(size: 9))
-                .foregroundStyle(.white)
-                .frame(width: 21, height: 21)
-                .background(entry.iconColor, in: Circle())
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
+                .frame(width: 22, height: 22)
+                .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6)
+                )
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

@@ -523,10 +523,14 @@ struct ModelGroupDetailView: View {
 
     private func settingsIcon(_ systemName: String, color: Color) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 9))
-            .foregroundStyle(.white)
-            .frame(width: 21, height: 21)
-            .background(color, in: Circle())
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
+            .frame(width: 22, height: 22)
+            .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6)
+            )
     }
 
     // MARK: - Actions
