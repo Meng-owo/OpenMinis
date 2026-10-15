@@ -6,11 +6,64 @@ final class EvolutionInjectorTests: XCTestCase {
 
     private func lesson(_ id: String, status: EvolutionLessonStatus, priority: Int,
                         recommendation: String = "先诊断再重试",
-                        tool: String = "shell_execute") -> EvolutionLesson {
+                        tool: String? = "shell_execute") -> EvolutionLesson {
         EvolutionLesson(id: id, scope: "global", personaId: nil, taskSignature: tool,
                         conditions: "条件", recommendation: recommendation, antiPattern: nil,
                         evidenceActions: "[]", status: status, successCount: 1, failureCount: 1,
                         version: 1, parentId: nil, lastVerifiedAt: nil, injectPriority: priority)
+    }
+
+    // MARK: - OPT-1 relevance gate
+
+    func testUnrelatedToolTagIsFilteredOut() {
+        let tagged = lesson("shell", status: .verified, priority: 9)
+        let generic = lesson("gen", status: .verified, priority: 1, tool: nil)
+        let out = EvolutionInjector.render(
+            lessons: [tagged, generic], budgetTokens: 400,
+            activeTools: ["browser_navigate"])
+        XCTAssertEqual(out.split(separator: "\n").count, 3)   // header + generic + footer
+        XCTAssertTrue(out.contains("工具：先诊断再重试"))      // generic kept
+        XCTAssertFalse(out.contains("shell_execute"))          // tagged dropped
+    }
+
+    func testEmptyActiveToolsKeepsOnlyGenericAndDoesNotCrash() {
+        let tagged = lesson("shell", status: .verified, priority: 9)
+        let generic = lesson("gen", status: .verified, priority: 1, tool: nil)
+        let out = EvolutionInjector.render(
+            lessons: [tagged, generic], budgetTokens: 400,
+            activeTools: [])
+        XCTAssertEqual(out.split(separator: "\n").count, 3)
+        XCTAssertTrue(out.contains("工具：先诊断再重试"))
+        XCTAssertFalse(out.contains("shell_execute"))
+    }
+
+    func testMatchingActiveToolPassesTaggedLesson() {
+        let tagged = lesson("shell", status: .verified, priority: 1, tool: "shell_execute")
+        let out = EvolutionInjector.render(
+            lessons: [tagged], budgetTokens: 400,
+            activeTools: ["shell_execute"])
+        XCTAssertTrue(out.contains("shell_execute"))
+    }
+
+    func testNilActiveToolsKeepsEverything() {
+        let tagged = lesson("shell", status: .verified, priority: 9)
+        let generic = lesson("gen", status: .verified, priority: 1, tool: nil)
+        let out = EvolutionInjector.render(
+            lessons: [tagged, generic], budgetTokens: 400,
+            activeTools: nil)
+        XCTAssertEqual(out.split(separator: "\n").count, 4)   // both kept
+        XCTAssertTrue(out.contains("shell_execute"))
+        XCTAssertTrue(out.contains("工具：先诊断再重试"))
+        // 2-arg render keeps the same default behavior.
+        XCTAssertEqual(EvolutionInjector.render(lessons: [tagged, generic], budgetTokens: 400), out)
+    }
+
+    func testFilterEmptiesToNothingRatherThanPadding() {
+        let tagged = lesson("shell", status: .verified, priority: 9)
+        let out = EvolutionInjector.render(
+            lessons: [tagged], budgetTokens: 400,
+            activeTools: ["browser_navigate"])
+        XCTAssertEqual(out, "")   // 宁缺毋滥 — no off-domain padding
     }
 
     func testOnlyActiveInjects() {

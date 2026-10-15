@@ -632,6 +632,37 @@ actor EvolutionStore {
         return out
     }
 
+    /// OPT-1: the "active tool set" for relevance filtering — distinct tool
+    /// names the given session actually used recently (zero new
+    /// instrumentation: a plain read of the actions ledger). Without a
+    /// session, the whole recent window stands in. Empty result is legal
+    /// (cold start) — callers treat it as "no tools in play", not an error.
+    func recentToolNames(sessionId: String?, limit: Int = 40) -> Set<String> {
+        guard db != nil, limit > 0 else { return [] }
+        let sql: String
+        if let sessionId, !sessionId.isEmpty {
+            sql = "SELECT tool_name FROM actions WHERE run_id IN (SELECT id FROM runs WHERE session_id = ?) ORDER BY created_at DESC LIMIT ?"
+        } else {
+            sql = "SELECT tool_name FROM actions ORDER BY created_at DESC LIMIT ?"
+        }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        if let sessionId, !sessionId.isEmpty {
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, EVO_SQLITE_TRANSIENT)
+            sqlite3_bind_int64(stmt, 2, Int64(limit))
+        } else {
+            sqlite3_bind_int64(stmt, 1, Int64(limit))
+        }
+        var out: Set<String> = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let name = columnText(stmt, 0), !name.isEmpty {
+                out.insert(name)
+            }
+        }
+        return out
+    }
+
     /// id → (status, version): extraction protection — user-owned lesson
     /// decisions (verified/deprecated) are never clobbered by a pass.
     func lessonStateMap() -> [String: (status: String, version: Int)] {

@@ -13,7 +13,8 @@ import Foundation
 ///                 synchronous, so the cache warms one step ahead).
 ///
 /// The cache refreshes at most once per `refreshInterval`, entirely off the
-/// prompt path, and can be invalidated explicitly by lesson edits (S6-2).
+/// prompt path, and can be invalidated explicitly by lesson edits (S6-2) or
+/// mode switches (OPT-3).
 final class EvolutionInjector: @unchecked Sendable {
 
     static let shared = EvolutionInjector()
@@ -26,6 +27,9 @@ final class EvolutionInjector: @unchecked Sendable {
         /// Shadow-hit logging throttle — a rapid multi-turn conversation
         /// must not spam the injections table.
         static let shadowLogInterval: TimeInterval = 60
+        /// OPT-1: how many most-recent actions contribute to the "active
+        /// tool set" for relevance filtering (distinct tool names).
+        static let activeToolWindow = 40
     }
 
     // MARK: - Pure surface (unit-tested)
@@ -36,10 +40,28 @@ final class EvolutionInjector: @unchecked Sendable {
         mode == .active
     }
 
-    /// Render the would-be fragment: verified first, then injectPriority
-    /// desc, capped at Top-K lines and the token budget.
-    static func render(lessons: [EvolutionLesson], budgetTokens: Int) -> String {
-        let eligible = lessons.filter { $0.status == .verified || $0.status == .candidate }
+    /// OPT-1: tool-relevance gate. A lesson carrying a tool tag
+    /// (`taskSignature`) only passes when the current active tool set
+    /// contains that tag — unrelated domains must not pollute the prompt
+    /// ("无关的会干扰"). Untagged (generic) lessons always pass. A `nil`
+    /// active set means "unknown" → keep everything (back-compat).
+    static func filterRelevant(_ lessons: [EvolutionLesson],
+                               activeTools: Set<String>?) -> [EvolutionLesson] {
+        guard let activeTools else { return lessons }
+        return lessons.filter { lesson in
+            guard let tag = lesson.taskSignature, !tag.isEmpty else { return true }
+            return activeTools.contains(tag)
+        }
+    }
+
+    /// Render the would-be fragment: relevance gate first, then verified
+    /// first, then injectPriority desc, capped at Top-K lines and the token
+    /// budget. When the gate empties the set (宁缺毋滥) the fragment is ""
+    /// rather than padding with off-domain lessons.
+    static func render(lessons: [EvolutionLesson], budgetTokens: Int,
+                       activeTools: Set<String>? = nil) -> String {
+        let relevant = filterRelevant(lessons, activeTools: activeTools)
+        let eligible = relevant.filter { $0.status == .verified || $0.status == .candidate }
         guard !eligible.isEmpty, budgetTokens > 0 else { return "" }
         let ranked = rank(eligible)
         let maxChars = max(80, Int(Double(budgetTokens) * Constants.charsPerToken))
@@ -85,7 +107,7 @@ final class EvolutionInjector: @unchecked Sendable {
     func turnFragment(sessionId: String?) -> String {
         let mode = EvolutionSettings.currentMode
         guard mode != .off else { return "" }
-        refreshIfStale()
+        refreshIfStale(sessionId: sessionId)
         let (lessons, fragment) = lockedSnapshot()
         guard !fragment.isEmpty else { return "" }
         if mode == .shadow {
@@ -95,7 +117,8 @@ final class EvolutionInjector: @unchecked Sendable {
         return fragment
     }
 
-    /// Explicit invalidation after lesson edits (S6-2) or data wipes.
+    /// Explicit invalidation after lesson edits (S6-2), data wipes, or mode
+    /// switches (OPT-3) — next turn refreshes immediately.
     func invalidate() {
         lock.lock()
         lastRefreshAt = .distantPast
@@ -110,7 +133,7 @@ final class EvolutionInjector: @unchecked Sendable {
         return (cachedLessons, cachedFragment)
     }
 
-    private func refreshIfStale() {
+    private func refreshIfStale(sessionId: String?) {
         guard EvolutionSettings.recordingEnabled else { return }
         let budget = EvolutionSettings.budgetTokens
         lock.lock()
@@ -118,13 +141,20 @@ final class EvolutionInjector: @unchecked Sendable {
         if due { lastRefreshAt = Date() }     // claim the slot before spawning
         lock.unlock()
         guard due else { return }
-        Task.detached(priority: .utility) { [weak self] in
+        Task.detached(priority: .utility) { [weak self, sessionId] in
             guard let self, let store = EvolutionStore.shared else { return }
             let candidates = await store.lessons(status: .candidate)
             let verified = await store.lessons(status: .verified)
-            let fragment = Self.render(lessons: candidates + verified, budgetTokens: budget)
+            // OPT-1: the active tool set comes from the triggering session's
+            // recent actions (zero new instrumentation) and gates the cache —
+            // shadow logging below therefore reflects the filtered result too.
+            let activeTools = await store.recentToolNames(sessionId: sessionId,
+                                                          limit: Constants.activeToolWindow)
+            let all = candidates + verified
+            let fragment = Self.render(lessons: all, budgetTokens: budget,
+                                       activeTools: activeTools)
             self.lock.lock()
-            self.cachedLessons = candidates + verified
+            self.cachedLessons = Self.filterRelevant(all, activeTools: activeTools)
             self.cachedFragment = fragment
             self.lock.unlock()
         }
