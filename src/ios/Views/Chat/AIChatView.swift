@@ -7760,7 +7760,7 @@ struct ChatVoiceSettingsSheet: View {
                 } header: {
                     Text("朗读偏好设置")
                 } footer: {
-                    Text("无悬浮遮挡：播放、倍速与声音调节已统一收纳在此处。")
+                    Text("播放、倍速与声音调节已统一收纳在此处。")
                 }
             }
             .navigationTitle("AI 语音设置")
