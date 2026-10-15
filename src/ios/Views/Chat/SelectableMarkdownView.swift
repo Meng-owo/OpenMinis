@@ -5100,25 +5100,8 @@ final class AudioAttachment: NSTextAttachment {
     private(set) var voiceDuration: Double = 0
 
     static let attachmentHeight: CGFloat = 70
-    /// [P1-6 / 10-15 C2 醒醒] 语音气泡标准高度与宽度延展计算。
-    static let voiceBubbleHeight: CGFloat = 44
-
-    /// 动态音轨宽度：根据时长（3s~60s）从 110pt 平滑过渡到列宽的 72%，既不臃肿也不过窄。
-    static func capsuleWidth(forLineWidth lineWidth: CGFloat, duration: Double) -> CGFloat {
-        let dur: Double = duration > 0 ? duration : 3
-        let target = 110.0 + CGFloat(min(dur, 60.0) / 5.0 * 12.0)
-        return min(max(110.0, target), lineWidth * 0.72)
-    }
-    /// Gap between the capsule and the expanded 转文字 transcript.
-    static let transcriptTopGap: CGFloat = 6
-    /// Tag for the transcript label inside the bubble container.
-    static let transcriptTag = 9875
-
-    /// [P1-6] 转文字 expansion state (persisted on the cached attachment so
-    /// a re-render rebuilds the expanded layout).
-    var transcriptExpanded = false
-    fileprivate(set) var transcriptText: String?
-    fileprivate(set) var transcriptHeight: CGFloat = 0
+    /// [T-voice-cat-card 10-16 醒醒] 语音卡片标准高度：占满列宽的 VoiceCatBubbleCardView。
+    static let voiceBubbleHeight: CGFloat = VoiceCatBubbleCardView.cardHeight
 
     init(source: String, theme: SelectableMarkdownTheme) {
         self.source = source
@@ -5163,13 +5146,7 @@ final class AudioAttachment: NSTextAttachment {
     override func attachmentBounds(for textContainer: NSTextContainer?, proposedLineFragment lineFrag: CGRect, glyphPosition position: CGPoint, characterIndex charIndex: Int) -> CGRect {
         let width = lineFrag.width
         if isVoiceBubble {
-            let h = Self.voiceBubbleHeight
-            if transcriptExpanded {
-                let extra = Self.transcriptTopGap + transcriptHeight
-                return CGRect(x: 0, y: 0, width: width, height: h + extra)
-            }
-            let w = Self.capsuleWidth(forLineWidth: width, duration: voiceDuration)
-            return CGRect(x: 0, y: 0, width: w, height: h)
+            return CGRect(x: 0, y: 0, width: width, height: Self.voiceBubbleHeight)
         }
         return CGRect(x: 0, y: 0, width: width, height: Self.attachmentHeight)
     }
@@ -5271,204 +5248,44 @@ final class AudioAttachment: NSTextAttachment {
     // [10-15 C2 醒醒] 常规款语音气泡：图标居中/实心圆润、正常长度音轨波形、播放动态起伏、全走主题变量
 
     private func makeVoiceBubbleView(width: CGFloat) -> UIView {
+        // [T-voice-cat-card 10-16 醒醒] 新卡片：占满列宽的小猫语音卡。
         let h = Self.voiceBubbleHeight
-        let dur: Double = voiceDuration > 0 ? voiceDuration : 3
-        let w: CGFloat = Self.capsuleWidth(forLineWidth: width, duration: dur)
-
-        let isExpanded = transcriptExpanded
-        let containerW = isExpanded ? width : w
-        let containerH = h + (isExpanded ? (Self.transcriptTopGap + transcriptHeight) : 0)
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: containerW, height: containerH))
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: h))
         container.backgroundColor = .clear
         container.isUserInteractionEnabled = true
 
-        let accent: UIColor = AppearanceStudio.uiColorSnapshot(.accent)
-        let bubbleFill: UIColor = AppearanceStudio.uiColorSnapshot(.assistantBubble, scope: .chat)
-        let textFill: UIColor = AppearanceStudio.uiColorSnapshot(.primaryText, scope: .chat)
-        let cardBg: UIColor = AppearanceStudio.uiColorSnapshot(.surface, scope: .chat)
-
-        let bubble = UIView(frame: CGRect(x: 0, y: 0, width: w, height: h))
-        bubble.backgroundColor = bubbleFill.withAlphaComponent(0.28)
-        bubble.layer.cornerRadius = 14
-        bubble.layer.borderWidth = 0.6
-        bubble.layer.borderColor = accent.withAlphaComponent(0.2).cgColor
-        container.addSubview(bubble)
-
-        // 1. 实心圆润播放按钮（左侧白底圆角）
-        let playBtnBg = UIView(frame: CGRect(x: 8, y: (h - 28) / 2.0, width: 28, height: 28))
-        playBtnBg.backgroundColor = cardBg
-        playBtnBg.layer.cornerRadius = 8
-        playBtnBg.layer.borderWidth = 0.5
-        playBtnBg.layer.borderColor = accent.withAlphaComponent(0.25).cgColor
-        playBtnBg.clipsToBounds = true
-        bubble.addSubview(playBtnBg)
-
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-        let playIcon = UIImageView(image: UIImage(systemName: "play.fill", withConfiguration: iconConfig))
-        playIcon.tintColor = accent
-        playIcon.contentMode = .center
-        playIcon.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
-        playBtnBg.addSubview(playIcon)
-
-        // 2. 正常长度音轨波形（8 根高低起伏竖条）
-        let heights: [CGFloat] = [7, 14, 20, 11, 17, 22, 15, 9]
-        var arcs: [UIView] = []
-        let waveStartX: CGFloat = 44
-        let waveEndX: CGFloat = w - 42
-        let count = heights.count
-        let spacing: CGFloat = max(3.0, min(6.0, (waveEndX - waveStartX - CGFloat(count) * 2.5) / CGFloat(count - 1)))
-        
-        for i in 0..<count {
-            let barX: CGFloat = waveStartX + CGFloat(i) * (2.5 + spacing)
-            let barH: CGFloat = heights[i]
-            let barY: CGFloat = (h - barH) / 2.0
-            let bar = UIView(frame: CGRect(x: barX, y: barY, width: 2.5, height: barH))
-            bar.backgroundColor = accent
-            bar.layer.cornerRadius = 1.25
-            bar.alpha = 0.45
-            bubble.addSubview(bar)
-            arcs.append(bar)
-        }
-
-        // 3. 时长标签（右侧清晰显示）
-        let durLabel = UILabel()
-        durLabel.text = dur > 0 ? "\(Int(dur.rounded()))\"" : "--\""
-        durLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-        durLabel.textColor = textFill.withAlphaComponent(0.85)
-        durLabel.sizeToFit()
-        let dlW: CGFloat = durLabel.frame.width
-        let dlH: CGFloat = durLabel.frame.height
-        durLabel.frame = CGRect(x: w - dlW - 10.0, y: (h - dlH) / 2.0, width: dlW, height: dlH)
-        bubble.addSubview(durLabel)
-
-        // 4. 底部微细进度条
-        let barH: CGFloat = 2.0
-        let barX: CGFloat = 8.0
-        let barW: CGFloat = w - barX * 2
-        let track = UIView(frame: CGRect(x: barX, y: h - 3.0 - barH, width: barW, height: barH))
-        track.backgroundColor = textFill.withAlphaComponent(0.08)
-        track.layer.cornerRadius = 1.0
-        track.clipsToBounds = true
-        track.alpha = 0.4
-        let fill = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: barH))
-        fill.backgroundColor = accent
-        fill.layer.cornerRadius = 1.0
-        track.addSubview(fill)
-        bubble.addSubview(track)
-        let progress = VoiceBubbleProgressController(track: track, fill: fill, fileURL: resolvedURL)
-        objc_setAssociatedObject(container, &VoiceBubbleProgressController.associatedKey,
-                                 progress, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-
-        if voiceDuration <= 0, let url = resolvedURL {
-            Task { @MainActor [weak durLabel] in
-                guard let durLabel, durLabel.superview != nil else { return }
-                if let p = try? AVAudioPlayer(contentsOf: url), p.duration > 0 {
-                    durLabel.text = "\(Int(p.duration.rounded()))\""
-                    durLabel.sizeToFit()
-                    if let bubble = durLabel.superview {
-                        durLabel.frame.origin.x = bubble.bounds.width - durLabel.frame.width - 10.0
-                    }
-                }
-            }
-        }
-
-        // 5. 动画与播放状态控制器（波形跳动 + 播放图标切换）
-        let controller = VoiceBubbleAnimationController(arcs: arcs, playIcon: playIcon, fileURL: resolvedURL)
-        objc_setAssociatedObject(container, &VoiceBubbleAnimationController.associatedKey,
-                                 controller, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-
-        // 6. 转文字视图
-        let transcriptLabel = UILabel()
-        transcriptLabel.tag = Self.transcriptTag
-        transcriptLabel.font = .systemFont(ofSize: 13)
-        transcriptLabel.textColor = textFill.withAlphaComponent(0.8)
-        transcriptLabel.numberOfLines = 0
-        transcriptLabel.isHidden = !transcriptExpanded
-        transcriptLabel.text = transcriptText
-        transcriptLabel.frame = CGRect(x: 0, y: h + Self.transcriptTopGap, width: width, height: transcriptHeight)
-        container.addSubview(transcriptLabel)
-
-        // 点击切换播放/暂停
-        let tap = AudioTapGesture(target: nil, action: nil)
-        tap.fileURL = resolvedURL
-        tap.togglePlayInsteadOfPreview = true
-        tap.addTarget(tap, action: #selector(AudioTapGesture.handleTap))
-        bubble.addGestureRecognizer(tap)
+        let transcript = resolvedURL.flatMap { AIVoiceMessageComposer.transcriptForAudioFile($0) } ?? ""
+        let card = VoiceCatBubbleCardView(
+            frame: CGRect(x: 0, y: 0, width: width, height: h),
+            fileURL: resolvedURL,
+            duration: voiceDuration,
+            soulName: Self.currentSoulDisplayName(),
+            voiceText: transcript)
+        container.addSubview(card)
 
         // 长按呼出菜单
         let menuHandler = VoiceBubbleMenuHandler(attachment: self)
         let longPress = UILongPressGestureRecognizer(target: menuHandler, action: #selector(VoiceBubbleMenuHandler.handleLongPress(_:)))
-        objc_setAssociatedObject(bubble, &VoiceBubbleMenuHandler.associatedKey,
+        objc_setAssociatedObject(card, &VoiceBubbleMenuHandler.associatedKey,
                                  menuHandler, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-        bubble.addGestureRecognizer(longPress)
+        card.addGestureRecognizer(longPress)
 
         return container
     }
 
-    /// [P1-6] Toggle the inline 转文字 transcript below the capsule, then
-    /// ask the host cell to re-measure.
-    fileprivate func toggleTranscript(from bubbleView: UIView) {
-        guard let container = bubbleView.superview else { return }
-        if transcriptExpanded {
-            transcriptExpanded = false
-        } else {
-            guard let url = resolvedURL,
-                  let text = AIVoiceMessageComposer.transcriptForAudioFile(url),
-                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-            transcriptText = text
-            // [P3-2] Transcript is measured at the message-column width
-            // (container), not the narrow capsule width — short bubbles
-            // would otherwise cram ~5 CJK chars per line.
-            let tw = container.bounds.width
-            transcriptHeight = Self.measureTranscriptHeight(text: text, width: tw)
-            transcriptExpanded = true
-        }
-        layoutTranscript(in: container)
-        var host: UIView? = container.superview
-        while let h = host, !(h is SelectableMarkdownTextView) { host = h.superview }
-        (host as? SelectableMarkdownTextView)?.invalidateCellSizeIfNeeded()
+    /// [T-voice-cat-card] 当前人设名（卡片标题「XX 给你留了言」）。
+    private static func currentSoulDisplayName() -> String {
+        guard Thread.isMainThread else { return "嘟嘟" }
+        let raw = MainActor.assumeIsolated { SoulStore.cachedMetadata.name }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "嘟嘟" : trimmed
     }
 
-    /// [P1-6] Show/hide the transcript label and resize the container to match
-    /// attachmentBounds (which the host reads on invalidate).
-    private func layoutTranscript(in container: UIView) {
-        let h = Self.voiceBubbleHeight
-        var f = container.frame
-        f.size.height = h + (transcriptExpanded ? (Self.transcriptTopGap + transcriptHeight) : 0)
-        container.frame = f
-        if let label = container.viewWithTag(Self.transcriptTag) as? UILabel {
-            label.isHidden = !transcriptExpanded
-            label.text = transcriptText
-            // [P3-2] Column width, not capsule width (see toggleTranscript).
-            let tw = container.bounds.width
-            label.frame = CGRect(x: 0, y: h + Self.transcriptTopGap, width: tw, height: transcriptHeight)
-        }
-    }
-
-    private static func measureTranscriptHeight(text: String, width: CGFloat) -> CGFloat {
-        let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
-        label.numberOfLines = 0
-        label.text = text
-        return label.sizeThatFits(CGSize(width: max(1, width), height: .greatestFiniteMagnitude)).height
-    }
-
-    /// [P1-6] Long-press menu: 转文字 (when a sidecar transcript exists) /
-    /// 更多 (full preview sheet for seek/rate).
+    /// [T-voice-cat-card 10-16 醒醒] Long-press menu: 更多（完整播放器）。
+    /// 「转文字」已删——卡片上的跑马灯字幕就是 AI 实际 TTS 文案。
     fileprivate func presentVoiceBubbleMenu(from sourceView: UIView) {
         guard let presenter = sourceView.nearestViewController() else { return }
         let sheet = UIAlertController(title: nil, message: nil, preferredStyle: .actionSheet)
-        let hasTranscript: Bool = {
-            if transcriptExpanded { return true }
-            guard let url = resolvedURL else { return false }
-            return AIVoiceMessageComposer.transcriptForAudioFile(url) != nil
-        }()
-        if hasTranscript {
-            sheet.addAction(UIAlertAction(title: AppLocalized(transcriptExpanded ? "收起文字" : "转文字"), style: .default) { [weak self] _ in
-                guard let self else { return }
-                self.toggleTranscript(from: sourceView)
-            })
-        }
         sheet.addAction(UIAlertAction(title: AppLocalized("更多"), style: .default) { [weak self] _ in
             guard let self, let url = self.resolvedURL else { return }
             AudioTapGesture.presentPreviewSheet(fileURL: url, from: sourceView)
@@ -5481,79 +5298,6 @@ final class AudioAttachment: NSTextAttachment {
         presenter.present(sheet, animated: true)
     }
 
-}
-
-/// Drives the WX-style arc animation for one voice bubble. Subscribes to
-/// GlobalAudioPlayer; when the bubble's file is the ACTIVE one, arcs pulse in
-/// sequence (0→1→2→…) at ~450ms/arc; otherwise they settle dim.
-private final class VoiceBubbleAnimationController: NSObject {
-    static var associatedKey: UInt8 = 0
-    private var cancellables = Set<AnyCancellable>()
-    private var arcs: [UIView]?
-    private weak var playIcon: UIImageView?
-    private let fileURL: URL?
-    private var step = 0
-    private var timer: Timer?
-
-    init(arcs: [UIView], playIcon: UIImageView?, fileURL: URL?) {
-        self.arcs = arcs
-        self.playIcon = playIcon
-        self.fileURL = fileURL
-        super.init()
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            GlobalAudioPlayer.shared.$isPlaying.combineLatest(
-                GlobalAudioPlayer.shared.$activeFileURL)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] playing, active in
-                    guard let self else { return }
-                    let isActive = playing && active == self.fileURL
-                    self.updatePlayIcon(isActive)
-                    self.setAnimating(isActive)
-                }
-                .store(in: &self.cancellables)
-        }
-    }
-
-    private func updatePlayIcon(_ playing: Bool) {
-        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-        let name = playing ? "pause.fill" : "play.fill"
-        playIcon?.image = UIImage(systemName: name, withConfiguration: config)
-    }
-
-    private func setAnimating(_ on: Bool) {
-        timer?.invalidate()
-        timer = nil
-        guard let arcs else { return }
-        if on {
-            timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
-                guard let self, let arcs = self.arcs else { return }
-                self.step = (self.step + 1) % arcs.count
-                let cur = self.step
-                for (i, arc) in arcs.enumerated() {
-                    let diff = abs(i - cur)
-                    let active = diff <= 1
-                    UIView.animate(withDuration: 0.15) {
-                        arc.alpha = active ? 1.0 : 0.4
-                        arc.transform = active
-                            ? CGAffineTransform(scaleX: 1.2, y: 1.2)
-                            : CGAffineTransform.identity
-                    }
-                }
-            }
-        } else {
-            for arc in arcs {
-                UIView.animate(withDuration: 0.2) {
-                    arc.alpha = 0.45
-                    arc.transform = .identity
-                }
-            }
-        }
-    }
-
-    deinit {
-        timer?.invalidate()
-    }
 }
 
 /// Tap gesture to open audio preview sheet.
@@ -5591,40 +5335,6 @@ private final class AudioTapGesture: UITapGestureRecognizer {
             sheet.prefersGrabberVisible = false
         }
         presenter.present(hosting, animated: true)
-    }
-}
-
-/// [P1-6] Thin progress bar inside the voice capsule, driven by the global
-/// player's progress publisher. Retained via associated object on the bubble
-/// container (same lifetime pattern as VoiceBubbleAnimationController).
-private final class VoiceBubbleProgressController: NSObject {
-    static var associatedKey: UInt8 = 0
-    private var cancellables = Set<AnyCancellable>()
-    private weak var track: UIView?
-    private weak var fill: UIView?
-    private let fileURL: URL?
-
-    init(track: UIView, fill: UIView, fileURL: URL?) {
-        self.track = track
-        self.fill = fill
-        self.fileURL = fileURL
-        super.init()
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let gp = GlobalAudioPlayer.shared
-            Publishers.CombineLatest3(gp.$currentTime, gp.$duration, gp.$activeFileURL)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] time, duration, activeURL in
-                    guard let self, let track = self.track, let fill = self.fill else { return }
-                    let isActive = self.fileURL != nil && activeURL == self.fileURL
-                    let frac: CGFloat = (isActive && duration > 0) ? CGFloat(time / duration) : 0
-                    var f = fill.frame
-                    f.size.width = track.bounds.width * min(max(frac, 0), 1)
-                    fill.frame = f
-                    track.alpha = isActive ? 1.0 : 0.5
-                }
-                .store(in: &self.cancellables)
-        }
     }
 }
 
