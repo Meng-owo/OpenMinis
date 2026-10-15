@@ -3972,6 +3972,13 @@ extension CollectionViewMessageListV3 {
                 guard let b = msg(mid)?.blocks.first(where: { $0.id == bid }) else { return "b#?" }
                 let c = b.content
                 return "b#\(digest(c))#\(c.count)#\(b.kind)"
+            case .assistantToolGroup(_, let groupKey):
+                // [batch0-fix] Keyed by the stable member-ID string; a group's
+                // identity does not change as its run only grows.
+                return "g#\(digest(groupKey))"
+            case .assistantTurnSummary(_, let groupKey):
+                // [batch0-fix] Same rationale as the tool-group row above.
+                return "t#\(digest(groupKey))"
             }
         }
         #endif
