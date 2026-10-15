@@ -233,7 +233,7 @@ struct VoiceServicesView: View {
                 Button {
                     showSystemEditor = true
                 } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "gearshape.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(MinisTheme.secondaryText)
                 }
@@ -257,7 +257,7 @@ struct VoiceServicesView: View {
                 Button {
                     editing = service
                 } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "gearshape.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(MinisTheme.secondaryText)
                 }

@@ -3506,7 +3506,7 @@ struct ContentView: View {
             homeBottomTab(
                 icon: {
                     Image(systemName: {
-                        if #available(iOS 17.0, *) { return "bubble.left.and.text.bubble.right" }
+                        if #available(iOS 17.0, *) { return "bubble.left.and.text.bubble.right.fill" }
                         return "plus.message.fill"
                     }())
                 },
@@ -3523,7 +3523,7 @@ struct ContentView: View {
                 showContactsPage = true
             }
             homeBottomTab(
-                icon: { Image(systemName: "gearshape") },
+                icon: { Image(systemName: "gearshape.fill") },
                 label: "Settings",
                 size: 22, weight: .medium
             ) {
@@ -3538,7 +3538,7 @@ struct ContentView: View {
             }
             if hasAlarms {
                 homeBottomTab(
-                    icon: { Image(systemName: "alarm") },
+                    icon: { Image(systemName: "alarm.fill") },
                     label: "Alarm",
                     size: 22, weight: .medium
                 ) {

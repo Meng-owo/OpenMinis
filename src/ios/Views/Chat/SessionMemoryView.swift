@@ -131,7 +131,7 @@ struct SessionMemoryView: View {
                 fileURL: globalURL
             ))
         } else {
-            items.append(AutoItem(name: "GLOBAL.md", detail: "Empty", icon: "star", content: "(empty)", fileURL: globalURL))
+            items.append(AutoItem(name: "GLOBAL.md", detail: "Empty", icon: "star.fill", content: "(empty)", fileURL: globalURL))
         }
 
         // Most recent 3 daily logs with content (matches system prompt injection logic)
