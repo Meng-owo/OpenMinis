@@ -66,6 +66,14 @@ struct PlayHubView: View {
     @State private var showNameEditor = false
     @State private var nameDraft = ""
 
+    // 上传 / 删除（P1-2 / P1-3）
+    @State private var uploadPicks: [PhotosPickerItem] = []
+    @State private var showPhotoPicker = false
+    @State private var showFileImporter = false
+    @State private var importing = false
+    @State private var pendingDelete: PlayHubMediaScanner.Hit?
+    @State private var showDeleteConfirm = false
+
     private static var backgroundURL: URL {
         AppearanceStudio.appearanceAssetsDirectory.appendingPathComponent("play-hub-background.jpg")
     }
@@ -135,6 +143,34 @@ struct PlayHubView: View {
         }
         .sheet(item: $previewFile) { url in
             filePreviewView(url)
+        }
+        .confirmationDialog("删除这个文件？",
+                            isPresented: $showDeleteConfirm,
+                            titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                if let url = pendingDelete?.url {
+                    try? FileManager.default.removeItem(at: url)
+                    Task { await rescan() }
+                }
+                pendingDelete = nil
+            }
+            Button("取消", role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text("将同时删除聊天里引用的该文件，此操作不可恢复。")
+        }
+        .photosPicker(isPresented: $showPhotoPicker,
+                      selection: $uploadPicks,
+                      maxSelectionCount: 20,
+                      matching: uploadMatching)
+        .fileImporter(isPresented: $showFileImporter,
+                      allowedContentTypes: [.item]) { result in
+            if case .success(let url) = result {
+                Task { await importFile(from: url) }
+            }
+        }
+        .onChange(of: uploadPicks) { _, newValue in
+            guard !newValue.isEmpty else { return }
+            Task { await handleUploadPicks() }
         }
     }
 
@@ -234,6 +270,22 @@ struct PlayHubView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if selection != .evolution {
+                Button {
+                    switch selection {
+                    case .files: showFileImporter = true
+                    default: showPhotoPicker = true
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(MinisThemeList.accent)
+                        .frame(width: 30, height: 30)
+                        .background(studio.color(.raised, scope: .home), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 8)
+            }
         }
         .padding(4)
         .background(Capsule().fill(studio.color(.mutedSurface, scope: .home).opacity(0.6)))
@@ -273,6 +325,12 @@ struct PlayHubView: View {
                                 AsyncCacheURLImageTile(cacheURL: hit.url, tileSize: side)
                             }
                             .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("删除", role: .destructive) {
+                                    pendingDelete = hit
+                                    showDeleteConfirm = true
+                                }
+                            }
                         }
                     }
                     .padding(.horizontal, 12)
@@ -298,6 +356,12 @@ struct PlayHubView: View {
                         ForEach(hits) { hit in
                             PlayHubVideoTile(fileURL: hit.url, tileSize: side) {
                                 playingVideo = hit.url
+                            }
+                            .contextMenu {
+                                Button("删除", role: .destructive) {
+                                    pendingDelete = hit
+                                    showDeleteConfirm = true
+                                }
                             }
                         }
                     }
@@ -326,6 +390,12 @@ struct PlayHubView: View {
                                      subtitle: "\(PlayHubFormat.size(hit.size)) · \(PlayHubFormat.date(hit.modified))")
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("删除", role: .destructive) {
+                                pendingDelete = hit
+                                showDeleteConfirm = true
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
@@ -342,16 +412,11 @@ struct PlayHubView: View {
         if scanning && scanResult == nil {
             loadingView
         } else if let hits = scanResult?.files, !hits.isEmpty {
+            let grouped = Self.groupFiles(hits)
             ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(hits) { hit in
-                        Button {
-                            previewFile = hit.url
-                        } label: {
-                            mediaRow(icon: "doc.fill", title: hit.name,
-                                     subtitle: "\(hit.relative) · \(PlayHubFormat.size(hit.size))")
-                        }
-                        .buttonStyle(.plain)
+                LazyVStack(spacing: 10) {
+                    ForEach(grouped, id: \.0) { category, items in
+                        fileCategorySection(category: category, items: items)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -360,6 +425,84 @@ struct PlayHubView: View {
             .refreshable { await rescan() }
         } else {
             emptyView("doc", Tab.files.emptyText)
+        }
+    }
+
+    // MARK: - 文件桶自动分类 + 折叠（P1-4）
+
+    private enum FileCategory: String, CaseIterable {
+        case scripts, code, config, docs, memory, other
+        var label: String {
+            switch self {
+            case .scripts: return "脚本"
+            case .code: return "代码"
+            case .config: return "配置"
+            case .docs: return "文档"
+            case .memory: return "记忆"
+            case .other: return "其他"
+            }
+        }
+    }
+
+    /// 扩展名优先，目录语义补充（memory/ 下的 .md 归"记忆"）。
+    private static func category(of hit: PlayHubMediaScanner.Hit) -> FileCategory {
+        let ext = hit.url.pathExtension.lowercased()
+        let rel = hit.relative.lowercased()
+        if rel.contains("memory/") && ext == "md" { return .memory }
+        switch ext {
+        case "py", "sh", "js", "ts", "swift", "kt", "go", "rs": return .scripts
+        case "c", "h", "m", "mm", "cpp", "java": return .code
+        case "json", "yml", "yaml", "plist", "xml", "toml", "ini": return .config
+        case "md", "txt", "rst": return .docs
+        default: return .other
+        }
+    }
+
+    private static func groupFiles(_ hits: [PlayHubMediaScanner.Hit])
+        -> [(FileCategory, [PlayHubMediaScanner.Hit])] {
+        let dict = Dictionary(grouping: hits, by: { category(of: $0) })
+        return FileCategory.allCases.compactMap { cat in
+            guard let items = dict[cat], !items.isEmpty else { return nil }
+            return (cat, items)
+        }
+    }
+
+    /// 分组头可折叠；行保留长按删除（P1-3）。
+    private func fileCategorySection(category: FileCategory,
+                                     items: [PlayHubMediaScanner.Hit]) -> some View {
+        DisclosureGroup {
+            LazyVStack(spacing: 8) {
+                ForEach(items) { hit in
+                    Button {
+                        previewFile = hit.url
+                    } label: {
+                        mediaRow(icon: "doc.fill", title: hit.name,
+                                 subtitle: "\(hit.relative) · \(PlayHubFormat.size(hit.size))")
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("删除", role: .destructive) {
+                            pendingDelete = hit
+                            showDeleteConfirm = true
+                        }
+                    }
+                }
+            }
+            .padding(.top, 4)
+        } label: {
+            HStack(spacing: 8) {
+                Text(category.label)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MinisThemeList.title)
+                Text("\(items.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(MinisThemeList.subtitle)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(studio.color(.raised, scope: .home), in: Capsule())
+                Spacer()
+            }
+            .padding(.vertical, 2)
         }
     }
 
@@ -485,6 +628,73 @@ struct PlayHubView: View {
     private func removeBackground() {
         try? FileManager.default.removeItem(at: Self.backgroundURL)
         backgroundImage = nil
+    }
+
+    // MARK: - 上传（P1-2）
+
+    /// 按当前桶选匹配类型：图片桶只收图、视频桶只收视频、音频桶只收音频。
+    private var uploadMatching: PHPickerFilter {
+        switch selection {
+        case .images: return .images
+        case .videos: return .videos
+        case .audio: return .audios
+        default: return .any(of: [.images, .videos, .audios])
+        }
+    }
+
+    private func uploadDir() -> URL {
+        let dir = AIChatViewModel.minisPersistentBase
+            .appendingPathComponent("play-hub", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// 重名自动追加序号（play-1.jpg），不覆盖。
+    private func uniqueDest(_ dir: URL, name: String) -> URL {
+        var dest = dir.appendingPathComponent(name)
+        var n = 1
+        while FileManager.default.fileExists(atPath: dest.path) {
+            let ext = (name as NSString).pathExtension
+            let base = (name as NSString).deletingPathExtension
+            dest = dir.appendingPathComponent("\(base)-\(n).\(ext)")
+            n += 1
+        }
+        return dest
+    }
+
+    private func saveImported(_ data: Data, ext: String) {
+        let dest = uniqueDest(uploadDir(), name: "play-\(Int(Date().timeIntervalSince1970)).\(ext)")
+        try? data.write(to: dest)
+    }
+
+    private func handleUploadPicks() async {
+        guard !uploadPicks.isEmpty else { return }
+        importing = true
+        defer { importing = false }
+        let target = selection
+        for item in uploadPicks {
+            guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
+            let ext: String
+            switch target {
+            case .images: ext = "jpg"
+            case .videos: ext = "mov"
+            case .audio: ext = "m4a"
+            default: ext = "bin"
+            }
+            saveImported(data, ext: ext)
+        }
+        uploadPicks = []
+        await rescan()
+    }
+
+    private func importFile(from url: URL) async {
+        let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension
+        if url.startAccessingSecurityScopedResource() {
+            defer { url.stopAccessingSecurityScopedResource() }
+            guard let data = try? Data(contentsOf: url) else { return }
+            saveImported(data, ext: ext)
+            await rescan()
+        }
     }
 }
 
