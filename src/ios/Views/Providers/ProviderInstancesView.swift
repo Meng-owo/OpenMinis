@@ -79,7 +79,7 @@ struct ProviderInstancesView: View {
                     if store.hasFoldedShadowDuplicates() {
                         // Non-destructive hint: same MiMo service configured twice.
                         HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "info.circle")
+                            Image(systemName: "info.circle.fill")
                                 .foregroundStyle(.secondary)
                             Text("A voice service is configured more than once. Voice is merged into a single row here; you can delete the extra provider above if you want.",
                                  comment: "Duplicate voice provider hint")

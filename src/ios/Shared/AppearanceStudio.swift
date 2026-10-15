@@ -837,9 +837,9 @@ struct QuietAppIcon: View {
             } else {
                 Image(systemName: systemName)
                     .font(.system(size: max(9, size * 0.42), weight: .medium))
-                    .foregroundStyle(studio.color(.accent))
+                    .foregroundStyle(studio.color(.primaryText))
                     .frame(width: size, height: size)
-                    .background(studio.color(.mutedSurface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .background(studio.color(.surface), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .stroke(studio.color(.border), lineWidth: 0.6)
@@ -897,27 +897,27 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
     }
     var systemName: String {
         switch self {
-        case .decorate: return "paintpalette"
-        case .appearance: return "paintbrush"
-        case .skills: return "puzzlepiece.extension"
+        case .decorate: return "paintpalette.fill"
+        case .appearance: return "paintbrush.fill"
+        case .skills: return "puzzlepiece.extension.fill"
         case .soul: return "sparkles"
         case .memory: return "brain.head.profile"
-        case .mcp: return "square.stack.3d.up"
-        case .env: return "terminal"
-        case .storage: return "archivebox"
-        case .shared: return "folder"
-        case .mounts: return "externaldrive"
-        case .icloud: return "icloud"
+        case .mcp: return "square.stack.3d.up.fill"
+        case .env: return "terminal.fill"
+        case .storage: return "archivebox.fill"
+        case .shared: return "folder.fill"
+        case .mounts: return "externaldrive.fill"
+        case .icloud: return "icloud.fill"
         case .backup: return "arrow.triangle.2.circlepath"
-        case .permissions: return "lock.shield"
-        case .lock: return "lock"
-        case .logs: return "doc.text"
-        case .about: return "info"
-        case .privacy: return "hand.raised"
-        case .feedback: return "bubble.left.and.bubble.right"
-        case .manual: return "book.closed"
-        case .terminal: return "terminal"
-        case .rootfs: return "externaldrive"
+        case .permissions: return "lock.shield.fill"
+        case .lock: return "lock.fill"
+        case .logs: return "doc.text.fill"
+        case .about: return "info.circle.fill"
+        case .privacy: return "hand.raised.fill"
+        case .feedback: return "bubble.left.and.bubble.right.fill"
+        case .manual: return "book.closed.fill"
+        case .terminal: return "terminal.fill"
+        case .rootfs: return "externaldrive.fill"
         case .browser: return "globe"
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"

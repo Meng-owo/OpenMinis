@@ -489,7 +489,7 @@ struct UnifiedModelPicker: View {
             if let note = config.headerNote {
                 Section {
                     HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "info.circle")
+                        Image(systemName: "info.circle.fill")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Text(note)

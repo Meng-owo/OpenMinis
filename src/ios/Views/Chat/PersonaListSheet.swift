@@ -55,7 +55,7 @@ struct PersonaListSheet: View {
                             Button(role: .destructive) {
                                 deleteTarget = persona
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label("删除", systemImage: "trash.fill")
                             }
                             .disabled(store.personas.count <= 1)
                         }
@@ -85,7 +85,7 @@ struct PersonaListSheet: View {
                             Button(role: .destructive) {
                                 deleteTarget = persona
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label("删除", systemImage: "trash.fill")
                             }
                         }
                     }

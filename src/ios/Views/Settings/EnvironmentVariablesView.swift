@@ -40,7 +40,7 @@ struct EnvironmentVariablesView: View {
             if store.entries.isEmpty {
                 Section {
                     VStack(spacing: 8) {
-                        Image(systemName: "terminal")
+                        Image(systemName: "terminal.fill")
                             .font(.largeTitle)
                             .foregroundStyle(.secondary)
                         Text("No Environment Variables")

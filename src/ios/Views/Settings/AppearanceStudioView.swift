@@ -339,7 +339,7 @@ struct AppearanceStudioView: View {
 
                 PhotosPicker(selection: $wallpaperItem, matching: .images) {
                     Label(studio.hasOwnWallpaper(wallpaperScope) ? "更换这张壁纸" : "选择壁纸",
-                          systemImage: "photo")
+                          systemImage: "photo.fill")
                 }
 
                 if studio.hasOwnWallpaper(wallpaperScope) {

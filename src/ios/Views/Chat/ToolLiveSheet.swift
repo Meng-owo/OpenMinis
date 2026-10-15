@@ -731,14 +731,14 @@ struct ToolLiveSheet: View {
     @ViewBuilder
     private var toolIcon: some View {
         switch block.kind {
-        case .shellTool: Image(systemName: "terminal")
-        case .fileReadTool: Image(systemName: "doc.text")
+        case .shellTool: Image(systemName: "terminal.fill")
+        case .fileReadTool: Image(systemName: "doc.text.fill")
         case .fileWriteTool: Image(systemName: "doc.text.fill")
         case .fileEditTool: Image(systemName: "square.and.pencil")
         case .browserTool: Image(systemName: "globe")
-        case .readImageTool: Image(systemName: "photo")
+        case .readImageTool: Image(systemName: "photo.fill")
         case .memoryTool: Image(systemName: "brain.head.profile")
-        case .askUserTool: Image(systemName: "questionmark.circle")
+        case .askUserTool: Image(systemName: "questionmark.circle.fill")
         case .info: Image(systemName: "arrow.triangle.2.circlepath")
         case .text: Image(systemName: "text.alignleft")
         case .thinking: Image("ThinkingIcon")
@@ -1518,7 +1518,7 @@ struct ToolLiveSheet: View {
                 }()
                 if let fullPath = footerPath {
                     HStack(spacing: 6) {
-                        Image(systemName: "info.circle")
+                        Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(Color(UIColor.secondaryLabel))
                         Text(fullPath)

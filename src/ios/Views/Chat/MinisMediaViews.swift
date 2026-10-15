@@ -351,7 +351,7 @@ private func minisFileIcon(for ext: String) -> String {
     case "zip", "tar", "gz", "bz2": return "doc.zipper"
     case "sh", "bash", "zsh": return "terminal"
     case "html", "css": return "globe"
-    case "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg": return "photo"
+    case "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg": return "photo.fill"
     case "mp3", "m4a", "wav", "aac", "ogg", "flac": return "music.note"
     case "mp4", "mov", "m4v", "avi", "mkv", "webm": return "film"
     default: return "doc"
@@ -418,7 +418,7 @@ struct AsyncImageTile: View {
                     )
                     .shadow(color: .black.opacity(0.08), radius: 2, x: 0, y: 1)
             } else {
-                attachmentPlaceholderTile(icon: "photo", size: tileSize)
+                attachmentPlaceholderTile(icon: "photo.fill", size: tileSize)
             }
         }
         .buttonStyle(.plain)
@@ -544,7 +544,7 @@ struct AsyncCacheURLImageTile: View {
                     .frame(width: tileSize, height: tileSize)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
-                attachmentPlaceholderTile(icon: "photo", size: tileSize)
+                attachmentPlaceholderTile(icon: "photo.fill", size: tileSize)
             }
         }
         .task(id: cacheURL) { loadThumbnail() }
@@ -664,7 +664,7 @@ private struct MinisImageView: View {
                             AsyncImagePreviewView(url: url)
                         }
                 case .failure:
-                    Label("Image failed to load", systemImage: "photo")
+                    Label("Image failed to load", systemImage: "photo.fill")
                         .foregroundColor(ChatColors.secondaryText)
                 default:
                     ProgressView()
@@ -696,7 +696,7 @@ private struct MinisImageView: View {
                 if loadAttempt > 0 {
                     ProgressView()
                 } else {
-                    Image(systemName: "photo")
+                    Image(systemName: "photo.fill")
                         .font(.system(size: 28))
                 }
                 Text(url.lastPathComponent)
@@ -1031,7 +1031,7 @@ struct MinisMarkdownPreviewView: View {
                             VoiceOutputPlayer.shared.stopAll()
                             VoiceOutputPlayer.shared.enqueueSegmented(markdownContent, sessionId: VoiceOutputPlayer.manualOwnerId)
                         } label: {
-                            Label(AppLocalized("Read Aloud"), systemImage: "speaker.wave.2")
+                            Label(AppLocalized("Read Aloud"), systemImage: "speaker.wave.2.fill")
                         }
                         .disabled(markdownContent.isEmpty)
                     } label: {

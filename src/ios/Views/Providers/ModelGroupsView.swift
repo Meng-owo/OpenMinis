@@ -335,7 +335,7 @@ private struct GroupRow: View {
                 .font(.caption).foregroundStyle(.tint)
                 .accessibilityLabel(AppLocalized("Image generation"))
         case .audioOutput:
-            Image(systemName: "speaker.wave.2")
+            Image(systemName: "speaker.wave.2.fill")
                 .font(.caption).foregroundStyle(.tint)
                 .accessibilityLabel(AppLocalized("Speech output"))
         case .audioInput:
@@ -347,7 +347,7 @@ private struct GroupRow: View {
                 .font(.caption).foregroundStyle(.secondary)
                 .accessibilityLabel(AppLocalized("Video input"))
         case .imageInput:
-            Image(systemName: "photo")
+            Image(systemName: "photo.fill")
                 .font(.caption).foregroundStyle(.secondary)
                 .accessibilityLabel(AppLocalized("Image input"))
         case .pdfInput:

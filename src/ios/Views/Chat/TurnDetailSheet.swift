@@ -542,14 +542,14 @@ struct TurnDetailSheet: View {
 
     private func toolIcon(for kind: AssistantBlockKind) -> Image {
         switch kind {
-        case .shellTool: Image(systemName: "terminal")
-        case .fileReadTool: Image(systemName: "doc.text")
+        case .shellTool: Image(systemName: "terminal.fill")
+        case .fileReadTool: Image(systemName: "doc.text.fill")
         case .fileWriteTool: Image(systemName: "doc.text.fill")
         case .fileEditTool: Image(systemName: "square.and.pencil")
         case .browserTool: Image(systemName: "globe")
-        case .readImageTool: Image(systemName: "photo")
+        case .readImageTool: Image(systemName: "photo.fill")
         case .memoryTool: Image(systemName: "brain.head.profile")
-        case .askUserTool: Image(systemName: "questionmark.circle")
+        case .askUserTool: Image(systemName: "questionmark.circle.fill")
         case .thinking: Image("ThinkingIcon")
         case .text: Image(systemName: "text.alignleft")
         case .info: Image(systemName: "arrow.triangle.2.circlepath")

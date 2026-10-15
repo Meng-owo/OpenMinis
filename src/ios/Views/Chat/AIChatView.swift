@@ -2148,7 +2148,7 @@ struct AIChatView: View {
 
     private func exportCurrentConversation() {
         guard !vm.messages.isEmpty else {
-            MinisToast.show("当前还没有对话记录可导出", systemImage: "info.circle")
+            MinisToast.show("当前还没有对话记录可导出", systemImage: "info.circle.fill")
             return
         }
         var text = "# OpenMinis 对话记录导出\n\n"
@@ -3590,7 +3590,7 @@ struct AIChatView: View {
                     if v { vm.speechPlayerExpanded = true } else { vm.stopSpeech() }
                 }
             )) {
-                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2")
+                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")
             }
             Toggle(isOn: Binding(
                 get: { VoiceOutputPreferences.capsuleVisible },
@@ -4787,7 +4787,7 @@ struct AIChatView: View {
         }
 
         private var iconName: String {
-            if entry.isDirectory { return "folder" }
+            if entry.isDirectory { return "folder.fill" }
             switch entry.scope {
             case .workspace:   return "doc.text"
             case .attachments: return "paperclip"
@@ -5599,7 +5599,7 @@ private struct ChatTrailingMenu: View, Equatable {
             .disabled(messagesEmpty)
 
             Button(role: .destructive) { onClearChat() } label: {
-                Label(AppLocalized("Clear Chat"), systemImage: "trash")
+                Label(AppLocalized("Clear Chat"), systemImage: "trash.fill")
             }
             .disabled(messagesEmpty)
 
@@ -5622,7 +5622,7 @@ private struct ChatTrailingMenu: View, Equatable {
             }
 
             Button { onOpenTerminal() } label: {
-                Label(AppLocalized("Open Terminal"), systemImage: "terminal")
+                Label(AppLocalized("Open Terminal"), systemImage: "terminal.fill")
             }
 
             Button { onOpenBrowser() } label: {
@@ -5630,7 +5630,7 @@ private struct ChatTrailingMenu: View, Equatable {
             }
 
             Button { onBrowseFiles() } label: {
-                Label(AppLocalized("Browse Chat Files"), systemImage: "folder")
+                Label(AppLocalized("Browse Chat Files"), systemImage: "folder.fill")
             }
 
             Divider()
@@ -5653,7 +5653,7 @@ private struct ChatTrailingMenu: View, Equatable {
                 get: { speakEnabled },
                 set: { setSpeakEnabled($0) }
             )) {
-                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2")
+                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")
             }
 
             // [T-menu-below-bubble 09-12] Voice Capsule + AI Voice Replies moved
@@ -5835,7 +5835,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                      image: UIImage(systemName: "arrow.down.right.and.arrow.up.left"),
                      attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onCompact() },
             UIAction(title: AppLocalized("Clear Chat"),
-                     image: UIImage(systemName: "trash"),
+                     image: UIImage(systemName: "trash.fill"),
                      attributes: key.messagesEmpty ? [.destructive, .disabled] : [.destructive]) { _ in coordinator.parent.onClearChat() },
         ]))
 
@@ -5855,11 +5855,11 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
 
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: AppLocalized("Open Terminal"),
-                     image: UIImage(systemName: "terminal")) { _ in coordinator.parent.onOpenTerminal() },
+                     image: UIImage(systemName: "terminal.fill")) { _ in coordinator.parent.onOpenTerminal() },
             UIAction(title: AppLocalized("Open Browser"),
                      image: UIImage(systemName: "globe")) { _ in coordinator.parent.onOpenBrowser() },
             UIAction(title: AppLocalized("Browse Chat Files"),
-                     image: UIImage(systemName: "folder")) { _ in coordinator.parent.onBrowseFiles() },
+                     image: UIImage(systemName: "folder.fill")) { _ in coordinator.parent.onBrowseFiles() },
         ]))
 
         var sessionGroup: [UIMenuElement] = [
@@ -5873,7 +5873,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                                          image: UIImage(systemName: "brain.head.profile")) { _ in coordinator.parent.onMemories() })
         }
         sessionGroup.append(UIAction(title: AppLocalized("Speak Responses"),
-                                     image: UIImage(systemName: "speaker.wave.2"),
+                                     image: UIImage(systemName: "speaker.wave.2.fill"),
                                      state: key.speakEnabled ? .on : .off) { _ in
             coordinator.parent.setSpeakEnabled(!key.speakEnabled)
         })
@@ -6651,7 +6651,7 @@ private struct EmptyChatDirectoryTimeline: View {
                 Spacer()
                 Button(action: onBrowse) {
                     HStack(spacing: 4) {
-                        Image(systemName: "folder")
+                        Image(systemName: "folder.fill")
                             .font(.system(size: 10, weight: .semibold))
                         Text("Browse Chat Files")
                             .font(.system(size: 11, weight: .semibold))
@@ -7457,7 +7457,7 @@ struct ChatStickerPanel: View {
                                 Button(role: .destructive) {
                                     store.deleteSticker(id: sticker.id)
                                 } label: {
-                                    Label("删除表情包", systemImage: "trash")
+                                    Label("删除表情包", systemImage: "trash.fill")
                                 }
                             }
                         }
@@ -8430,7 +8430,7 @@ struct StickerPickerSheet: View {
                                     Button(role: .destructive) {
                                         store.deleteSticker(id: sticker.id)
                                     } label: {
-                                        Label("删除", systemImage: "trash")
+                                        Label("删除", systemImage: "trash.fill")
                                     }
                                 }
                             }

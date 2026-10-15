@@ -436,7 +436,7 @@ struct BackupSettingsView: View {
                         Button {
                             showSaveToFiles = true
                         } label: {
-                            Label("Save to Files…", systemImage: "folder")
+                            Label("Save to Files…", systemImage: "folder.fill")
                         }
                     }
 

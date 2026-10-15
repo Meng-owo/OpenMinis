@@ -250,7 +250,7 @@ struct SessionStorageDetailView: View {
                         FileBrowserView(rootPath: minisURL)
                     } label: {
                         HStack {
-                            Label("Browse Files", systemImage: "folder")
+                            Label("Browse Files", systemImage: "folder.fill")
                             Spacer()
                             Text(formatter.string(fromByteCount: currentMinisSize))
                                 .foregroundStyle(.secondary)

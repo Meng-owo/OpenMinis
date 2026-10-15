@@ -93,7 +93,7 @@ struct PersonaContactsView: View {
                             Button(role: .destructive) {
                                 deleteTarget = persona
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label("删除", systemImage: "trash.fill")
                             }
                         }
                         Button {
@@ -432,7 +432,7 @@ struct PersonaDetailHomeView: View {
                                     store.deletePersona(p.id)
                                     dismiss()
                                 } label: {
-                                    Label("删除人设", systemImage: "trash")
+                                    Label("删除人设", systemImage: "trash.fill")
                                 }
                             }
                         } label: {

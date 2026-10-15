@@ -83,7 +83,7 @@ struct ThinkingRulesSection: View {
     private var unsupportedNoticeSection: some View {
         Section {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "info.circle")
+                Image(systemName: "info.circle.fill")
                     .foregroundStyle(.secondary)
                 Text("This provider uses an official protocol, so its thinking parameters are maintained by 我的小家. Custom rules apply to OpenAI-compatible providers on the Chat Completions API.")
                     .font(.footnote)

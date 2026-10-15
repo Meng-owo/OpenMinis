@@ -256,7 +256,7 @@ struct MountedFoldersSettingsView: View {
 private struct InfoBanner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Mount external folders", systemImage: "info.circle")
+            Label("Mount external folders", systemImage: "info.circle.fill")
                 .font(.subheadline.weight(.semibold))
             Text("Picked folders are bind-mounted at /var/minis/mounts/<name>. You can browse them in Browse Files and read/write them directly from the iSH shell, just like /var/minis/shared. Up to 10 folders can be mounted at a time.")
                 .font(.caption)

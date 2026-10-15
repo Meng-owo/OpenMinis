@@ -101,7 +101,7 @@ struct FileBrowserView: View {
             } else if viewModel.items.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "folder")
+                    Image(systemName: "folder.fill")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
                     Text("Empty folder")
@@ -338,7 +338,7 @@ struct FileBrowserView: View {
                 )
             }
             Toggle(isOn: $foldersFirst) {
-                Label("Folders First", systemImage: "folder")
+                Label("Folders First", systemImage: "folder.fill")
             }
             Toggle(isOn: $showHidden) {
                 Label(
@@ -769,7 +769,7 @@ private struct FileBrowserRow: View {
                     Label("Copy to…", systemImage: "doc.on.doc")
                 }
                 Button { onMove() } label: {
-                    Label("Move to…", systemImage: "folder")
+                    Label("Move to…", systemImage: "folder.fill")
                 }
                 Divider()
                 if !item.isDirectory {
@@ -1657,7 +1657,7 @@ private struct DirectoryPickerView: View {
             if items.isEmpty {
                 Spacer()
                 VStack(spacing: 12) {
-                    Image(systemName: "folder")
+                    Image(systemName: "folder.fill")
                         .font(.system(size: 48))
                         .foregroundColor(.secondary)
                     Text("Empty folder")

@@ -180,15 +180,15 @@ struct AssistantBlockView: View {
     /// per-block switch below and the tool-group folding card.
     static func toolCapsuleIcon(for kind: AssistantBlockKind) -> String {
         switch kind {
-        case .shellTool: return "terminal"
-        case .fileReadTool: return "doc.text"
+        case .shellTool: return "terminal.fill"
+        case .fileReadTool: return "doc.text.fill"
         case .fileWriteTool: return "doc.text.fill"
         case .fileEditTool: return "square.and.pencil"
         case .browserTool: return "globe"
-        case .readImageTool: return "photo"
+        case .readImageTool: return "photo.fill"
         case .memoryTool: return "brain.head.profile"
-        case .askUserTool: return "questionmark.circle"
-        case .text, .thinking, .info: return "wrench.and.screwdriver"
+        case .askUserTool: return "questionmark.circle.fill"
+        case .text, .thinking, .info: return "wrench.and.screwdriver.fill"
         }
     }
 

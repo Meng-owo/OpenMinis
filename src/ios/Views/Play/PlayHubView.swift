@@ -239,7 +239,7 @@ struct PlayHubView: View {
                     currentFileTypes = [.item]
                     showFileImporter = true
                 } label: {
-                    Label("从文件导入（音频/文档/任意）", systemImage: "folder")
+                    Label("从文件导入（音频/文档/任意）", systemImage: "folder.fill")
                 }
             } label: {
                 Image(systemName: "plus")

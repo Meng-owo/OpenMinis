@@ -60,9 +60,9 @@ extension ModelEntry {
 
         // Cloud / regular models: glyph by primary modality; credentialed.
         let symbol: String
-        if isTTS { symbol = "speaker.wave.2" }
+        if isTTS { symbol = "speaker.wave.2.fill" }
         else if isASR { symbol = "waveform.badge.mic" }
-        else if m.contains(.imageOutput) { symbol = "photo" }
+        else if m.contains(.imageOutput) { symbol = "photo.fill" }
         else { symbol = "circle.fill" }
         return ModelDisplayTraits(
             isOffline: false,

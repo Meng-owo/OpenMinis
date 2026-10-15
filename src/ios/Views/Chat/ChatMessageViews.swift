@@ -309,7 +309,7 @@ struct ChatMessageRow: View {
         case .compactDivider:
             compactDividerRow
         case .systemInfo:
-            systemDividerRow(icon: message.isCompactLoading ? nil : (message.systemIcon ?? "info.circle"),
+            systemDividerRow(icon: message.isCompactLoading ? nil : (message.systemIcon ?? "info.circle.fill"),
                              loading: message.isCompactLoading, compact: false)
         }
     }
@@ -339,7 +339,7 @@ struct ChatMessageRow: View {
                             showCompactSummary = true
                         }
                     } label: {
-                        Image(systemName: "info.circle")
+                        Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
                     }
                     .buttonStyle(.plain)
@@ -541,7 +541,7 @@ struct ChatMessageRow: View {
                     Button(role: .destructive) {
                         showDeleteFromConfirm = true
                     } label: {
-                        Label("Delete From Here", systemImage: "trash")
+                        Label("Delete From Here", systemImage: "trash.fill")
                     }
                 }
                 if let onCompact {

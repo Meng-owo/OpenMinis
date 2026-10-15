@@ -3534,7 +3534,7 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
             children.append(
                 UICommand(
                     title: AppLocalized("Read Selected Aloud"),
-                    image: UIImage(systemName: "speaker.wave.2"),
+                    image: UIImage(systemName: "speaker.wave.2.fill"),
                     action: #selector(readSelectedAloud)
                 )
             )
@@ -4749,7 +4749,7 @@ final class ImageAttachment: NSTextAttachment {
         container.addSubview(bg)
 
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 32, weight: .light)
-        let icon = UIImageView(image: UIImage(systemName: "photo", withConfiguration: iconConfig))
+        let icon = UIImageView(image: UIImage(systemName: "photo.fill", withConfiguration: iconConfig))
         icon.tintColor = .tertiaryLabel
         icon.sizeToFit()
         icon.center = CGPoint(x: bg.bounds.midX, y: bg.bounds.midY - 12)
@@ -6833,7 +6833,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         if onReadAloud != nil {
             extras.append(UICommand(
                 title: AppLocalized("Read from Start"),
-                image: UIImage(systemName: "speaker.wave.2"),
+                image: UIImage(systemName: "speaker.wave.2.fill"),
                 action: #selector(readReplyFromMenu(_:))
             ))
         }

@@ -4799,7 +4799,7 @@ struct ContentView: View {
                 Button(role: .destructive) {
                     requestDeleteFolderWithSessions(folder)
                 } label: {
-                    Label("Delete Group & \(group.totalCount) Sessions", systemImage: "trash")
+                    Label("Delete Group & \(group.totalCount) Sessions", systemImage: "trash.fill")
                 }
             }
         }
@@ -4893,7 +4893,7 @@ struct ContentView: View {
                     sessionIds: selectedIds, fromMultiSelect: true, anyFiled: anyFiled)
             } label: {
                 VStack(spacing: 4) {
-                    Image(systemName: "folder")
+                    Image(systemName: "folder.fill")
                         .font(.system(size: 20))
                     Text("Move")
                         .font(.caption2)
@@ -4938,7 +4938,7 @@ struct ContentView: View {
                 }
             } label: {
                 VStack(spacing: 4) {
-                    Image(systemName: "trash")
+                    Image(systemName: "trash.fill")
                         .font(.system(size: 20))
                     Text("Delete")
                         .font(.caption2)
@@ -5751,7 +5751,7 @@ private struct ExportPreviewSheet: View {
                     actionButton(icon: "square.and.arrow.up", label: AppLocalized("Share")) {
                         showShareSheet = true
                     }
-                    actionButton(icon: "folder", label: AppLocalized("Save to Files")) {
+                    actionButton(icon: "folder.fill", label: AppLocalized("Save to Files")) {
                         showFilePicker = true
                     }
                 }
@@ -6029,7 +6029,7 @@ private struct SessionContextMenu: View, Equatable {
             // looked up in Localizable.xcstrings (a plain String would bypass
             // localization entirely).
             Label(LocalizedStringKey(key.filed ? "Change Group" : "Move to Group"),
-                  systemImage: key.filed ? "folder.badge.gearshape" : "folder")
+                  systemImage: key.filed ? "folder.badge.gearshape" : "folder.fill")
         }
         if iCloudSyncVisible {
             Button {
@@ -6061,7 +6061,7 @@ private struct SessionContextMenu: View, Equatable {
         Button(role: .destructive) {
             actions.send(.delete(key.sid))
         } label: {
-            Label("Delete", systemImage: "trash")
+            Label("Delete", systemImage: "trash.fill")
         }
     }
 
