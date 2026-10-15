@@ -103,7 +103,7 @@ struct BubbleAudioActionBar: View {
             MinisToast.show(AppLocalized("Copied", comment: "Message action bar: copied toast"),
                             systemImage: "doc.on.doc")
         } label: {
-            actionIcon("doc.on.doc", label: "Copy")
+            actionIcon("doc.on.doc.fill", label: "Copy")
         }
         .buttonStyle(.borderless)
     }
@@ -112,7 +112,7 @@ struct BubbleAudioActionBar: View {
 
     private var deleteButton: some View {
         Button(role: .destructive) { onDelete() } label: {
-            actionIcon("trash", label: "Delete")
+            actionIcon("trash.fill", label: "Delete")
         }
         .buttonStyle(.borderless)
     }
@@ -124,19 +124,26 @@ struct BubbleAudioActionBar: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showFeedbackSheet = true
         } label: {
-            actionIcon("text.bubble", label: "Feedback")
+            actionIcon("text.bubble.fill", label: "Feedback")
         }
         .buttonStyle(.borderless)
     }
 
     // MARK: Icon helper
 
+    // [批D · 10-15 醒醒] 白底圆角 + 黑实心偏圆润图标（全部走全局变量）。
     private func actionIcon(_ systemName: String, label: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(MinisTheme.secondaryText)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(ChatColors.primaryText)
             .frame(width: 28, height: 28)
-            .contentShape(Rectangle())
+            .background(ChatColors.secondaryBg,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(ChatColors.toolBorder.opacity(0.35), lineWidth: 0.6)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .accessibilityLabel(label)
     }
 }
