@@ -334,9 +334,9 @@ struct AppearanceStudioView: View {
                         .padding(10)
                 }
                 .frame(height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .stroke(studio.color(.border, scope: wallpaperScope), lineWidth: 0.8)
                 )
 

@@ -774,7 +774,37 @@ extension View {
         modifier(AppearancePageModifier(scope: scope))
     }
 
-    /// One-line theming for a settings-scope page: palette canvas/accent/text
+    // MARK: - [3-4 醒醒] 统一卡片修饰器 (MinisStandardCard)
+// 标准卡片：surface + 16pt (或 12pt 行内) 连续圆角 + 16x12 内距 + 0.5pt border 描边
+
+public struct MinisStandardCard: ViewModifier {
+    public var cornerRadius: CGFloat = 16
+    public var paddingHorizontal: CGFloat = 16
+    public var paddingVertical: CGFloat = 12
+    public var strokeOpacity: Double = 0.35
+
+    public func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, paddingHorizontal)
+            .padding(.vertical, paddingVertical)
+            .background(
+                AppearanceStudio.shared.color(.surface),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppearanceStudio.shared.color(.border).opacity(strokeOpacity), lineWidth: 0.5)
+            )
+    }
+}
+
+public extension View {
+    func minisStandardCard(cornerRadius: CGFloat = 16, hPadding: CGFloat = 16, vPadding: CGFloat = 12) -> some View {
+        modifier(MinisStandardCard(cornerRadius: cornerRadius, paddingHorizontal: hPadding, paddingVertical: vPadding))
+    }
+}
+
+/// One-line theming for a settings-scope page: palette canvas/accent/text
     /// + transparent nav bar (via appearancePage) + List section cards that
     /// follow the palette "卡片" (surface) color instead of the system
     /// grouped background — so the 色盘 卡片 row actually controls them.

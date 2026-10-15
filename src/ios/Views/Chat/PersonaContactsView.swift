@@ -9,7 +9,7 @@ struct SettingsRowIcon: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(color)
                 .frame(width: 28, height: 28)
             Image(systemName: icon)

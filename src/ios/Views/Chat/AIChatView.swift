@@ -6887,10 +6887,10 @@ public struct PlusPanelTileButton: View {
         }) {
             VStack(spacing: 8) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(CSSThemeVariables.optionBg(isDark: isDark))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                         )
                         .shadow(
@@ -8466,7 +8466,7 @@ public struct StickerZoomPreviewSheet: View {
                     }
                     .padding(16)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .padding()
             }

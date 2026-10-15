@@ -37,9 +37,9 @@ struct AboutView: View {
                         Image(uiImage: icon)
                             .resizable()
                             .frame(width: 80, height: 80)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 18)
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .stroke(Color(UIColor.separator), lineWidth: 0.5)
                             )
                     }

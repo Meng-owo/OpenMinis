@@ -293,8 +293,8 @@ struct AgentCallbackCellView: View {
             }
             .padding(.horizontal, 12)
             .frame(height: Self.cardHeight)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(ChatColors.secondaryBg))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(accent.opacity(0.35), lineWidth: 0.8))
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(ChatColors.secondaryBg))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(accent.opacity(0.35), lineWidth: 0.8))
             .contentShape(Rectangle())
             .onTapGesture {
                 var info: [String: Any] = ["callback": callback]

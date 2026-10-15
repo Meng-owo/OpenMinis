@@ -227,9 +227,9 @@ struct ChatFeedbackSheet: View {
                                 .frame(height: 48)
                                 .background(isThumbUp ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
                                 .foregroundStyle(isThumbUp ? CSSThemeVariables.accentFg(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .strokeBorder(isThumbUp ? Color.clear : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                                 )
                                 .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06), radius: 6, x: 0, y: 2)
@@ -260,9 +260,9 @@ struct ChatFeedbackSheet: View {
                                 .frame(height: 48)
                                 .background(isThumbDown ? CSSThemeVariables.dangerSoft(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
                                 .foregroundStyle(isThumbDown ? CSSThemeVariables.danger(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .strokeBorder(isThumbDown ? CSSThemeVariables.danger(isDark: isDark).opacity(0.35) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
                                 )
                                 .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06), radius: 6, x: 0, y: 2)

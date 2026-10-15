@@ -17,7 +17,7 @@ struct ICloudBackupView: View {
                             .foregroundColor(.white)
                             .frame(width: 30, height: 30)
                             .background(MinisTheme.destructive)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         Text("iCloud is not available")
                             .foregroundColor(.primary)
                     }
@@ -28,7 +28,7 @@ struct ICloudBackupView: View {
                             .foregroundColor(.white)
                             .frame(width: 30, height: 30)
                             .background(MinisTheme.success)
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         Text("iCloud connected")
                             .foregroundColor(.green)
                     }
@@ -47,7 +47,7 @@ struct ICloudBackupView: View {
                                     .foregroundColor(.white)
                                     .frame(width: 30, height: 30)
                                     .background(category.iconColor)
-                                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(category.displayName)
                                         .foregroundColor(.primary)
@@ -158,7 +158,7 @@ struct ICloudBackupView: View {
                 .foregroundColor(.white)
                 .frame(width: 30, height: 30)
                 .background(entry.category.iconColor)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.category.displayName)

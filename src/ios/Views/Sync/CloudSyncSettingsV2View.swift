@@ -109,7 +109,7 @@ struct CloudSyncSettingsV2View: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
-                                    .background(iconColor(for: cat), in: RoundedRectangle(cornerRadius: 7))
+                                    .background(iconColor(for: cat), in: RoundedRectangle(cornerRadius: 8))
                                 Text(LocalizedStringKey(cat.displayName))
                             }
                         }
@@ -127,7 +127,7 @@ struct CloudSyncSettingsV2View: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(.white)
                                     .frame(width: 28, height: 28)
-                                    .background(Color.gray, in: RoundedRectangle(cornerRadius: 7))
+                                    .background(Color.gray, in: RoundedRectangle(cornerRadius: 8))
                                 Text("Max Per-File Size")
                             }
                         }
