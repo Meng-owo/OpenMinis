@@ -456,11 +456,28 @@ actor EvolutionStore {
 
     func insert(_ lesson: EvolutionLesson, now: Date = Date()) {
         let sql = """
-            INSERT OR REPLACE INTO lessons
+            INSERT INTO lessons
               (id, scope, persona_id, task_signature, conditions, recommendation,
                anti_pattern, evidence_actions, status, success_count, failure_count,
                version, parent_id, last_verified_at, inject_priority, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              scope = excluded.scope,
+              persona_id = excluded.persona_id,
+              task_signature = excluded.task_signature,
+              conditions = excluded.conditions,
+              recommendation = excluded.recommendation,
+              anti_pattern = excluded.anti_pattern,
+              evidence_actions = excluded.evidence_actions,
+              status = excluded.status,
+              success_count = excluded.success_count,
+              failure_count = excluded.failure_count,
+              version = excluded.version,
+              parent_id = excluded.parent_id,
+              last_verified_at = excluded.last_verified_at,
+              inject_priority = excluded.inject_priority,
+              updated_at = excluded.updated_at
+              -- created_at 故意不进更新集：首创时间保真（P6-4）
         """
         write(sql) { st in
             bindText(st, 1, lesson.id)
