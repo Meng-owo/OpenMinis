@@ -882,7 +882,6 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "桥·对外连接"
         case .webSearch: return "联网搜索"
         case .scheduled: return "定时任务与脉搏"
-        case .evolution: return "自我进化"
         }
     }
     var systemName: String {
