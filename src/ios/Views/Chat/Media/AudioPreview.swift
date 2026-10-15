@@ -405,6 +405,7 @@ private struct CircleIconButton: View {
 
 private extension UIImage {
     /// Returns an approximate dominant color by sampling the image at low resolution.
+    @MainActor
     func dominantSwiftUIColor() -> Color {
         guard let resized = resized(to: CGSize(width: 50, height: 50)),
               let cgImage = resized.cgImage else { return AppearanceStudio.shared.color(.surface, scope: .chat) }

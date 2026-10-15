@@ -7673,7 +7673,7 @@ struct ChatVoiceSettingsSheet: View {
                                     .font(.subheadline.weight(.medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
-                                    .background(MinisTheme.secondaryBg, in: Capsule())
+                                    .background(MinisTheme.mutedSurface, in: Capsule())
                             }
                             .buttonStyle(.plain)
 
@@ -8969,7 +8969,7 @@ struct StickerEditSheet: View {
             allowedContentTypes: [.image, .gif, .data],
             allowsMultipleSelection: false
         ) { result in
-            guard let url = try? result.get() else { return }
+            guard let urls = try? result.get(), let url = urls.first else { return }
             guard url.startAccessingSecurityScopedResource() else { return }
             defer { url.stopAccessingSecurityScopedResource() }
             if let data = try? Data(contentsOf: url), !data.isEmpty {
