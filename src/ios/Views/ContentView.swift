@@ -3485,6 +3485,7 @@ struct ContentView: View {
     ///    pack + dark mode + wallpaper so it reads as one surface with the
     ///    chat canvas behind it).
     private var homeBottomBar: some View {
+        let studio = AppearanceStudio.shared
         HStack(spacing: 0) {
             homeBottomTab(
                 icon: {
@@ -3529,9 +3530,13 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(height: 48)
+        .frame(height: 36)
+        .padding(.horizontal, 14)
         .contentShape(Rectangle())
         .background(homeBottomBarBackground)
+        .background(
+            Capsule().fill(studio.color(.raised, scope: .home).opacity(0.92))
+        )
     }
 
     /// [T-home-bottom-bar-icons-only][10-15 醒醒 9b] 底栏去文字只留图标居中，
