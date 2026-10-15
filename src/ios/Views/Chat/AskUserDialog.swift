@@ -15,46 +15,54 @@ public enum CSSThemeVariables {
     private static var studio: AppearanceStudio { .shared }
 
     /// --color-card / var(--dudu-card)
+    /// [4-1 醒醒] 背景卡接入全局 surface 角色，支持壁纸透明度
     public static func card(isDark: Bool) -> Color {
         if studio.hasWallpaper(.chat) {
-            return studio.color(.surface, scope: .chat).opacity(studio.surfaceOpacity)
+            return studio.color(.surface, scope: .chat, variant: isDark ? .dark : .light).opacity(studio.surfaceOpacity)
         }
-        return isDark ? Color(hex: "#2A2523") : Color(hex: "#FFFFFF")
+        return studio.color(.surface, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-bg / var(--dudu-cream)
+    /// [4-1 醒醒] 背景底衬接入全局 canvas 角色
     public static func bg(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#1C1917") : Color(hex: "#FBF8EA")
+        studio.color(.canvas, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-text-main / var(--dudu-brown)
+    /// [4-1 醒醒] 主文字接入全局 primaryText 角色
     public static func textMain(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#E8D9D2") : Color(hex: "#8B736C")
+        studio.color(.primaryText, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-text-dim / var(--dudu-text-dim)
+    /// [4-1 醒醒] 次文字接入全局 secondaryText 角色
     public static func textDim(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#8A7A74") : Color(hex: "#A89890")
+        studio.color(.secondaryText, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-divider / var(--dudu-divider)
+    /// [4-1 醒醒] 分隔线接入全局 border 角色
     public static func divider(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#38302C") : Color(hex: "#F1E7E2")
+        studio.color(.border, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-accent-soft / var(--dudu-pink-soft)
+    /// [4-1 醒醒] 柔和强调色由 accent 角色动态派生
     public static func accentSoft(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#4A3A36") : Color(hex: "#FFE7E8")
+        studio.color(.accent, scope: .chat, variant: isDark ? .dark : .light).opacity(0.18)
     }
 
     /// --color-accent / var(--dudu-pink)
+    /// [4-1 醒醒] 强调色接入全局 accent 角色
     public static func accent(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#C2869F") : Color(hex: "#ECC7D6")
+        studio.color(.accent, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-accent-fg
+    /// [4-1 醒醒] 强调色前景字（按钮等）
     public static func accentFg(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#FFFFFF") : Color(hex: "#FFFFFF")
+        Color.white
     }
 
     /// --color-option-bg (输入框/未选中胶囊底色)
@@ -80,13 +88,14 @@ public enum CSSThemeVariables {
     }
 
     /// --color-danger
+    /// [4-1 醒醒] 危险操作接入全局 destructive 角色
     public static func danger(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#E05D52") : Color(hex: "#D94841")
+        studio.color(.destructive, scope: .chat, variant: isDark ? .dark : .light)
     }
 
     /// --color-danger-soft
     public static func dangerSoft(isDark: Bool) -> Color {
-        isDark ? Color(hex: "#3D2423") : Color(hex: "#FDECEB")
+        studio.color(.destructive, scope: .chat, variant: isDark ? .dark : .light).opacity(0.18)
     }
 
     /// --color-success
