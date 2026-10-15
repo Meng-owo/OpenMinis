@@ -373,7 +373,7 @@ struct PersonaDetailHomeView: View {
                     } header: {
                         Text("微调与能力")
                     } footer: {
-                        Text("人设各维度均与 Kelivo 深度打通，所有参数与规则实时生效。")
+                        Text("人设各参数与规则实时生效。")
                     }
 
                     // 对话与快捷操作
