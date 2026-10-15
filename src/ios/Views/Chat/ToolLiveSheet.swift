@@ -449,7 +449,7 @@ struct ToolLiveSheet: View {
         // distribute space between the fixed chrome and the flexible content.
         // On iPhone `.infinity` just fills the sheet detent as before.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(UIColor.systemGroupedBackground))
+        .background(AppearanceStudio.shared.color(.surface, scope: .chat))
         .onAppear {
             startBrowserTimer()
             MinisOpenURLBroker.shared.toolSheetVisible = true
@@ -672,7 +672,7 @@ struct ToolLiveSheet: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(UIColor.systemBackground))
+        .background(AppearanceStudio.shared.color(.canvas, scope: .chat))
         .fullScreenCover(isPresented: $showTerminal) {
             NavigationStack {
                 // Pre-fill the shell command the tool is currently running,
@@ -886,7 +886,7 @@ struct ToolLiveSheet: View {
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+                        .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.5), lineWidth: 0.5))
                     .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
                     .contextMenu {
                         Button { UIPasteboard.general.image = image } label: {
@@ -903,10 +903,10 @@ struct ToolLiveSheet: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "globe")
                                     .font(.system(size: 12))
-                                    .foregroundStyle(Color(UIColor.secondaryLabel))
+                                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                                 Text("Result")
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(Color(UIColor.label))
+                                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity)
@@ -918,7 +918,7 @@ struct ToolLiveSheet: View {
                             // Result content
                             Text(text)
                                 .font(.system(size: 13, design: .monospaced))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .textSelection(.enabled)
                                 .padding(14)
@@ -976,10 +976,10 @@ struct ToolLiveSheet: View {
                         HStack(spacing: 6) {
                             Image(systemName: "globe")
                                 .font(.system(size: 12))
-                                .foregroundStyle(Color(UIColor.secondaryLabel))
+                                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                             Text("Result")
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                 .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
@@ -991,7 +991,7 @@ struct ToolLiveSheet: View {
                         // Result content
                         Text(sanitizeForDisplay(text))
                             .font(.system(size: 13, design: .monospaced))
-                            .foregroundStyle(Color(UIColor.label))
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                             .padding(14)
@@ -1085,14 +1085,14 @@ struct ToolLiveSheet: View {
         HStack(spacing: 6) {
             Image(systemName: "doc.text")
                 .font(.system(size: 12))
-                .foregroundStyle(Color(UIColor.secondaryLabel))
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
             Text(fileName)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color(UIColor.label))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                 .lineLimit(1)
             Text("(\(Self.formatCharCount(charCount)))")
                 .font(.system(size: 11))
-                .foregroundStyle(Color(UIColor.tertiaryLabel))
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -1169,11 +1169,11 @@ struct ToolLiveSheet: View {
                                     .foregroundStyle(ChatColors.warning)
                                 Text(fileName)
                                     .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(Color(UIColor.label))
+                                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                     .lineLimit(1)
                                 Text("(\(sizeLabel))")
                                     .font(.system(size: 11))
-                                    .foregroundStyle(isStreaming ? ChatColors.warning.opacity(0.8) : Color(UIColor.tertiaryLabel))
+                                    .foregroundStyle(isStreaming ? ChatColors.warning.opacity(0.8) : AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity)
@@ -1235,7 +1235,7 @@ struct ToolLiveSheet: View {
                                     switch block.toolStatus {
                                     case .failed:    return (AppLocalized("Failed to edit"), ChatColors.destructive)
                                     case .cancelled: return (AppLocalized("Cancelled"),     ChatColors.warning)
-                                    default:         return (AppLocalized("Edited"),        Color(UIColor.label))
+                                    default:         return (AppLocalized("Edited"),        AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                     }
                                 }()
                                 let isFailure: Bool = {
@@ -1250,7 +1250,7 @@ struct ToolLiveSheet: View {
                                             .foregroundStyle(labelColor)
                                         Text(filePath)
                                             .font(.system(size: 12, design: .monospaced))
-                                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                         Spacer()
@@ -1263,14 +1263,14 @@ struct ToolLiveSheet: View {
                                         // lines to keep the card height bounded.
                                         Text(Self.trimmedErrorMessage(errText))
                                             .font(.system(size: 12, design: .monospaced))
-                                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                                             .lineLimit(6)
                                             .frame(maxWidth: .infinity, alignment: .leading)
                                             .textSelection(.enabled)
                                     } else if let detail = resultDetail {
                                         Text(detail)
                                             .font(.system(size: 12))
-                                            .foregroundStyle(Color(UIColor.tertiaryLabel))
+                                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                                     }
                                 }
                                 .padding(.horizontal, 14)
@@ -1373,7 +1373,7 @@ struct ToolLiveSheet: View {
                 Spacer()
                 Text(Self.formatBytes(script.utf8.count))
                     .font(.system(size: 11))
-                    .foregroundStyle(Color(UIColor.tertiaryLabel))
+                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -1384,7 +1384,7 @@ struct ToolLiveSheet: View {
             // Script content
             Text(script)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(Color(UIColor.label))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
                 .padding(12)
@@ -1475,14 +1475,14 @@ struct ToolLiveSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: isRead ? "doc.text" : "doc.text.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                         Text(fileName)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color(UIColor.label))
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                             .lineLimit(1)
                         Text("(\(sizeLabel))")
                             .font(.system(size: 11))
-                            .foregroundStyle(isStreaming ? ChatColors.warning.opacity(0.8) : Color(UIColor.tertiaryLabel))
+                            .foregroundStyle(isStreaming ? ChatColors.warning.opacity(0.8) : AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -1495,7 +1495,7 @@ struct ToolLiveSheet: View {
                         ForEach(chunks, id: \.id) { chunk in
                             Text(chunk.text)
                                 .font(.system(size: 13, design: .monospaced))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 14)
                         }
@@ -1520,16 +1520,16 @@ struct ToolLiveSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "info.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(Color(UIColor.secondaryLabel))
+                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
                         Text(fullPath)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Color(UIColor.label))
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .chat))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer(minLength: 4)
                         Text(sizeLabel)
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundStyle(Color(UIColor.tertiaryLabel))
+                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
@@ -1776,7 +1776,7 @@ struct ToolLiveSheet: View {
                             .frame(maxWidth: .infinity)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
                             .overlay(RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+                                .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.5), lineWidth: 0.5))
                             .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
                             .contextMenu {
                                 Button { UIPasteboard.general.image = img } label: {
@@ -1922,7 +1922,7 @@ struct ToolLiveSheet: View {
             .padding(.horizontal, 24)
             .padding(.vertical, 12)
         }
-        .background(Color(UIColor.systemBackground))
+        .background(AppearanceStudio.shared.color(.canvas, scope: .chat))
     }
 
     // MARK: - Helpers
@@ -2081,7 +2081,7 @@ private struct ToolPreviewThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(UIColor.separator).opacity(0.4), lineWidth: 0.5)
+                .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.4), lineWidth: 0.5)
         )
         .overlay(alignment: .bottom) {
             if isLive && isShell {
@@ -2381,7 +2381,7 @@ private struct ToolStatusBarSurface: ViewModifier {
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(UIColor.separator).opacity(0.3), lineWidth: 0.5)
+                        .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.3), lineWidth: 0.5)
                 )
                 .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
         }

@@ -723,7 +723,7 @@ struct UnifiedModelPicker: View {
         HStack(spacing: 10) {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 20))
-                .foregroundStyle(isSelected ? MinisTheme.accent : Color(UIColor.tertiaryLabel))
+                .foregroundStyle(isSelected ? MinisTheme.accent : AppearanceStudio.shared.color(.secondaryText).opacity(0.7))
             Image(systemName: "square.stack.3d.up.fill")
                 .font(.caption).foregroundStyle(MinisTheme.accent)
 
@@ -731,7 +731,7 @@ struct UnifiedModelPicker: View {
                 HStack(spacing: 6) {
                     Text(group.name)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                     strategyBadge(group.strategy)
                 }
                 groupSubtitle(group)
@@ -763,7 +763,7 @@ struct UnifiedModelPicker: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
-                    .background(Color(UIColor.tertiarySystemFill))
+                    .background(AppearanceStudio.shared.color(.mutedSurface))
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
@@ -828,7 +828,7 @@ struct UnifiedModelPicker: View {
         .foregroundStyle(.secondary)
         .padding(.horizontal, 4)
         .padding(.vertical, 1)
-        .background(Color(UIColor.quaternarySystemFill))
+        .background(AppearanceStudio.shared.color(.mutedSurface).opacity(0.6))
         .clipShape(Capsule())
     }
 
@@ -955,7 +955,7 @@ struct UnifiedModelPicker: View {
         HStack(spacing: 10) {
             Image(systemName: isActive ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 17))
-                .foregroundStyle(isActive ? MinisTheme.accent : Color(UIColor.quaternaryLabel))
+                .foregroundStyle(isActive ? MinisTheme.accent : AppearanceStudio.shared.color(.secondaryText).opacity(0.4))
 
             providerDot(entry.model.provider)
                 .opacity(disabled ? 0.4 : 1)
@@ -964,7 +964,7 @@ struct UnifiedModelPicker: View {
                 HStack(spacing: 4) {
                     Text(entry.model.displayName)
                         .font(.subheadline)
-                        .foregroundStyle(disabled ? Color(UIColor.tertiaryLabel) : Color(UIColor.label))
+                        .foregroundStyle(disabled ? AppearanceStudio.shared.color(.secondaryText).opacity(0.7) : AppearanceStudio.shared.color(.primaryText))
                     if disabled {
                         Text("unavailable", comment: "Modality-incompatible model tag")
                             .font(.system(size: 9, weight: .medium))
@@ -1026,7 +1026,7 @@ struct UnifiedModelPicker: View {
         HStack(spacing: 10) {
             Image(systemName: "circle")
                 .font(.system(size: 17))
-                .foregroundStyle(Color(UIColor.quaternaryLabel))
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText).opacity(0.4))
 
             if let entry {
                 providerDot(entry.model.provider)
@@ -1035,7 +1035,7 @@ struct UnifiedModelPicker: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.model.displayName)
                         .font(.subheadline)
-                        .foregroundStyle(Color(UIColor.tertiaryLabel))
+                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText).opacity(0.7))
                     HStack(spacing: 4) {
                         if let instanceLabel = store.instance(for: entry.providerInstanceId)?.label {
                             Text(instanceLabel)
@@ -1054,7 +1054,7 @@ struct UnifiedModelPicker: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entryId.components(separatedBy: "/").last ?? entryId)
                         .font(.subheadline)
-                        .foregroundStyle(Color(UIColor.tertiaryLabel))
+                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText).opacity(0.7))
                     Text(reason)
                         .font(.caption2)
                         .foregroundStyle(.red.opacity(0.7))
@@ -1174,7 +1174,7 @@ struct UnifiedModelPicker: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                             .frame(width: 28, height: 28)
-                            .background(Color(UIColor.tertiarySystemFill))
+                            .background(AppearanceStudio.shared.color(.mutedSurface))
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -1208,7 +1208,7 @@ struct UnifiedModelPicker: View {
         return HStack(spacing: 10) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundStyle(isSelected ? MinisTheme.accent : Color(UIColor.tertiaryLabel))
+                    .foregroundStyle(isSelected ? MinisTheme.accent : AppearanceStudio.shared.color(.secondaryText).opacity(0.7))
 
                 Image(systemName: traits.iconSymbol)
                     .font(.system(size: 11))
@@ -1218,7 +1218,7 @@ struct UnifiedModelPicker: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.model.displayName)
                         .font(.subheadline)
-                        .foregroundStyle(disabled ? Color(UIColor.tertiaryLabel) : Color(UIColor.label))
+                        .foregroundStyle(disabled ? AppearanceStudio.shared.color(.secondaryText).opacity(0.7) : AppearanceStudio.shared.color(.primaryText))
                     HStack(spacing: 4) {
                         // Subtitle from traits (e.g. "iOS built-in, works offline")
                         // for built-ins; the raw model id for cloud models.
@@ -1236,7 +1236,7 @@ struct UnifiedModelPicker: View {
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
-                                    .background(Color(UIColor.tertiarySystemFill))
+                                    .background(AppearanceStudio.shared.color(.mutedSurface))
                                     .clipShape(RoundedRectangle(cornerRadius: 3))
                             }
                         }
