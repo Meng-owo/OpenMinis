@@ -425,7 +425,7 @@ private struct InstanceRow: View {
         let _ = store.authRevision  // subscribe to OAuth state changes
         HStack(spacing: 12) {
             Circle()
-                .fill(isConfigured && instance.isEnabled ? MinisTheme.success : Color(UIColor.quaternaryLabel))
+                .fill(isConfigured && instance.isEnabled ? MinisTheme.success : AppearanceStudio.shared.color(.secondaryText).opacity(0.4))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -458,7 +458,7 @@ private struct InstanceRow: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color(UIColor.quaternarySystemFill))
+                    .background(AppearanceStudio.shared.color(.mutedSurface).opacity(0.6))
                     .clipShape(Capsule())
             }
         }

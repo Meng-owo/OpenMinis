@@ -44,7 +44,7 @@ struct GroupSlotPicker: View {
         } label: {
             HStack {
                 Text(label)
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Spacer()
                 Text(selectedName)
                     .foregroundStyle(.secondary)

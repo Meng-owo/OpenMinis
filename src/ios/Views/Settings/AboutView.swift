@@ -40,7 +40,7 @@ struct AboutView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .stroke(Color(UIColor.separator), lineWidth: 0.5)
+                                    .stroke(AppearanceStudio.shared.color(.border), lineWidth: 0.5)
                             )
                     }
                     Text("我的小家")
@@ -68,7 +68,7 @@ struct AboutView: View {
                     Label {
                         HStack {
                             Text("GitHub Repository")
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
                                 .font(.caption)
@@ -82,7 +82,7 @@ struct AboutView: View {
                     Label {
                         HStack {
                             Text("Report an Issue")
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
                                 .font(.caption)

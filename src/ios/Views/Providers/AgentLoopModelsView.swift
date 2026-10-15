@@ -124,7 +124,7 @@ struct AgentLoopModelsSection: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 1)
-                                .background(Color(UIColor.tertiarySystemFill))
+                                .background(AppearanceStudio.shared.color(.mutedSurface))
                                 .clipShape(RoundedRectangle(cornerRadius: 3))
                         }
                     }
@@ -236,12 +236,12 @@ struct AddAgentLoopGroupsSheet: View {
                     HStack(spacing: 10) {
                         Image(systemName: selectedGroupIds.contains(group.id) ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 20))
-                            .foregroundStyle(selectedGroupIds.contains(group.id) ? MinisTheme.accent : Color(UIColor.tertiaryLabel))
+                            .foregroundStyle(selectedGroupIds.contains(group.id) ? MinisTheme.accent : AppearanceStudio.shared.color(.secondaryText).opacity(0.7))
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(group.name)
                                 .font(.subheadline.weight(.medium))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             let entries = group.memberEntryIds.compactMap { store.entry(for: $0) }
                             let names = entries.prefix(3).map(\.model.displayName)
                             let suffix = entries.count > 3 ? " +\(entries.count - 3)" : ""

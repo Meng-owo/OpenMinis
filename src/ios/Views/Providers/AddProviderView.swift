@@ -433,7 +433,7 @@ struct AddProviderView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(providerPickerLabel(type))
                                 .font(.body.weight(.medium))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Text(type.pickerSubtitle)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -472,7 +472,7 @@ struct AddProviderView: View {
 
                     Text("Or Import Provider from File")
                         .font(.body.weight(.medium))
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
 
                     Spacer()
 
@@ -508,7 +508,7 @@ struct AddProviderView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(template.name)
                                 .font(.body.weight(.medium))
-                                .foregroundStyle(Color(UIColor.label))
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Text(template.capability)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -563,12 +563,12 @@ struct AddProviderView: View {
                                 Image(systemName: cred == .apiKey ? "key" : "person.badge.shield.checkmark")
                                     .font(.body)
                                     .frame(width: 28)
-                                    .foregroundStyle(Color(UIColor.label))
+                                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(cred == .apiKey ? "API Key" : "OAuth")
                                         .font(.body.weight(.medium))
-                                        .foregroundStyle(Color(UIColor.label))
+                                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                     Text(credentialDescription(type: type, credential: cred))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)

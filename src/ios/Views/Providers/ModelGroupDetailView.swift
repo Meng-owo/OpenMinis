@@ -406,7 +406,7 @@ struct ModelGroupDetailView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.model.displayName)
                     .font(.subheadline)
-                    .foregroundStyle(providerDisabled ? Color.secondary : Color(UIColor.label))
+                    .foregroundStyle(providerDisabled ? Color.secondary : AppearanceStudio.shared.color(.primaryText))
                 if let instance = instance {
                     HStack(spacing: 4) {
                         Text(instance.label)
@@ -457,7 +457,7 @@ struct ModelGroupDetailView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(entry.model.displayName)
                     .font(.subheadline)
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Text("iOS built-in, works offline")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

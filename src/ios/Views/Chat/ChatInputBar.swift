@@ -33,7 +33,7 @@ struct SwipeToSendHint: View {
             // (`UIColor.systemBackground`), otherwise dark mode renders
             // white-on-white and the indicator vanishes (bug 2026-05-18).
             let chipBg = ChatColors.sendButton
-            let chipFg = Color(UIColor.systemBackground)
+            let chipFg = AppearanceStudio.shared.color(.canvas)
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 34))

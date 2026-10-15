@@ -84,7 +84,7 @@ struct OnboardingModelSelectionView: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? MinisTheme.accent : Color(UIColor.tertiarySystemFill))
+                        .fill(isSelected ? MinisTheme.accent : AppearanceStudio.shared.color(.mutedSurface))
                         .frame(width: 26, height: 26)
                     if isSelected, let idx = selectionIndex {
                         Text("\(idx + 1)")
@@ -94,7 +94,7 @@ struct OnboardingModelSelectionView: View {
                 }
                 Text(entry.model.displayName)
                     .font(.body)
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Spacer()
             }
         }

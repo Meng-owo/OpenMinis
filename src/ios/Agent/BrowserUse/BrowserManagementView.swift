@@ -87,7 +87,7 @@ struct BrowserManagementView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(profile.displayName, systemImage: profile.icon)
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                     Text(displayUA(for: profile))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -120,7 +120,7 @@ struct BrowserManagementView: View {
             } label: {
                 HStack {
                     Label("Custom", systemImage: "pencil.line")
-                        .foregroundStyle(Color(UIColor.label))
+                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                     Spacer()
                     if isSelected {
                         Image(systemName: "checkmark")
@@ -194,7 +194,7 @@ struct BrowserManagementView: View {
         } label: {
             HStack {
                 Label("Default (auto by UA)", systemImage: "arrow.counterclockwise")
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Spacer()
                 if !isCustomViewportActive {
                     Image(systemName: "checkmark")
@@ -211,7 +211,7 @@ struct BrowserManagementView: View {
         } label: {
             HStack {
                 Label("Custom", systemImage: "aspectratio")
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Spacer()
                 if isCustomViewportActive {
                     Image(systemName: "checkmark")
@@ -297,7 +297,7 @@ struct BrowserManagementView: View {
                 .foregroundStyle(.yellow)
             Text(message)
                 .font(.caption)
-                .foregroundStyle(Color(UIColor.label))
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
@@ -329,12 +329,12 @@ struct BrowserManagementView: View {
                             .background(
                                 isPresetActive(preset)
                                     ? Color.accentColor.opacity(0.18)
-                                    : Color(UIColor.tertiarySystemFill)
+                                    : AppearanceStudio.shared.color(.mutedSurface)
                             )
                             .foregroundStyle(
                                 isPresetActive(preset)
                                     ? Color.accentColor
-                                    : Color(UIColor.label)
+                                    : AppearanceStudio.shared.color(.primaryText)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }

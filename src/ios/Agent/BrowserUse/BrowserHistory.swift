@@ -200,7 +200,7 @@ struct BrowserHistoryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title.isEmpty ? entry.domain : entry.title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color(UIColor.label))
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                     .lineLimit(1)
 
                 Text(entry.url)

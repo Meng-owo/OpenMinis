@@ -656,7 +656,7 @@ private struct MinisImageView: View {
                         .frame(maxWidth: 400, maxHeight: maxH, alignment: .leading)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .overlay(RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+                            .stroke(AppearanceStudio.shared.color(.border).opacity(0.5), lineWidth: 0.5))
                         .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .onTapGesture { showFullscreen = true }
@@ -683,7 +683,7 @@ private struct MinisImageView: View {
                 .frame(maxWidth: 400, maxHeight: maxH, alignment: .leading)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+                    .stroke(AppearanceStudio.shared.color(.border).opacity(0.5), lineWidth: 0.5))
                 .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .onTapGesture { showFullscreen = true }

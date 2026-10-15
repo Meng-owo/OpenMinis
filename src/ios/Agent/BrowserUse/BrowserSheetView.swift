@@ -57,7 +57,7 @@ struct BrowserSheetView: View {
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color(UIColor.secondarySystemBackground))
+                    .background(AppearanceStudio.shared.color(.surface))
                     .allowsHitTesting(!(isAgentBusy && !isTakeoverActive))
                 }
 
@@ -79,7 +79,7 @@ struct BrowserSheetView: View {
                         // agent/manual navigation failures (blank page otherwise).
                         BrowserLoadErrorOverlay(manager: manager)
                     } else {
-                        Color(UIColor.systemBackground)
+                        AppearanceStudio.shared.color(.canvas)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
 
@@ -164,7 +164,7 @@ struct BrowserSheetView: View {
                     }
                     .font(.system(size: 18))
                     .padding(.vertical, 10)
-                    .background(Color(UIColor.secondarySystemBackground))
+                    .background(AppearanceStudio.shared.color(.surface))
                     .allowsHitTesting(!(isAgentBusy && !isTakeoverActive))
                 }
             }
@@ -273,7 +273,7 @@ struct BrowserSheetView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         }
-        .background(Color(UIColor.tertiarySystemBackground))
+        .background(AppearanceStudio.shared.color(.raised))
     }
 
     private func tabButton(for tab: BrowserTabPool.Tab) -> some View {
@@ -458,7 +458,7 @@ struct BrowserDownloadBanner: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(AppearanceStudio.shared.color(.surface))
         }
     }
 }

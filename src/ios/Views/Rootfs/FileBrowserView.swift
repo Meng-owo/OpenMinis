@@ -91,7 +91,7 @@ struct FileBrowserView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(AppearanceStudio.shared.color(.surface))
 
             // File list
             if viewModel.isLoading {
@@ -1651,7 +1651,7 @@ private struct DirectoryPickerView: View {
                 .padding(.horizontal)
                 .padding(.vertical, 8)
             }
-            .background(Color(UIColor.secondarySystemBackground))
+            .background(AppearanceStudio.shared.color(.surface))
 
             // Directory list
             if items.isEmpty {

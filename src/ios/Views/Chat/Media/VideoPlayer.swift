@@ -53,7 +53,7 @@ struct MinisVideoPlayerView: View {
                 .frame(maxWidth: 400, maxHeight: maxH)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color(UIColor.separator).opacity(0.5), lineWidth: 0.5))
+                    .stroke(AppearanceStudio.shared.color(.border).opacity(0.5), lineWidth: 0.5))
                 .onTapGesture { showPlayer = true }
             } else {
                 // Fixed-size placeholder matches mediaPlaceholderHeight to prevent layout jumps
