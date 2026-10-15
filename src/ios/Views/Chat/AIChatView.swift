@@ -103,7 +103,8 @@ enum ChatColors {
         studio.bubbleOpacity
     }
     static var toolBg: Color {
-        studio.color(.toolCard, scope: .chat).opacity(studio.surfaceOpacity)
+        // [10-15 1-4 醒醒] 工具卡归入卡片体系：消费点改走卡片角色（surface），旧 toolCard 键仍保留兼容读取
+        studio.color(.surface, scope: .chat).opacity(studio.surfaceOpacity)
     }
     static var toolBorder: Color { studio.color(.border, scope: .chat).opacity(0.75) }
     static var accent: Color { studio.color(.accent, scope: .chat) }

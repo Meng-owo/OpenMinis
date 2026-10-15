@@ -178,6 +178,13 @@ final class AppearanceStudio: ObservableObject {
 
     func hex(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
              variant: AppearanceVariant) -> String {
+        // [10-15 1-4 醒醒] 工具卡归入卡片体系：保留旧 toolCard 键兼容读取，无自定义时回退至卡片 surface
+        if role == .toolCard {
+            if let value = customColors[key(.toolCard, scope: scope, variant: variant)] { return value }
+            if scope != .global,
+               let value = customColors[key(.toolCard, scope: .global, variant: variant)] { return value }
+            return hex(.surface, scope: scope, variant: variant)
+        }
         if let value = customColors[key(role, scope: scope, variant: variant)] { return value }
         if scope != .global,
            let value = customColors[key(role, scope: .global, variant: variant)] { return value }
@@ -267,6 +274,12 @@ final class AppearanceStudio: ObservableObject {
             return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
         }()
         let snap = colorSnapshot
+        if role == .toolCard {
+            let scoped = "\(scope.rawValue).\(variant.rawValue).toolCard"
+            let global = "\(AppearanceScope.global.rawValue).\(variant.rawValue).toolCard"
+            if let val = snap[scoped] ?? snap[global] { return UIColor(hex: val) }
+            return uiColorSnapshot(.surface, scope: scope)
+        }
         let scoped = "\(scope.rawValue).\(variant.rawValue).\(role.rawValue)"
         let global = "\(AppearanceScope.global.rawValue).\(variant.rawValue).\(role.rawValue)"
         let hex = snap[scoped] ?? snap[global]

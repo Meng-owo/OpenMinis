@@ -88,7 +88,7 @@ struct AppearanceStudioView: View {
                 }
                 .pickerStyle(.segmented)
 
-                ForEach(AppearanceColorRole.allCases.filter { $0 != .userBubble && $0 != .assistantBubble }) { role in
+                ForEach(AppearanceColorRole.allCases.filter { $0 != .userBubble && $0 != .assistantBubble && $0 != .toolCard }) { role in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 12) {
                             ColorPicker(role.title,
