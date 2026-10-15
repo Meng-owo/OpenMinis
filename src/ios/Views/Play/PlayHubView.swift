@@ -1,6 +1,7 @@
 import SwiftUI
 import PhotosUI
 import AVFoundation
+import UniformTypeIdentifiers
 
 // MARK: - Play Hub（播放）
 //
@@ -73,6 +74,7 @@ struct PlayHubView: View {
     @State private var importing = false
     @State private var pendingDelete: PlayHubMediaScanner.Hit?
     @State private var showDeleteConfirm = false
+    @State private var currentFileTypes: [UTType] = [.item]
 
     private static var backgroundURL: URL {
         AppearanceStudio.appearanceAssetsDirectory.appendingPathComponent("play-hub-background.jpg")
@@ -163,7 +165,7 @@ struct PlayHubView: View {
                       maxSelectionCount: 20,
                       matching: uploadMatching)
         .fileImporter(isPresented: $showFileImporter,
-                      allowedContentTypes: [.item]) { result in
+                      allowedContentTypes: currentFileTypes) { result in
             if case .success(let url) = result {
                 Task { await importFile(from: url) }
             }
@@ -273,8 +275,14 @@ struct PlayHubView: View {
             if selection != .evolution {
                 Button {
                     switch selection {
-                    case .files: showFileImporter = true
-                    default: showPhotoPicker = true
+                    case .audio:
+                        currentFileTypes = [.audio]
+                        showFileImporter = true
+                    case .files:
+                        currentFileTypes = [.item]
+                        showFileImporter = true
+                    default:
+                        showPhotoPicker = true
                     }
                 } label: {
                     Image(systemName: "plus")
@@ -632,13 +640,12 @@ struct PlayHubView: View {
 
     // MARK: - 上传（P1-2）
 
-    /// 按当前桶选匹配类型：图片桶只收图、视频桶只收视频、音频桶只收音频。
+    /// 按当前桶选匹配类型：图片桶只收图、视频桶只收视频（音频走文件导入）。
     private var uploadMatching: PHPickerFilter {
         switch selection {
         case .images: return .images
         case .videos: return .videos
-        case .audio: return .audios
-        default: return .any(of: [.images, .videos, .audios])
+        default: return .images
         }
     }
 
@@ -678,7 +685,6 @@ struct PlayHubView: View {
             switch target {
             case .images: ext = "jpg"
             case .videos: ext = "mov"
-            case .audio: ext = "m4a"
             default: ext = "bin"
             }
             saveImported(data, ext: ext)

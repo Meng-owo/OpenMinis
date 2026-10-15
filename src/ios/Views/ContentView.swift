@@ -3484,7 +3484,7 @@ struct ContentView: View {
     ///    chat-surface opacity (CSS-variable style, follows every theme
     ///    pack + dark mode + wallpaper so it reads as one surface with the
     ///    chat canvas behind it).
-    private var homeBottomBar: some View {
+    @ViewBuilder private var homeBottomBar: some View {
         let studio = AppearanceStudio.shared
         HStack(spacing: 0) {
             homeBottomTab(
