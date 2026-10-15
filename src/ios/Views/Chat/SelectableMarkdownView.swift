@@ -5100,9 +5100,15 @@ final class AudioAttachment: NSTextAttachment {
     private(set) var voiceDuration: Double = 0
 
     static let attachmentHeight: CGFloat = 70
-    /// Voice-bubble rows are much shorter than the file-player card.
-    /// [P1-6] Compact WeChat-style capsule: 44 → 37pt, tighter padding.
-    static let voiceBubbleHeight: CGFloat = 37
+    /// [P1-6 / 10-15 C2 醒醒] 语音气泡标准高度与宽度延展计算。
+    static let voiceBubbleHeight: CGFloat = 44
+
+    /// 动态音轨宽度：根据时长（3s~60s）从 110pt 平滑过渡到列宽的 72%，既不臃肿也不过窄。
+    static func capsuleWidth(forLineWidth lineWidth: CGFloat, duration: Double) -> CGFloat {
+        let dur: Double = duration > 0 ? duration : 3
+        let target = 110.0 + CGFloat(min(dur, 60.0) / 5.0 * 12.0)
+        return min(max(110.0, target), lineWidth * 0.72)
+    }
     /// Gap between the capsule and the expanded 转文字 transcript.
     static let transcriptTopGap: CGFloat = 6
     /// Tag for the transcript label inside the bubble container.
@@ -5156,11 +5162,16 @@ final class AudioAttachment: NSTextAttachment {
 
     override func attachmentBounds(for textContainer: NSTextContainer?, proposedLineFragment lineFrag: CGRect, glyphPosition position: CGPoint, characterIndex charIndex: Int) -> CGRect {
         let width = lineFrag.width
-        // [T-ai-voice-messages 09-12] WX-style bubble is a short capsule row.
-        // [P1-6] Grows when the 转文字 transcript is expanded.
-        let h = isVoiceBubble ? Self.voiceBubbleHeight : Self.attachmentHeight
-        let extra = (isVoiceBubble && transcriptExpanded) ? (Self.transcriptTopGap + transcriptHeight) : 0
-        return CGRect(x: 0, y: 0, width: width, height: h + extra)
+        if isVoiceBubble {
+            let h = Self.voiceBubbleHeight
+            if transcriptExpanded {
+                let extra = Self.transcriptTopGap + transcriptHeight
+                return CGRect(x: 0, y: 0, width: width, height: h + extra)
+            }
+            let w = Self.capsuleWidth(forLineWidth: width, duration: voiceDuration)
+            return CGRect(x: 0, y: 0, width: w, height: h)
+        }
+        return CGRect(x: 0, y: 0, width: width, height: Self.attachmentHeight)
     }
 
     func makeView(width: CGFloat) -> UIView {
@@ -5257,80 +5268,88 @@ final class AudioAttachment: NSTextAttachment {
     }
 
     // MARK: - [T-ai-voice-messages 09-12] WX-style voice bubble
+    // [10-15 C2 醒醒] 常规款语音气泡：图标居中/实心圆润、正常长度音轨波形、播放动态起伏、全走主题变量
 
-    /// WeChat-like voice bubble: leading speaker glyph + three sound arcs that
-    /// animate while playing + trailing duration ("3\""). Tap → GlobalAudioPlayer.
-    /// Bubble width grows with duration (WX semantics: longer voice, longer
-    /// bubble), clamped to the message column.
-    /// [P1-6] Compact WeChat-style voice capsule (37pt): tap = inline
-    /// play/pause, thin progress bar, long-press → 转文字 / 更多.
     private func makeVoiceBubbleView(width: CGFloat) -> UIView {
         let h = Self.voiceBubbleHeight
-        // Compact: 64pt base + 9pt per 5s, capped at 55% of column width —
-        // slimmer than the old 44pt chunky player, still duration-scaled.
         let dur: Double = voiceDuration > 0 ? voiceDuration : 3
-        let w: CGFloat = min(64.0 + CGFloat(dur / 5.0 * 9.0), width * 0.55)
+        let w: CGFloat = Self.capsuleWidth(forLineWidth: width, duration: dur)
 
-        let containerH = h + (transcriptExpanded ? (Self.transcriptTopGap + transcriptHeight) : 0)
-        let container = UIView(frame: CGRect(x: 0, y: 0, width: width, height: containerH))
+        let isExpanded = transcriptExpanded
+        let containerW = isExpanded ? width : w
+        let containerH = h + (isExpanded ? (Self.transcriptTopGap + transcriptHeight) : 0)
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: containerW, height: containerH))
         container.backgroundColor = .clear
         container.isUserInteractionEnabled = true
 
         let accent: UIColor = AppearanceStudio.uiColorSnapshot(.accent)
         let bubbleFill: UIColor = AppearanceStudio.uiColorSnapshot(.assistantBubble, scope: .chat)
         let textFill: UIColor = AppearanceStudio.uiColorSnapshot(.primaryText, scope: .chat)
+        let cardBg: UIColor = AppearanceStudio.uiColorSnapshot(.surface, scope: .chat)
 
         let bubble = UIView(frame: CGRect(x: 0, y: 0, width: w, height: h))
-        // AI's voice bubble uses the assistant bubble color (this is the AI
-        // speaking, not the user).
-        bubble.backgroundColor = bubbleFill.withAlphaComponent(0.35)
-        bubble.layer.cornerRadius = 17
-        let mask: CACornerMask = [.layerMinXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMinYCorner]
-        bubble.layer.maskedCorners = mask
+        bubble.backgroundColor = bubbleFill.withAlphaComponent(0.28)
+        bubble.layer.cornerRadius = 14
+        bubble.layer.borderWidth = 0.6
+        bubble.layer.borderColor = accent.withAlphaComponent(0.2).cgColor
         container.addSubview(bubble)
 
-        // Speaker glyph (smaller, tighter padding)
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-        let speaker = UIImageView(image: UIImage(systemName: "speaker.wave.2.fill", withConfiguration: iconConfig))
-        speaker.tintColor = accent
-        speaker.frame = CGRect(x: 11, y: (h - 13.0) / 2.0, width: 15.0, height: 13.0)
-        bubble.addSubview(speaker)
+        // 1. 实心圆润播放按钮（左侧白底圆角）
+        let playBtnBg = UIView(frame: CGRect(x: 8, y: (h - 28) / 2.0, width: 28, height: 28))
+        playBtnBg.backgroundColor = cardBg
+        playBtnBg.layer.cornerRadius = 8
+        playBtnBg.layer.borderWidth = 0.5
+        playBtnBg.layer.borderColor = accent.withAlphaComponent(0.25).cgColor
+        playBtnBg.clipsToBounds = true
+        bubble.addSubview(playBtnBg)
 
-        // Duration label (crisp, smaller)
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        let playIcon = UIImageView(image: UIImage(systemName: "play.fill", withConfiguration: iconConfig))
+        playIcon.tintColor = accent
+        playIcon.contentMode = .center
+        playIcon.frame = CGRect(x: 0, y: 0, width: 28, height: 28)
+        playBtnBg.addSubview(playIcon)
+
+        // 2. 正常长度音轨波形（8 根高低起伏竖条）
+        let heights: [CGFloat] = [7, 14, 20, 11, 17, 22, 15, 9]
+        var arcs: [UIView] = []
+        let waveStartX: CGFloat = 44
+        let waveEndX: CGFloat = w - 42
+        let count = heights.count
+        let spacing: CGFloat = max(3.0, min(6.0, (waveEndX - waveStartX - CGFloat(count) * 2.5) / CGFloat(count - 1)))
+        
+        for i in 0..<count {
+            let barX: CGFloat = waveStartX + CGFloat(i) * (2.5 + spacing)
+            let barH: CGFloat = heights[i]
+            let barY: CGFloat = (h - barH) / 2.0
+            let bar = UIView(frame: CGRect(x: barX, y: barY, width: 2.5, height: barH))
+            bar.backgroundColor = accent
+            bar.layer.cornerRadius = 1.25
+            bar.alpha = 0.45
+            bubble.addSubview(bar)
+            arcs.append(bar)
+        }
+
+        // 3. 时长标签（右侧清晰显示）
         let durLabel = UILabel()
         durLabel.text = dur > 0 ? "\(Int(dur.rounded()))\"" : "--\""
-        durLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        durLabel.textColor = textFill.withAlphaComponent(0.8)
+        durLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+        durLabel.textColor = textFill.withAlphaComponent(0.85)
         durLabel.sizeToFit()
         let dlW: CGFloat = durLabel.frame.width
         let dlH: CGFloat = durLabel.frame.height
         durLabel.frame = CGRect(x: w - dlW - 10.0, y: (h - dlH) / 2.0, width: dlW, height: dlH)
         bubble.addSubview(durLabel)
 
-        // Three animated arcs — animate while THIS bubble's file is playing.
-        var arcs: [UIView] = []
-        for i in 0..<3 {
-            let arcX: CGFloat = 31.0 + CGFloat(i) * 4.5
-            let arcH: CGFloat = i % 2 == 0 ? 7.0 : 3.5
-            let arcY: CGFloat = h / 2.0 - arcH / 2.0
-            let arc = UIView(frame: CGRect(x: arcX, y: arcY, width: 2.0, height: arcH))
-            arc.backgroundColor = accent
-            arc.layer.cornerRadius = 1.0
-            arc.alpha = 0.35
-            bubble.addSubview(arc)
-            arcs.append(arc)
-        }
-
-        // [P1-6] Thin progress bar along the capsule bottom, driven by the
-        // global player's progress publisher.
+        // 4. 底部微细进度条
         let barH: CGFloat = 2.0
-        let barX: CGFloat = 11.0
+        let barX: CGFloat = 8.0
         let barW: CGFloat = w - barX * 2
         let track = UIView(frame: CGRect(x: barX, y: h - 3.0 - barH, width: barW, height: barH))
-        track.backgroundColor = textFill.withAlphaComponent(0.12)
+        track.backgroundColor = textFill.withAlphaComponent(0.08)
         track.layer.cornerRadius = 1.0
         track.clipsToBounds = true
-        track.alpha = 0.5
+        track.alpha = 0.4
         let fill = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: barH))
         fill.backgroundColor = accent
         fill.layer.cornerRadius = 1.0
@@ -5340,18 +5359,12 @@ final class AudioAttachment: NSTextAttachment {
         objc_setAssociatedObject(container, &VoiceBubbleProgressController.associatedKey,
                                  progress, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-        // [T-ai-voice-mp3-duration 09-12] The `dur=` query is a best-effort
-        // hint written at compose time — it reads 0 for mp3 payloads (the WAV
-        // header parser can't see mp3 frames). When it's missing/0, resolve
-        // the real duration from the file itself (AVAudioPlayer reads both
-        // containers) and update the label once.
         if voiceDuration <= 0, let url = resolvedURL {
             Task { @MainActor [weak durLabel] in
                 guard let durLabel, durLabel.superview != nil else { return }
                 if let p = try? AVAudioPlayer(contentsOf: url), p.duration > 0 {
                     durLabel.text = "\(Int(p.duration.rounded()))\""
                     durLabel.sizeToFit()
-                    // Keep the right-padding anchor (10pt from bubble edge).
                     if let bubble = durLabel.superview {
                         durLabel.frame.origin.x = bubble.bounds.width - durLabel.frame.width - 10.0
                     }
@@ -5359,31 +5372,30 @@ final class AudioAttachment: NSTextAttachment {
             }
         }
 
-        // Controller: keeps arcs in sync with the global player state.
-        let controller = VoiceBubbleAnimationController(arcs: arcs, fileURL: resolvedURL)
+        // 5. 动画与播放状态控制器（波形跳动 + 播放图标切换）
+        let controller = VoiceBubbleAnimationController(arcs: arcs, playIcon: playIcon, fileURL: resolvedURL)
         objc_setAssociatedObject(container, &VoiceBubbleAnimationController.associatedKey,
                                  controller, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
-        // Transcript view (below the capsule; hidden unless expanded).
+        // 6. 转文字视图
         let transcriptLabel = UILabel()
         transcriptLabel.tag = Self.transcriptTag
-        transcriptLabel.font = .systemFont(ofSize: 12)
-        transcriptLabel.textColor = textFill.withAlphaComponent(0.75)
+        transcriptLabel.font = .systemFont(ofSize: 13)
+        transcriptLabel.textColor = textFill.withAlphaComponent(0.8)
         transcriptLabel.numberOfLines = 0
         transcriptLabel.isHidden = !transcriptExpanded
         transcriptLabel.text = transcriptText
         transcriptLabel.frame = CGRect(x: 0, y: h + Self.transcriptTopGap, width: width, height: transcriptHeight)
         container.addSubview(transcriptLabel)
 
-        // Tap anywhere → toggle play/pause via the global player (the arcs animate
-        // while THIS bubble's file is playing). No preview sheet — WX semantics.
+        // 点击切换播放/暂停
         let tap = AudioTapGesture(target: nil, action: nil)
         tap.fileURL = resolvedURL
         tap.togglePlayInsteadOfPreview = true
         tap.addTarget(tap, action: #selector(AudioTapGesture.handleTap))
         bubble.addGestureRecognizer(tap)
 
-        // Long-press → 转文字 / 更多 menu.
+        // 长按呼出菜单
         let menuHandler = VoiceBubbleMenuHandler(attachment: self)
         let longPress = UILongPressGestureRecognizer(target: menuHandler, action: #selector(VoiceBubbleMenuHandler.handleLongPress(_:)))
         objc_setAssociatedObject(bubble, &VoiceBubbleMenuHandler.associatedKey,
@@ -5477,16 +5489,15 @@ final class AudioAttachment: NSTextAttachment {
 private final class VoiceBubbleAnimationController: NSObject {
     static var associatedKey: UInt8 = 0
     private var cancellables = Set<AnyCancellable>()
-    /// Strong refs — fine here: container holds controller (associated), bubble
-    /// holds arcs, controller holds arcs. No retain cycle (bubble never holds
-    /// the controller).
     private var arcs: [UIView]?
+    private weak var playIcon: UIImageView?
     private let fileURL: URL?
     private var step = 0
     private var timer: Timer?
 
-    init(arcs: [UIView], fileURL: URL?) {
+    init(arcs: [UIView], playIcon: UIImageView?, fileURL: URL?) {
         self.arcs = arcs
+        self.playIcon = playIcon
         self.fileURL = fileURL
         super.init()
         Task { @MainActor [weak self] in
@@ -5497,10 +5508,17 @@ private final class VoiceBubbleAnimationController: NSObject {
                 .sink { [weak self] playing, active in
                     guard let self else { return }
                     let isActive = playing && active == self.fileURL
+                    self.updatePlayIcon(isActive)
                     self.setAnimating(isActive)
                 }
                 .store(in: &self.cancellables)
         }
+    }
+
+    private func updatePlayIcon(_ playing: Bool) {
+        let config = UIImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
+        let name = playing ? "pause.fill" : "play.fill"
+        playIcon?.image = UIImage(systemName: name, withConfiguration: config)
     }
 
     private func setAnimating(_ on: Bool) {
@@ -5508,16 +5526,17 @@ private final class VoiceBubbleAnimationController: NSObject {
         timer = nil
         guard let arcs else { return }
         if on {
-            timer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: true) { [weak self] _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { [weak self] _ in
                 guard let self, let arcs = self.arcs else { return }
-                self.step = (self.step + 1) % (arcs.count + 1)
+                self.step = (self.step + 1) % arcs.count
                 let cur = self.step
                 for (i, arc) in arcs.enumerated() {
-                    let active: Bool = i < cur
-                    UIView.animate(withDuration: 0.2) {
-                        arc.alpha = active ? 1.0 : 0.35
+                    let diff = abs(i - cur)
+                    let active = diff <= 1
+                    UIView.animate(withDuration: 0.15) {
+                        arc.alpha = active ? 1.0 : 0.4
                         arc.transform = active
-                            ? CGAffineTransform(scaleX: 1.15, y: 1.15)
+                            ? CGAffineTransform(scaleX: 1.2, y: 1.2)
                             : CGAffineTransform.identity
                     }
                 }
@@ -5525,7 +5544,7 @@ private final class VoiceBubbleAnimationController: NSObject {
         } else {
             for arc in arcs {
                 UIView.animate(withDuration: 0.2) {
-                    arc.alpha = 0.35
+                    arc.alpha = 0.45
                     arc.transform = .identity
                 }
             }
@@ -5534,7 +5553,6 @@ private final class VoiceBubbleAnimationController: NSObject {
 
     deinit {
         timer?.invalidate()
-        // Cancellables released on dealloc — Set<AnyCancellable> cancels on deinit.
     }
 }
 
