@@ -36,16 +36,14 @@ struct AppearanceStudioView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                themePreview
-            } header: {
-                Text("你的房间")
-            } footer: {
-                Text("默认是安静的暖纸色。下面每一项都可以换，布局不会跟着乱。")
-            }
+        VStack(spacing: 0) {
+            topFixedPreviewArea
 
-            // [T-appearance-collapsible] 气泡 promoted to its own always-open
+            Divider()
+                .overlay(studio.color(.border, variant: variant).opacity(0.35))
+
+            List {
+                // [T-appearance-collapsible] 气泡 promoted to its own always-open
             // section — colour + opacity for both bubbles, no digging.
             Section {
                 ForEach([AppearanceColorRole.userBubble, .assistantBubble]) { role in
@@ -446,11 +444,12 @@ struct AppearanceStudioView: View {
                     }
                 }
             }
+            .modifier(CompactListSections())
         }
-        .appearancePage(.settings)
+    }
+    .appearancePage(.settings)
         .navigationTitle("装扮")
         .navigationBarTitleDisplayMode(.inline)
-        .modifier(CompactListSections())
         .onChange(of: wallpaperItem) { item in
             guard let item else { return }
             Task {
@@ -508,44 +507,151 @@ struct AppearanceStudioView: View {
         .listRowBackground(AppearanceStudio.shared.color(.surface, scope: .settings))
     }
 
-    private var themePreview: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    // MARK: - [10-15 1-1 醒醒] 顶部固定实时预览区
+    // 包含：搜索栏、卡片（弹窗边风格）、AI气泡、我的气泡、输入框、强调色发送按钮
+    // 全部绑定全局颜色角色（AppearanceStudio 是 ObservableObject，颜色改动自动重画）
+    private var topFixedPreviewArea: some View {
+        VStack(spacing: 8) {
+            // 1. 顶部状态栏：展示标题与外观切换
             HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("一间可以慢慢变成你的房间")
-                        .font(.headline)
-                    Text("默认安静。想打扮时再动手。")
-                        .font(.caption)
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                }
+                Text("全局实时预览")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 Spacer()
-                Circle()
-                    .fill(studio.color(.accent, variant: variant))
-                    .frame(width: 18, height: 18)
+                Picker("外观", selection: $variant) {
+                    ForEach(AppearanceVariant.allCases) { item in
+                        Text(item.title).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 110)
             }
-            HStack(spacing: 8) {
-                previewSwatch(.surface)
-                previewSwatch(.mutedSurface)
-                previewSwatch(.userBubble)
-                previewSwatch(.assistantBubble)
-                previewSwatch(.input)
-            }
-        }
-        .padding(18)
-        .foregroundStyle(studio.color(.primaryText, variant: variant))
-        .background(studio.color(.surface, variant: variant),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(studio.color(.border, variant: variant), lineWidth: 0.8)
-        )
-        .listRowBackground(Color.clear)
-    }
+            .padding(.horizontal, 4)
 
-    private func previewSwatch(_ role: AppearanceColorRole) -> some View {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(studio.color(role, variant: variant))
+            // 2. 搜索栏真实复刻小样
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                Text("搜索会话与内容...")
+                    .font(.system(size: 12))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                Spacer()
+            }
+            .padding(.horizontal, 10)
             .frame(height: 28)
+            .background(
+                Capsule().fill(studio.color(.searchField, variant: variant))
+            )
+            .overlay(
+                Capsule().stroke(studio.color(.border, variant: variant).opacity(0.5), lineWidth: 0.6)
+            )
+
+            // 3. 聊天与卡片小样（带弹窗/卡片边框）
+            VStack(spacing: 8) {
+                // AI 气泡
+                HStack(alignment: .top, spacing: 6) {
+                    Circle()
+                        .fill(studio.color(.accent, variant: variant))
+                        .frame(width: 22, height: 22)
+                        .overlay(
+                            Text(String(aiName.prefix(1)))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Color.white)
+                        )
+                    Text("醒醒，今天想聊点什么？")
+                        .font(.system(size: 12))
+                        .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            studio.color(.assistantBubble, variant: variant)
+                                .opacity(studio.bubbleOpacity),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
+                        )
+                    Spacer(minLength: 0)
+                }
+
+                // 我的气泡
+                HStack(alignment: .top, spacing: 6) {
+                    Spacer(minLength: 0)
+                    Text("把界面做得漂亮一点~")
+                        .font(.system(size: 12))
+                        .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            studio.color(.userBubble, variant: variant)
+                                .opacity(studio.bubbleOpacity),
+                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
+                        )
+                    Circle()
+                        .fill(studio.color(.secondaryText, variant: variant).opacity(0.25))
+                        .frame(width: 22, height: 22)
+                        .overlay(
+                            Text("你")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        )
+                }
+
+                // 4. 输入框 + 强调色操作按钮小样
+                HStack(spacing: 8) {
+                    HStack {
+                        Text("发消息...")
+                            .font(.system(size: 12))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                        Spacer()
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(
+                        studio.color(.input, variant: variant),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(studio.color(.border, variant: variant).opacity(0.5), lineWidth: 0.6)
+                    )
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("发送")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.white)
+                    .frame(height: 30)
+                    .padding(.horizontal, 10)
+                    .background(
+                        studio.color(.accent, variant: variant),
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                }
+            }
+            .padding(10)
+            .background(
+                studio.color(.surface, variant: variant)
+                    .opacity(studio.surfaceOpacity),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(studio.color(.border, variant: variant).opacity(0.6), lineWidth: 0.6)
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
+        .background(studio.color(.canvas, variant: variant))
     }
 
     private var pairedAvatarPreview: some View {
