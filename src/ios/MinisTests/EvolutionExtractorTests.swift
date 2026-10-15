@@ -7,8 +7,9 @@ final class EvolutionExtractorTests: XCTestCase {
 
     private func action(_ id: String, run: String, seq: Int, tool: String,
                         status: EvolutionActionStatus,
-                        errorClass: String? = nil) -> EvolutionAction {
-        EvolutionAction(id: id, runId: run, seq: seq, toolName: tool, profile: "",
+                        errorClass: String? = nil,
+                        profile: String = "") -> EvolutionAction {
+        EvolutionAction(id: id, runId: run, seq: seq, toolName: tool, profile: profile,
                         status: status, errorClass: errorClass, errorDigest: nil,
                         durationMs: 1, retryCount: 0, resultDigest: nil)
     }
@@ -42,18 +43,37 @@ final class EvolutionExtractorTests: XCTestCase {
     func testRecoveryNeedsTwoWitnesses() {
         let onePair = [
             action("f1", run: "r1", seq: 1, tool: "web_fetch", status: .fail, errorClass: "tool_error"),
-            action("s1", run: "r1", seq: 2, tool: "web_fetch", status: .success),
+            action("s1", run: "r1", seq: 2, tool: "web_fetch", status: .success, profile: "adjusted"),
         ]
         XCTAssertTrue(EvolutionExtractor.lessons(from: onePair).isEmpty)
 
         let twoPairs = onePair + [
             action("f2", run: "r2", seq: 1, tool: "web_fetch", status: .fail, errorClass: "tool_error"),
-            action("s2", run: "r2", seq: 2, tool: "web_fetch", status: .success),
+            action("s2", run: "r2", seq: 2, tool: "web_fetch", status: .success, profile: "adjusted"),
         ]
         let lessons = EvolutionExtractor.lessons(from: twoPairs)
         XCTAssertEqual(lessons.count, 1)
         XCTAssertEqual(lessons.first?.status, .candidate)
         XCTAssertEqual(lessons.first?.successCount, 2)
+    }
+
+    func testSameProfileRetryIsNotRecovery() {
+        // P6-5: identical params that happen to succeed must NOT count as
+        // "调整后成功" — only adjusted retries feed recovery lessons.
+        let sameParamPairs = [
+            action("f1", run: "r1", seq: 1, tool: "web_fetch", status: .fail, errorClass: "tool_error", profile: "same"),
+            action("s1", run: "r1", seq: 2, tool: "web_fetch", status: .success, profile: "same"),
+            action("f2", run: "r2", seq: 1, tool: "web_fetch", status: .fail, errorClass: "tool_error", profile: "same"),
+            action("s2", run: "r2", seq: 2, tool: "web_fetch", status: .success, profile: "same"),
+        ]
+        XCTAssertTrue(EvolutionExtractor.lessons(from: sameParamPairs).isEmpty)
+
+        // Mixed: one adjusted pair is not enough (needs >= 2 witnesses).
+        let oneAdjusted = sameParamPairs + [
+            action("f3", run: "r3", seq: 1, tool: "web_fetch", status: .fail, errorClass: "tool_error"),
+            action("s3", run: "r3", seq: 2, tool: "web_fetch", status: .success, profile: "adjusted"),
+        ]
+        XCTAssertTrue(EvolutionExtractor.lessons(from: oneAdjusted).isEmpty)
     }
 
     func testRecoveryWindowIsRespected() {
