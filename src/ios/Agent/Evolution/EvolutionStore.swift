@@ -109,6 +109,9 @@ struct EvolutionSkill: Codable, Equatable {
 struct EvolutionInjection: Codable, Equatable {
     var id: String
     var runId: String?
+    /// OPT-2: session context of the reference (active mode logs this;
+    /// shadow rows keep it nil).
+    var sessionId: String?
     var lessonId: String
     var injectedAt: Date
     var tokenCost: Int

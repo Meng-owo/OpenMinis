@@ -114,6 +114,9 @@ final class EvolutionInjector: @unchecked Sendable {
             logShadowHit(lessons: lessons, fragment: fragment)
             return ""          // ★ shadow NEVER injects
         }
+        // OPT-2: active mode logs every actual injection into the same
+        // ledger shadow uses — lesson_id / time / session context / mode.
+        logActiveHit(lessons: lessons, fragment: fragment, sessionId: sessionId)
         return fragment
     }
 
@@ -186,5 +189,76 @@ final class EvolutionInjector: @unchecked Sendable {
                 ))
             }
         }
+    }
+
+    /// OPT-2: every ACTUAL injection in active mode lands in the injections
+    /// ledger (unthrottled — this is the "what was really used" audit trail).
+    /// The first time a candidate lesson is referenced, one lightweight
+    /// notice fires (never again for that lesson).
+    private func logActiveHit(lessons: [EvolutionLesson], fragment: String,
+                              sessionId: String?) {
+        let ranked = Self.rank(lessons.filter { $0.status == .verified || $0.status == .candidate })
+            .prefix(Constants.topK)
+        guard !ranked.isEmpty else { return }
+        let perLineTokens = max(1, Int(Double(fragment.count) / Constants.charsPerToken / Double(max(1, ranked.count))))
+        let entries: [(EvolutionLesson, Int)] = ranked.map { ($0, perLineTokens) }
+        Task.detached(priority: .utility) { [sessionId] in
+            guard let store = EvolutionStore.shared else { return }
+            for (lesson, cost) in entries {
+                await store.insert(EvolutionInjection(
+                    id: UUID().uuidString,
+                    runId: nil,
+                    sessionId: sessionId,
+                    lessonId: lesson.id,
+                    injectedAt: Date(),
+                    tokenCost: cost,
+                    mode: EvolutionMode.active.rawValue,
+                    outcomeLinked: nil
+                ))
+                if lesson.status == .candidate {
+                    await EvolutionNoticeCenter.shared.notifyFirstReferenceIfNeeded(
+                        lessonId: lesson.id)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - [OPT-2][evolution] One-time first-reference notice
+
+/// The lightest possible "someone got referenced" signal: a single banner
+/// line in the evolution center, once per lesson ever. Persisted via
+/// UserDefaults so "ever" survives launches; repeat injections of the same
+/// lesson never re-announce.
+@MainActor
+final class EvolutionNoticeCenter: ObservableObject {
+
+    static let shared = EvolutionNoticeCenter()
+
+    /// Banner text while non-nil; the evolution center shows it and the
+    /// owner clears it after a beat.
+    @Published var pendingMessage: String?
+
+    nonisolated private static let notifiedKey = "evolution.firstReferenceNotified."
+
+    /// One-time gate (pure, injectable for tests): returns true only the
+    /// first time a lesson id is seen, and atomically marks it notified.
+    nonisolated static func shouldMarkFirstReference(lessonId: String,
+                                                     defaults: UserDefaults = .standard) -> Bool {
+        let key = notifiedKey + lessonId
+        guard !defaults.bool(forKey: key) else { return false }
+        defaults.set(true, forKey: key)
+        return true
+    }
+
+    /// Called from the active-injection logger (any thread — hops here).
+    func notifyFirstReferenceIfNeeded(lessonId: String) -> Bool {
+        guard Self.shouldMarkFirstReference(lessonId: lessonId) else { return false }
+        pendingMessage = "进化库：候选「\(lessonId)」首次被参考——可去经验库查看或裁决"
+        return true
+    }
+
+    func clearPending() {
+        pendingMessage = nil
     }
 }
