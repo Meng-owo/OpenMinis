@@ -967,6 +967,8 @@ struct ContentView: View {
     /// back to "Minis". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
         ? "我的小家" : SoulStore.cachedMetadata.name
+    /// [B2 · 10-15] 顶部标题点击弹出的人设切换（复用现成 PersonaListSheet）。
+    @State private var showPersonaSwitcher = false
     /// Subtitle state shown under the "Minis" sidebar title. nil hides the
     /// row; otherwise it renders as small capsules per type or a single
     /// status string. Refreshed by a 5s timer.
@@ -1773,6 +1775,11 @@ struct ContentView: View {
         signalsWired
         .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
             AlarmListView()
+        }
+        // [B2 · 10-15] 会话列表顶部标题点击弹出的人设切换（复用现成 PersonaListSheet；
+        // 原入口全部保留，本处只是新增快捷方式）。
+        .sheet(isPresented: $showPersonaSwitcher) {
+            PersonaListSheet(store: PersonaStore.shared)
         }
         .sheet(item: $activeToolSheet) { sheet in
             switch sheet {
@@ -3404,10 +3411,16 @@ struct ContentView: View {
                 // attached here gets torn down and re-created constantly and can
                 // drop a .soulMdChanged notification that arrives during the gap.
                 // This Text now only READS `soulName`.
-                let titleLabel = Text(soulName)
-                    .font(.system(size: 18.5, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .overlay(alignment: .leading) {
+                let titleLabel = HStack(spacing: 4) {
+                    Text(soulName)
+                        .font(.system(size: 18.5, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    // [B2] 可点击提示：小 chevron，走全局变量、不加底色。
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(MinisThemeList.subtitle)
+                }
+                .overlay(alignment: .leading) {
                         if canOpenSync {
                             Button {
                                 activeToolSheet = .syncMigrationDetail
@@ -3432,16 +3445,15 @@ struct ContentView: View {
                 // (see migrationSubtitleLoop, T-ios-migration-timer-sessionlist-uaf-crash);
                 // this Text only READS the `migrationSubtitle` @State.
 
-                if canOpenSync {
-                    Button {
-                        activeToolSheet = .syncMigrationDetail
-                    } label: {
-                        titleLabel
-                    }
-                    .buttonStyle(.plain)
-                } else {
+                // [B2 · 10-15 醒醒] 顶部标题点击 → 直接切人设；同步详情入口
+                // 保留在标题左侧的小指示器上（本按钮不再指向它）。
+                Button {
+                    showPersonaSwitcher = true
+                } label: {
                     titleLabel
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("切换人设，当前：\(soulName)"))
             }
         }
         ToolbarItem(placement: .topBarLeading) {
