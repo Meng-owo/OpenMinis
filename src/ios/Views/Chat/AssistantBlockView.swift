@@ -26,6 +26,9 @@ struct AssistantBlockView: View {
     /// Pause/resume/continue then ride the GlobalAudioPlayer like any media.
     /// nil (or a text-only reply) keeps the old behavior: speak the text.
     var voiceBubbleFileURL: URL?
+    /// [batch9d / W1C-08] 会话绑定人设 id——正则显示规则按它取；
+    /// nil 回退全局当前人设（与模型侧 sessionPersonaId 同一语义）。
+    var sessionPersonaId: String? = nil
     /// [T-action-bar 09-11] Regenerate this assistant message.
     var onRegenerate: (() -> Void)?
     /// [T-action-bar 09-11] Delete this single assistant message.
@@ -50,7 +53,7 @@ struct AssistantBlockView: View {
             if !block.content.isEmpty {
                 // [Kelivo Alignment] 助手消息渲染前应用正则替换规则 (视觉展示)
                 let appliedContent: String = {
-                    let pId = PersonaStore.currentID()
+                    let pId = sessionPersonaId ?? PersonaStore.currentID()
                     if let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) {
                         return p.applyRegexRules(to: block.content, role: "assistant", visual: true)
                     }
@@ -1285,13 +1288,17 @@ struct ThinkingBlockView: View {
 
 struct TypingIndicator: View {
     @State private var dotOffsets: [Bool] = [false, false, false]
+    /// [batch9d / W1C-08] 会话绑定人设 id（nil = 草稿态，回退全局当前人设）。
+    /// 气泡名按它取——与"回答的人"一致，不再跟着全局切换漂移。
+    var personaId: String? = nil
     /// Live Soul name so the indicator reads "<custom name> is thinking…" when
     /// the user has renamed the assistant in Soul settings. Updates via
-    /// `.soulMdChanged` Notification — same wiring used by `AssistantSoulName`.
-    @State private var soulName: String = {
-        let n = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return n.isEmpty ? "嘟嘟" : n
-    }()
+    /// `.soulMdChanged` / `.personaDidChange`, plus an onAppear refresh.
+    @State private var soulName: String = "嘟嘟"
+
+    private func refreshSoulName() {
+        soulName = SoulStore.displayName(for: SoulStore.displayPersonaId(personaId))
+    }
 
     var body: some View {
         // The thinking-level badge that used to trail this indicator was
@@ -1307,13 +1314,16 @@ struct TypingIndicator: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
-            let n = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            soulName = n.isEmpty ? "嘟嘟" : n
+            refreshSoulName()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .personaDidChange)) { _ in
+            refreshSoulName()
         }
         .font(.system(size: 15, weight: .medium))
         .foregroundStyle(ChatColors.tertiaryText)
         .padding(.top, 0)
         .onAppear {
+            refreshSoulName()
             for i in 0..<3 {
                 withAnimation(
                     .easeInOut(duration: 0.4)

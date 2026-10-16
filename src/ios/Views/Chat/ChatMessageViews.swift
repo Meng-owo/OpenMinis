@@ -211,6 +211,9 @@ struct ChatMessageRow: View {
     var onTakeoverDone: (() -> Void)?
     var browserPool: BrowserTabPool?
     var toolSnapshots: [ToolSnapshotItem] = []
+    /// [batch9d / W1C-08] 会话绑定人设 id——气泡名/正则显示按它取；
+    /// nil（草稿态/未传）回退全局当前人设。
+    var sessionPersonaId: String? = nil
     @State private var showUsage = false
     @State private var showCompactSummary = false
     /// [T-ios-delete-from-message] Confirmation gate for the suffix delete.
@@ -630,6 +633,7 @@ struct ChatMessageRow: View {
                     onCopyScreenshot: onCopyScreenshot,
                     browserPool: browserPool,
                     toolSnapshots: toolSnapshots,
+                    sessionPersonaId: sessionPersonaId,
                     highlightedBlockId: $highlightedBlockId,
                     detailBlock: $detailBlock
                 )
@@ -646,7 +650,7 @@ struct ChatMessageRow: View {
             // Typing indicator — "request out, nothing back yet", evaluated per
             // ROUND. See `ChatMessage.shouldShowTypingIndicator`.
             if isActiveMessage && message.shouldShowTypingIndicator {
-                TypingIndicator()
+                TypingIndicator(personaId: sessionPersonaId)
             }
 
             // Inline error + retry

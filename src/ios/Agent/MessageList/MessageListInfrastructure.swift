@@ -1217,6 +1217,9 @@ final class CellStateBridgeV2: ObservableObject {
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?
+    /// [batch9d / W1C-08] 本会话绑定人设 id（cell 配置时从 VM 复制），供气泡名/
+    /// 正则显示面使用——与"回答的人"保持同一身份。
+    @Published var sessionPersonaId: String?
     @Published var toolSnapshots: [ToolSnapshotItem] = []
     /// Tool detail sheet — owned by footer, triggered by block cells.
     @Published var detailBlock: AssistantBlock?

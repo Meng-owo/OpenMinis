@@ -1334,6 +1334,7 @@ struct AIChatView: View {
             .ignoresSafeArea(edges: .bottom)
         }
         .onAppear {
+            refreshSoulName()
             let sinceInit = (CFAbsoluteTimeGetCurrent() - AIChatViewModel.onAppearTimestamp) * 1000
             minisLogger.info("[SessionLoad] onAppear T+\(String(format: "%.0f", sinceInit))ms isNew=\(cached.isNew) msgs=\(vm.messages.count)")
             // [T-inputbar-stale-across-reentry] Re-arm the leading-edge seed on
@@ -1455,6 +1456,7 @@ struct AIChatView: View {
         .observingQuickActions(modifier: quickActionObserver)
         .onChange(of: vm.sessionId) { _ in
             refreshTitlePillSession()
+            refreshSoulName()
         }
         .onReceive(NotificationCenter.default.publisher(for: .sessionDidUpdate)) { note in
             guard let sid = vm.sessionId,
@@ -2433,8 +2435,10 @@ struct AIChatView: View {
                     // re-introducing the top crop.
                     .padding(.top, legacyLayout ? 0 : 2)
                     .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
-                        let n = SoulStore.cachedMetadata.name
-                        soulName = n.isEmpty ? "嘟嘟" : n
+                        refreshSoulName()
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .personaDidChange)) { _ in
+                        refreshSoulName()
                     }
             }
             .buttonStyle(.plain)
@@ -2679,6 +2683,13 @@ struct AIChatView: View {
     }
 
     // MARK: - Session Title Snapshot
+
+    /// [batch9d / W1C-08] 会话显示身份：标题/占位符取"会话绑定人设"的名
+    ///（草稿态回退全局当前人设）。会话切换（vm.sessionId onChange）/
+    /// SOUL 变更 / 人设切换 / 首进页面 都会刷新。
+    private func refreshSoulName() {
+        soulName = SoulStore.displayName(for: SoulStore.displayPersonaId(vm.sessionPersonaId))
+    }
 
     private func refreshTitlePillSession() {
         guard let sid = vm.sessionId else {

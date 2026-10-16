@@ -321,6 +321,7 @@ private struct BridgedAssistantBlockV3: View {
             onSpeakText: bridge.onSpeakText,
             speechController: bridge.isStreaming ? nil : bridge.speechController,
             voiceBubbleFileURL: bridge.voiceBubbleFileURL,
+            sessionPersonaId: bridge.sessionPersonaId,
             onRegenerate: bridge.isStreaming ? nil : bridge.onRegenerate,
             onDeleteMessage: bridge.isStreaming ? nil : bridge.onDeleteMessage,
             onFeedback: bridge.isStreaming ? nil : bridge.onFeedback,
@@ -457,7 +458,7 @@ private struct BridgedAssistantFooterV3: View {
             // Typing indicator — "request out, nothing back yet", evaluated per
             // ROUND. See `ChatMessage.shouldShowTypingIndicator`.
             if showsTypingIndicator {
-                TypingIndicator()
+                TypingIndicator(personaId: bridge.sessionPersonaId)
             }
 
             // Inline error
@@ -683,7 +684,8 @@ private struct BridgedWholeMessageV3: View {
             onBrowserTakeover: bridge.onBrowserTakeover,
             onTakeoverDone: bridge.onTakeoverDone,
             browserPool: nil,
-            toolSnapshots: []
+            toolSnapshots: [],
+            sessionPersonaId: bridge.sessionPersonaId
         )
         .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
         .frame(maxWidth: .infinity)
@@ -1576,6 +1578,7 @@ extension CollectionViewMessageListV3 {
                 ?? FooterHeightShape(bridge: bridge, message: message)
 
             bridge.isActiveMessage = isActive
+            bridge.sessionPersonaId = vm.sessionPersonaId
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
             bridge.browserPool = vm.browserTabPool

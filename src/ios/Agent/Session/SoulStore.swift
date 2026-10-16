@@ -1048,6 +1048,31 @@ enum SoulStore {
     @MainActor
     static var cachedMetadata: SoulMetadata = .default
 
+    // MARK: - [batch9d / W1C-08] Session display identity
+
+    /// 会话显示身份：会话绑定人设优先（loadSession 落定），草稿态回退全局
+    /// 当前人设。界面（标题/占位符/气泡名/正则显示）统一用它——杜绝
+    /// "回答的人"（sessionPersonaId）与"显示的人"（全局 currentID）两套身份。
+    @MainActor
+    static func displayPersonaId(_ sessionPersonaId: String?) -> String {
+        sessionPersonaId ?? PersonaStore.currentID()
+    }
+
+    /// 指定人设的显示名（读该人设 SOUL.md 的 name；空 → "嘟嘟"），带内存缓存。
+    /// 缓存由 refreshCache() 与 save(_:for:) 失效——显示名变化的两条路径。
+    @MainActor
+    private static var displayNameCache: [String: String] = [:]
+
+    @MainActor
+    static func displayName(for personaID: String) -> String {
+        if let hit = displayNameCache[personaID] { return hit }
+        let n = (load(for: personaID)?.metadata.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolved = n.isEmpty ? "嘟嘟" : n
+        displayNameCache[personaID] = resolved
+        return resolved
+    }
+
     /// Re-read SOUL.md into `cachedMetadata` and post a notification so
     /// observers (chat bubble header, prompt builder, etc.) can refresh.
     @MainActor
@@ -1057,6 +1082,7 @@ enum SoulStore {
         } else {
             cachedMetadata = .default
         }
+        displayNameCache.removeAll()
         NotificationCenter.default.post(name: .soulMdChanged, object: nil)
     }
 
@@ -1076,6 +1102,9 @@ enum SoulStore {
                                                  withIntermediateDirectories: true)
         let text = SoulMDParser.serialize(file)
         try text.data(using: .utf8)?.write(to: url, options: .atomic)
+        // [batch9d / W1C-08] 显示名缓存失效是无条件的——非当前人设改名
+        // 也要让界面立刻取到新名。
+        displayNameCache.removeValue(forKey: personaID)
         if personaID == PersonaStore.currentID() {
             cachedMetadata = file.metadata
             NotificationCenter.default.post(name: .soulMdChanged, object: nil)
