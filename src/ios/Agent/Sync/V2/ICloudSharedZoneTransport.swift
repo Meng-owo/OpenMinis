@@ -119,6 +119,9 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         "EnvVarV2":           secretsZoneName,
         "EnvVarItem":         secretsZoneName,
         "SoulV2":             sharedZoneName,
+        // [batch1 / audit W1C-02] Sub Agents roster — private text like Soul,
+        // no secrets; same zone as the persona/soul records.
+        "SubAgentV3":         sharedZoneName,
         "MemoryGlobalV2":     sharedZoneName,
         "MemoryDailyV2":      sharedZoneName,
         // [T-provider-sync-v3-zone-mapping] Per-record provider sync v3.
@@ -300,6 +303,8 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3",
         "ProviderThinkingRuleV3",
         "ProviderConfigV2", "MCPServersV2", "MCPServerItem", "EnvVarItem",
+        // [batch1] Agents created months ago must reach a fresh device too.
+        "SubAgentV3",
         // Folders are low-volume config-like records: a fresh device must
         // pull the full set (a folder created months ago would never fall
         // inside the 24h window), and sessions arriving before their folder
@@ -766,6 +771,7 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             ("ProviderModelEntryV3", "updatedAt"),
             ("ProviderModelGroupV3", "updatedAt"),
             ("ProviderThinkingRuleV3", "updatedAt"),
+            ("SubAgentV3", "updatedAt"),
             ("MCPServersV2", "updatedAt"),
             ("MCPServerItem", "updatedAt"),
             ("EnvVarItem", "updatedAt"),

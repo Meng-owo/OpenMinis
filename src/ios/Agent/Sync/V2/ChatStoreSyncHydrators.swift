@@ -109,6 +109,16 @@ enum ChatStoreSyncHydrators {
             merger: { record in await mergeProviderThinkingRuleV3(record: record) },
             deletionApplier: { id in await deleteProviderThinkingRuleV3(id: id) }
         )
+        // [batch1 / audit W1C-02] Sub Agents roster (`sub-agents.json`).
+        // Outbound: one record per definition. Inbound: roster-level merge via
+        // SubAgentRoster.merge so the built-in stays pinned and name collisions
+        // resolve exactly like a local edit.
+        h.register(
+            recordType: "SubAgentV3",
+            builder: { id in await buildSubAgentV3(id: id) },
+            merger: { record in await mergeSubAgentV3(record: record) },
+            deletionApplier: { id in await deleteSubAgentV3(id: id) }
+        )
         // Legacy whole-file env-vars record. New devices NEVER emit it
         // (builder returns nil — caller treats nil as "this builder
         // chose not to push" and drops the dirty row). The merger is
@@ -1690,6 +1700,83 @@ enum ChatStoreSyncHydrators {
         } else {
             logger.info("[v3] skipped ProviderModelGroupV3 \(id.prefix(8)) (no scalar/member change) members(local=\(localCount) inbound=\(inboundCount))")
         }
+    }
+
+    // MARK: - SubAgentV3 (batch1 / audit W1C-02)
+
+    /// Outbound. nil = the definition no longer exists locally (deleted between
+    /// markDirty and push) — the caller drops the dirty row, same contract as
+    /// the other V3 builders.
+    private static func buildSubAgentV3(id: String) async -> PortableRecord? {
+        let def = await MainActor.run { SubAgentStore.shared.subAgent(id: id) }
+        guard let def else { return nil }
+        let synced = SyncedSubAgentV3(
+            id: def.id,
+            name: def.name,
+            desc: def.description,
+            instructions: def.instructions,
+            modelGroupId: def.modelGroupId,
+            thinkingLevel: def.thinkingLevelOverride?.rawValue,
+            isBuiltIn: def.isBuiltIn ? 1 : 0,
+            sortOrder: def.sortOrder,
+            updatedAt: def.updatedAt
+        )
+        return SyncableTypeRegistry.shared
+            .metadata(for: "SubAgentV3")?
+            .buildPortable(synced)
+    }
+
+    /// Inbound upsert. Roster-level merge (LWW + name-collision + built-in
+    /// pinning all live in `SubAgentRoster.merge`); `applyMergedFromSync` does
+    /// NOT re-emit markDirty, so an inbound record never boomerangs back.
+    private static func mergeSubAgentV3(record: PortableRecord) async {
+        let id = record.id.id
+        if await ChatStore.shared.isRecentlyDeletedRecord(
+            type: "SubAgentV3", id: id,
+            remoteUpdatedAt: dateField(record, "updatedAt") ?? Date()) {
+            logger.info("[SubAgents] mergeSubAgentV3 SKIP (recently deleted locally): id=\(id.prefix(8))")
+            return
+        }
+        guard let name = stringField(record, "name"), !name.isEmpty else {
+            logger.warning("[SubAgents] mergeSubAgentV3 SKIP (no name) id=\(id.prefix(8))")
+            return
+        }
+        let remote = SubAgentDefinition(
+            id: id,
+            name: name,
+            description: stringField(record, "desc") ?? "",
+            instructions: stringField(record, "instructions") ?? "",
+            modelGroupId: optionalStringField(record, "modelGroupId"),
+            thinkingLevelOverride: optionalStringField(record, "thinkingLevel")
+                .flatMap(ThinkingLevel.init(rawValue:)),
+            isBuiltIn: intField(record, "isBuiltIn") == 1,
+            sortOrder: intField(record, "sortOrder") ?? 0,
+            updatedAt: dateField(record, "updatedAt") ?? Date()
+        )
+        await MainActor.run {
+            let store = SubAgentStore.shared
+            let merged = SubAgentRoster.merge(
+                local: store.subAgents,
+                remote: [remote],
+                log: { logger.info($0) }
+            )
+            store.applyMergedFromSync(merged)
+        }
+        logger.info("[SubAgents] mergeSubAgentV3 applied id=\(id.prefix(8)) name=\(name.prefix(20))")
+    }
+
+    /// Inbound delete. Never re-emits markDirty (no delete boomerang); the
+    /// originating device's tombstone is what stops resurrection races.
+    private static func deleteSubAgentV3(id: String) async {
+        guard id != SubAgentDefinition.builtInId else {
+            logger.warning("[SubAgents] deleteSubAgentV3 REFUSED for built-in id")
+            return
+        }
+        await MainActor.run {
+            let store = SubAgentStore.shared
+            store.applyMergedFromSync(store.subAgents.filter { $0.id != id })
+        }
+        logger.info("[SubAgents] deleted SubAgentV3 \(id.prefix(8))")
     }
 
     // MARK: - ProviderThinkingRuleV3 (T-icloud-thinking-rules-sync)

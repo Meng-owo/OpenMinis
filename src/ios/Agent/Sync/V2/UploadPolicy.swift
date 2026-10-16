@@ -24,6 +24,7 @@ enum UploadPolicy {
         case providers             // ProviderConfig
         case envVars               // EnvVar
         case memory                // MemoryGlobalV2 + MemoryDailyV2
+        case subAgents             // [batch1] SubAgentV3 (Sub Agents roster)
 
         /// SQLite record_type values that fall under this category.
         var recordTypes: Set<String> {
@@ -50,6 +51,10 @@ enum UploadPolicy {
                         "ProviderThinkingRuleV3"]
             case .envVars:
                 return ["EnvVar", "EnvVarV2"]
+            case .subAgents:
+                // [batch1 / audit W1C-02] Roster records; the Sub Agents
+                // toggle governs their uploads like any other category.
+                return ["SubAgentV3"]
             case .memory:
                 return ["MemoryGlobalV2", "MemoryDailyV2"]
             }
@@ -66,6 +71,8 @@ enum UploadPolicy {
             case .providers:    return "Providers"
             case .envVars:      return "Environments"
             case .memory:       return "Memory Files"
+            case .subAgents:    return "Sub Agents"
+            case .subAgents:    return "Sub Agents"
             }
         }
     }

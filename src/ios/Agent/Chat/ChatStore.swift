@@ -6008,6 +6008,10 @@ extension ChatStore {
         // written but loadDirtyRecords filters them out, so nothing ever uploads
         // and the type fails SILENTLY.
         "ProviderThinkingRuleV3",
+        // [batch1 / audit W1C-02] Sub Agents roster — same missing-whitelist
+        // failure mode MCPServersV2 hit: dirty rows written but filtered out,
+        // so nothing ever uploaded and the rows piled up forever.
+        "SubAgentV3",
         // [T-mcp-per-server-sync] Per-server MCP records, plus the legacy
         // whole-file type. MCPServersV2 was NEVER in this whitelist — its
         // dirty rows were written but filtered out by loadDirtyRecords

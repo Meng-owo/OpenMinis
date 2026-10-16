@@ -607,6 +607,44 @@ struct SyncedProviderThinkingRuleV3: Syncable {
     }()
 }
 
+// MARK: - SyncedSubAgentV3 (batch1 / audit W1C-02)
+
+/// Per-record sync for the Sub Agents roster (`sub-agents.json`). One record
+/// per definition; deletions ride the standard op=delete dirty path. Merge is
+/// roster-level (`SubAgentRoster.merge`) so name collisions and the built-in
+/// pinning behave exactly like a local edit arriving the same way.
+struct SyncedSubAgentV3: Syncable {
+    var id: String
+    var name: String
+    var desc: String
+    var instructions: String
+    var modelGroupId: String?
+    var thinkingLevel: String?
+    var isBuiltIn: Int
+    var sortOrder: Int
+    var updatedAt: Date
+
+    static let syncMetadata: SyncTypeMetadata<SyncedSubAgentV3> = {
+        typealias F = FieldDescriptor<SyncedSubAgentV3>
+        return SyncTypeMetadata<SyncedSubAgentV3>(
+            recordType: "SubAgentV3",
+            idKeyPath: \SyncedSubAgentV3.id,
+            fields: [
+                F.string("name",                 \SyncedSubAgentV3.name),
+                F.string("desc",                 \SyncedSubAgentV3.desc),
+                F.string("instructions",         \SyncedSubAgentV3.instructions),
+                F.optionalString("modelGroupId", \SyncedSubAgentV3.modelGroupId),
+                F.optionalString("thinkingLevel", \SyncedSubAgentV3.thinkingLevel),
+                F.int("isBuiltIn",               \SyncedSubAgentV3.isBuiltIn),
+                F.int("sortOrder",               \SyncedSubAgentV3.sortOrder),
+                F.date("updatedAt",              \SyncedSubAgentV3.updatedAt),
+            ],
+            conflictPolicy: .lastWriteWinsByField(\SyncedSubAgentV3.updatedAt),
+            version: 1
+        )
+    }()
+}
+
 // MARK: - SyncedEnvVars (legacy whole-file record)
 //
 // Kept for inbound compatibility ONLY. New devices push per-variable
@@ -879,6 +917,7 @@ enum SyncedTypesBootstrap {
         r.register(SyncedProviderModelEntryV3.self)
         r.register(SyncedProviderModelGroupV3.self)
         r.register(SyncedProviderThinkingRuleV3.self)
+        r.register(SyncedSubAgentV3.self)
         r.register(SyncedEnvVars.self)   // legacy whole-file, inbound only
         r.register(SyncedEnvVar.self)    // per-variable, current schema
         r.register(SyncedDevice.self)
