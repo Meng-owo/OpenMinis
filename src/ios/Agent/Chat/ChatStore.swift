@@ -2665,7 +2665,11 @@ actor ChatStore {
     /// ［persona］删人设时级联删它的全部会话（对标 Kelivo
     /// deleteConversationsForAssistant）。走 deleteSession 保证
     /// 云删除队列、tombstone 等副作用一致。
-    func deleteSessions(forPersonaId personaId: String) {
+    ///
+    /// [batch9c / E2] async：删行前先在主线程做统一的运行时收尾（定时任务 /
+    /// 子 agent / 浏览器池 / 会话文件）——历史上这里只删 DB 行，删人设后其
+    /// 会话的定时任务仍在后台空跑（audit E2）。
+    func deleteSessions(forPersonaId personaId: String) async {
         var stmt: OpaquePointer?
         // 老数据 NULL 视为默认人设，一并归属。
         let sql = "SELECT id FROM sessions WHERE persona_id IS ?1 OR (persona_id IS NULL AND ?2 = '\(PersonaStore.defaultPersonaID)')"
@@ -2679,6 +2683,12 @@ actor ChatStore {
             }
         }
         sqlite3_finalize(stmt)
+        // 先统一收尾（与手动删除路径同一条），再逐行删。
+        await MainActor.run {
+            for id in ids {
+                SessionTeardown.tearDownRuntime(sessionId: id, reason: "persona deleted")
+            }
+        }
         for id in ids {
             deleteSession(id)
         }

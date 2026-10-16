@@ -4387,6 +4387,7 @@ struct ContentView: View {
         Task(priority: .utility) { @MainActor in
             sessions = await ChatStore.shared.listSessions()
             folders = await ChatStore.shared.listFolders()
+            clearSelectionIfDangling()
             sessionRefreshInFlight = false
             // [T-ios-listsessions-perf] Stamp the COMPLETION instant — the
             // cooldown in SessionRefreshScheduler is keyed on this, not on when
@@ -4396,7 +4397,22 @@ struct ContentView: View {
         }
     }
 
-    /// [T-ios-listsessions-perf] Passive (background-stream) entry point for
+    /// [batch9c / E2] 列表刷新完成点调用：清理悬空选中。
+    /// 级联删除（删人设）不走 ContentView.deleteSession 的选中清理，详情面板
+    /// 会停在一个已不存在的会话上（死内容）。草稿态由状态机自管：未持久化的
+    /// 草稿（newSessionRealId == nil）不在此清理。
+    private func clearSelectionIfDangling() {
+        guard let sel = selectedSessionId else { return }
+        if Self.isNewSessionId(sel) {
+            if let real = newSessionRealId, !sessions.contains(where: { $0.id == real }) {
+                selectedSessionId = nil
+            }
+        } else if !sessions.contains(where: { $0.id == sel }) {
+            selectedSessionId = nil
+        }
+    }
+
+    /// [T-ios-listsessions-perf] Passive (background-stream) entry point for the
     /// session-list updates. Navigation and user-initiated refreshes still call
     /// `refreshSessionList()` directly (a tap must never wait out a cooldown),
     /// but the `.sessionDidUpdate` stream goes through here: run immediately if
@@ -5133,21 +5149,14 @@ struct ContentView: View {
         if isSessionHighlighted(session.id) {
             selectedSessionId = nil
         }
-        ViewModelCache.shared.remove(sessionId: session.id)
-        BrowserUseOffloadBridge.releasePool(forSession: session.id)
         withAnimation {
             sessions.removeAll { $0.id == session.id }
         }
         Task { @MainActor in
-            // [AUD2-03] Tear down the work this session owns before it leaves
-            // the store: its scheduled jobs would otherwise keep firing against
-            // a deleted session (recordFire(ok:false) forever), and any running
-            // sub agent would keep burning tokens until it naturally finished.
-            AgentJobRegistry.shared.cancelScheduled(createdBy: session.id, reason: "session deleted")
-            AgentJobRegistry.shared.dropQueuedDelegations(parent: session.id, reason: "session deleted")
-            AgentJobRegistry.shared.cancelAll(parent: session.id, reason: "session deleted", silent: true)
+            // [batch9c / E2] 统一收尾（VM 缓存 / 浏览器池 / 定时任务与子 agent /
+            // 会话文件）——与级联删除链共用同一条实现。
+            SessionTeardown.tearDownRuntime(sessionId: session.id)
             await ChatStore.shared.deleteSession(session.id)
-            deleteSessionFiles(session.id)
         }
     }
 
@@ -5159,10 +5168,6 @@ struct ContentView: View {
         if ids.contains(where: { isSessionHighlighted($0) }) {
             selectedSessionId = nil
         }
-        for id in ids {
-            ViewModelCache.shared.remove(sessionId: id)
-            BrowserUseOffloadBridge.releasePool(forSession: id)
-        }
         withAnimation {
             sessions.removeAll { ids.contains($0.id) }
         }
@@ -5173,12 +5178,9 @@ struct ContentView: View {
         pendingDeleteFolderId = nil
         Task { @MainActor in
             for id in ids {
-                // [AUD2-03] Same teardown as the single-delete path, per id.
-                AgentJobRegistry.shared.cancelScheduled(createdBy: id, reason: "session deleted")
-                AgentJobRegistry.shared.dropQueuedDelegations(parent: id, reason: "session deleted")
-                AgentJobRegistry.shared.cancelAll(parent: id, reason: "session deleted", silent: true)
+                // [batch9c / E2] 统一收尾，与单删路径同一条。
+                SessionTeardown.tearDownRuntime(sessionId: id)
                 await ChatStore.shared.deleteSession(id)
-                deleteSessionFiles(id)
             }
             // Delete-all-in-folder: the folder is empty now; dissolving it
             // just drops the row (and pushes the FolderV2 tombstone).
@@ -5187,16 +5189,6 @@ struct ContentView: View {
                 await MainActor.run { refreshSessionList() }
             }
         }
-    }
-
-    /// Remove persistent minis files for a session (Library/MinisChat/minis/<sessionId>/).
-    private func deleteSessionFiles(_ sessionId: String) {
-        let fm = FileManager.default
-        let base = fm.urls(for: .libraryDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("MinisChat/minis", isDirectory: true)
-            .appendingPathComponent(sessionId, isDirectory: true)
-        try? fm.removeItem(at: base)
-        BrowserTabPool.deletePersistedData(for: sessionId)
     }
 
     private func regenerateTitle(for session: ChatSession) {
