@@ -25,6 +25,8 @@ enum UploadPolicy {
         case envVars               // EnvVar
         case memory                // MemoryGlobalV2 + MemoryDailyV2
         case subAgents             // [batch1] SubAgentV3 (Sub Agents roster)
+        case soul                  // [batch6 / W1C-03] SoulV2 (persona identity)
+        case mcpServers            // [batch6 / W1C-03] MCPServersV2 + MCPServerItem
 
         /// SQLite record_type values that fall under this category.
         var recordTypes: Set<String> {
@@ -50,11 +52,21 @@ enum UploadPolicy {
                         "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3",
                         "ProviderThinkingRuleV3"]
             case .envVars:
-                return ["EnvVar", "EnvVarV2"]
+                // [batch6 / W1C-03] EnvVarItem is the ONLY live path — EnvVarStore
+                // stopped issuing legacy EnvVar(whole-file) markDirty, so without
+                // this entry the "Environments" toggle governed nothing and every
+                // environment variable still shipped to iCloud.
+                return ["EnvVar", "EnvVarV2", "EnvVarItem"]
             case .subAgents:
                 // [batch1 / audit W1C-02] Roster records; the Sub Agents
                 // toggle governs their uploads like any other category.
                 return ["SubAgentV3"]
+            case .soul:
+                // [batch6 / W1C-03] Persona identity file.
+                return ["SoulV2"]
+            case .mcpServers:
+                // [batch6 / W1C-03] Per-server records + the legacy whole-file one.
+                return ["MCPServersV2", "MCPServerItem"]
             case .memory:
                 return ["MemoryGlobalV2", "MemoryDailyV2"]
             }
@@ -72,6 +84,8 @@ enum UploadPolicy {
             case .envVars:      return "Environments"
             case .memory:       return "Memory Files"
             case .subAgents:    return "Sub Agents"
+            case .soul:         return "Soul (Persona)"
+            case .mcpServers:   return "MCP Servers"
             }
         }
     }

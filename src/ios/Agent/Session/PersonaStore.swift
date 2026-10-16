@@ -340,6 +340,51 @@ final class PersonaStore: ObservableObject {
             .appendingPathComponent("personas/\(personaID)", isDirectory: true)
     }
 
+    /// [batch5 / W2B-01] Move leftover files from the legacy root memory dir
+    /// into the default persona dir. Merge-only: a file that already exists
+    /// per-persona is left alone (and logged), never overwritten. Runs once
+    /// per launch after the persona store is loaded.
+    static func mergeLegacyRootMemoryIfNeeded() {
+        let fm = FileManager.default
+        let memDir = AIChatViewModel.minisMemoryPersistentDir
+        let defaultDir = memoryDir(for: defaultPersonaID)
+        var moved: [String] = []
+        for name in ["GLOBAL.md", "SOUL.md"] {
+            let src = memDir.appendingPathComponent(name)
+            guard fm.fileExists(atPath: src.path) else { continue }
+            let dst = defaultDir.appendingPathComponent(name)
+            if fm.fileExists(atPath: dst.path) {
+                AppLogger(category: "PersonaStore").warning("[MemoryMigrate] root \(name) leftover ignored (persona file exists)")
+                continue
+            }
+            do {
+                try fm.createDirectory(at: defaultDir, withIntermediateDirectories: true)
+                try fm.moveItem(at: src, to: dst)
+                moved.append(name)
+            } catch {
+                AppLogger(category: "PersonaStore").error("[MemoryMigrate] move \(name) failed: \(error)")
+            }
+        }
+        if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+            for f in files where isDailyLogName(f.lastPathComponent) {
+                let dst = defaultDir.appendingPathComponent(f.lastPathComponent)
+                if fm.fileExists(atPath: dst.path) {
+                    AppLogger(category: "PersonaStore").warning("[MemoryMigrate] root \(f.lastPathComponent) leftover ignored (persona file exists)")
+                    continue
+                }
+                do {
+                    try fm.moveItem(at: f, to: dst)
+                    moved.append(f.lastPathComponent)
+                } catch {
+                    AppLogger(category: "PersonaStore").error("[MemoryMigrate] move \(f.lastPathComponent) failed: \(error)")
+                }
+            }
+        }
+        if !moved.isEmpty {
+            AppLogger(category: "PersonaStore").warning("[MemoryMigrate] merged \(moved.count) legacy root file(s) into default persona: \(moved.joined(separator: ","))")
+        }
+    }
+
     /// 当前人设的工具白名单快照（skill / mcp）。nil = 全部可用。
     /// 直接读 personas.json，不经过 @MainActor，prompt 组装线程可调。
     nonisolated static func whitelistSnapshot() -> (skillIds: [String]?, mcpServerIds: [String]?) {
@@ -380,6 +425,9 @@ final class PersonaStore: ObservableObject {
                 try? Self.stewardSoulContent.data(using: .utf8)?
                     .write(to: stewardSoulURL, options: .atomic)
             }
+            // [batch5 / W2B-01] Sweep any leftover files from the legacy root
+            // memory dir into the default persona (merge-only, never overwrite).
+            Self.mergeLegacyRootMemoryIfNeeded()
             return
         }
 

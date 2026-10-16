@@ -29,7 +29,10 @@ enum MemoryWriteRevoker {
         }
 
         let fm = FileManager.default
-        let memDir = AIChatViewModel.minisMemoryPersistentDir
+        // [batch5 / W2B-01/W2B-05] The daily log lives in the current persona
+        // dir — the legacy root path made revoke fail for every non-default
+        // persona (and silently no-op for the default one).
+        let memDir = PersonaStore.memoryDir(for: PersonaStore.currentID())
 
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd"

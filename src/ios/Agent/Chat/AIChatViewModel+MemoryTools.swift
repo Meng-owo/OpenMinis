@@ -109,10 +109,18 @@ extension AIChatViewModel {
         let timestamp = timeFmt.string(from: Date())
         let entry = "<!-- \(timestamp) -->\n\(content)\n\n"
 
-        // Prepend to existing file
+        // Prepend to existing file. [batch5 / W2B-03] A file that EXISTS but
+        // fails to read (bad bytes, locks) must never be treated as empty —
+        // with the old `?? ""` the next step rewrote the whole file from just
+        // the new entry, silently destroying the day's log. Refuse instead.
         var existing = ""
         if fm.fileExists(atPath: fileURL.path) {
-            existing = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
+            do {
+                existing = try String(contentsOf: fileURL, encoding: .utf8)
+            } catch {
+                AppLogger(category: "MemoryTools").error("[MemoryTools] existing \(fileURL.lastPathComponent) unreadable — refusing to overwrite: \(error)")
+                return FileToolResult(output: "Error: the existing memory file could not be read, so the new entry was NOT written (writing would have replaced the day's existing entries): \(error.localizedDescription)", success: false)
+            }
         }
 
         let newContent = entry + existing

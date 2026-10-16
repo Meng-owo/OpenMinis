@@ -354,6 +354,18 @@ extension AIChatViewModel {
                 break
             }
 
+            // [batch5 / W2B-02] Memory write guard: memory-off sessions (and
+            // cross-persona targets) can't write /var/minis/memory via shell.
+            if let memoryRefusal = memoryShellWriteGuard(command) {
+                ctLogger.warning("[MemoryGuard] BLOCKED shell memory write")
+                toolOutput = memoryRefusal
+                toolSuccess = false
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = memoryRefusal
+                }
+                break
+            }
+
             // Offload permission check.
             ctLogger.info("[OffloadPerm] shell command: \(command)")
             if let offloadCmd = OffloadPermissionManager.extractOffloadCommand(from: command) {

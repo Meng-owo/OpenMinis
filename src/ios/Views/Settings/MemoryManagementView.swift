@@ -111,18 +111,23 @@ struct MemoryManagementView: View {
 
     private func loadFiles() {
         let fm = FileManager.default
-        let memDir = AIChatViewModel.minisMemoryPersistentDir
+        // [batch5 / W2B-01] The persona-aware memory dir is the one the agent
+        // actually reads and the tools write; the legacy root dir produced a
+        // fake GLOBAL.md the model never saw.
+        let memDir = PersonaStore.memoryDir(for: PersonaStore.currentID())
         try? fm.createDirectory(at: memDir, withIntermediateDirectories: true)
 
-        // GLOBAL.md always first
+        // GLOBAL.md first — only when it actually exists (no fabricated row).
         let globalURL = memDir.appendingPathComponent("GLOBAL.md")
         var items: [MemoryFileItem] = []
 
-        let globalModDate = (try? fm.attributesOfItem(atPath: globalURL.path)[.modificationDate] as? Date) ?? Date()
-        let globalContent = (try? String(contentsOf: globalURL, encoding: .utf8)) ?? ""
-        let globalPreview = firstMemoryLine(from: globalContent)
-        let globalSize = (try? fm.attributesOfItem(atPath: globalURL.path)[.size] as? Int) ?? 0
-        items.append(MemoryFileItem(name: "GLOBAL.md", isGlobal: true, modifiedDate: formatDate(globalModDate), fileSize: formatFileSize(globalSize), preview: globalPreview))
+        if fm.fileExists(atPath: globalURL.path) {
+            let globalModDate = (try? fm.attributesOfItem(atPath: globalURL.path)[.modificationDate] as? Date) ?? Date()
+            let globalContent = (try? String(contentsOf: globalURL, encoding: .utf8)) ?? ""
+            let globalPreview = firstMemoryLine(from: globalContent)
+            let globalSize = (try? fm.attributesOfItem(atPath: globalURL.path)[.size] as? Int) ?? 0
+            items.append(MemoryFileItem(name: "GLOBAL.md", isGlobal: true, modifiedDate: formatDate(globalModDate), fileSize: formatFileSize(globalSize), preview: globalPreview))
+        }
 
         // Daily logs sorted by name descending
         if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) {
@@ -145,7 +150,8 @@ struct MemoryManagementView: View {
 
     private func deleteFiles(at offsets: IndexSet) {
         let fm = FileManager.default
-        let memDir = AIChatViewModel.minisMemoryPersistentDir
+        // [batch5 / W2B-01] Delete from the same persona dir the list came from.
+        let memDir = PersonaStore.memoryDir(for: PersonaStore.currentID())
         for idx in offsets {
             let file = memoryFiles[idx]
             if file.isGlobal { continue }
@@ -203,7 +209,9 @@ private struct MemoryFileEditView: View {
     @State private var suppressNextChange = false
 
     private var fileURL: URL {
-        AIChatViewModel.minisMemoryPersistentDir.appendingPathComponent(fileName)
+        // [batch5 / W2B-01] Same persona dir as the list/load path — the
+        // legacy root path silently wrote a file the agent never reads.
+        PersonaStore.memoryDir(for: PersonaStore.currentID()).appendingPathComponent(fileName)
     }
 
     var body: some View {
@@ -290,7 +298,8 @@ private struct MemoryFileEditView: View {
 
     private func save() {
         let fm = FileManager.default
-        try? fm.createDirectory(at: AIChatViewModel.minisMemoryPersistentDir, withIntermediateDirectories: true)
+        // [batch5 / W2B-01] Create the persona dir (not the legacy root).
+        try? fm.createDirectory(at: PersonaStore.memoryDir(for: PersonaStore.currentID()), withIntermediateDirectories: true)
         do {
             try content.data(using: .utf8)?.write(to: fileURL)
             hasChanges = false

@@ -384,12 +384,71 @@ extension AIChatViewModel {
     }
 
     /// Execute a file_write tool call via direct FileManager + meta.db update.
+    /// [batch5 / W2B-02] Memory write guard. The iSH mount exposes the whole
+    /// /var/minis/memory root to every session — including memory-off sub
+    /// agents and scheduled jobs — so the tool layer enforces what the mount
+    /// cannot: no writes while memory is off, and no writes into another
+    /// persona's directory. Returns a refusal message, or nil when fine.
+    func memoryWriteGuard(for rawPath: String) -> String? {
+        let norm: String
+        if rawPath.hasPrefix("/var/minis/memory/") || rawPath == "/var/minis/memory" {
+            norm = rawPath
+        } else if rawPath.hasPrefix("minis-clone://memory/") {
+            norm = "/var/minis/memory/" + rawPath.dropFirst("minis-clone://memory/".count)
+        } else {
+            return nil
+        }
+        if !memoryEnabled {
+            return "Error: memory is disabled for this session — writes under /var/minis/memory are blocked."
+        }
+        let marker = "/var/minis/memory/personas/"
+        if let r = norm.range(of: marker) {
+            let pid = String(norm[r.upperBound...].prefix(while: { $0 != "/" }))
+            let current = sessionPersonaId ?? PersonaStore.currentID()
+            if !pid.isEmpty, pid != current {
+                return "Error: refusing to write another persona's memory (persona=\(pid), current=\(current))."
+            }
+        }
+        return nil
+    }
+
+    /// [batch5 / W2B-02] Shell-side memory guard: catches the direct write
+    /// forms the file-tool guard can't see (redirection, tee, cp/mv/rm, sed -i).
+    /// Text-level, so a cleverly embedded write can slip through — accepted;
+    /// the mount layer keeps full enforcement as a follow-up.
+    func memoryShellWriteGuard(_ command: String) -> String? {
+        guard command.contains("/var/minis/memory") else { return nil }
+        let writeMarkers = [">", "tee", "cp ", "mv ", "rm ", "sed -i", "truncate", "chmod", "dd "]
+        let hasWrite = writeMarkers.contains { command.contains($0) }
+        let current = sessionPersonaId ?? PersonaStore.currentID()
+        if !memoryEnabled, hasWrite {
+            return "Error: memory is disabled for this session — shell writes under /var/minis/memory are blocked."
+        }
+        // Explicit other-persona targets, any session (only with a write marker,
+        // so plain reads of the archive stay allowed).
+        let marker = "/var/minis/memory/personas/"
+        var searchStart = command.startIndex
+        while let r = command.range(of: marker, range: searchStart..<command.endIndex) {
+            let pid = String(command[r.upperBound...].prefix(while: { $0 != "/" && $0 != " " && $0 != "\n" && $0 != "'" && $0 != "\"" }))
+            if !pid.isEmpty, !pid.hasPrefix("$"), !pid.hasPrefix("\\("), pid != current, hasWrite {
+                return "Error: refusing to write another persona's memory via shell (persona=\(pid), current=\(current))."
+            }
+            searchStart = r.upperBound
+        }
+        return nil
+    }
+
     func executeFileWrite(from json: String) async throws -> FileToolResult {
         guard let data = json.data(using: .utf8),
               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let path = dict["path"] as? String,
               let content = dict["content"] as? String else {
             return FileToolResult(output: "Error: Missing required 'path' and/or 'content' parameters", success: false)
+        }
+
+        // [batch5 / W2B-02] Guard memory writes before any resolution work.
+        if let refusal = memoryWriteGuard(for: path) {
+            return FileToolResult(output: refusal, success: false)
         }
 
         #if DEBUG
@@ -589,6 +648,11 @@ extension AIChatViewModel {
               let oldString = dict["old_string"] as? String,
               let newString = dict["new_string"] as? String else {
             return FileToolResult(output: "Error: Missing required parameters (path, old_string, new_string)", success: false)
+        }
+
+        // [batch5 / W2B-02] Guard memory edits before any resolution work.
+        if let refusal = memoryWriteGuard(for: path) {
+            return FileToolResult(output: refusal, success: false)
         }
 
         // Pre-reject edits to read-only mounts via Linux path first — immune

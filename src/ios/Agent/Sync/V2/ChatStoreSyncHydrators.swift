@@ -1182,11 +1182,19 @@ enum ChatStoreSyncHydrators {
                     .appendingPathComponent("\(dateKey).md")
         let fm = FileManager.default
 
-        // Read existing local entries
+        // Read existing local entries. [batch5 / W2B-03] An existing-but-
+        // unreadable file must not be treated as empty: the union below would
+        // then rewrite the whole file from remote entries only, silently
+        // dropping the local day. Skip the merge instead.
         var localEntries: [MemoryEntry] = []
-        if fm.fileExists(atPath: url.path),
-           let localText = try? String(contentsOf: url, encoding: .utf8) {
-            localEntries = parseMemoryEntries(from: localText)
+        if fm.fileExists(atPath: url.path) {
+            do {
+                let localText = try String(contentsOf: url, encoding: .utf8)
+                localEntries = parseMemoryEntries(from: localText)
+            } catch {
+                logger.error("[SyncCore] mergeMemoryDaily: local file unreadable, skipping merge to avoid clobber: \(dateKey) err=\(error)")
+                return
+            }
         }
 
         // Set Union by timestamp key.
