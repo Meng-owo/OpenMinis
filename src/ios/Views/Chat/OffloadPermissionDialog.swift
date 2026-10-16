@@ -80,7 +80,7 @@ private struct OffloadPermissionDialogContent: View {
                             }
                         }
                         .background(AppearanceStudio.shared.color(.surface, scope: .chat))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
                     }

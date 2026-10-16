@@ -330,7 +330,7 @@ struct AppearanceStudioView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(studio.color(.raised, scope: wallpaperScope).opacity(0.88),
-                                    in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .padding(10)
                 }
                 .frame(height: 150)
@@ -555,10 +555,10 @@ struct AppearanceStudioView: View {
                         .background(
                             studio.color(.assistantBubble, variant: variant)
                                 .opacity(studio.bubbleOpacity),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
                         )
                     Spacer(minLength: 0)
@@ -575,10 +575,10 @@ struct AppearanceStudioView: View {
                         .background(
                             studio.color(.userBubble, variant: variant)
                                 .opacity(studio.bubbleOpacity),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
                         )
                     Circle()
@@ -629,10 +629,10 @@ struct AppearanceStudioView: View {
             .background(
                 studio.color(.surface, variant: variant)
                     .opacity(studio.surfaceOpacity),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(studio.color(.border, variant: variant).opacity(0.6), lineWidth: 0.6)
             )
         }

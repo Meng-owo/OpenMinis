@@ -83,8 +83,8 @@ struct ShellOutputView: View {
                     .background(Color(white: 0.08))
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
             .padding(.horizontal, 12)
             .padding(.top, 12)
             .padding(.bottom, 16)

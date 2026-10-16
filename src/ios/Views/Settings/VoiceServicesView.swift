@@ -216,7 +216,7 @@ struct VoiceServicesView: View {
 
     private func rowIcon(symbol: String, active: Bool) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(active ? MinisTheme.accent.opacity(0.15) : MinisTheme.mutedSurface)
             Image(systemName: symbol)
                 .font(.system(size: 15, weight: .medium))

@@ -3509,9 +3509,9 @@ struct AIChatView: View {
             ZStack(alignment: .topTrailing) {
                 StickerAnimatedImageView(image: img)
                     .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1)
                     )
                 Button {
@@ -4724,9 +4724,9 @@ struct AIChatView: View {
             content()
                 .frame(maxWidth: .infinity)
                 .background(ChatColors.secondaryBg)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 12)
                         .stroke(ChatColors.inputBorder, lineWidth: 0.5)
                 )
                 .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.08, alpha: 0.75) : UIColor(white: 0, alpha: 0.12) }), radius: 8, x: 0, y: 4)
@@ -4935,7 +4935,7 @@ struct AIChatView: View {
                 }
             }
             .background(Color.secondary.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 
@@ -7388,9 +7388,9 @@ struct ChatStickerPanel: View {
                                     if let img = store.image(for: sticker) {
                                         StickerAnimatedImageView(image: img)
                                             .frame(height: 72)
-                                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                             .overlay(
-                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
                                                     .stroke(
                                                         isManageMode && selectedStickerIds.contains(sticker.id)
                                                             ? CSSThemeVariables.accent(isDark: isDark)
@@ -7399,7 +7399,7 @@ struct ChatStickerPanel: View {
                                                     )
                                             )
                                     } else {
-                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
                                             .fill(CSSThemeVariables.optionBg(isDark: isDark))
                                             .frame(height: 72)
                                     }
@@ -8714,15 +8714,15 @@ struct StickerPickerSheet: View {
                                         if let img = store.image(for: sticker) {
                                             StickerAnimatedImageView(image: img)
                                                 .frame(width: 72, height: 72)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                                 .overlay(
-                                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                                                         .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
                                                 )
                                         } else {
                                             Color.secondary.opacity(0.1)
                                                 .frame(width: 72, height: 72)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                         }
 
                                         Text(sticker.title)

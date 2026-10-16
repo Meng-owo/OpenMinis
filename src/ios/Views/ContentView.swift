@@ -3121,7 +3121,7 @@ struct ContentView: View {
                                                 .padding(.bottom, isLast ? 4 : 0)
                                             }
                                         } else {
-                                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            RoundedRectangle(cornerRadius: 12, style: .continuous)
                                                 .fill(isSessionHighlighted(session.id)
                                                       ? MinisThemeList.accent.opacity(0.3)
                                                       : Color.clear)
@@ -6133,7 +6133,7 @@ fileprivate func minisListIconClip() -> AnyShape {
     switch MinisThemeList.iconShape {
     case .circle: return AnyShape(Circle())
     case .squircle: return AnyShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    case .rounded: return AnyShape(RoundedRectangle(cornerRadius: 10, style: .circular))
+    case .rounded: return AnyShape(RoundedRectangle(cornerRadius: 12, style: .circular))
     }
 }
 
@@ -7213,9 +7213,9 @@ private struct AppearanceSettingsView: View {
                                         .resizable()
                                         .aspectRatio(contentMode: .fill)
                                         .frame(width: 60, height: 60)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                         .overlay(
-                                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
                                                 .stroke(Color.primary.opacity(0.15), lineWidth: 0.5)
                                         )
                                 }
@@ -8105,7 +8105,7 @@ private struct ForceSyncToastBanner: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(MinisTheme.accent.opacity(0.92))
         )
         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)

@@ -884,8 +884,8 @@ struct ToolLiveSheet: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12)
                         .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.5), lineWidth: 0.5))
                     .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
                     .contextMenu {
@@ -924,8 +924,8 @@ struct ToolLiveSheet: View {
                                 .padding(14)
                         }
                         .background(ChatColors.toolBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                         .padding(.horizontal, 12)
                     }
             }
@@ -997,8 +997,8 @@ struct ToolLiveSheet: View {
                             .padding(14)
                     }
                     .background(ChatColors.toolBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                     .padding(.horizontal, 12)
                 }
             }
@@ -1044,8 +1044,8 @@ struct ToolLiveSheet: View {
                         .padding(.bottom, 14)
                         .frame(maxWidth: .infinity, minHeight: cardMinHeight, alignment: .topLeading)
                         .background(Color.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
                         .padding(.bottom, 16)
@@ -1070,7 +1070,7 @@ struct ToolLiveSheet: View {
                                 .textSelection(.enabled)
                                 .padding(14)
                                 .background(Color(white: 0.12))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .padding(.horizontal, 12)
                         }
                         .padding(.bottom, 16)
@@ -1279,8 +1279,8 @@ struct ToolLiveSheet: View {
                         }
                             .frame(maxWidth: .infinity, minHeight: cardMinHeight, maxHeight: .infinity, alignment: .topLeading)
                             .background(ChatColors.toolBg)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                             .padding(.horizontal, 12)
                             .padding(.top, 12)
                         }
@@ -1390,8 +1390,8 @@ struct ToolLiveSheet: View {
                 .padding(12)
         }
         .background(ChatColors.toolBg)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
         .padding(.horizontal, 12)
     }
 
@@ -1441,8 +1441,8 @@ struct ToolLiveSheet: View {
                     .padding(.vertical, 14)
                 }
                 .background(ChatColors.toolBg)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
             }
@@ -1504,8 +1504,8 @@ struct ToolLiveSheet: View {
                     .padding(.vertical, 14)
                 }
                 .background(ChatColors.toolBg)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(ChatColors.toolBorder, lineWidth: 0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(ChatColors.toolBorder, lineWidth: 0.5))
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
 
@@ -1705,7 +1705,7 @@ struct ToolLiveSheet: View {
                         .padding(.vertical, 14)
                         .frame(maxWidth: .infinity, minHeight: cardMinHeight, alignment: .topLeading)
                         .background(Color(white: 0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
                         .padding(.horizontal, 12)
                     }
                     .padding(.bottom, 16)
@@ -1774,8 +1774,8 @@ struct ToolLiveSheet: View {
                             .resizable()
                             .scaledToFit()
                             .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(RoundedRectangle(cornerRadius: 10)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12)
                                 .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.5), lineWidth: 0.5))
                             .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 3)
                             .contextMenu {
@@ -2369,7 +2369,7 @@ private struct ToolPreviewThumbnail: View {
 /// is what avoids it here.
 private struct ToolStatusBarSurface: ViewModifier {
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
     }
 
     func body(content: Content) -> some View {
@@ -2378,9 +2378,9 @@ private struct ToolStatusBarSurface: ViewModifier {
         } else {
             content
                 .background(ChatColors.background)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 12)
                         .stroke(AppearanceStudio.shared.color(.border, scope: .chat).opacity(0.3), lineWidth: 0.5)
                 )
                 .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)

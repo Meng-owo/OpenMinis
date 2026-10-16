@@ -256,7 +256,7 @@ struct ScheduledTaskDetailSheet: View {
                                     }
                                     .padding(10)
                                     .background(CSSThemeVariables.optionBg(isDark: isDark))
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
                             }
                         }

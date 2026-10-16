@@ -878,7 +878,7 @@ struct SyncMigrationDetailView: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color.yellow.opacity(0.18))
         )
     }

@@ -201,10 +201,10 @@ guard let id = pendingDeleteId else { return }
         .padding(14)
         .background(CSSThemeVariables.card(isDark: isDark))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private func taskRow(for job: AgentJob) -> some View {

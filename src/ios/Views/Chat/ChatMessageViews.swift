@@ -76,7 +76,7 @@ struct MessageContextMenuPreview: View {
 /// Background for the long-press preview platter.
 ///
 /// Matches `UserBubbleSurface` so lifting a bubble doesn't jump from Liquid
-/// Glass to a flat colour card — the shape (`RoundedRectangle(cornerRadius: 18)`,
+/// Glass to a flat colour card — the shape (`RoundedRectangle(cornerRadius: 16)`,
 /// non-`.continuous`) is deliberately the same one the bubble and the row's
 /// `.contentShape(.contextMenuPreview, …)` already use.
 ///
@@ -127,7 +127,7 @@ private struct ContextMenuPreviewSurface: ViewModifier {
 private struct UserBubbleSurface: ViewModifier {
     let isQueued: Bool
 
-    /// Matches `.contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18))`
+    /// Matches `.contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))`
     /// on the row exactly — including the default (non-`.continuous`) corner
     /// style. A `.continuous` bubble against a circular-arc preview clip would
     /// show the corners subtly change shape as the long-press lift begins.
@@ -514,7 +514,7 @@ struct ChatMessageRow: View {
             // stays a full Rectangle (so the whole row is long-pressable), but
             // the context-menu PREVIEW must clip to the bubble's rounded shape —
             // otherwise the lifted preview shows square corners while the bubble
-            // is RoundedRectangle(cornerRadius: 18). iOS 16+ lets us specify the
+            // is RoundedRectangle(cornerRadius: 16). iOS 16+ lets us specify the
             // preview clip shape independently from the interaction shape.
             .contentShape(.contextMenuPreview, MinisThemeShape.userBubble)
             .contextMenu {
@@ -879,7 +879,7 @@ struct ChatMessageRow: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChatColors.destructive.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     private var resumeBanner: some View {
@@ -914,7 +914,7 @@ struct ChatMessageRow: View {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ChatColors.warning.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
     // [T-ios-typing-indicator-scope] The local `hasVisibleContent` that used to

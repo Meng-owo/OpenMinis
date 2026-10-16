@@ -121,7 +121,7 @@ struct TTSGroupsView: View {
         let members = store.candidates(for: group)
         return HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(isDefault ? MinisTheme.accent.opacity(0.15) : MinisTheme.mutedSurface)
                 Image(systemName: "square.stack.3d.up.fill")
                     .font(.system(size: 15, weight: .medium))

@@ -524,8 +524,8 @@ struct PlayHubView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
                 .background(MinisThemeList.rowFill,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.plain)
 
@@ -549,7 +549,7 @@ struct PlayHubView: View {
                 }
                 .padding(.vertical, 4)
                 .background(MinisThemeList.rowFill,
-                            in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -638,7 +638,7 @@ struct PlayHubView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(MinisThemeList.rowFill,
-                    in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 10)
     }
@@ -652,9 +652,9 @@ struct PlayHubView: View {
                 .foregroundStyle(MinisThemeList.accent)
                 .frame(width: 36, height: 36)
                 .background(studio.color(.raised, scope: .home),
-                            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(studio.color(.border, scope: .home).opacity(0.55), lineWidth: 0.6)
                 )
             VStack(alignment: .leading, spacing: 3) {

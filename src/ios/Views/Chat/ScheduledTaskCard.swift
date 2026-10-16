@@ -216,10 +216,10 @@ struct ScheduledTaskCard: View {
                 .padding(.vertical, 10)
                 .background(CSSThemeVariables.card(isDark: isDark))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.04), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(PlainButtonStyle())
@@ -343,10 +343,10 @@ struct ScheduledPulseCardView: View {
         .padding(.vertical, 9)
         .background(CSSThemeVariables.card(isDark: isDark))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.05), radius: 4, x: 0, y: 2)
         .padding(.vertical, 3)
         .sheet(isPresented: $showingDetail) {
