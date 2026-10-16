@@ -631,9 +631,9 @@ struct ChatMessageRow: View {
                         }
                     } : nil,
                     onCopyScreenshot: onCopyScreenshot,
+                    sessionPersonaId: sessionPersonaId,
                     browserPool: browserPool,
                     toolSnapshots: toolSnapshots,
-                    sessionPersonaId: sessionPersonaId,
                     highlightedBlockId: $highlightedBlockId,
                     detailBlock: $detailBlock
                 )
