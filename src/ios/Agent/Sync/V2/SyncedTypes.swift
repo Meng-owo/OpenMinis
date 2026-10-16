@@ -629,6 +629,7 @@ struct SyncedSubAgentV3: Syncable {
         return SyncTypeMetadata<SyncedSubAgentV3>(
             recordType: "SubAgentV3",
             idKeyPath: \SyncedSubAgentV3.id,
+            scope: .global,
             fields: [
                 F.string("name",                 \SyncedSubAgentV3.name),
                 F.string("desc",                 \SyncedSubAgentV3.desc),
