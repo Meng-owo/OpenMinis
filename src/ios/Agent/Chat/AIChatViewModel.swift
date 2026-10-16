@@ -809,6 +809,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// off the previous turn's reply (a ghost banner on a good answer).
     /// Not @Published for the same reason as turnStartedByRetry.
     var currentTurnStartHistoryIndex = 0
+    /// [batch4 / W2C-01] Tokens for the per-request fixed overhead (system
+    /// prompt + tool definitions), refreshed every time the request is built
+    /// (runAgentLoop). estimateContextTokens adds it on top of the history so
+    /// capacity checks stop under-counting by thousands of tokens.
+    /// Not @Published — read from estimation paths only.
+    var lastRequestFixedTokens = 0
     /// Transient banner / toast message for in-loop notices (e.g. "older
     /// N image(s) elided from request to fit 25MB budget"). Set by the
     /// request-level image budget pass when it had to drop history images;
@@ -5294,6 +5300,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [P1-7] Single builder — the old hand-written recipe drifted from
         // the fallback paths (which dropped skills/MCP/TTS/memory).
         var userSystemPrompt = buildTurnSystemPrompt(base: baseSystemPrompt, model: activeModel)
+
+        // [batch4 / W2C-01] Refresh the fixed-overhead count that
+        // estimateContextTokens adds on top of the history: system prompt +
+        // tool schemas ride on every request and were never counted before.
+        do {
+            var fixed = BPETokenizer.shared.countTokens(userSystemPrompt)
+            for tool in tools {
+                fixed += BPETokenizer.shared.countTokens(tool.name)
+                fixed += BPETokenizer.shared.countTokens(tool.description)
+                for (pName, param) in tool.parameters {
+                    fixed += BPETokenizer.shared.countTokens(pName)
+                    fixed += BPETokenizer.shared.countTokens(param.description)
+                }
+                fixed += 8 // per-tool schema structural overhead
+            }
+            lastRequestFixedTokens = fixed
+        }
 
         let promptBuildMs = (CFAbsoluteTimeGetCurrent() - loopSetupStart) * 1000
         logger.info("⏱️ [runAgentLoop] prompt build elapsed=\(String(format: "%.1f", promptBuildMs))ms history=\(self.agentHistory.count)")

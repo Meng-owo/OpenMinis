@@ -271,6 +271,7 @@ struct CloudSyncSettingsV2View: View {
         case .providers:    return "link"
         case .envVars:      return "rectangle.stack.fill"
         case .memory:       return "brain.head.profile"
+        case .subAgents:    return "person.2.fill"   // [batch1/W1C-02]
         }
     }
 
@@ -282,6 +283,7 @@ struct CloudSyncSettingsV2View: View {
         case .providers:    return .teal
         case .envVars:      return .green
         case .memory:       return .pink
+        case .subAgents:    return .purple   // [batch1/W1C-02]
         }
     }
 

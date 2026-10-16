@@ -230,11 +230,23 @@ struct TokenUsage {
         //   • Agent multi-turn (multiple API calls) → each call's input grows, max is correct
         inputTokens = max(inputTokens, u.inputTokens)
         outputTokens = max(outputTokens, u.outputTokens)
-        cacheCreationTokens = (u.cacheCreationInputTokens ?? 0)
-        cacheReadTokens = (u.cacheReadInputTokens ?? 0)
-        latestContextTokens = u.inputTokens
-            + (u.cacheReadInputTokens ?? 0)
-            + (u.cacheCreationInputTokens ?? 0)
+        // [batch4 / W2C-02] "Non-nil only" semantics: providers may send a
+        // partial trailing usage event (Anthropic's message_delta carries only
+        // output_tokens). The old code wrote `?? 0` unconditionally, so that
+        // trailing event zeroed out the full input/cache stats the earlier
+        // event had just reported — and the context baseline collapsed to 0,
+        // which silently pushed offload/budget decisions back onto the bad
+        // chars/3.5 estimate (W2C-01).
+        if let c = u.cacheCreationInputTokens { cacheCreationTokens = c }
+        if let r = u.cacheReadInputTokens { cacheReadTokens = r }
+        // latestContextTokens is "the size of the latest call": recompute it
+        // only when this event actually carries input accounting, using the
+        // freshest values we hold.
+        if u.inputTokens > 0 {
+            latestContextTokens = u.inputTokens
+                + (u.cacheReadInputTokens ?? cacheReadTokens)
+                + (u.cacheCreationInputTokens ?? cacheCreationTokens)
+        }
     }
 }
 

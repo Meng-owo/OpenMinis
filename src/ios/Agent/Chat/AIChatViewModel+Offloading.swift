@@ -310,61 +310,49 @@ extension AIChatViewModel {
     /// what's sent; estimating against the raw log made post-compact usage
     /// look unchanged and fired the "near capacity" prompt before every send.
     func estimateContextTokens(_ caller: String = #function) -> Int {
-        var totalChars = 0
-        var imageTokens = 0
+        var partTokens = 0
         let slice = effectiveAgentHistory()
         // DIAG: per-message breakdown so we can see EXACTLY what occupies the
         // post-compact context. Logs every message's role + part summary +
         // token estimate; lets us tell whether bloat comes from the injected
         // summary, pre-anchor warm-up turns, or post-anchor tool results.
         var perMsg: [String] = []
-        var biggest: [(kind: String, chars: Int, msgIdx: Int)] = []
+        var biggest: [(kind: String, tokens: Int, msgIdx: Int)] = []
         for (idx, msg) in slice.enumerated() {
-            var msgChars = 0
-            var msgImgTok = 0
+            var msgTok = 0
             var partTags: [String] = []
             for part in msg.parts {
-                var partChars = 0
+                // [batch4 / W2C-01] Per-part BPE count (includes its image tokens).
+                let partTok = BPETokenizer.shared.countPartTokens(part)
                 var partKind = ""
                 switch part {
                 case .text(let t):
-                    partChars = t.count
                     let isSummary = t.contains("<context-summary>")
                     partKind = isSummary ? "SUMMARY" : "text"
-                case .toolUse(_, let name, let input):
-                    if let data = try? JSONSerialization.data(withJSONObject: input) {
-                        partChars = data.count
-                    }
+                case .toolUse(_, let name, _):
                     partKind = "tu:\(name)"
-                case .toolResult(_, _, let content, _, let imgData, _, _, _):
-                    partChars = content.count
-                    if let imgData = imgData {
-                        let it = BPETokenizer.shared.countImageTokens(imgData)
-                        imageTokens += it
-                        msgImgTok += it
-                    }
+                case .toolResult:
                     partKind = "tr"
-                case .imageData(let data, _, _):
-                    let it = BPETokenizer.shared.countImageTokens(data)
-                    imageTokens += it
-                    msgImgTok += it
+                case .imageData:
                     partKind = "img"
                 }
-                msgChars += partChars
-                totalChars += partChars
-                partTags.append("\(partKind)=\(partChars)c")
-                if partChars >= 2000 {
-                    biggest.append((partKind, partChars, idx))
+                msgTok += partTok
+                partTokens += partTok
+                partTags.append("\(partKind)=\(partTok)t")
+                if partTok >= 500 {
+                    biggest.append((partKind, partTok, idx))
                 }
             }
-            let msgTok = Int(Double(msgChars) / 3.5) + msgImgTok
             let dbId = msg.dbMessageId?.prefix(8) ?? "----"
             perMsg.append("[\(idx) \(msg.role.rawValue) db=\(dbId) ~\(msgTok)tok | \(partTags.joined(separator: ","))]")
         }
-        let totalTokens = Int(Double(totalChars) / 3.5) + imageTokens
-        biggest.sort { $0.chars > $1.chars }
-        let top = biggest.prefix(5).map { "[\($0.msgIdx)\($0.kind)=\($0.chars)c]" }.joined(separator: " ")
-        logger.info("[CompactDiag] estimate caller=\(caller) slice=\(slice.count) total=\(totalTokens)tok (\(totalChars)chars+\(imageTokens)imgTok) bigParts(≥2kc): \(top)")
+        // [batch4 / W2C-01] Fixed per-request overhead (system prompt + tool
+        // definitions), refreshed each turn by the request builder — worth
+        // thousands of tokens on its own and previously never counted.
+        let totalTokens = partTokens + lastRequestFixedTokens
+        biggest.sort { $0.tokens > $1.tokens }
+        let top = biggest.prefix(5).map { "[\($0.msgIdx)\($0.kind)=\($0.tokens)t]" }.joined(separator: " ")
+        logger.info("[CompactDiag] estimate caller=\(caller) slice=\(slice.count) total=\(totalTokens)tok (history=\(partTokens)+fixed=\(lastRequestFixedTokens)) bigParts(≥500t): \(top)")
         logger.info("[CompactDiag] estimate perMsg: \(perMsg.joined(separator: " "))")
         return totalTokens
     }

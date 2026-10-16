@@ -72,7 +72,6 @@ enum UploadPolicy {
             case .envVars:      return "Environments"
             case .memory:       return "Memory Files"
             case .subAgents:    return "Sub Agents"
-            case .subAgents:    return "Sub Agents"
             }
         }
     }
