@@ -108,7 +108,7 @@ enum AIVoiceMessageComposer {
     /// 都不传 = 走默认链路（默认 TTS 分组 → 选中服务 → 模型分组）。
     /// 点名时是严格语义：只试点名的候选，死透了就抛错，不会悄悄用别的声音顶。
     static func compose(for text: String, sessionId: String, voice: String?, group: String?) async throws -> Result {
-        let sanitized = VoiceTextSanitizer.sanitize(text, mode: .fullText)
+        let sanitized = VoiceTextSanitizer.sanitize(text)
         guard !sanitized.isEmpty else { throw VoiceComposeError.emptyText }
 
         let data: Data

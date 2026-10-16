@@ -7679,25 +7679,7 @@ struct ChatVoiceSettingsSheet: View {
                     }
                     .pickerStyle(.segmented)
 
-                    // 2. 朗读内容范围选择
-                    Picker(selection: Binding(
-                        get: { VoiceOutputPreferences.selectionMode },
-                        set: { VoiceOutputPreferences.selectionMode = $0 }
-                    )) {
-                        ForEach(VoiceTextSanitizer.SelectionMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("朗读内容")
-                                .font(.body.weight(.medium))
-                            Text("决定朗读回复的哪一部分文本")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-
-                    // 3. 声音模型入口
+                    // 2. 声音模型入口
                     Button {
                         showModelSelector = true
                     } label: {

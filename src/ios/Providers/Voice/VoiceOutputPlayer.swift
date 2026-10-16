@@ -27,14 +27,6 @@ enum VoiceOutputPreferences {
         set { UserDefaults.standard.set(newValue, forKey: speedKey) }
     }
 
-    /// [T-kelivo-tts 09-10] Read-aloud text selection mode (kelivo-style):
-    /// fullText = everything; quotedOnly = just quoted spans;
-    /// withoutParentheses = drop (asides). Persisted.
-    private static let selectionKey = "voice.output.selectionMode"
-    static var selectionMode: VoiceTextSanitizer.SelectionMode {
-        get { VoiceTextSanitizer.SelectionMode(rawValue: UserDefaults.standard.string(forKey: selectionKey) ?? "") ?? .fullText }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: selectionKey) }
-    }
 
     private static let mutedKey = "voice.output.muted"
 
@@ -314,7 +306,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// preview / "Read Selected" — same splitting as live streaming TTS.
     /// Non-session callers pass `VoiceOutputPlayer.manualOwnerId`.
     func enqueueSegmented(_ rawText: String, sessionId: String) {
-        let sanitized = VoiceTextSanitizer.sanitize(rawText, mode: VoiceOutputPreferences.selectionMode)
+        let sanitized = VoiceTextSanitizer.sanitize(rawText)
         guard !sanitized.isEmpty else { return }
         let segments = AIChatViewModel.splitIntoSpeechSegments(sanitized)
         for s in segments { enqueue(s, sessionId: sessionId) }

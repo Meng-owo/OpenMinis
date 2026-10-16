@@ -12,29 +12,10 @@ enum VoiceTextSanitizer {
 
     /// Strip common Markdown syntax + emoji / non-speakable symbols and tidy
     /// whitespace. Returns the cleaned, speakable string (may be empty).
-    /// [T-kelivo-tts 09-10] kelivo-style read-aloud selection. The default
-    /// (.fullText) keeps today's behaviour; .quotedOnly reads JUST the
-    /// quoted spans (「」/“”/「」), dropping the AI's surrounding commentary —
-    /// natural for reading dialogue-heavy replies aloud.
-    enum SelectionMode: String, CaseIterable {
-        case fullText
-        case quotedOnly
-        /// Drop (parenthetical asides) — they read as interruptions aloud.
-        case withoutParentheses
-    }
-
-    static func sanitize(_ text: String, mode: SelectionMode = .fullText) -> String {
-        var working = text
-        switch mode {
-        case .fullText:
-            break
-        case .quotedOnly:
-            let quoted = extractQuoted(text)
-            working = quoted.isEmpty ? text : quoted
-        case .withoutParentheses:
-            working = stripParenthesized(text)
-        }
-        var s = stripMarkdown(working)
+    /// [batch9-voice-1a] 朗读范围（SelectionMode）已删——统一全文口径，
+    /// 不再提供 quotedOnly / withoutParentheses 模式。
+    static func sanitize(_ text: String) -> String {
+        var s = stripMarkdown(text)
         // Replace any remaining bare URLs in plain text with "<host> 的链接" so the
         // reader never voices a long, unstoppable URL.
         s = rewriteBareURLs(s)
@@ -164,119 +145,6 @@ enum VoiceTextSanitizer {
     }
 
     /// True if the scalar should be spoken (kept). Drops emoji & symbol ranges.
-    /// [T-kelivo-tts] All quoted spans joined with pauses: 「」『』“”‘’ and
-    /// straight quotes. Empty when there are none (caller falls back).
-    private static func extractQuoted(_ text: String) -> String {
-        let pairs: [(open: Character, close: Character)] = [
-            ("「", "」"), ("『", "』"), ("“", "”"), ("‘", "’"),
-        ]
-        var spans: [String] = []
-        var i = text.startIndex
-        while i < text.endIndex {
-            let ch = text[i]
-            if let pair = pairs.first(where: { $0.open == ch }) {
-                if let close = text[i...].firstIndex(of: pair.close), close > i {
-                    let inner = String(text[text.index(after: i)..<close])
-                    if !inner.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        spans.append(inner)
-                    }
-                    i = text.index(after: close)
-                    continue
-                }
-            } else if ch == "\"" || ch == "'" {
-                // Straight quote pair — find the matching close. A single
-                // quote flanked by letters is a contraction apostrophe
-                // (don't / it's / we're), never a quote delimiter: skip it
-                // both as an opener here and as a candidate close below,
-                // or "don't … 'quoted'" pairs the apostrophe with the real
-                // opening quote and extracts garbage ("t think").
-                if ch == "'", isContractionApostrophe(text, at: i) {
-                    i = text.index(after: i)
-                    continue
-                }
-                let next = text.index(after: i)
-                if next < text.endIndex,
-                   let close = straightQuoteClose(text, from: next, quote: ch),
-                   close > next {
-                    let inner = String(text[next..<close])
-                    if !inner.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        spans.append(inner)
-                    }
-                    i = text.index(after: close)
-                    continue
-                }
-            }
-            i = text.index(after: i)
-        }
-        return spans.joined(separator: "\n")
-    }
-
-    /// A `'` with a letter on both sides is a word-internal apostrophe.
-    private static func isContractionApostrophe(_ text: String, at i: String.Index) -> Bool {
-        guard i > text.startIndex, text[text.index(before: i)].isLetter else { return false }
-        let next = text.index(after: i)
-        guard next < text.endIndex else { return false }
-        return text[next].isLetter
-    }
-
-    /// First index of `quote` at/after `from` that can close a straight-quote
-    /// span — contraction apostrophes inside the span don't count.
-    private static func straightQuoteClose(_ text: String, from: String.Index, quote: Character) -> String.Index? {
-        var j = from
-        while j < text.endIndex {
-            if text[j] == quote,
-               quote != "'" || !isContractionApostrophe(text, at: j) {
-                return j
-            }
-            j = text.index(after: j)
-        }
-        return nil
-    }
-
-    /// [T-kelivo-tts] Remove (……) and （……） spans — asides read as
-    /// interruptions when spoken aloud.
-    /// [AI-P2-11] Unclosed-paren guard: the old single-pass depth counter
-    /// swallowed EVERYTHING after an unclosed `(` — depth never returned to
-    /// 0, so all following text was dropped. Now the text is stripped only
-    /// when its parens balance (every closer matches an opener in scan
-    /// order); otherwise the original is kept verbatim. Dropping words is
-    /// worse than hearing a stray "(" pause, and the well-formed path is
-    /// byte-for-byte the old logic.
-    private static func stripParenthesized(_ text: String) -> String {
-        guard parenthesesBalanced(text) else { return text }
-        var out = ""
-        var depth = 0
-        for ch in text {
-            if ch == "(" || ch == "（" {
-                if depth == 0, !out.isEmpty, !out.hasSuffix(" ") { out.append(" ") }
-                depth += 1
-                continue
-            }
-            if ch == ")" || ch == "）" {
-                if depth > 0 { depth -= 1 }
-                continue
-            }
-            if depth == 0 { out.append(ch) }
-        }
-        return out
-    }
-
-    /// True when every paren closer matches an earlier opener in scan order
-    /// (open/close types are interchangeable, mirroring the strip above).
-    /// `")("` is NOT balanced — depth must never go negative.
-    private static func parenthesesBalanced(_ text: String) -> Bool {
-        var depth = 0
-        for ch in text {
-            if ch == "(" || ch == "（" {
-                depth += 1
-            } else if ch == ")" || ch == "）" {
-                depth -= 1
-                if depth < 0 { return false }
-            }
-        }
-        return depth == 0
-    }
-
     private static func isSpeakable(_ s: Unicode.Scalar) -> Bool {
         // Keep ASCII (letters, digits, common punctuation, whitespace).
         if s.value < 0x80 { return true }

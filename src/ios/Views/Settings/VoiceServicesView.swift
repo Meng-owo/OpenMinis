@@ -341,35 +341,9 @@ struct VoiceServicesView: View {
                 }
             }
 
-            Picker(selection: Binding(
-                get: { VoiceOutputPreferences.selectionMode },
-                set: { VoiceOutputPreferences.selectionMode = $0 }
-            )) {
-                ForEach(VoiceTextSanitizer.SelectionMode.allCases, id: \.self) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Read")
-                    Text("Which part of a reply is spoken")
-                        .font(.caption)
-                        .foregroundStyle(MinisTheme.secondaryText)
-                }
-            }
         } header: {
             Text("Playback")
         }
     }
 }
 
-// MARK: - Selection mode labels
-
-extension VoiceTextSanitizer.SelectionMode {
-    var displayName: String {
-        switch self {
-        case .fullText:           return "Full text"
-        case .quotedOnly:         return "Quoted text only"
-        case .withoutParentheses: return "Skip parentheses"
-        }
-    }
-}
