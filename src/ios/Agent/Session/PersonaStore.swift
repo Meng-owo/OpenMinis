@@ -366,7 +366,7 @@ final class PersonaStore: ObservableObject {
             }
         }
         if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
-            for f in files where isDailyLogName(f.lastPathComponent) {
+            for f in files where Self.isDailyLogName(f.lastPathComponent) {
                 let dst = defaultDir.appendingPathComponent(f.lastPathComponent)
                 if fm.fileExists(atPath: dst.path) {
                     AppLogger(category: "PersonaStore").warning("[MemoryMigrate] root \(f.lastPathComponent) leftover ignored (persona file exists)")
@@ -459,7 +459,7 @@ final class PersonaStore: ObservableObject {
         // 每日日志 YYYY-MM-DD.md
         if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: nil,
                                                    options: [.skipsHiddenFiles]) {
-            for f in files where isDailyLogName(f.lastPathComponent) {
+            for f in files where Self.isDailyLogName(f.lastPathComponent) {
                 try? fm.moveItem(at: f,
                                  to: defaultDir.appendingPathComponent(f.lastPathComponent))
             }
@@ -491,7 +491,7 @@ final class PersonaStore: ObservableObject {
         NotificationCenter.default.post(name: .personaDidChange, object: nil)
     }
 
-    private func isDailyLogName(_ name: String) -> Bool {
+    private static func isDailyLogName(_ name: String) -> Bool {
         guard name.hasSuffix(".md"), name.count == 13 else { return false }
         let stem = (name as NSString).deletingPathExtension
         let parts = stem.split(separator: "-")
