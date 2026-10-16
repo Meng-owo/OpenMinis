@@ -7541,6 +7541,17 @@ private struct SettingsSheet: View {
                             QuietAppIcon(id: QuietIconSlot.browser.id, systemName: QuietIconSlot.browser.systemName)
                         }
                     }
+                    // [batch1] Agent Tools：Browser Use / Sub Agents 总开关页
+                    //（ToolsSettingsView 此前零构造点、不可达——审计 W2A-03）。
+                    NavigationLink {
+                        ToolsSettingsView()
+                    } label: {
+                        Label {
+                            Text("Agent Tools")
+                        } icon: {
+                            QuietAppIcon(id: QuietIconSlot.agentTools.id, systemName: QuietIconSlot.agentTools.systemName)
+                        }
+                    }
                     NavigationLink {
                         MemoryManagementView()
                     } label: {

@@ -117,6 +117,7 @@ enum AgentToolSwitch: String, CaseIterable {
 
 struct ToolsSettingsView: View {
     @AppStorage(AgentToolSwitch.browser.key) private var browserEnabled: Bool = AgentToolSwitch.browser.defaultValue
+    @AppStorage(AgentToolSwitch.agents.key) private var agentsEnabled: Bool = AgentToolSwitch.agents.defaultValue
 
     var body: some View {
         Form {
@@ -125,9 +126,14 @@ struct ToolsSettingsView: View {
             } footer: {
                 Text(AppLocalized("Browse the web in the in-app browser: open pages, read them, click and type. Stable and on by default. When off, the tool is removed from every conversation — the model does not see it at all."))
             }
-            // [T-sub-agents-v1] No Agents section here, and deliberately not
-            // even a read-only pointer row: the switch belongs to the Sub Agents
-            // page, next to the definitions it governs.
+            // [batch1] The Agents switch lives HERE now: its former home (a
+            // "Sub Agents page") was never built — the switch was unreachable
+            // while still being advertised (audit W1C-04 / W2A-05).
+            Section {
+                toolRow(AppLocalized("Sub Agents"), tool: SubAgentDefinition.toolName, icon: "person.2.fill", isOn: $agentsEnabled)
+            } footer: {
+                Text(AppLocalized("Let the assistant delegate work to background sub-agents. Each one spends real tokens while it runs. When off, the tool is removed from every conversation — the model does not see it at all."))
+            }
         }
         .navigationTitle(AppLocalized("Agent Tools"))
         .navigationBarTitleDisplayMode(.inline)

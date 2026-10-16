@@ -123,7 +123,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
             deliverySentence = "Delivery: each fire RE-RUNS user message \(mid.prefix(8)) in session \(sid.prefix(8))."
         case "child-of-current", "child":
             guard AgentToolSwitch.agents.isEnabled else {
-                return error("child-of-current is unavailable: Sub Agents are turned off in Settings › Sub Agents. Use --target new or follow-up.")
+                return error("child-of-current is unavailable: Sub Agents are turned off in Settings › Agent Tools. Use --target new or follow-up.")
             }
             guard let sid = str("session") ?? callerSid else {
                 return error("child-of-current needs a current session: run this from a chat, or pass --session")
@@ -478,7 +478,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
                     newTarget = .rerun(sessionId: sid, messageId: mid)
                 case "child-of-current", "child":
                     guard AgentToolSwitch.agents.isEnabled else {
-                        return error("child-of-current is unavailable: Sub Agents are turned off in Settings › Sub Agents.")
+                        return error("child-of-current is unavailable: Sub Agents are turned off in Settings › Agent Tools.")
                     }
                     guard let sid = str("session") ?? callerSid else {
                         return error("child-of-current needs a current session: run this from a chat, or pass --session")

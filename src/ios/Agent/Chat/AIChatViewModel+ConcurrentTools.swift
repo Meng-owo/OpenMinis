@@ -137,6 +137,30 @@ extension AIChatViewModel {
             )
         }
 
+        // [batch1] Belt-and-braces refusal: a request built before the switch
+        // flipped (stale plan / older turn) must not execute a switched-off
+        // tool. The schema filter above keeps the model from SEEING it; this
+        // keeps it from RUNNING it.
+        if !AgentToolSwitch.isToolEnabled(tu.name) {
+            let disabledContent = Self.toolsDisabledMessage
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].toolStatus = .failed
+                messages[msgIdx].blocks[blockIdx].content = disabledContent
+            }
+            let disabledSnap = ToolSnapshot(type: .text, text: disabledContent, mediaRef: nil, duration: nil)
+            let item = ToolSnapshotItem(
+                id: tu.id, toolName: tu.name, snapshot: disabledSnap,
+                mediaResolver: await ChatStore.shared.mediaFileURLResolver()
+            )
+            return ToolExecOutcome(
+                toolId: tu.id, toolName: tu.name,
+                resultPart: .toolResult(id: tu.id, name: tu.name, content: disabledContent, isError: true),
+                snapshotEntry: (toolName: tu.name, snapshot: disabledSnap),
+                snapshotItem: item,
+                cancelled: false
+            )
+        }
+
         var toolOutput: String = ""
         var toolSuccess: Bool = false
         var toolImageData: Data?

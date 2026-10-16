@@ -408,6 +408,9 @@ struct MinisApp: App {
                     // in BackupRunController.finished(token:).
                     // Migrate legacy provider config on first launch after upgrade
                     ProviderMigration.migrateIfNeeded(store: ProviderConfigStore.shared)
+                    // [batch1] Carry the pre-granular master tool switch forward,
+                    // once (agent.tools.enabled → agent.tools.agents.enabled).
+                    AgentToolSwitch.migrateLegacyIfNeeded()
                     // Refresh model lists once per day to keep them current
                     ProviderConfigStore.shared.refreshAllModelsIfNeeded()
                     // [T-mimo-shadow-voice] One-time upgrade fix: force-refresh

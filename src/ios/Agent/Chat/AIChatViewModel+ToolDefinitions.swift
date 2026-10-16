@@ -505,6 +505,12 @@ extension AIChatViewModel {
             propertyOrdering: ["drawer"]
         ))
 
+        // [batch1] Global tool switches (AgentToolSwitch): OFF means removed,
+        // not refused — the model never sees a switched-off tool in the schema.
+        // Applied last so it covers every append path (incl. persona-whitelist
+        // survivors above).
+        tools.removeAll { !AgentToolSwitch.isToolEnabled($0.name) }
+
         return tools
     }
 

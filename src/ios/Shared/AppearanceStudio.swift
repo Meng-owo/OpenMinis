@@ -882,6 +882,8 @@ struct QuietAppIcon: View {
 
 enum QuietIconSlot: String, CaseIterable, Identifiable {
     case decorate, appearance, skills, soul, memory, mcp, env, terminal, rootfs, browser
+    /// [batch1] Settings → Agent Runtime 的「Agent Tools」行（工具开关页）。
+    case agentTools
     case storage, shared, mounts, icloud, backup, permissions, lock
     case logs, about, privacy, feedback
     /// [merge step18a] Settings → Agent Runtime 的「桥·对外连接」行。
@@ -923,6 +925,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "桥·对外连接"
         case .webSearch: return "联网搜索"
         case .scheduled: return "定时任务与脉搏"
+        case .agentTools: return "工具开关"
         }
     }
     var systemName: String {
@@ -952,6 +955,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"
         case .scheduled: return "clock.arrow.circlepath"
+        case .agentTools: return "wrench.and.screwdriver.fill"
         }
     }
 }
