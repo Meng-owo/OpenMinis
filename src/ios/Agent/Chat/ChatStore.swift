@@ -2834,6 +2834,10 @@ actor ChatStore {
         // servers reject that history with `400 content or tool_calls must be set`.
         let messages = messages.filter { msg in
             guard msg.role == .assistant else { return true }
+            // [batch3 / W1A-01] Error carriers are empty by design — the reload
+            // path renders the banner from their error_info, and dropping them
+            // is exactly what silently killed every persisted early failure.
+            if msg.errorInfo != nil { return true }
             return msg.parts.contains { part in
                 switch part {
                 case .text(let s): return !s.isEmpty
@@ -3804,7 +3808,10 @@ actor ChatStore {
     /// updated. NOT marked dirty for iCloud — error_info is device-local.
     @discardableResult
     func updateMessageErrorInfo(messageId: String, errorInfo: String?) -> Bool {
-        let sql = "UPDATE messages SET error_info = ? WHERE id = ?"
+        // [batch3 / W1A-17] Role guard: error_info belongs to assistant rows
+        // only, so a stale/wrong id now updates nothing (and reports false)
+        // instead of painting a ghost banner on an unrelated row.
+        let sql = "UPDATE messages SET error_info = ? WHERE id = ? AND role = 'assistant'"
         var stmt: OpaquePointer?
         defer { sqlite3_finalize(stmt) }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }

@@ -1986,9 +1986,28 @@ extension AIChatViewModel {
     /// context-exhausted case (`ChatMessage(role: .assistant, content: "")` with
     /// `.error` set).
     func persistErrorInfo(_ error: String?) async {
-        if let dbId = agentHistory.last(where: { $0.role == .assistant && $0.dbMessageId != nil })?.dbMessageId {
+        // [batch3 / W1A-17] Anchor on THIS turn's assistant row, never "the
+        // most recent one": during the window between request start and the
+        // turn's own persist, the most recent row belongs to the PREVIOUS
+        // turn, and hanging the error there put a ghost banner on a good
+        // answer (and retry() then couldn't clear it cleanly either).
+        let lastAssistantIdx = agentHistory.lastIndex(where: { $0.role == .assistant })
+        let currentTurnAssistantId: String? = {
+            guard let idx = lastAssistantIdx,
+                  idx >= currentTurnStartHistoryIndex,
+                  let id = agentHistory[idx].dbMessageId else { return nil }
+            return id
+        }()
+        if let dbId = currentTurnAssistantId {
             let ok = await ChatStore.shared.updateMessageErrorInfo(messageId: dbId, errorInfo: error)
-            logger.info("[ErrorPersist] wrote error_info to msg=\(dbId.prefix(8)) cleared=\(error == nil) ok=\(ok)")
+            if ok {
+                logger.info("[ErrorPersist] wrote error_info to msg=\(dbId.prefix(8)) cleared=\(error == nil)")
+            } else {
+                // [batch3 / W1A-17] The row was right there; one retry covers
+                // a transient hiccup, then it goes to error level.
+                let retryOk = await ChatStore.shared.updateMessageErrorInfo(messageId: dbId, errorInfo: error)
+                logger.error("[ErrorPersist] update failed msg=\(dbId.prefix(8)) cleared=\(error == nil) retry=\(retryOk ? "ok" : "FAILED")")
+            }
             return
         }
 
@@ -2007,19 +2026,31 @@ extension AIChatViewModel {
             return
         }
 
+        // [batch3 / W1A-01] The carrier row now carries error_info itself.
+        // persistAgentMessage never wrote it (buildRawMessage has no errorInfo
+        // parameter) and the empty-parts filter dropped the row entirely — the
+        // two together made this path 100% dead. The filter now whitelists
+        // rows with errorInfo, and this raw sets it before the INSERT.
         let carrier = AgentMessage(role: .assistant, parts: [])
-        guard let newId = await persistAgentMessage(carrier) else {
-            logger.warning("[ErrorPersist] failed to persist error-carrier assistant row")
+        guard var raw = await buildRawMessage(carrier) else {
+            logger.error("[ErrorPersist] buildRawMessage failed for error carrier")
+            return
+        }
+        raw.errorInfo = error
+        let insertedRows = await ChatStore.shared.appendMessage(raw)
+        guard insertedRows > 0 else {
+            logger.error("[ErrorPersist] failed to persist error-carrier row sid=\(raw.sessionId.prefix(8))")
             return
         }
         // Record the id so a later clear (retry succeeding) can find this row
         // instead of orphaning it — the same link `retry()` walks.
         var stamped = carrier
-        stamped.dbMessageId = newId
+        stamped.dbMessageId = raw.id
         agentHistory.append(stamped)
-
-        let ok = await ChatStore.shared.updateMessageErrorInfo(messageId: newId, errorInfo: error)
-        logger.info("[ErrorPersist] created carrier row msg=\(newId.prefix(8)) for early failure ok=\(ok)")
+        // Bump baseline so iCloud sync doesn't mistake our own carrier for a remote row.
+        lastKnownDbSortOrder += 1
+        lastKnownDbCount += 1
+        logger.info("[ErrorPersist] created carrier row msg=\(raw.id.prefix(8)) for early failure")
     }
 
 }

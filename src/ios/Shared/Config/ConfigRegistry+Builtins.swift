@@ -851,6 +851,7 @@ extension ConfigRegistry {
         case .providers:    return "providers"
         case .envVars:      return "environments"
         case .memory:       return "memory"
+        case .subAgents:    return "subAgents"   // [batch1/W1C-02] raw value fallthrough
         }
     }
 

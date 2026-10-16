@@ -803,6 +803,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// isProcessing handler, and publishing it would re-render the whole chat
     /// on every retry for no visual reason.
     var turnStartedByRetry = false
+    /// [batch3 / W1A-17] agentHistory index where the CURRENT turn's entries
+    /// begin. persistErrorInfo uses it to tell "this turn's assistant row"
+    /// apart from a row left by a previous turn — without it the error hung
+    /// off the previous turn's reply (a ghost banner on a good answer).
+    /// Not @Published for the same reason as turnStartedByRetry.
+    var currentTurnStartHistoryIndex = 0
     /// Transient banner / toast message for in-loop notices (e.g. "older
     /// N image(s) elided from request to fit 25MB budget"). Set by the
     /// request-level image budget pass when it had to drop history images;
@@ -2905,6 +2911,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
             let userMessage = AgentMessage(role: .user, parts: userParts)
             let userIdx = self.agentHistory.count
+            // [batch3 / W1A-17] This is where the current turn's history begins.
+            self.currentTurnStartHistoryIndex = userIdx
             self.agentHistory.append(userMessage)
 
             // Persist user message and write the DB id back into agentHistory so
@@ -3046,6 +3054,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         autoRetryCountdown = 0
         canResume = false
         userDidCancel = false
+        // [batch3 / W1A-17] Retry re-sends from here: the failed turn's row is
+        // rolled back below, so this turn's anchor starts at the current end.
+        currentTurnStartHistoryIndex = agentHistory.count
 
         // Clear the error on the existing assistant message
         lastMsg.error = nil
