@@ -967,8 +967,11 @@ struct ContentView: View {
     /// back to "Minis". Refreshed whenever SoulStore posts .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
         ? "嘟嘟" : SoulStore.cachedMetadata.name
-    /// [B2 · 10-15] 顶部标题点击弹出的人设切换（复用现成 PersonaListSheet）。
-    @State private var showPersonaSwitcher = false
+    /// [batch9b] 顶部标题点开的「一击切换」浮层（PersonaQuickSwitcher）。
+    @State private var showPersonaQuickSwitch = false
+    /// [B2 · 10-15] 完整人设管理页（新建/编辑/删除/复制）——改由浮层底部
+    /// 「管理人设…」进入；标题点击不再直达。
+    @State private var showPersonaManage = false
     /// Subtitle state shown under the "Minis" sidebar title. nil hides the
     /// row; otherwise it renders as small capsules per type or a single
     /// status string. Refreshed by a 5s timer.
@@ -1776,9 +1779,9 @@ struct ContentView: View {
         .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
             AlarmListView()
         }
-        // [B2 · 10-15] 会话列表顶部标题点击弹出的人设切换（复用现成 PersonaListSheet；
-        // 原入口全部保留，本处只是新增快捷方式）。
-        .sheet(isPresented: $showPersonaSwitcher) {
+        // [batch9b] 完整人设管理页——由「一击切换」浮层底部的「管理人设…」进入
+        //（复用现成 PersonaListSheet；组件零改动）。
+        .sheet(isPresented: $showPersonaManage) {
             PersonaListSheet(store: PersonaStore.shared)
         }
         .sheet(item: $activeToolSheet) { sheet in
@@ -2617,6 +2620,29 @@ struct ContentView: View {
         }
     }
 
+    /// [batch9b] 顶部标题点开的「一击切换」浮层：挂在会话列表的稳定层
+    ///（与 folderMiniBarOverlay 同范式），出现在标题正下方。
+    /// 多选模式下不渲染且状态自动清掉（标题此时已被替换为选择计数）。
+    @ViewBuilder
+    private var personaQuickSwitchOverlay: some View {
+        if showPersonaQuickSwitch, !isSelecting {
+            PersonaQuickSwitcher(
+                store: PersonaStore.shared,
+                onManage: {
+                    withAnimation(.easeOut(duration: 0.16)) { showPersonaQuickSwitch = false }
+                    // 收层动画让出 present 事务后再开管理 sheet——同帧既关层又开
+                    // sheet 会撞 present 竞态（cf. 本文件 toolbar 区事故史）。
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
+                        showPersonaManage = true
+                    }
+                },
+                onDismiss: {
+                    withAnimation(.easeOut(duration: 0.16)) { showPersonaQuickSwitch = false }
+                }
+            )
+        }
+    }
+
     /// Top-aligned overlay for both list layouts: measures the list's visible
     /// top edge (the probe threshold — the GeometryReader content respects
     /// the safe area, so its global minY IS "just under the nav bar") and
@@ -2963,6 +2989,8 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         .overlay { if didInitialLoad, filteredSessions.isEmpty, !isSearching { emptyState } }
         .overlay(alignment: .top) { folderMiniBarOverlay(scrollProxy) }
+        .overlay(alignment: .top) { personaQuickSwitchOverlay }
+        .onChange(of: isSelecting) { sel in if sel { showPersonaQuickSwitch = false } }
         .safeAreaInset(edge: .bottom) {
             if isSelecting {
                 selectionToolbar
@@ -3161,6 +3189,8 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         .overlay { if didInitialLoad, displaySessions.isEmpty, !isSearching { emptyState } }
         .overlay(alignment: .top) { folderMiniBarOverlay(scrollProxy) }
+        .overlay(alignment: .top) { personaQuickSwitchOverlay }
+        .onChange(of: isSelecting) { sel in if sel { showPersonaQuickSwitch = false } }
         .safeAreaInset(edge: .bottom) {
             if isSelecting {
                 selectionToolbar
@@ -3448,7 +3478,9 @@ struct ContentView: View {
                 // [B2 · 10-15 醒醒] 顶部标题点击 → 直接切人设；同步详情入口
                 // 保留在标题左侧的小指示器上（本按钮不再指向它）。
                 Button {
-                    showPersonaSwitcher = true
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        showPersonaQuickSwitch.toggle()
+                    }
                 } label: {
                     titleLabel
                 }

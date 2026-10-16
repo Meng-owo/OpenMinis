@@ -425,6 +425,7 @@
 		E5N0000052F3B941A00049557 /* SessionMemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000152F3B941A00049557 /* SessionMemoryView.swift */; };
 		E5PERSONA02 /* PersonaSwitcherRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA102 /* PersonaSwitcherRow.swift */; };
 		E5PERSONA03 /* PersonaListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA103 /* PersonaListSheet.swift */; };
+		E5PQS0003 /* PersonaQuickSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PQS0103 /* PersonaQuickSwitcher.swift */; };
 		E5PERSONA04 /* PersonaSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA104 /* PersonaSettingsView.swift */; };
 		E5N0000062F3B941A00049557 /* AlarmListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000162F3B941A00049557 /* AlarmListView.swift */; };
 		E5OARC001 /* ClaudeOAuthRefreshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5OARC010 /* ClaudeOAuthRefreshCoordinator.swift */; };
@@ -1207,6 +1208,7 @@
 		E5N0000152F3B941A00049557 /* SessionMemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionMemoryView.swift; sourceTree = "<group>"; };
 		E5PERSONA102 /* PersonaSwitcherRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaSwitcherRow.swift; sourceTree = "<group>"; };
 		E5PERSONA103 /* PersonaListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaListSheet.swift; sourceTree = "<group>"; };
+		E5PQS0103 /* PersonaQuickSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaQuickSwitcher.swift; sourceTree = "<group>"; };
 		E5PERSONA104 /* PersonaSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaSettingsView.swift; sourceTree = "<group>"; };
 		E5N0000162F3B941A00049557 /* AlarmListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmListView.swift; sourceTree = "<group>"; };
 		E5OARC010 /* ClaudeOAuthRefreshCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeOAuthRefreshCoordinator.swift; sourceTree = "<group>"; };
@@ -2524,6 +2526,7 @@
 				E5N0000152F3B941A00049557 /* SessionMemoryView.swift */,
 				E5PERSONA102 /* PersonaSwitcherRow.swift */,
 				E5PERSONA103 /* PersonaListSheet.swift */,
+				E5PQS0103 /* PersonaQuickSwitcher.swift */,
 				E5SAS0011 /* SubAgentStore.swift */,
 				E5SAD0011 /* SubAgentDefinition.swift */,
 				E5TSV0011 /* ToolsSettingsView.swift */,
@@ -3438,6 +3441,7 @@
 				E5N0000052F3B941A00049557 /* SessionMemoryView.swift in Sources */,
 				E5PERSONA02 /* PersonaSwitcherRow.swift in Sources */,
 				E5PERSONA03 /* PersonaListSheet.swift in Sources */,
+				E5PQS0003 /* PersonaQuickSwitcher.swift in Sources */,
 				E5PERSONA04 /* PersonaSettingsView.swift in Sources */,
 				E5N0000062F3B941A00049557 /* AlarmListView.swift in Sources */,
 				E5P000001 /* EnvVarStore.swift in Sources */,
