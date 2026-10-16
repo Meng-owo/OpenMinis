@@ -23,6 +23,11 @@ struct SyncedSession: Syncable {
     var pinnedAt: Date?
     var folderId: String?
     var source: String?
+    /// [batch6b / W3A-08] The session's true last-activity time (message
+    /// activity). `updatedAt` above now carries only the METADATA clock that
+    /// LWW compares — old peers keep treating it as activity∪metadata, which
+    /// is exactly the old safe fallback.
+    var contentUpdatedAt: Date?
 
     static let syncMetadata: SyncTypeMetadata<SyncedSession> = {
         typealias F = FieldDescriptor<SyncedSession>
@@ -48,6 +53,9 @@ struct SyncedSession: Syncable {
                 // `source` (e.g. "shortcut") never left the origin device,
                 // so the shortcuts bolt badge never rendered on any peer.
                 F.optionalString("source",   \SyncedSession.source),
+                // [batch6b / W3A-08] Activity clock, separate from the LWW
+                // metadata clock. Optional — old peers omit it (→ nil).
+                F.optionalDate("contentUpdatedAt", \SyncedSession.contentUpdatedAt),
             ],
             conflictPolicy: .lastWriteWinsByField(\SyncedSession.updatedAt),
             version: 1
@@ -61,12 +69,16 @@ struct SyncedSession: Syncable {
             category: s.category,
             modelId: s.modelId,
             createdAt: s.createdAt,
-            updatedAt: s.updatedAt,
+            // [batch6b / W3A-08] LWW rides the metadata clock; the raw
+            // activity time travels in its own field instead. Pre-column rows
+            // (meta == nil) fall back to updatedAt = old behaviour.
+            updatedAt: s.metaUpdatedAt ?? s.updatedAt,
             memoryEnabled: memoryEnabled ? 1 : 0,
             modelBinding: modelBinding,
             pinnedAt: s.pinnedAt,
             folderId: s.folderId,
-            source: s.source
+            source: s.source,
+            contentUpdatedAt: s.updatedAt
         )
     }
 }

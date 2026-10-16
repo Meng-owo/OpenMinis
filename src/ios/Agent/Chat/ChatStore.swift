@@ -55,6 +55,10 @@ struct ChatSession: Identifiable, Codable, Hashable {
     var folderId: String?     // non-nil if filed into a folder; NULL = ungrouped
     /// ［persona］归属人设 id。nil = 老数据，视为默认人设。
     var personaId: String? = nil
+    /// [batch6b / W3A-08] Last METADATA edit (rename/category/pin/folder/
+    /// memory/model). nil on rows written before the column existed — sync
+    /// falls back to updatedAt for those. Message activity never touches it.
+    var metaUpdatedAt: Date? = nil
 
     /// Whether this session is from a remote device (read-only).
     var isRemote: Bool { remoteDeviceId != nil }
@@ -644,6 +648,11 @@ actor ChatStore {
         // cascades clean it up); such orphans render under the default
         // persona rather than failing a constraint.
         addColumnIfMissing(table: "sessions", column: "persona_id", definition: "TEXT")
+        // [batch6b / W3A-08] Meta-updated clock: metadata edits (rename /
+        // category / pin / folder / memory / model) bump THIS column, while
+        // message activity keeps bumping updated_at. Sync's LWW rides this one,
+        // so "device B chatted" can no longer overwrite "device A renamed".
+        addColumnIfMissing(table: "sessions", column: "meta_updated_at", definition: "REAL")
         exec("CREATE INDEX IF NOT EXISTS idx_sessions_persona ON sessions(persona_id)")
         // Folder membership. NULL = ungrouped. Intentionally NOT a declared FK:
         // a folder_id pointing at a folder that does not exist locally is a
@@ -2079,7 +2088,7 @@ actor ChatStore {
     }
 
     func getSession(_ id: String) -> ChatSession? {
-        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at, folder_id FROM sessions WHERE id = ?"
+        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at, folder_id, meta_updated_at FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
         var session: ChatSession?
 
@@ -2095,11 +2104,14 @@ actor ChatStore {
                 let pinnedAt: Date? = sqlite3_column_type(stmt, 7) != SQLITE_NULL
                     ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7)) : nil
                 let folderId = sqlite3_column_text(stmt, 8).map { String(cString: $0) }
+                // [batch6b / W3A-08] Metadata clock (nil on pre-column rows).
+                let metaUpdatedAt: Date? = sqlite3_column_type(stmt, 9) != SQLITE_NULL
+                    ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9)) : nil
 
                 session = ChatSession(
                     id: id, title: title, category: category, modelId: modelId,
                     createdAt: createdAt, updatedAt: updatedAt, source: source,
-                    pinnedAt: pinnedAt, folderId: folderId
+                    pinnedAt: pinnedAt, folderId: folderId, metaUpdatedAt: metaUpdatedAt
                 )
             }
         }
@@ -2110,11 +2122,13 @@ actor ChatStore {
 
     func updateSessionModelId(_ id: String, modelId: String) {
         invalidateSessionListCache()
-        let sql = "UPDATE sessions SET model_id = ? WHERE id = ?"
+        // [batch6b / W3A-08] Re-binding the model is a metadata edit.
+        let sql = "UPDATE sessions SET model_id = ?, meta_updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (modelId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            sqlite3_bind_text(stmt, 3, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -2135,13 +2149,16 @@ actor ChatStore {
         let capped = String(trimmed.prefix(Self.maxSessionTitleLength))
         let safeTitle = capped.isEmpty ? AppLocalized("New Chat") : capped
         invalidateSessionListCache()
-        let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ? WHERE id = ?"
+        // [batch6b / W3A-08] A rename also bumps the LWW metadata clock.
+        let sql = "UPDATE sessions SET title = ?, category = COALESCE(?, category), updated_at = ?, meta_updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            let now = Date().timeIntervalSince1970
             sqlite3_bind_text(stmt, 1, (safeTitle as NSString).utf8String, -1, nil)
             bindOptionalText(stmt, index: 2, value: category)
-            sqlite3_bind_double(stmt, 3, Date().timeIntervalSince1970)
-            sqlite3_bind_text(stmt, 4, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 3, now)
+            sqlite3_bind_double(stmt, 4, now)
+            sqlite3_bind_text(stmt, 5, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -2166,7 +2183,8 @@ actor ChatStore {
         sqlite3_finalize(checkStmt)
 
         let newPinned = !isPinned
-        let sql = "UPDATE sessions SET pinned_at = ? WHERE id = ?"
+        // [batch6b / W3A-08] Pin/unpin is a metadata edit — bump the LWW clock.
+        let sql = "UPDATE sessions SET pinned_at = ?, meta_updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             if newPinned {
@@ -2174,7 +2192,8 @@ actor ChatStore {
             } else {
                 sqlite3_bind_null(stmt, 1)
             }
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            sqlite3_bind_text(stmt, 3, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -2187,7 +2206,8 @@ actor ChatStore {
     /// can't express that (it flips the state and stamps "now").
     func setSessionPinnedAt(_ pinnedAt: Date?, forSession id: String) {
         invalidateSessionListCache()
-        let sql = "UPDATE sessions SET pinned_at = ? WHERE id = ?"
+        // [batch6b / W3A-08] Metadata edit — bump the LWW clock too.
+        let sql = "UPDATE sessions SET pinned_at = ?, meta_updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             if let pinnedAt {
@@ -2195,7 +2215,8 @@ actor ChatStore {
             } else {
                 sqlite3_bind_null(stmt, 1)
             }
-            sqlite3_bind_text(stmt, 2, (id as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            sqlite3_bind_text(stmt, 3, (id as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -2396,7 +2417,8 @@ actor ChatStore {
     func setFolder(_ folderId: String?, forSessions sessionIds: [String]) {
         guard !sessionIds.isEmpty else { return }
         invalidateSessionListCache()
-        let sql = "UPDATE sessions SET folder_id = ? WHERE id = ?"
+        // [batch6b / W3A-08] Filing/unfiling sessions is a metadata edit.
+        let sql = "UPDATE sessions SET folder_id = ?, meta_updated_at = ? WHERE id = ?"
         for sid in sessionIds {
             var stmt: OpaquePointer?
             if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -2405,7 +2427,8 @@ actor ChatStore {
                 } else {
                     sqlite3_bind_null(stmt, 1)
                 }
-                sqlite3_bind_text(stmt, 2, (sid as NSString).utf8String, -1, nil)
+                sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+                sqlite3_bind_text(stmt, 3, (sid as NSString).utf8String, -1, nil)
                 sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
@@ -2423,12 +2446,13 @@ actor ChatStore {
     @discardableResult
     func setFolderIfUnfiled(_ folderId: String, forSession sessionId: String) -> Bool {
         invalidateSessionListCache()
-        let sql = "UPDATE sessions SET folder_id = ? WHERE id = ? AND folder_id IS NULL"
+        let sql = "UPDATE sessions SET folder_id = ?, meta_updated_at = ? WHERE id = ? AND folder_id IS NULL"
         var changed = false
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (folderId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
             changed = sqlite3_changes(db) > 0
         }
@@ -2611,11 +2635,13 @@ actor ChatStore {
     }
 
     func setMemoryEnabled(sessionId: String, enabled: Bool) {
-        let sql = "UPDATE sessions SET memory_enabled = ? WHERE id = ?"
+        // [batch6b / W3A-08] Metadata edit — bump the LWW clock.
+        let sql = "UPDATE sessions SET memory_enabled = ?, meta_updated_at = ? WHERE id = ?"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_int(stmt, 1, enabled ? 1 : 0)
-            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 2, Date().timeIntervalSince1970)
+            sqlite3_bind_text(stmt, 3, (sessionId as NSString).utf8String, -1, nil)
             sqlite3_step(stmt)
         }
         sqlite3_finalize(stmt)
@@ -6577,7 +6603,9 @@ extension ChatStore {
         var localUpdatedAt: Double?
         var localPinnedAt: Double?
         var localFolderId: String?
-        let checkSql = "SELECT updated_at, pinned_at, folder_id FROM sessions WHERE id = ?"
+        // [batch6b / W3A-08] Metadata clock for the LWW comparison below.
+        var localMetaUpdatedAt: Double?
+        let checkSql = "SELECT updated_at, pinned_at, folder_id, meta_updated_at FROM sessions WHERE id = ?"
         var checkStmt: OpaquePointer?
         if sqlite3_prepare_v2(db, checkSql, -1, &checkStmt, nil) == SQLITE_OK {
             sqlite3_bind_text(checkStmt, 1, (session.id as NSString).utf8String, -1, nil)
@@ -6587,6 +6615,9 @@ extension ChatStore {
                     localPinnedAt = sqlite3_column_double(checkStmt, 1)
                 }
                 localFolderId = sqlite3_column_text(checkStmt, 2).map { String(cString: $0) }
+                if sqlite3_column_type(checkStmt, 3) != SQLITE_NULL {
+                    localMetaUpdatedAt = sqlite3_column_double(checkStmt, 3)
+                }
             }
         }
         sqlite3_finalize(checkStmt)
@@ -6625,25 +6656,33 @@ extension ChatStore {
         }()
 
         if let localTs = localUpdatedAt {
-            // Local exists — only update title/category/etc if remote is newer
-            if remoteUpdated > localTs {
-                iCloudLogger.info("[iCloud] mergeRemoteSession UPDATE (remote newer): id=\(session.id) remoteTs=\(remoteUpdated) localTs=\(localTs)")
+            // Local exists — only update title/category/etc if remote is newer.
+            // [batch6b / W3A-08] Compare the remote METADATA clock against the
+            // local metadata clock (falling back to updated_at for pre-column
+            // rows): pure message activity no longer wins this comparison.
+            let localCompareTs = localMetaUpdatedAt ?? localTs
+            if remoteUpdated > localCompareTs {
+                iCloudLogger.info("[iCloud] mergeRemoteSession UPDATE (remote newer): id=\(session.id) remoteTs=\(remoteUpdated) localTs=\(localTs) localMetaTs=\(localCompareTs)")
                 // folder_id is written ONLY when the peer's record carried
                 // the field — an old build's record omitting it must not wipe
                 // a local folder assignment (same tolerance pinnedAt got).
                 // `source` follows the identical rule: an old build never
                 // sends it, and its echo must not clear the local origin
                 // marker (e.g. "shortcut").
+                // [batch6b / W3A-08] The accepted remote value now lands in
+                // meta_updated_at (slot 3 — was updated_at). The LOCAL
+                // updated_at is deliberately left alone: it is this device's
+                // activity clock for list ordering, not a sync clock.
                 let sql: String
                 switch (remoteHasFolderField, remoteHasSourceField) {
                 case (true, true):
-                    sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, folder_id = ?, source = ? WHERE id = ?"
+                    sql = "UPDATE sessions SET title = ?, category = ?, meta_updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, folder_id = ?, source = ? WHERE id = ?"
                 case (true, false):
-                    sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, folder_id = ? WHERE id = ?"
+                    sql = "UPDATE sessions SET title = ?, category = ?, meta_updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, folder_id = ? WHERE id = ?"
                 case (false, true):
-                    sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, source = ? WHERE id = ?"
+                    sql = "UPDATE sessions SET title = ?, category = ?, meta_updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ?, source = ? WHERE id = ?"
                 case (false, false):
-                    sql = "UPDATE sessions SET title = ?, category = ?, updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ? WHERE id = ?"
+                    sql = "UPDATE sessions SET title = ?, category = ?, meta_updated_at = ?, memory_enabled = ?, model_binding = ?, pinned_at = ? WHERE id = ?"
                 }
                 var stmt: OpaquePointer?
                 if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
