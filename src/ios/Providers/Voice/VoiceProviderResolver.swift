@@ -107,7 +107,7 @@ final class VoiceOutputState: ObservableObject {
                                                  : VoiceOutputPlayer.shared.pause() }
     }
     func stop() {
-        VoiceLog.log("[VoiceOutputState] stop() (isEnabled stays \(isEnabled))")
+        VoiceLog.log("[VoiceOutputState] stop()")
         if let c = activeController { c.stopSpeech() }
         else { VoiceOutputPlayer.shared.stopAll() }
         isReadingAloud = false; speechPaused = false
