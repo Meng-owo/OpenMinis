@@ -822,11 +822,11 @@ struct FileItemRow: View {
             ZStack(alignment: .bottomLeading) {
                 Image(systemName: item.iconName)
                     .font(.title2)
-                    .foregroundColor(item.isDirectory ? .blue : .secondary)
+                    .foregroundColor(item.isDirectory ? AppearanceStudio.shared.color(.accent) : .secondary)
                 if item.isSymlink {
                     Image(systemName: "arrow.turn.right.down")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.orange)
+                        .foregroundColor(MinisTheme.warning)
                         .offset(x: -4, y: 2)
                 }
             }

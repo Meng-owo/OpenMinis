@@ -207,7 +207,7 @@ struct SkillsManagementView: View {
         case .session:
             Image(systemName: "bubble.left.and.text.bubble.right")
                 .font(.caption2)
-                .foregroundStyle(.purple)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
         }
     }
 }

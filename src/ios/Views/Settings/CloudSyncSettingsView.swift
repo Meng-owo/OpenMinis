@@ -762,7 +762,7 @@ struct SyncLogView: View {
                     .foregroundStyle(MinisTheme.success)
             case .conflict:
                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(MinisTheme.warning)
             case .error:
                 Image(systemName: "exclamationmark.circle.fill")
                     .foregroundStyle(MinisTheme.destructive)

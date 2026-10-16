@@ -107,9 +107,10 @@ struct CloudSyncSettingsV2View: View {
                             HStack(spacing: 12) {
                                 Image(systemName: iconName(for: cat))
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                     .frame(width: 28, height: 28)
-                                    .background(iconColor(for: cat), in: RoundedRectangle(cornerRadius: 8))
+                                    .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                                 Text(LocalizedStringKey(cat.displayName))
                             }
                         }
@@ -125,9 +126,10 @@ struct CloudSyncSettingsV2View: View {
                             HStack(spacing: 12) {
                                 Image(systemName: "doc.zipper")
                                     .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                     .frame(width: 28, height: 28)
-                                    .background(Color.gray, in: RoundedRectangle(cornerRadius: 8))
+                                    .background(AppearanceStudio.shared.color(.surface), in: RoundedRectangle(cornerRadius: 8))
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                                 Text("Max Per-File Size")
                             }
                         }

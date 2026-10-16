@@ -131,11 +131,11 @@ private struct ConfigConfirmRow: View {
             if item.risk == .destructive {
                 Label("This may affect later tool calls.", systemImage: "exclamationmark.triangle.fill")
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(MinisTheme.destructive)
             } else if item.risk == .sensitive {
                 Label("Reversible, but worth a quick look.", systemImage: "exclamationmark.circle")
                     .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(MinisTheme.warning)
             }
         }
         .padding(.vertical, 4)

@@ -1167,7 +1167,7 @@ struct AddProviderView: View {
         switch type {
         case .anthropic:
             Image(systemName: "sparkles")
-                .foregroundStyle(.purple)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
         case .gemini:
             Image(systemName: "diamond")
                 .foregroundStyle(MinisTheme.accent)
@@ -1179,19 +1179,19 @@ struct AddProviderView: View {
                 .foregroundStyle(MinisTheme.warning)
         case .openRouter:
             Image(systemName: "arrow.triangle.branch")
-                .foregroundStyle(.cyan)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
         case .openAIResponses:
             Image(systemName: "arrow.trianglehead.2.counterclockwise")
-                .foregroundStyle(.mint)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
         case .xAI:
             Image(systemName: "x.circle")
-                .foregroundStyle(.gray)
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
         case .kimiCode:
             Image(systemName: "moon.stars")
-                .foregroundStyle(.indigo)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
         case .unsupported:
             Image(systemName: "questionmark.circle.fill")
-                .foregroundStyle(.gray)
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
         }
     }
 

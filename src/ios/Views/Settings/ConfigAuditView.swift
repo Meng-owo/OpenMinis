@@ -131,7 +131,7 @@ struct ConfigAuditView: View {
             } else if entry.status == .reverted {
                 Label("Reverted", systemImage: "arrow.uturn.backward.circle.fill")
                     .font(.caption2)
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(AppearanceStudio.shared.color(.accent))
                     .padding(.top, 2)
             }
         }

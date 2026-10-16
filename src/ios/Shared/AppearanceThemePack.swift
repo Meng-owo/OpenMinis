@@ -867,12 +867,12 @@ enum MinisThemeList {
     }
 
     static func categoryIcon(for category: String?) -> (systemName: String, color: Color) {
+        // [batch8d / W1B2-06] Category colors retired app-wide: the glyph name
+        // still resolves per category, but the color is the theme accent now —
+        // imported or legacy `categoryColors` no longer reach rendering.
         let fallback = sessionCategoryIconBuiltin(for: category)
         let key = category ?? "other"
         let name = pack.categoryIcons[key] ?? fallback.systemName
-        if let hex = pack.categoryColors[key] {
-            return (name, Color(hex: hex))
-        }
-        return (name, fallback.color)
+        return (name, accent)
     }
 }

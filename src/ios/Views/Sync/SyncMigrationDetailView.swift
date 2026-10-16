@@ -879,7 +879,7 @@ struct SyncMigrationDetailView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.yellow.opacity(0.18))
+                .fill(MinisTheme.warning.opacity(0.18))
         )
     }
 

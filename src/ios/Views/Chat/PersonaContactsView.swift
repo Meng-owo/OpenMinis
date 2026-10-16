@@ -5,16 +5,19 @@ import PhotosUI
 // MARK: - iOS Settings 统一风格图标胶囊
 struct SettingsRowIcon: View {
     let icon: String
-    let color: Color
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(color)
+                .fill(AppearanceStudio.shared.color(.surface))
                 .frame(width: 28, height: 28)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6)
+                )
             Image(systemName: icon)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
         }
     }
 }
@@ -243,7 +246,7 @@ struct PersonaDetailHomeView: View {
                             PersonaBasicSettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "slider.horizontal.3", color: .indigo)
+                                SettingsRowIcon(icon: "slider.horizontal.3")
                                 Text("基础设置")
                                     .font(.body)
                                 Spacer()
@@ -259,7 +262,7 @@ struct PersonaDetailHomeView: View {
                             PersonaPromptSettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "doc.text.fill", color: .blue)
+                                SettingsRowIcon(icon: "doc.text.fill")
                                 Text("提示词")
                                     .font(.body)
                             }
@@ -269,7 +272,7 @@ struct PersonaDetailHomeView: View {
                             PersonaMemorySettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "brain.head.profile", color: .purple)
+                                SettingsRowIcon(icon: "brain.head.profile")
                                 Text("记忆")
                                     .font(.body)
                             }
@@ -279,7 +282,7 @@ struct PersonaDetailHomeView: View {
                             PersonaLocalToolsSettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "wrench.and.screwdriver.fill", color: .orange)
+                                SettingsRowIcon(icon: "wrench.and.screwdriver.fill")
                                 Text("本地工具")
                                     .font(.body)
                                 Spacer()
@@ -294,7 +297,7 @@ struct PersonaDetailHomeView: View {
                             PersonaSkillsSettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "sparkles", color: .yellow)
+                                SettingsRowIcon(icon: "sparkles")
                                 Text("技能")
                                     .font(.body)
                                 Spacer()
@@ -310,7 +313,7 @@ struct PersonaDetailHomeView: View {
                             PersonaMcpSettingsView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "terminal.fill", color: .green)
+                                SettingsRowIcon(icon: "terminal.fill")
                                 Text("MCP")
                                     .font(.body)
                                 Spacer()
@@ -326,7 +329,7 @@ struct PersonaDetailHomeView: View {
                             PersonaPresetMessagesView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "bolt.fill", color: .red)
+                                SettingsRowIcon(icon: "bolt.fill")
                                 Text("快捷短语")
                                     .font(.body)
                                 Spacer()
@@ -342,7 +345,7 @@ struct PersonaDetailHomeView: View {
                             PersonaCustomRequestView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "network", color: .teal)
+                                SettingsRowIcon(icon: "network")
                                 Text("自定义请求")
                                     .font(.body)
                                 Spacer()
@@ -359,7 +362,7 @@ struct PersonaDetailHomeView: View {
                             PersonaRegexRulesView(personaId: p.id)
                         } label: {
                             HStack(spacing: 12) {
-                                SettingsRowIcon(icon: "textformat", color: .pink)
+                                SettingsRowIcon(icon: "textformat")
                                 Text("正则替换")
                                     .font(.body)
                                 Spacer()

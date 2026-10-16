@@ -162,9 +162,10 @@ struct BackupSettingsView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "doc.zipper")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                 .frame(width: 28, height: 28)
-                                .background(Color.gray, in: Circle())
+                                .background(AppearanceStudio.shared.color(.surface), in: Circle())
+                                .overlay(Circle().stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                             Text("Max Per-File Size")
                         }
                     }
@@ -206,10 +207,11 @@ struct BackupSettingsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: encryptBackup ? "lock.fill" : "lock.open.fill")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             .frame(width: 28, height: 28)
-                            .background(encryptBackup ? MinisTheme.success : Color.gray,
+                            .background(AppearanceStudio.shared.color(.surface),
                                         in: Circle())
+                            .overlay(Circle().stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         Text("Encrypt Backup")
                     }
                 }
@@ -915,9 +917,10 @@ struct BackupSettingsView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "folder.fill")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             .frame(width: 28, height: 28)
-                            .background(Color.indigo, in: Circle())
+                            .background(AppearanceStudio.shared.color(.surface), in: Circle())
+                            .overlay(Circle().stroke(AppearanceStudio.shared.color(.border).opacity(0.4), lineWidth: 0.6))
                         VStack(alignment: .leading, spacing: 2) {
                             Text(folder.name)
                             Text(folder.sourceDisplayName)

@@ -302,7 +302,7 @@ private extension View {
         self
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.yellow, lineWidth: 2)
+                    .stroke(MinisTheme.accent, lineWidth: 2)
                     // Expand the border outward so it isn't cramped against the
                     // row text — more breathing room above/below in particular.
                     .padding(.horizontal, -10)

@@ -1899,8 +1899,8 @@ struct BackgroundInterruptionBanner: View {
                         .font(.caption.bold())
                         .padding(.horizontal, 12)
                         .padding(.vertical, 5)
-                        .background(Color.white)
-                        .foregroundColor(.orange)
+                        .background(AppearanceStudio.shared.color(.accent))
+                        .foregroundColor(.white)
                         .cornerRadius(14)
                 }
 
@@ -1909,7 +1909,7 @@ struct BackgroundInterruptionBanner: View {
                 } label: {
                     Text("Remind me later")
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(AppearanceStudio.shared.color(.secondaryText))
                 }
             }
         }
@@ -1918,7 +1918,7 @@ struct BackgroundInterruptionBanner: View {
         .padding(.top, 4)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.orange.gradient)
+                .fill(AppearanceStudio.shared.color(.raised).gradient)
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
         )
         .padding(.horizontal, 12)
