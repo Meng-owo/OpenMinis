@@ -82,6 +82,14 @@ enum AIVoiceMessageComposer {
         return s.count < 200
     }
 
+    /// [batch9-voice/2] 统一语音卡片链接构造——send_voice 工具与 StreamEnd
+    /// 自动气泡共用一份字面（此前两处手写重复）。格式：
+    /// `![voice](<url>?voice_bubble=1&dur=<秒>&auto_play=true)`
+    static func voiceBubbleLink(url: String, duration: Double) -> String {
+        let durParam = duration > 0 ? Int(duration.rounded()) : 0
+        return "![voice](\(url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+    }
+
     /// Synthesize the assistant reply text and persist the audio in the session's
     /// attachments dir. Returns a minis-clone:// URL ready for embedding into a
     /// `![voice](...)` markdown link. All errors (empty text, every candidate

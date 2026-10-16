@@ -7473,7 +7473,7 @@ private struct SettingsSheet: View {
                 }
 
                 // [T-tts-services 09-11] kelivo-style independent TTS layer:
-                // pick the voice that reads replies aloud, configure services
+                // pick the voice for read-aloud and AI voice replies, configure services
                 // (vendor / endpoint / key / model / voice id / tuning).
                 Section {
                     NavigationLink {
@@ -7484,7 +7484,7 @@ private struct SettingsSheet: View {
                 } header: {
                     Text("Speech")
                 } footer: {
-                    Text("Choose the voice that reads replies aloud. A service is a complete synthesis target — vendor, endpoint, key, model, voice id and tuning knobs — independent of model groups.")
+                    Text("Choose the voice for read-aloud and AI voice replies. A service is a complete synthesis target — vendor, endpoint, key, model, voice id and tuning knobs — independent of model groups.")
                 }
 
                 // [T-scheduled-prompt 09-13] W1: agent self-wake schedules.

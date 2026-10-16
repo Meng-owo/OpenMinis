@@ -1602,49 +1602,55 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     // MARK: - Auto-Play Audio
 
-    /// Regex to find Markdown image syntax with audio extensions and ?auto_play=true query.
-    /// Matches: ![...](minis-clone://attachments/file.mp3?auto_play=true)
+    /// [batch9-voice/2 · V-12] 收紧：自动播只认**语音卡片**（voice_bubble=1）。
+    /// 普通音频文件链接（哪怕手写 auto_play）不再被自动播放——"想发文件走
+    /// 文件气泡、不自动出声"由此钉死。
+    /// Matches: ![...](minis-clone://attachments/file.mp3?voice_bubble=1&…)
     private static let autoPlayAudioPattern: NSRegularExpression? = {
-        // Match ![alt](url) where url ends with audio extension and has auto_play=true/1
+        // Match ![alt](url) where url ends with audio extension and carries the voice-card marker
         try? NSRegularExpression(
-            pattern: #"!\[[^\]]*\]\(([^)]+\.(?:mp3|m4a|wav|aac|ogg|flac)\?[^)]*auto_play=(?:true|1)[^)]*)\)"#,
+            pattern: #"!\[[^\]]*\]\(([^)]+\.(?:mp3|m4a|wav|aac|ogg|flac)\?[^)]*voice_bubble=(?:1|true)[^)]*)\)"#,
             options: .caseInsensitive
         )
     }()
 
-    /// Scan assistant text for audio URLs with ?auto_play=true and trigger playback
-    /// directly via GlobalAudioPlayer. Works even in background (Shortcuts intents).
+    /// Scan assistant text for voice-card links and trigger playback directly via
+    /// GlobalAudioPlayer. Works even in background (Shortcuts intents).
+    /// [batch9-voice/2] 遍历全部匹配，播第一条能解析成功的即止（多卡片时其余
+    /// 留给手动点）——此前只看第一条，第一条解析失败就整段静默。
     static func triggerAutoPlayAudio(in text: String) {
         guard !text.isEmpty, let regex = autoPlayAudioPattern else { return }
         let range = NSRange(text.startIndex..., in: text)
-        let matches = regex.matches(in: text, range: range)
-        guard let firstMatch = matches.first, firstMatch.numberOfRanges >= 2,
-              let urlRange = Range(firstMatch.range(at: 1), in: text) else { return }
-        let rawURL = String(text[urlRange])
+        for match in regex.matches(in: text, range: range) {
+            guard match.numberOfRanges >= 2,
+                  let urlRange = Range(match.range(at: 1), in: text) else { continue }
+            let rawURL = String(text[urlRange])
 
-        // Strip query parameters to get clean file URL
-        guard let url = URL(string: rawURL),
-              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
-        components.queryItems = nil
-        guard let cleanURL = components.url else { return }
+            // Strip query parameters to get clean file URL
+            guard let url = URL(string: rawURL),
+                  var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { continue }
+            components.queryItems = nil
+            guard let cleanURL = components.url else { continue }
 
-        // Resolve minis-clone:// to file URL
-        let fileURL: URL?
-        if cleanURL.scheme == "minis-clone" {
-            fileURL = resolveMinisFileURLForAutoPlay(url: cleanURL)
-        } else {
-            fileURL = cleanURL
+            // Resolve minis-clone:// to file URL
+            let fileURL: URL?
+            if cleanURL.scheme == "minis-clone" {
+                fileURL = resolveMinisFileURLForAutoPlay(url: cleanURL)
+            } else {
+                fileURL = cleanURL
+            }
+
+            guard let resolved = fileURL else {
+                logger.warning("⏵ auto_play: could not resolve URL \(rawURL)")
+                continue
+            }
+
+            logger.info("⏵ auto_play: triggering playback for \(resolved.lastPathComponent)")
+            // GlobalAudioPlayer.play() configures the audio session itself (without
+            // .mixWithOthers) so that it appears in Control Center / lock screen.
+            GlobalAudioPlayer.shared.play(url: resolved)
+            return  // 播一条即止
         }
-
-        guard let resolved = fileURL else {
-            logger.warning("⏵ auto_play: could not resolve URL \(rawURL)")
-            return
-        }
-
-        logger.info("⏵ auto_play: triggering playback for \(resolved.lastPathComponent)")
-        // GlobalAudioPlayer.play() configures the audio session itself (without
-        // .mixWithOthers) so that it appears in Control Center / lock screen.
-        GlobalAudioPlayer.shared.play(url: resolved)
     }
 
     /// Resolve minis-clone:// URL to local file URL (standalone, no UI dependency).
@@ -5883,7 +5889,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 logger.info("[StreamEnd] NO TEXT — tool-only response, nothing to flush")
             }
 
-            // Auto-play: scan assistant text for audio URLs with ?auto_play=true
+            // Auto-play: scan assistant text for voice-card links (voice_bubble=1)
             // This works even when the app is in the background (e.g. Shortcuts intent)
             // because it triggers GlobalAudioPlayer directly, bypassing UI rendering.
             Self.triggerAutoPlayAudio(in: assistantText)
@@ -6106,7 +6112,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     } else if let voice = await AIVoiceMessageComposer.compose(
                         for: assistantText, sessionId: sid) {
                         let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
-                        let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+                        // [batch9-voice/2] 统一构造（durParam 仍供日志使用）。
+                        let link = AIVoiceMessageComposer.voiceBubbleLink(url: voice.url, duration: voice.duration)
                         // [T-voice-bubble-context-clean v2 09-12] 修复审查问题14/15:
                         // 之前的写法把气泡 link append 进 agentHistory——reload 侧会
                         // 剥，但 live 侧（effectiveAgentHistory/applyRequestImageBudget）

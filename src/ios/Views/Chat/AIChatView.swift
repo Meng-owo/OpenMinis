@@ -392,9 +392,6 @@ struct AIChatView: View {
         nonmutating set { voiceMode.isVoiceActive = newValue }
     }
     @StateObject private var voiceVM = VoiceInputViewModel()
-    /// Global read-replies state — observed so the voice-mode "Read replies" toggle
-    /// reflects enabled/muted in lockstep with the global voice-output capsule.
-    @ObservedObject private var voiceOutput = VoiceOutputState.shared
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
     /// [T-codex-fast-mode] Codex Fast Mode toggle ("..." menu, OpenAI OAuth
     /// only). Same key OpenAIProvider reads at request-build time; @AppStorage
@@ -7544,7 +7541,7 @@ struct ChatVoiceSettingsSheet: View {
                     Text("播放、倍速与声音调节已统一收纳在此处。")
                 }
             }
-            .navigationTitle("AI 语音设置")
+            .navigationTitle("语音设置")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

@@ -1579,7 +1579,8 @@ private extension AIChatViewModel {
             let voice = try await AIVoiceMessageComposer.compose(
                 for: speakText, sessionId: sid, voice: voiceParam, group: groupParam)
             let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
-            let link = "![voice](\(voice.url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+            // [batch9-voice/2] 统一构造（durParam 仍供日志使用）。
+            let link = AIVoiceMessageComposer.voiceBubbleLink(url: voice.url, duration: voice.duration)
             // ① UI：气泡 block 直接进当前回复（用户立刻看见）。
             if msgIdx < messages.count {
                 messages[msgIdx].blocks.append(AssistantBlock(kind: .text, content: link))

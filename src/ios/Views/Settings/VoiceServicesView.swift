@@ -96,7 +96,7 @@ struct VoiceServicesView: View {
         } header: {
             Text("Text-to-Speech")
         } footer: {
-            Text("Pick which voice reads replies aloud. A service here is a complete synthesis target on its own — vendor, endpoint, key, model, voice and tuning. Nothing selected falls to the Voice Output model group. The built-in System voice only speaks when \"Allow System voice\" is on.")
+            Text("Pick which voice speaks for read-aloud and AI voice replies. A service here is a complete synthesis target on its own — vendor, endpoint, key, model, voice and tuning. Nothing selected falls to the Voice Output model group. The built-in System voice only speaks when \"Allow System voice\" is on.")
         }
     }
 

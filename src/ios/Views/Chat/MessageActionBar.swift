@@ -15,8 +15,7 @@ struct MessageActionBar: View {
 
     /// The bubble's plain text (already markdown-stripped for speech).
     let speakText: String
-    /// Speaks ONLY this text via the service layer. Caller (vm) ensures the
-    /// read-replies master switch is on before invoking.
+    /// Speaks ONLY this text via the service layer (explicit read-aloud).
     let onSpeak: (String) -> Void
     /// Global pause/resume/stop — the vm's SpeechControlling conformance.
     let controller: SpeechControlling
