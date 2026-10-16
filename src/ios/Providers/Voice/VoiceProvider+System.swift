@@ -264,9 +264,9 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         utterance.voice = Self.resolveVoice(request: request, fallbackLocale: locale)
         utterance.pitchMultiplier = SystemVoicePreferences.pitch
         utterance.volume = SystemVoicePreferences.volume
-        // [T-tts-services 09-11] Same rule as the live path: the Voice Services
-        // System editor's rate (an absolute AVSpeechUtterance.rate) wins over
-        // mapSpeed's multiplier mapping when the user set it.
+        // [T-tts-services 09-11 · batch9-voice/3 订正] 用户调过编辑器速率时，
+        // 最终合成速率 = 编辑器基准 × 语音设置的播放倍速（超出系统上下限时截断）
+        // ——弹窗倍速是通用乘数，编辑器滑条是基准；两者相乘是有意为之。
         if UserDefaults.standard.object(forKey: "systemVoice.rateMultiplier") != nil {
             let mult = VoiceOutputPreferences.speedMultiplier
             utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate,

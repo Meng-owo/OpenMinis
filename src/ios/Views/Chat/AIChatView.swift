@@ -7398,6 +7398,11 @@ struct ChatVoiceSettingsSheet: View {
 
     @ObservedObject private var state = VoiceOutputState.shared
     @ObservedObject private var voicePlayer = VoiceOutputPlayer.shared
+    /// [batch9-voice/3 · VT-F3] 本弹窗会话内发生过"无可用语音"（队列无候选而
+    /// 排出）——状态行给出失败态，而不是静默回"就绪"。
+    @State private var noVoiceWarning = false
+    /// [batch9-voice/3 · VT-F2] 系统语音闸门回显（权威在 设置 › 语音服务）。
+    @AppStorage("voice.output.systemVoiceAllowed") private var systemVoiceAllowed = false
     @State private var showModelSelector: Bool = false
     @State private var modelLabel: String = ""
 
@@ -7454,10 +7459,10 @@ struct ChatVoiceSettingsSheet: View {
                 Section {
                     HStack {
                         HStack(spacing: 8) {
-                            Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : "speaker.wave.2.fill"))
+                            Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : (noVoiceWarning ? "speaker.slash.fill" : "speaker.wave.2.fill")))
                                 .font(.system(size: 16))
                                 .foregroundStyle(isSpeaking ? MinisTheme.accent : MinisTheme.secondaryText)
-                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : "播报就绪"))
+                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : (noVoiceWarning ? "无可用语音——去 设置 › 语音服务 检查" : "播报就绪")))
                                 .font(.body.weight(.medium))
                         }
                         Spacer()
@@ -7540,6 +7545,26 @@ struct ChatVoiceSettingsSheet: View {
                 } footer: {
                     Text("播放、倍速与声音调节已统一收纳在此处。")
                 }
+
+                // [batch9-voice/3 · VT-F2] 系统语音闸门回显——设置页是权威，
+                // 这里只读；避免"为什么没声音"在弹窗内零线索。
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("允许系统语音")
+                                .font(.body.weight(.medium))
+                            Text("关闭时只用你配置的声音发声")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(systemVoiceAllowed ? "已允许" : "未允许")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                } footer: {
+                    Text("在 设置 › 语音服务 里调整。")
+                }
             }
             .navigationTitle("语音设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -7550,6 +7575,10 @@ struct ChatVoiceSettingsSheet: View {
             }
             .onAppear {
                 refreshModelLabel()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .ttsQueueDrainedSilently)) { _ in
+                // [batch9-voice/3 · VT-F3] 候选全空/合成全败 → 失败态（不再静默回"就绪"）。
+                noVoiceWarning = true
             }
             .sheet(isPresented: $showModelSelector, onDismiss: { refreshModelLabel() }) {
                 NavigationStack {

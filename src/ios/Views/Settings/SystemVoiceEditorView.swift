@@ -58,6 +58,8 @@ struct SystemVoiceEditorView: View {
     @State private var volume: Float = SystemVoicePreferences.volume
     @State private var testing = false
     @State private var testError: String?
+    /// [batch9-voice/3 · VT-C2] 保存时"切到系统语音"确认框。
+    @State private var showSwitchConfirm = false
 
     var body: some View {
         Form {
@@ -73,9 +75,26 @@ struct SystemVoiceEditorView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Done") {
                     persist()
-                    dismiss()
+                    // [batch9-voice/3 · VT-C2] 选用系统音色且当前有选中的云服务：
+                    // 不再静默改路由——交给确认框由用户决定。
+                    if needsVoiceSwitchConfirm {
+                        showSwitchConfirm = true
+                    } else {
+                        dismiss()
+                    }
                 }
             }
+        }
+        .confirmationDialog("把发声切换为系统语音吗？", isPresented: $showSwitchConfirm, titleVisibility: .visible) {
+            Button("切换为系统语音") {
+                switchVoiceToSystem()
+                dismiss()
+            }
+            Button("保持当前服务", role: .cancel) {
+                dismiss()
+            }
+        } message: {
+            Text("你选定了系统音色。切换后朗读用系统声音；随时可在 设置 › 语音服务 切回。")
         }
         .onAppear(perform: loadVoices)
         // Roster refresh via the shared observer (iOS 17+; on older systems the
@@ -132,7 +151,7 @@ struct SystemVoiceEditorView: View {
     }
 
     private var tuningSection: some View {
-        Section("Tuning") {
+        Section {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text("Speed")
@@ -157,6 +176,10 @@ struct SystemVoiceEditorView: View {
                 }
                 Slider(value: $volume, in: 0.0...1.0, step: 0.05)
             }
+        } header: {
+            Text("Tuning")
+        } footer: {
+            Text("速度基准：最终播放速度 = 此处 Speed × 语音设置里的播放倍速。")
         }
     }
 
@@ -201,11 +224,20 @@ struct SystemVoiceEditorView: View {
         SystemVoiceEditorPreferences.utteranceRate = rate
         SystemVoicePreferences.pitch = pitch
         SystemVoicePreferences.volume = volume
-        // A pinned system voice acts as the TTS selection — make the System row
-        // active in the services list so the two pages agree.
-        if selectedVoiceId != nil, TTSServiceStore.shared.selectedServiceId != nil {
-            TTSServiceStore.shared.setSelectedServiceId(nil)
-        }
+        // [batch9-voice/3 · VT-C2] 不再静默清掉已选服务——路由切换由 Done 时
+        // 的确认框决定（needsVoiceSwitchConfirm → confirmationDialog）。
+    }
+
+    /// 保存时是否要用户确认"把发声切换到系统语音"：选定了系统音色，且当前有
+    /// 显式选中的云服务（清服务 = 发声路由从云服务变回模型组/系统）。
+    private var needsVoiceSwitchConfirm: Bool {
+        selectedVoiceId != nil && TTSServiceStore.shared.selectedServiceId != nil
+    }
+
+    /// 确认后切换路由（用户点"切换为系统语音"→ 清除云服务选择）。
+    private func switchVoiceToSystem() {
+        TTSServiceStore.shared.setSelectedServiceId(nil)
+        MinisToast.show("已切换为系统语音发声", systemImage: "waveform")
     }
 
     private func runTest() {
