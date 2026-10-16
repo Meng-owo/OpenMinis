@@ -682,29 +682,9 @@ struct AIChatView: View {
                             inputBar
                             #endif
                         }
-                        // Register the composer (tool preview + input bar) as a
-                        // region the global speech capsule must not cover.
-                        .capsuleProtectedFrame("inputBar")
                         inputPopupOverlay
                             .padding(.bottom, inputBarHeight)
                     }
-                }
-                // Collapse the expanded speech player on a tap anywhere in the chat
-                // area. Attached as a SIMULTANEOUS TapGesture directly on the content
-                // (no full-screen hit-test overlay, which blocked scrolling) so a tap
-                // collapses the player while scroll/drag still work normally. The tap
-                // only acts when the player is expanded; otherwise it's a no-op.
-                .simultaneousGesture(
-                    TapGesture().onEnded {
-                        if vm.speakEnabled && vm.speechPlayerExpanded {
-                            withAnimation(.easeInOut(duration: 0.16)) {
-                                vm.speechPlayerExpanded = false
-                            }
-                        }
-                    }
-                )
-                .overlay(alignment: .bottomTrailing) {
-                    floatingSpeechButton
                 }
                 .overlay {
                     // Session-loading indicator, two flavors by scenario:
@@ -2041,10 +2021,7 @@ struct AIChatView: View {
                 cached.vm.speakEnabled = enabled
                 // Keep the persisted "Read replies" preference in lockstep.
                 VoiceOutputPreferences.isEnabled = enabled
-                if enabled {
-                    // Explicit enable from the "…" menu → open expanded.
-                    cached.vm.speechPlayerExpanded = true
-                } else {
+                if !enabled {
                     cached.vm.stopSpeech()
                 }
             },
@@ -2974,8 +2951,6 @@ struct AIChatView: View {
                 .animation(.easeInOut(duration: 0.2), value: vm.isNearBottom)
                 .animation(.easeInOut(duration: 0.2), value: vm.isAtFirstTurn)
                 .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
-                // The capsule must not cover these floating scroll-jump buttons.
-                .capsuleProtectedFrame("scrollButtons")
             }
         }
         // [T-browser-download-ux-v2] Floating download button — same visual
@@ -2992,7 +2967,6 @@ struct AIChatView: View {
             .padding(.horizontal, 12)
             .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12) + 92)
             .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
-            .capsuleProtectedFrame("downloadButton")
         }
     }
 
@@ -3037,31 +3011,6 @@ struct AIChatView: View {
     /// Whether the floating tool preview is visible.
     private var hasAnyToolBlocks: Bool {
         false
-    }
-
-    // MARK: - Floating Speech Button
-
-    /// Floating read-replies player control (compact ↔ expanded capsule), shown
-    /// only when read-replies is enabled.
-    @ViewBuilder
-    // The read-replies speech capsule is now a SINGLE app-root instance (mounted
-    // in MinisApp beside AudioPiPCapsule) so it persists across chat → home. No
-    // per-session copy is rendered here anymore.
-    private var floatingSpeechButton: some View { EmptyView() }
-
-    /// Height the floating scroll-jump button stack occupies right now (0 when
-    /// hidden), used to lift the speech control so the two never overlap. Mirrors
-    /// the visibility conditions of the jump-button overlay above.
-    private var scrollJumpButtonsHeight: CGFloat {
-        guard !vm.messages.isEmpty else { return 0 }
-        // Up and down buttons now share one condition (!isNearBottom): both are
-        // present together or both hidden.
-        guard !vm.isNearBottom else { return 0 }
-        // Sized for the TALLEST case (both buttons: 2×36 + 10 spacing = 82pt). The
-        // control already rests +48pt above the buttons' baseline, so lift the
-        // excess over that head start, plus a 10pt gap.
-        let maxStack: CGFloat = 2 * 36 + 10
-        return max(0, maxStack + 10 - 48)
     }
 
     // MARK: - Fork Banner (Read-Only Mode)
@@ -3586,7 +3535,7 @@ struct AIChatView: View {
                 set: { v in
                     vm.speakEnabled = v
                     VoiceOutputPreferences.isEnabled = v
-                    if v { vm.speechPlayerExpanded = true } else { vm.stopSpeech() }
+                    if !v { vm.stopSpeech() }
                 }
             )) {
                 Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")

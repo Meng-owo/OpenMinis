@@ -61,15 +61,6 @@ class GlobalAudioPlayer: ObservableObject {
     @Published var isLoaded = false
     @Published var activeFileURL: URL?
     @Published var fileName: String = ""
-    /// Set to true when user taps capsule to re-open the full preview.
-    @Published var showFullPreview = false
-
-    /// Capsule is shown whenever an audio file is loaded. The only way to hide
-    /// it is to call `stop()` (e.g. via the capsule's close button), which
-    /// resets `isLoaded`. The capsule view itself further hides when the full
-    /// preview sheet is open to avoid overlapping UI.
-    var isPiPActive: Bool { isLoaded }
-
     private var player: AVAudioPlayer?
     private var timer: Timer?
     private var seekWorkItem: DispatchWorkItem?
@@ -225,15 +216,10 @@ class GlobalAudioPlayer: ObservableObject {
     /// compiling — minimization now happens by simply dismissing the sheet.
     func activatePiP() {}
 
-    /// Deprecated: capsule visibility is now derived from `isLoaded`. Use
-    /// `stop()` to fully hide the capsule.
-    func deactivatePiP() {}
-
     /// Stop all playback and reset state. This is the only way to hide the
     /// PiP capsule (driven by `isLoaded` flipping to false in `stopInternal`).
     func stop() {
         stopInternal()
-        showFullPreview = false
     }
 
     private func stopInternal() {
@@ -318,140 +304,6 @@ class GlobalAudioPlayer: ObservableObject {
                 }
             }
         }
-    }
-}
-
-// MARK: - Floating Audio PiP Capsule
-
-struct AudioPiPCapsule: View {
-    @ObservedObject private var player = GlobalAudioPlayer.shared
-    /// Persisted position of the capsule center.
-    @State private var position: CGPoint? = nil
-    @State private var dragOffset: CGSize = .zero
-
-    private let capsuleWidth: CGFloat = 160
-    private let capsuleHeight: CGFloat = 40
-
-    /// Default position: bottom-trailing, 10pt above the Tool Status Bar area.
-    private func defaultPosition(in size: CGSize) -> CGPoint {
-        CGPoint(
-            x: size.width - capsuleWidth / 2 - 10,
-            y: size.height - capsuleHeight / 2 - 165
-        )
-    }
-
-    /// Clamp the position within the container bounds with padding.
-    private func clamp(_ point: CGPoint, in size: CGSize) -> CGPoint {
-        let margin: CGFloat = 6
-        let minX = capsuleWidth / 2 + margin
-        let maxX = size.width - capsuleWidth / 2 - margin
-        let minY = capsuleHeight / 2 + margin
-        let maxY = size.height - capsuleHeight / 2 - margin
-        return CGPoint(
-            x: max(minX, min(maxX, point.x)),
-            y: max(minY, min(maxY, point.y))
-        )
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            if player.isPiPActive && !player.showFullPreview {
-                let current = position ?? defaultPosition(in: geo.size)
-                capsuleContent
-                    .position(
-                        x: current.x + dragOffset.width,
-                        y: current.y + dragOffset.height
-                    )
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 5)
-                            .onChanged { dragOffset = $0.translation }
-                            .onEnded { value in
-                                let raw = CGPoint(
-                                    x: current.x + value.translation.width,
-                                    y: current.y + value.translation.height
-                                )
-                                withAnimation(.spring(response: 0.3)) {
-                                    position = clamp(raw, in: geo.size)
-                                    dragOffset = .zero
-                                }
-                            }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .sheet(isPresented: $player.showFullPreview) {
-                        if let url = player.activeFileURL {
-                            MinisAudioPreviewView(fileURL: url)
-                                .presentationDetents([.large])
-                                .presentationDragIndicator(.hidden)
-                        }
-                    }
-                    .onAppear {
-                        if position == nil {
-                            position = defaultPosition(in: geo.size)
-                        }
-                    }
-            }
-        }
-    }
-
-    private var capsuleContent: some View {
-        HStack {
-            Button {
-                player.showFullPreview = true
-            } label: {
-                Image(systemName: "waveform")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 40)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button {
-                player.togglePlayPause()
-            } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .frame(width: 36, height: 40)
-            }
-            .buttonStyle(.plain)
-
-            Spacer()
-
-            Button {
-                player.stop()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, height: 40)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 16)
-        .frame(width: 160, height: 40)
-        .background {
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.15),
-                                    Color.white.opacity(0.05),
-                                    Color.clear
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                )
-                .opacity(0.85)
-        }
-        .clipShape(Capsule())
-        .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
     }
 }
 

@@ -1354,12 +1354,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// by the player control to collapse from expanded to compact on first speak.
     @Published var isReadingAloud = false
 
-    /// Whether the floating speech player control is expanded (vs compact). Lives
-    /// here so the chat view can overlay a tap-to-dismiss layer while expanded.
-    /// Defaults to COMPACT — expansion is only initiated by an explicit user action
-    /// that turns reading on (so a new session / relaunch shows compact).
-    @Published var speechPlayerExpanded = false
-
     /// Explicitly set the playback speed (player control speed chip).
     func setSpeechSpeed(_ s: Float) {
         VoiceOutputPreferences.speedMultiplier = s
