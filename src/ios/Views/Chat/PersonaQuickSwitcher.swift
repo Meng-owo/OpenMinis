@@ -14,14 +14,39 @@ import SwiftUI
 //
 // 交互：点行 = 切换（当前项则仅收起）；点空白 = 收起；切换不等 DB 往返，
 // 列表刷新由既有 .personaDidChange 链在后台完成。
+//
+// [batch9b+] 视觉规范化（醒醒反馈：材质灰底与主题不适配、卡片高度不跟
+// 数量走、观感不高级）：
+//  ① 底色从 .regularMaterial 材质改为主题「浮层」角色 .raised——浅色主题
+//    即纯白（FFFFFF）、暗色主题自动跟随（2E2621），天然主题适配；
+//  ② 卡片高度按人设数量自适应：行高固定 48pt 精确预计算，≤6 人不滚动
+//    （高度=内容高），超过 300pt 封顶滚动；不再用"撑满 maxHeight"的
+//    固定观感；
+//  ③ 观感收敛：圆角 16→20、大柔阴影、0.5pt 细描边、发丝分隔线（对齐
+//    名字缩进）、隐藏滚动指示器、管理行图标与头像轴心对齐。
 
 struct PersonaQuickSwitcher: View {
     @ObservedObject var store: PersonaStore
 
-    /// 点「管理人设…」：宿主先收浮层、（延迟一拍）再开管理 sheet。
+    /// 点「管理人设…」：宿主先收浮层、动画完成后开管理 sheet。
     var onManage: () -> Void
     /// 点空白处收起。
     var onDismiss: () -> Void
+
+    // MARK: - Metrics
+    // 行高固定值：自适应高度 = 行数 × 行高 + 分隔线，精确可算，不依赖
+    // ScrollView 的自撑行为（它默认会撑满可用高度——旧观感的来源）。
+    private let rowHeight: CGFloat = 48
+    private let manageRowHeight: CGFloat = 48
+    private let hairlineWidth: CGFloat = 0.5
+    private let maxListHeight: CGFloat = 300
+
+    private var listHeight: CGFloat {
+        let count = store.personas.count
+        guard count > 0 else { return rowHeight }
+        let dividers = CGFloat(count - 1) * hairlineWidth
+        return min(CGFloat(count) * rowHeight + dividers, maxListHeight)
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -47,46 +72,38 @@ struct PersonaQuickSwitcher: View {
                     ForEach(store.personas) { p in
                         personaRow(p)
                         if p.id != store.personas.last?.id {
-                            Divider().padding(.leading, 52)
+                            hairline(inset: true)
                         }
                     }
                 }
             }
-            .frame(maxHeight: 320)
+            .frame(height: listHeight)
             .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.hidden)
 
-            Divider()
+            hairline(inset: false)
 
-            Button {
-                onManage()
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "person.2.crop.square.stack")
-                        .font(.system(size: 15))
-                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
-                        .frame(width: 26)
-                    Text("管理人设…")
-                        .font(.subheadline)
-                        .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            manageRow
         }
         .frame(maxWidth: 340)
         .frame(maxWidth: .infinity, alignment: .center)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(AppearanceStudio.shared.color(.border).opacity(0.5), lineWidth: 0.7)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(AppearanceStudio.shared.color(.raised))
         )
-        .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(AppearanceStudio.shared.color(.border).opacity(0.45), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 24, y: 10)
+    }
+
+    /// 发丝分隔线。inset = 对齐名字文字（头像 30 + spacing 12 + 左内边 14 = 56）。
+    private func hairline(inset: Bool) -> some View {
+        Rectangle()
+            .fill(AppearanceStudio.shared.color(.border).opacity(0.55))
+            .frame(height: hairlineWidth)
+            .padding(.leading, inset ? 56 : 0)
     }
 
     // MARK: - Row
@@ -100,7 +117,7 @@ struct PersonaQuickSwitcher: View {
             onDismiss()
         } label: {
             HStack(spacing: 12) {
-                PersonaAvatarView(iconRef: p.avatar, size: 26)
+                PersonaAvatarView(iconRef: p.avatar, size: 30)
 
                 Text(p.name)
                     .font(.body)
@@ -125,7 +142,33 @@ struct PersonaQuickSwitcher: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 11)
+            .frame(height: rowHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Manage Row
+
+    private var manageRow: some View {
+        Button {
+            onManage()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "person.2.crop.square.stack")
+                    .font(.system(size: 15))
+                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
+                    .frame(width: 30)
+                Text("管理人设…")
+                    .font(.subheadline)
+                    .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText))
+            }
+            .padding(.horizontal, 14)
+            .frame(height: manageRowHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

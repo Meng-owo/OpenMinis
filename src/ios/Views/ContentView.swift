@@ -2629,11 +2629,14 @@ struct ContentView: View {
             PersonaQuickSwitcher(
                 store: PersonaStore.shared,
                 onManage: {
-                    withAnimation(.easeOut(duration: 0.16)) { showPersonaQuickSwitch = false }
-                    // 收层动画让出 present 事务后再开管理 sheet——同帧既关层又开
-                    // sheet 会撞 present 竞态（cf. 本文件 toolbar 区事故史）。
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                        showPersonaManage = true
+                    // [batch9b+] 收层动画完成的那一拍立刻开管理 sheet：比固定
+                    // 0.28s 更"直接"（醒醒：应该直接进人设列表），收层事务已
+                    // 结束再 present，避开同帧竞态（cf. 本文件 toolbar 区事故
+                    // 史）；completion 后再让 main 一拍作双保险。
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        showPersonaQuickSwitch = false
+                    } completion: {
+                        DispatchQueue.main.async { showPersonaManage = true }
                     }
                 },
                 onDismiss: {
