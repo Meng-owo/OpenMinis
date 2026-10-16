@@ -24,7 +24,6 @@ import SwiftUI
 
 struct VoiceServicesView: View {
 
-    @ObservedObject private var output = VoiceOutputState.shared
     @ObservedObject private var appearanceStudio = AppearanceStudio.shared
 
     @State private var editing: TTSServiceOptions?
@@ -301,18 +300,6 @@ struct VoiceServicesView: View {
 
     private var playbackSection: some View {
         Section {
-            Toggle(isOn: Binding(
-                get: { VoiceOutputPreferences.isEnabled },
-                set: { output.isEnabled = $0 }
-            )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Auto-read replies")
-                    Text("Read each new reply aloud as it arrives")
-                        .font(.caption)
-                        .foregroundStyle(MinisTheme.secondaryText)
-                }
-            }
-
             Toggle(isOn: Binding(
                 get: { VoiceOutputPreferences.cacheNetworkAudio },
                 set: { VoiceOutputPreferences.cacheNetworkAudio = $0 }

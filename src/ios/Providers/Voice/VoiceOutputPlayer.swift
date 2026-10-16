@@ -5,14 +5,7 @@ import CryptoKit
 // MARK: - Voice-output preference (persisted)
 
 enum VoiceOutputPreferences {
-    private static let key = "voice.output.readRepliesAloud"
     private static let speedKey = "voice.output.speedMultiplier"
-
-    /// Whether agent replies should be read aloud via TTS.
-    static var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: key) }
-        set { UserDefaults.standard.set(newValue, forKey: key) }
-    }
 
     /// The speed steps the floating speaker button cycles through.
     static let speedSteps: [Float] = [1.0, 1.25, 1.5, 2.0]
@@ -28,8 +21,6 @@ enum VoiceOutputPreferences {
     }
 
 
-    private static let mutedKey = "voice.output.muted"
-
     /// [T-tts-services 09-11] kelivo-style "cache audio for replay": keep the
     /// files a network service synthesized so replaying the same unit doesn't
     /// re-hit the vendor. Persisted; default on (audio is small and private).
@@ -40,28 +31,6 @@ enum VoiceOutputPreferences {
             return UserDefaults.standard.bool(forKey: cacheKey)
         }
         set { UserDefaults.standard.set(newValue, forKey: cacheKey) }
-    }
-
-    // [T-tts-first-use-nudge 09-13] N2: one-time guidance card on the FIRST
-    // read-aloud enable. Users who never opened Settings → Voice hear the
-    // robotic system voice and never learn the service layer exists. The
-    // card fires once per install (skipped entirely when a TTS service is
-    // already configured — they don't need it).
-    private static let firstUseNudgeKey = "voice.output.firstUseNudgeShown"
-    /// True when the nudge has NOT been shown yet AND no service is configured.
-    static var shouldShowFirstUseNudge: Bool {
-        guard !UserDefaults.standard.bool(forKey: firstUseNudgeKey) else { return false }
-        return TTSServiceStore.shared.services.isEmpty
-    }
-    /// Mark the nudge as shown (call whether the card was tapped or dismissed).
-    static func markFirstUseNudgeShown() {
-        UserDefaults.standard.set(true, forKey: firstUseNudgeKey)
-    }
-
-    /// Whether read-replies is temporarily muted (persisted so it survives restart).
-    static var isMuted: Bool {
-        get { UserDefaults.standard.bool(forKey: mutedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: mutedKey) }
     }
 
     /// [T-system-voice-off 09-12] 醒醒 3：「把里面的系统语音全变成可关闭选项，
@@ -289,7 +258,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// session's speech without touching concurrent sessions'.
     func enqueue(_ text: String, sessionId: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard VoiceOutputPreferences.isEnabled, !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return }
 
         let unit = Unit(seq: nextSeq, text: trimmed, ownerSessionId: sessionId); nextSeq += 1
         queue.append(unit)

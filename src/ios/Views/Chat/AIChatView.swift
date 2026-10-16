@@ -420,12 +420,6 @@ struct AIChatView: View {
     @State private var showSessionMemory = false
     @State private var showEnhancedCacheAlert = false
     @State private var showTokenUsage = false
-    /// [T-tts-first-use-nudge 09-13] N2: one-time guidance card on the very
-    /// first read-aloud enable (only when no TTS service is configured yet).
-    @State private var showTTSFirstUseNudge = false
-    /// Set when the nudge's CTA was tapped — drives the follow-on navigation
-    /// to Settings → Voice Services after the card dismisses.
-    @State private var pendingVoiceServicesNav = false
     // [T-ios-json-open-provider-import-prompt] A shared/opened JSON file that
     // looks like a Provider export (providerType + credentialType + models)
     // prompts the user to choose: import as a provider, or add as a chat
@@ -513,7 +507,7 @@ struct AIChatView: View {
     private var hasOverlayPresented: Bool {
         showFileBrowser || showBrowserSheet || showTerminal || showCamera
             || showPhotoPicker || showDocumentPicker || showModelPicker
-            || showTokenUsage || showTTSFirstUseNudge || showSessionSkills
+            || showTokenUsage || showSessionSkills
             || showSessionMCPs || showSessionMemory || showMoveToSheet
             || showThinkingLevelSheet || showDownloadsPanel
             || titlePillEditSession != nil || locateDownloadTarget != nil
@@ -1106,23 +1100,6 @@ struct AIChatView: View {
         .sheet(isPresented: $showTokenUsage) {
             TokenUsageSheet(vm: cached.vm)
                 .presentationDetents([.fraction(0.8), .large])
-        }
-        // [T-tts-first-use-nudge 09-13] N2: the card itself.
-        .sheet(isPresented: $showTTSFirstUseNudge) {
-            TTSFirstUseNudgeCard {
-                pendingVoiceServicesNav = true
-            }
-            .presentationDetents([.medium])
-        }
-        .onChange(of: pendingVoiceServicesNav) { nav in
-            // Follow-on navigation after the nudge card's CTA — pops the card
-            // (already dismissed) and jumps to Settings → Voice Services. No
-            // router/openSettings symbol exists in this view; the project's
-            // deep-link hop is setting the coordinator's pending target,
-            // which ContentView's onChange observes to open the sheet.
-            guard nav else { return }
-            pendingVoiceServicesNav = false
-            DeepLinkCoordinator.shared.pendingSettingsTarget = .voiceServices
         }
         .sheet(item: $screenshotPreview) { preview in
             ChatScreenshotPreviewSheet(image: preview.image)
@@ -2001,7 +1978,6 @@ struct AIChatView: View {
             isForcePulling: isForcePulling,
             iCloudSyncEnabled: iCloudSyncEnabled,
             memoryEnabled: vm.memoryEnabled,
-            speakEnabled: cached.vm.speakEnabled,
             showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
             enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
             showFastModeToggle: activeModelSupportsFastMode,
@@ -2019,14 +1995,6 @@ struct AIChatView: View {
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
             onMemories: { showSessionMemory = true },
-            setSpeakEnabled: { enabled in
-                cached.vm.speakEnabled = enabled
-                // Keep the persisted "Read replies" preference in lockstep.
-                VoiceOutputPreferences.isEnabled = enabled
-                if !enabled {
-                    cached.vm.stopSpeech()
-                }
-            },
             setEnhancedCache: { newValue in
                 if newValue && !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
                     showEnhancedCacheAlert = true
@@ -2266,7 +2234,6 @@ struct AIChatView: View {
             isForcePulling: isForcePulling,
             iCloudSyncEnabled: iCloudSyncEnabled,
             memoryEnabled: vm.memoryEnabled,
-            speakEnabled: cached.vm.speakEnabled,
             showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
             enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
             showFastModeToggle: activeModelSupportsFastMode,
@@ -3425,10 +3392,6 @@ struct AIChatView: View {
             // 输入框在底栏按钮之间自适应
             inputFieldOrWaveform
 
-            if voiceInputActive, vm.editingMessageIndex == nil {
-                readAloudToolbarToggle
-            }
-
             micButtonContainer
 
             sendButton
@@ -3508,13 +3471,6 @@ struct AIChatView: View {
             attachmentMenuButton
             if vm.editingMessageIndex != nil { editExitButton }
             Spacer()
-            // Mutually exclusive with editExitButton: while editing a past
-            // message the exit capsule owns this row — showing both capsules
-            // overflows the row and they render overlapped.
-            if voiceInputActive, vm.editingMessageIndex == nil {
-                readAloudToolbarToggle
-                Spacer()
-            }
             micButtonContainer
             sendButton
         }
@@ -3541,16 +3497,6 @@ struct AIChatView: View {
         // [opaque-return 09-12] 显式 return：let 声明 + 多行 modifier 链之后的
         // 表达式不被认作隐式 return（opaque return 只认单表达式 body）。
         return Menu {
-            Toggle(isOn: Binding(
-                get: { vm.speakEnabled },
-                set: { v in
-                    vm.speakEnabled = v
-                    VoiceOutputPreferences.isEnabled = v
-                    if !v { vm.stopSpeech() }
-                }
-            )) {
-                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")
-            }
             Toggle(isOn: Binding(
                 get: { vm.sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false },
                 set: { v in
@@ -3585,75 +3531,6 @@ struct AIChatView: View {
         }
     }
 
-    /// "Read replies aloud" toggle shown centered in the toolbar during voice
-    /// input (TTS on/off). Styled like the other secondary toolbar controls.
-    private var readAloudToolbarToggle: some View {
-        // Source of truth = vm.speakEnabled (also driven by the floating speaker's
-        // tap-cycle / long-press-off), so this toggle reflects those changes too.
-        // Three states, in lockstep with the global voice-output capsule:
-        //  • disabled  (!isEnabled)        → gray, slashed speaker
-        //  • muted     (isEnabled & muted) → accent, slashed speaker
-        //  • active    (isEnabled & !muted)→ accent, wave speaker
-        let on = voiceOutput.isEnabled
-        let muted = voiceOutput.isMuted
-        return Button {
-            if on && !muted {
-                // Active → mute (temporary silence, capsule stays visible).
-                voiceOutput.isMuted = true
-            } else if on && muted {
-                // Muted → fully off (capsule hides).
-                vm.speakEnabled = false
-                VoiceOutputPreferences.isEnabled = false
-            } else {
-                // Off → turn on (resume last speed, un-muted).
-                voiceOutput.isMuted = false
-                vm.speakEnabled = true
-                VoiceOutputPreferences.isEnabled = true
-                // [T-tts-first-use-nudge 09-13] N2: first-ever enable with no
-                // TTS service configured → one-time guidance card.
-                if VoiceOutputPreferences.shouldShowFirstUseNudge {
-                    showTTSFirstUseNudge = true
-                }
-            }
-        } label: {
-            HStack(spacing: 5) {
-                // Fixed-width icon slot so the size stays constant when the glyph
-                // swaps between wave / slash.
-                // [T-ios-voiceover-labels] The glyph only mirrors the on/off
-                // state that the accessibilityValue below already announces,
-                // and the row carries visible text — so it is pure decoration
-                // for VoiceOver and would otherwise be read as
-                // "speaker wave 2 fill".
-                Image(systemName: (on && !muted) ? "speaker.wave.2.fill" : "speaker.slash.fill")
-                    .font(.system(size: 12))
-                    .frame(width: 16)
-                    .accessibilityHidden(true)
-                Text("Read replies", comment: "Voice TTS toggle (compact)")
-                    .font(.subheadline)
-            }
-            .foregroundStyle(on ? ChatColors.accent : ChatColors.secondaryText)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                Capsule().fill(on ? ChatColors.accent.opacity(0.15)
-                                  : Color.secondary.opacity(0.10))
-            )
-            .fixedSize()
-        }
-        .buttonStyle(.plain)
-        // [T-ios-voiceover-labels] State goes in the VALUE, not the label:
-        // folding "on"/"off" into the label would lose VoiceOver's own
-        // "on/off" semantics and make the control's name change as it toggles.
-        // Muted is a third state the glyph distinguishes visually, so it is
-        // announced too rather than being flattened into "on".
-        .accessibilityValue(Text(
-            on ? (muted
-                    ? AppLocalized("On, muted", comment: "VoiceOver value for the read-replies toggle when enabled but muted")
-                    : AppLocalized("On", comment: "VoiceOver value for the read-replies toggle when enabled"))
-               : AppLocalized("Off", comment: "VoiceOver value for the read-replies toggle when disabled")
-        ))
-        .accessibilityHint(Text("Toggles reading replies aloud", comment: "VoiceOver hint for the read-replies toggle"))
-    }
 
     /// `/` button that opens the slash command menu.
     private var slashMenuButton: some View {
@@ -5378,7 +5255,6 @@ private struct ChatToolbarKey: Equatable {
     let isForcePulling: Bool
     let iCloudSyncEnabled: Bool
     let memoryEnabled: Bool
-    let speakEnabled: Bool
     let showEnhancedCacheToggle: Bool
     let enhancedCacheEnabled: Bool
     /// [T-codex-fast-mode] Menu row shown only for Codex OAuth models.
@@ -5430,7 +5306,6 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             if lhs.key.isForcePulling != rhs.key.isForcePulling { diffs.append("isForcePulling") }
             if lhs.key.iCloudSyncEnabled != rhs.key.iCloudSyncEnabled { diffs.append("iCloudSyncEnabled") }
             if lhs.key.memoryEnabled != rhs.key.memoryEnabled { diffs.append("memoryEnabled") }
-            if lhs.key.speakEnabled != rhs.key.speakEnabled { diffs.append("speakEnabled") }
             if lhs.key.showEnhancedCacheToggle != rhs.key.showEnhancedCacheToggle { diffs.append("showEnhancedCacheToggle") }
             if lhs.key.enhancedCacheEnabled != rhs.key.enhancedCacheEnabled { diffs.append("enhancedCacheEnabled") }
             if lhs.key.showFastModeToggle != rhs.key.showFastModeToggle { diffs.append("showFastModeToggle") }
@@ -5490,7 +5365,6 @@ private struct ChatTrailingMenu: View, Equatable {
     let isForcePulling: Bool
     let iCloudSyncEnabled: Bool
     let memoryEnabled: Bool
-    let speakEnabled: Bool
     let showEnhancedCacheToggle: Bool
     let enhancedCacheEnabled: Bool
     /// [T-codex-fast-mode] Mirrors ChatTrailingMenuButton.
@@ -5508,7 +5382,6 @@ private struct ChatTrailingMenu: View, Equatable {
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onMemories: () -> Void
-    let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
     let setFastMode: (Bool) -> Void
     let onTokenUsage: () -> Void
@@ -5521,7 +5394,6 @@ private struct ChatTrailingMenu: View, Equatable {
             && lhs.isForcePulling == rhs.isForcePulling
             && lhs.iCloudSyncEnabled == rhs.iCloudSyncEnabled
             && lhs.memoryEnabled == rhs.memoryEnabled
-            && lhs.speakEnabled == rhs.speakEnabled
             && lhs.showEnhancedCacheToggle == rhs.showEnhancedCacheToggle
             && lhs.enhancedCacheEnabled == rhs.enhancedCacheEnabled
             && lhs.showFastModeToggle == rhs.showFastModeToggle
@@ -5599,13 +5471,6 @@ private struct ChatTrailingMenu: View, Equatable {
                 }
             }
 
-            Toggle(isOn: Binding(
-                get: { speakEnabled },
-                set: { setSpeakEnabled($0) }
-            )) {
-                Label(AppLocalized("Speak Responses"), systemImage: "speaker.wave.2.fill")
-            }
-
             // [T-menu-below-bubble 09-12] Voice Capsule + AI Voice Replies moved
             // DOWN to the composer's "•••" (voiceOptionsButton) per 醒醒 1 —
             // voice config lives under the AI bubble, not up in the navbar.
@@ -5676,7 +5541,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let isForcePulling: Bool
     let iCloudSyncEnabled: Bool
     let memoryEnabled: Bool
-    let speakEnabled: Bool
     let showEnhancedCacheToggle: Bool
     let enhancedCacheEnabled: Bool
     /// [T-codex-fast-mode] Shown only when the active model's provider is a
@@ -5695,7 +5559,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onMemories: () -> Void
-    let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
     let setFastMode: (Bool) -> Void
     let onTokenUsage: () -> Void
@@ -5709,7 +5572,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         let isForcePulling: Bool
         let iCloudSyncEnabled: Bool
         let memoryEnabled: Bool
-        let speakEnabled: Bool
         let showEnhancedCacheToggle: Bool
         let enhancedCacheEnabled: Bool
         let showFastModeToggle: Bool
@@ -5719,7 +5581,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     private var key: Key {
         Key(messagesEmpty: messagesEmpty, hasSession: hasSession,
             isForcePulling: isForcePulling, iCloudSyncEnabled: iCloudSyncEnabled,
-            memoryEnabled: memoryEnabled, speakEnabled: speakEnabled,
+            memoryEnabled: memoryEnabled,
             showEnhancedCacheToggle: showEnhancedCacheToggle,
             enhancedCacheEnabled: enhancedCacheEnabled,
             showFastModeToggle: showFastModeToggle,
@@ -5822,11 +5684,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             sessionGroup.append(UIAction(title: AppLocalized("Memories in Session"),
                                          image: UIImage(systemName: "brain.head.profile")) { _ in coordinator.parent.onMemories() })
         }
-        sessionGroup.append(UIAction(title: AppLocalized("Speak Responses"),
-                                     image: UIImage(systemName: "speaker.wave.2.fill"),
-                                     state: key.speakEnabled ? .on : .off) { _ in
-            coordinator.parent.setSpeakEnabled(!key.speakEnabled)
-        })
         // [T-menu-below-bubble 09-12] Voice Capsule + AI Voice Replies live in
         // the composer's "•••" (voiceOptionsButton) — removed here per 醒醒 1.
         groups.append(UIMenu(options: .displayInline, children: sessionGroup))
@@ -7590,31 +7447,10 @@ struct ChatVoiceSettingsSheet: View {
                         }
                     }
 
-                    Toggle(isOn: Binding(
-                        get: { vm.speakEnabled },
-                        set: { v in
-                            vm.speakEnabled = v
-                            VoiceOutputPreferences.isEnabled = v
-                            state.isEnabled = v
-                            if v {
-                                refreshModelLabel()
-                            } else {
-                                vm.stopSpeech()
-                            }
-                        }
-                    )) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("朗读回复")
-                                .font(.body.weight(.medium))
-                            Text("由语音引擎即时朗读文本回复")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
                 } header: {
-                    Text("AI 语音与播报开关")
+                    Text("AI 语音回复")
                 } footer: {
-                    Text("AI语音回复针对当前会话生效；朗读回复针对全局生效。")
+                    Text("针对当前会话生效。")
                 }
 
                 // 实时播报状态与控制（收口悬浮播放器全部调节）
@@ -7728,6 +7564,13 @@ struct ChatVoiceSettingsSheet: View {
     }
 
     private func refreshModelLabel() {
+        // [batch9-voice-1b / VT-C1] 标签口径修正：先看**用户选中的 TTS 服务**
+        //（朗读与气泡的真实发声方）；未选服务时退回播放器的运行时值；最后才
+        // 用模型组解析——不再出现"未发声时永远显示 System"的错位。
+        if let svc = TTSServiceStore.shared.selectedService() {
+            modelLabel = svc.name
+            return
+        }
         if let instance = VoiceOutputPlayer.shared.activeModelLabel {
             modelLabel = instance
             return

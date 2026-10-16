@@ -288,7 +288,6 @@
 		E5F200002 /* MinisMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200012 /* MinisMediaViews.swift */; };
 		F1T00033 /* MessageActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00034 /* MessageActionBar.swift */; };
 		F1T0003B /* BubbleAudioActionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T0003C /* BubbleAudioActionBar.swift */; };
-		F1T0003D /* TTSFirstUseNudgeCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T0003E /* TTSFirstUseNudgeCard.swift */; };
 		F1T00040 /* ScheduledPromptManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00041 /* ScheduledPromptManager.swift */; };
 		F1T00042 /* ScheduledPromptsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00043 /* ScheduledPromptsView.swift */; };
 		E5F200003 /* AssistantBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200013 /* AssistantBlockView.swift */; };
@@ -1048,7 +1047,6 @@
 		E5F200012 /* MinisMediaViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisMediaViews.swift; sourceTree = "<group>"; };
 		F1T00034 /* MessageActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageActionBar.swift; sourceTree = "<group>"; };
 		F1T0003C /* BubbleAudioActionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleAudioActionBar.swift; sourceTree = "<group>"; };
-		F1T0003E /* TTSFirstUseNudgeCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TTSFirstUseNudgeCard.swift; sourceTree = "<group>"; };
 		F1T00041 /* ScheduledPromptManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledPromptManager.swift; sourceTree = "<group>"; };
 		F1T00043 /* ScheduledPromptsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledPromptsView.swift; sourceTree = "<group>"; };
 		E5F200013 /* AssistantBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantBlockView.swift; sourceTree = "<group>"; };
@@ -2577,7 +2575,6 @@
 				F1T00023 /* VoiceServicesView.swift */,
 				F1T00024 /* TTSServiceEditorView.swift */,
 				F1T00049 /* TTSGroupsView.swift */,
-				F1T0003E /* TTSFirstUseNudgeCard.swift */,
 				F1T00029 /* SystemVoiceEditorView.swift */,
 				XMSTYLE102 /* AppearanceStudioView.swift */,
 				E5P000012 /* EnvironmentVariablesView.swift */,
@@ -3199,7 +3196,6 @@
 				E5F200002 /* MinisMediaViews.swift in Sources */,
 				F1T00033 /* MessageActionBar.swift in Sources */,
 				F1T0003B /* BubbleAudioActionBar.swift in Sources */,
-				F1T0003D /* TTSFirstUseNudgeCard.swift in Sources */,
 				E5F200003 /* AssistantBlockView.swift in Sources */,
 				E5F200004 /* ChatMessageViews.swift in Sources */,
 				54191697ED371BF2C6EF48E3 /* TurnSummaryRow.swift in Sources */,

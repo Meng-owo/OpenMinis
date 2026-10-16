@@ -54,7 +54,6 @@ protocol SpeechControlling: AnyObject {
     func toggleSpeechPause()
     func stopSpeech()
     func nextSpeechSpeed()
-    func disableSpeech(resetSpeed: Bool)
     /// [T-tts-services 09-11] The selected TTS voice changed mid-read: drop the
     /// per-reply engine snapshot so subsequent enqueues resolve against the new
     /// service instead of continuing on the old cloud/System decision.
@@ -70,41 +69,8 @@ protocol SpeechControlling: AnyObject {
 final class VoiceOutputState: ObservableObject {
     static let shared = VoiceOutputState()
 
-    @Published var isEnabled: Bool {
-        didSet {
-            guard oldValue != isEnabled else { return }
-            VoiceLog.log("[VoiceOutputState] isEnabled \(oldValue) → \(isEnabled)")
-            VoiceOutputPreferences.isEnabled = isEnabled
-            if !isEnabled {
-                // Off → stop whatever is currently being read aloud, app-wide,
-                // AND drop any queued-but-unplayed items. Also clear temporary
-                // mute (it's meaningless once fully off, and a fresh enable should
-                // start un-muted).
-                VoiceOutputPlayer.shared.stopAll()
-                activeController?.stopSpeech()
-                isMuted = false
-            }
-        }
-    }
-
-    /// TEMPORARY mute — distinct from `isEnabled`. Muting silences playback and
-    /// suppresses NEW reply TTS, but read-replies stays ON and the capsule stays
-    /// VISIBLE (so the user can un-mute). Toggled by the capsule speaker (expand
-    /// tap / compact double-tap). Full close = `isEnabled = false` (capsule hides).
-    @Published var isMuted: Bool {
-        didSet {
-            guard oldValue != isMuted else { return }
-            VoiceLog.log("[VoiceOutputState] isMuted \(oldValue) → \(isMuted)")
-            VoiceOutputPreferences.isMuted = isMuted
-            if isMuted {
-                VoiceOutputPlayer.shared.stopAll()
-                activeController?.stopSpeech()
-            }
-        }
-    }
-
-    /// Effective gate for producing reply audio: enabled AND not muted.
-    var canPlay: Bool { isEnabled && !isMuted }
+    // [batch9-voice-1b] 自动朗读与静音门控已删：isEnabled / isMuted / canPlay
+    // 退役——朗读只在用户显式点读时发生，读完即止。
 
     // Mirrored live state (pushed by the active controller).
     @Published var isReadingAloud = false
@@ -165,15 +131,7 @@ final class VoiceOutputState: ObservableObject {
             VoiceOutputPlayer.shared.setRate(next)
         }
     }
-    func disable() {
-        VoiceLog.log("[VoiceOutputState] disable() → isEnabled=false")
-        activeController?.disableSpeech(resetSpeed: true)
-        isEnabled = false
-    }
-
     private init() {
-        self.isEnabled = VoiceOutputPreferences.isEnabled
-        self.isMuted = VoiceOutputPreferences.isMuted
         registerLiveActivityToggleObserver()
     }
 

@@ -159,7 +159,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     private var mediaPreemptCancellable: AnyCancellable?
     /// [T-system-voice-off 09-12] Subscribes to .ttsQueueDrainedSilently (see init).
     private var queueDrainedCancellable: AnyCancellable?
-    private var voiceStateCancellable: AnyCancellable?
     /// Observer for font-size changes to invalidate cached attributed strings.
     private var fontChangeObserver: Any?
     /// Observer for iCloud sync changes to reload messages.
@@ -457,17 +456,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                                systemImage: "speaker.slash")
             }
 
-        // Read-replies is now GLOBAL state (VoiceOutputState.shared). Forward its
-        // changes so views observing `vm.speakEnabled` refresh, and stop this VM's
-        // System TTS the moment it's turned off anywhere.
-        voiceStateCancellable = VoiceOutputState.shared.$isEnabled
-            .dropFirst()                 // skip the synchronous current-value emit
-            .removeDuplicates()
-            .sink { [weak self] enabled in
-                guard let self else { return }
-                self.objectWillChange.send()
-                if !enabled { self.stopSpeech() }
-            }
     }
 
     deinit {
@@ -886,18 +874,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     // Note: Stream throttle timestamps (lastTextDeltaFlush, lastFileWriteStreamUpdate,
     // lastToolInputStreamUpdate) are now local vars inside processStreamEvents().
     @Published var kernelStatus: KernelStatus = .notBooted
-    /// When enabled, agent responses and tool descriptions are spoken aloud.
-    /// Initialized from the persisted "Read replies" preference so an already-on
-    /// toggle drives streaming TTS for new chats.
-    /// Read-replies on/off. NOT per-session state — proxies the GLOBAL
-    /// `VoiceOutputState.shared` so toggling in any session (or the home screen)
-    /// is reflected everywhere. `voiceStateCancellable` (set in init) forwards the
-    /// global object's changes to this VM so views observing `vm.speakEnabled`
-    /// still refresh.
-    var speakEnabled: Bool {
-        get { VoiceOutputState.shared.isEnabled }
-        set { VoiceOutputState.shared.isEnabled = newValue }
-    }
     /// When enabled, uses 1-hour cache TTL instead of 5-minute for Anthropic requests.
     @Published var enhancedCacheEnabled = false
 
@@ -1407,17 +1383,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // session-scoped streaming cleanup) clears any queued manual/other-chat
         // audio too, so tapping a reply never leaves the old voice talking first.
         stopSpeech()
-        // Ensure read-replies is on (and reflected in prefs/voice VM).
-        if !speakEnabled {
-            speakEnabled = true
-            VoiceOutputPreferences.isEnabled = true
-        }
-        // [T-readaloud-menu-force-unmute] Explicit user intent beats the mute
-        // switch. Enabling `speakEnabled` alone was not enough: `canSpeakNow`
-        // resolves to `VoiceOutputState.canPlay` == `isEnabled && !isMuted`, so
-        // while muted every `speakQueued` below returned early and the tap did
-        // nothing at all — silently, with no feedback.
-        unmuteForExplicitReadAloud()
+        // [batch9-voice-1b] 自动朗读已删：手动点读按"本条"语义直接发声，
+        // 不再动全局开关，也不再需要解除静音。
         isReadingAloud = true
         // Split into sentences and queue each — reuses the streaming segmenter so
         // sizing / dynamic window behave the same as live playback. The engine is
@@ -1428,42 +1395,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         for s in units { speakText(s) }
     }
 
-    /// [T-readaloud-menu-force-unmute] Lift a TEMPORARY mute because the user
-    /// explicitly asked for read-aloud from a long-press menu.
-    ///
-    /// The mute switch (capsule speaker) is meant to silence *automatic* reply
-    /// TTS, not to veto a deliberate "read this" tap. Since `canSpeakNow` folds
-    /// `isMuted` into its gate, leaving it set made those menu actions no-ops
-    /// with no user-visible feedback.
-    ///
-    /// Only `isMuted` is touched — deliberately NOT `isEnabled`, so this cannot
-    /// resurrect read-replies for someone who switched the feature fully off;
-    /// callers that want it on (e.g. `readReplyFromStart`) enable it themselves.
-    /// `isMuted`'s `didSet` persists the change, matching what a manual un-mute
-    /// tap on the capsule does. Mirrors `SelectableMarkdownView`'s
-    /// `activateReadAloudState()`, which already did this for the menus that
-    /// bypass this view model.
-    private func unmuteForExplicitReadAloud() {
-        let state = VoiceOutputState.shared
-        guard state.isMuted else { return }
-        VoiceLog.log("[ReadAloud] explicit menu action — clearing temporary mute")
-        state.isMuted = false
-    }
-
-    /// Turn read-replies off entirely, stopping playback.
-    func disableSpeech(resetSpeed: Bool) {
-        stopSpeech()
-        speakEnabled = false
-        VoiceOutputPreferences.isEnabled = false
-        if resetSpeed {
-            VoiceOutputPreferences.speedMultiplier = 1.0
-            speechSpeed = 1.0
-        }
-    }
-
     /// [T-tts-services 09-11] Voice switched in the middle of a read: the
     /// per-reply engine snapshot is stale (it decided cloud/System before the
-    /// switch). Clear it so the next `speakQueued`/`speak` re-resolves through
+    /// switch). Clear it so the next explicit read re-resolves through
     /// the new service layer. The unread remainder was already re-enqueued by
     /// the store; this VM just needs to keep its read-aloud state consistent.
     func restartReplyTTS() {
@@ -1510,44 +1444,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal()
     }
 
-    /// Session-scoped stop: clears only THIS session's units from the shared
-    /// cloud TTS queue (other concurrent chats' queued speech keeps playing) and
-    /// stops the System synthesizer (engine-global — it has no queue to scope).
-    /// Used at reply start / read-from-start so one chat starting a new reply
-    /// can't wipe another chat's in-flight speech, which the old global
-    /// `stopSpeech()` did (queue hijack + text loss across concurrent sessions).
-    func stopSpeechForThisSession() {
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        VoiceOutputPlayer.shared.stopSession(sessionId ?? "")
-        speechPaused = false
-        isReadingAloud = false
-        if !useCloudTTS {
-            // System engine path: nothing else shares the intent, release it.
-            // The cloud path releases inside stopSession only when the WHOLE
-            // queue is idle — ending it here would tear the audio session out
-            // from under another session's still-playing audio.
-            AudioSessionCoordinator.shared.end(.replyTTS)
-        }
-        syncSpeechStateToGlobal()
-    }
-
-    /// Speak text aloud if speakEnabled is on. Interrupts any current speech.
+    /// Speak text aloud for an explicit user request. Interrupts current speech.
     /// When Background Speak is enabled, configures audio session for .playback
     /// so TTS continues in the background and keeps the process alive.
     func speakText(_ rawText: String) {
         // Strip emoji / non-speakable glyphs before TTS.
         let text = VoiceTextSanitizer.sanitize(rawText)
-        // [T-readaloud-menu-force-unmute] Explicit play must work even when
-        // auto-read is currently OFF: the bubble/selection tap is an immediate
-        // intent to hear this text, so turn on the master gate and lift only the
-        // temporary mute before checking canSpeakNow. Previously the bubble
-        // action only unmuted; with isEnabled=false, canSpeakNow returned false
-        // and the speaker looked tappable yet silently did nothing.
-        if !speakEnabled {
-            speakEnabled = true
-            VoiceOutputPreferences.isEnabled = true
-        }
-        unmuteForExplicitReadAloud()
+        // [batch9-voice-1b] 手动点读按"本条"语义直接发声（自动朗读已删）。
         guard canSpeakNow, !text.isEmpty else {
             if text.isEmpty {
                 MinisToast.show(AppLocalized("Nothing to read aloud"), systemImage: "speaker.slash")
@@ -1585,144 +1488,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         speechSynthesizer.speak(utterance)
     }
 
-    /// Dynamic TTS window: decide how much of the accumulated `buffer` to send to
-    /// cloud TTS now, returning the LEFTOVER text the caller should keep buffering.
-    /// Rules:
-    ///  • Idle (no buffered/playing audio) → send the FIRST batch ASAP (low latency).
-    ///  • Otherwise wait until the buffer reaches the player's recommended minimum
-    ///    (grows with buffered audio → longer, more coherent batches mid/late reply).
-    ///  • PARAGRAPH-COHERENT: once eligible, prefer cutting at a PARAGRAPH boundary
-    ///    (blank line / newline) so a whole paragraph is synthesized in ONE request
-    ///    and doesn't get split across batches (which made Gemini render the two
-    ///    halves in slightly different timbres). Only fall back to a sentence cut
-    ///    if the paragraph would exceed `maxBatchChars` (synth-timeout guard).
-    ///  • `force` (stream end / tool) → send everything left.
-    /// System TTS has no synth metrics → it just sends immediately, whole buffer.
-    /// Returns the unsent leftover (caller stores it back into the buffer).
-    func feedDynamicTTS(_ buffer: String, force: Bool) -> String {
-        let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-        // REAL-TIME global gate: if read-replies was turned off mid-stream (e.g.
-        // the user muted from the global capsule), drop any remaining buffered /
-        // force-flushed text instead of speaking it. `speakEnabled` is a live proxy
-        // for VoiceOutputState.shared, so this reflects the latest global state —
-        // not a stream-start snapshot.
-        guard canSpeakNow else {
-            VoiceLog.log("feedDynamicTTS DROP — read-replies off (speakEnabled=\(speakEnabled) capturing=\(VoiceModePreference.shared.isCapturing))")
-            return ""
-        }
-        // [T-voice-bubble-no-double-read 09-12] When this session's "AI Voice
-        // Replies" is ON, the turn will arrive as a wx-style voice bubble that
-        // auto-plays itself at StreamEnd. Speaking the same text through the
-        // streaming read-aloud path first means 醒醒 hears the reply twice —
-        // once from the read-aloud queue and once from the bubble. Drop the
-        // buffered speech here instead; the bubble is the single audio source.
-        if let sid = sessionId, AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) {
-            VoiceLog.log("feedDynamicTTS DROP — AI voice replies ON, bubble owns audio sid=\(sid.prefix(8))")
-            return ""
-        }
-
-        // System path: no dynamic window, speak each batch as it arrives.
-        guard useCloudTTS else {
-            speakQueued(trimmed)
-            return ""
-        }
-
-        let player = VoiceOutputPlayer.shared
-        let minChars = player.recommendedMinChars
-        let maxChars = VoiceOutputPlayer.maxBatchChars
-        let idle = !player.hasPendingAudio
-        let len = trimmed.count
-
-        if force {
-            VoiceLog.log("dyn-window FLUSH(force) len=\(len)")
-            speakQueued(trimmed)
-            return ""
-        }
-
-        // Not yet eligible → keep accumulating (unless idle: send ASAP for latency).
-        guard idle || len >= minChars else {
-            VoiceLog.log("dyn-window HOLD len=\(len) < minChars=\(minChars)")
-            return trimmed
-        }
-
-        // Eligible. Send the largest whole-PARAGRAPH prefix that fits maxChars; if a
-        // single paragraph already exceeds maxChars, fall back to a sentence cut.
-        let cut = Self.coherentCutIndex(in: trimmed, minChars: idle ? 1 : minChars, maxChars: maxChars)
-        let head = String(trimmed[trimmed.startIndex..<cut]).trimmingCharacters(in: .whitespacesAndNewlines)
-        let tail = String(trimmed[cut...]).trimmingCharacters(in: .whitespacesAndNewlines)
-        if head.isEmpty {
-            // No boundary found within maxChars and below min → keep waiting.
-            VoiceLog.log("dyn-window HOLD(no-boundary) len=\(len)")
-            return trimmed
-        }
-        VoiceLog.log("dyn-window FLUSH len=\(head.count) (of \(len)) minChars=\(minChars) idle=\(idle) leftover=\(tail.count)")
-        speakQueued(head)
-        return tail
-    }
-
-    /// Find the index to cut `text` at: the LAST paragraph boundary (newline) at or
-    /// before `maxChars` and at/after `minChars`; else the last sentence-ender in
-    /// that window; else `maxChars` (hard cap) if the text already exceeds it; else
-    /// `endIndex` (send all — it's a complete short unit).
-    nonisolated private static func coherentCutIndex(in text: String, minChars: Int, maxChars: Int) -> String.Index {
-        let chars = Array(text)
-        let n = chars.count
-        if n <= maxChars {
-            // Whole buffer fits a batch — prefer ending on a paragraph break if the
-            // buffer doesn't already end at one; otherwise send it all as one unit.
-            // (Sending all keeps a multi-sentence paragraph intact.)
-            return text.endIndex
-        }
-        // Buffer exceeds maxChars: must cut. Search [minChars, maxChars] for the
-        // best boundary — paragraph (newline) first, then sentence-ender.
-        let lo = max(1, min(minChars, maxChars))
-        var paragraphCut = -1, sentenceCut = -1
-        let enders = AIChatViewModel.speechEndersForCut
-        var i = lo - 1
-        while i < min(maxChars, n) {
-            let c = chars[i]
-            if c == "\n" { paragraphCut = i + 1 }
-            else if enders.contains(c) { sentenceCut = i + 1 }
-            i += 1
-        }
-        let idx = paragraphCut > 0 ? paragraphCut : (sentenceCut > 0 ? sentenceCut : maxChars)
-        return text.index(text.startIndex, offsetBy: idx)
-    }
-
-    /// Sentence-ender set used by the coherent-cut fallback (mirrors the SSE
-    /// segmenter's tier-1 enders).
-    nonisolated static let speechEndersForCut: Set<Character> = ["。", "！", "？", ".", "!", "?", "；", ";"]
-
-    /// Enqueue text for speech without interrupting current utterance.
-    /// Used for streaming text playback — sentences are queued in order.
-    /// AVSpeechSynthesizer automatically queues multiple speak() calls; the cloud
-    /// player keeps its own ordered queue + synthesize pipeline.
-    func speakQueued(_ rawText: String) {
-        // Strip emoji / non-speakable glyphs before TTS.
-        let text = VoiceTextSanitizer.sanitize(rawText)
-        guard canSpeakNow, !text.isEmpty else {
-            VoiceLog.log("speakQueued SKIP — speakEnabled=\(speakEnabled) isCapturing=\(AudioSessionCoordinator.shared.isCapturing) empty=\(text.isEmpty)")
-            return
-        }
-        isReadingAloud = true
-        syncSpeechStateToGlobal(registerActive: true)
-        // [AUD8-19] Shared helper — see ensureSpeechPlaybackSession.
-        Self.ensureSpeechPlaybackSession()
-        if useCloudTTS {
-            VoiceOutputPlayer.shared.enqueue(text, sessionId: sessionId ?? "")
-            return
-        }
-        if BackgroundKeepAliveManager.shared.backgroundSpeakEnabled {
-            BackgroundKeepAliveManager.shared.stopSilentAudio()
-            speechSynthesizer.delegate = speechDelegate
-        }
-        // [AUD8-08] Keep the interruption-ended resume wired while System TTS runs.
-        registerSystemTTSInterruptionResume()
-        let utterance = makeUtterance(text)
-        speechSynthesizer.speak(utterance)  // queues automatically, does NOT interrupt
-    }
-
     /// Declare the reply-TTS audio intent before System TTS speaks. The
     /// coordinator applies the `.playback/.spokenAudio/.duckOthers` profile (audible
     /// even on silent switch) with a FULL category+mode+options reconfigure — fixing
@@ -1750,12 +1515,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
-    /// Whether reply TTS may speak right now: enabled AND the mic isn't capturing
-    /// (capture and playback are mutually exclusive — no echo / session fight).
+    /// Whether read-aloud may speak right now. [batch9-voice-1b] 自动朗读与静音
+    /// 门控已删——只剩采集互斥（录音时不出声，防回声/会话打架）。
     private var canSpeakNow: Bool {
-        // Enabled AND not muted AND not capturing. `canPlay` folds in the temporary
-        // mute (capsule speaker) on top of the full on/off `isEnabled`.
-        VoiceOutputState.shared.canPlay && !VoiceModePreference.shared.isCapturing
+        !VoiceModePreference.shared.isCapturing
     }
 
     /// True when a configured cloud TTS model is selected (not the offline System
@@ -1801,14 +1564,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// Reset the per-reply TTS engine snapshot (call at the start of each reply).
     func resetReplyTTSEngine() { replyUsesCloudTTS = nil }
-
-    /// True once THIS turn (one user send, spanning ALL agent-loop iterations)
-    /// has cleared the previous turn's TTS leftovers. Lives on the vm — NOT on
-    /// StreamResult, which is recreated per loop iteration: a per-iteration
-    /// flag made every iteration's first textDelta call stopSession and cut
-    /// off the previous iteration's still-playing speech. One turn = one
-    /// read-aloud context; iterations append and play back-to-back.
-    var hasClearedTTSForCurrentTurn = false
 
     /// Create an AVSpeechUtterance with the user's speech settings applied.
     private func makeUtterance(_ text: String) -> AVSpeechUtterance {
@@ -2440,16 +2195,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             return
         }
 
-        // Don't stop TTS here — let the previous reply finish playing. The stream
-        // handler will clear the queue on the FIRST textDelta of the new reply, so
-        // the old audio plays until actual new content starts arriving.
+        // [batch9-voice-1b] 朗读改为"点读即发、读完即止"；这里只刷新每次回复的
+        // 引擎快照（手动点读/气泡合成在发声时重新解析）。
         resetReplyTTSEngine()
-        // Re-arm the once-per-turn TTS clear: the agent loop creates a fresh
-        // StreamResult per iteration, so the "stopped previous TTS" flag must
-        // live HERE (per-send), not on the StreamResult — otherwise every loop
-        // iteration's first textDelta re-cleared the queue and cut off the
-        // previous iteration's still-playing speech mid-sentence.
-        hasClearedTTSForCurrentTurn = false
 
         // [T-voice-mode-memory-refine-ios] The SEND commits the composer mode.
         // "voice" is recorded ONLY here — when a voice-composed message is
@@ -6306,18 +6054,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     canResume = true
                 }
 
-                // Flush any remaining unspoken text (streaming TTS already spoke most sentences)
-                let remainingSpeak: String
-                if streamResult.spokenTextOffset < streamResult.assistantText.count {
-                    let startIdx = streamResult.assistantText.index(streamResult.assistantText.startIndex, offsetBy: streamResult.spokenTextOffset)
-                    remainingSpeak = String(streamResult.assistantText[startIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    remainingSpeak = ""
-                }
-                // [T-voice-bubble-no-double-read 09-12] AI voice replies ON → the voice
-                // bubble auto-plays at StreamEnd; skip the read-aloud flush.
-                let bubbleOwnsAudio = sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false
-                if !remainingSpeak.isEmpty, !bubbleOwnsAudio { speakQueued(remainingSpeak) }
                 let interruptCount = await MainActor.run { messages[msgIdx].streamInterruptCount }
                 let uiBlockCount = await MainActor.run { msgIdx < messages.count ? messages[msgIdx].blocks.count : -1 }
                 logger.info("[BlocksLost] PERSIST final (no-tool) sid=\(sessionId?.prefix(8) ?? "nil") agentParts=\(assistantMessage.parts.count) uiBlocks=\(uiBlockCount)")
@@ -6476,20 +6212,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // the id is deterministic and compact lookups rely on it.
             if let raw = deferredAssistantRaw, assistantAgentIdx < agentHistory.count {
                 agentHistory[assistantAgentIdx].dbMessageId = raw.id
-            }
-            // Flush any remaining unspoken text (streaming TTS already spoke most sentences)
-            do {
-                let remainingSpeak: String
-                if streamResult.spokenTextOffset < streamResult.assistantText.count {
-                    let startIdx = streamResult.assistantText.index(streamResult.assistantText.startIndex, offsetBy: streamResult.spokenTextOffset)
-                    remainingSpeak = String(streamResult.assistantText[startIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    remainingSpeak = ""
-                }
-                // [T-voice-bubble-no-double-read 09-12] AI voice replies ON → the voice
-                // bubble auto-plays at StreamEnd; skip the read-aloud flush.
-                let bubbleOwnsAudio = sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false
-                if !remainingSpeak.isEmpty, !bubbleOwnsAudio { speakQueued(remainingSpeak) }
             }
 
             // Execute each tool use and collect results

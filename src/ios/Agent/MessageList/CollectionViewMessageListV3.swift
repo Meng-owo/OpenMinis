@@ -1612,19 +1612,12 @@ extension CollectionViewMessageListV3 {
             // [T-selection-menu-minis-tts] "Read Selection" from the text
             // selection menu — speaks the selected snippet via the Minis TTS
             // stack (sanitizer + provider voices + fail-over).
-            // [T-action-bar 09-12] Explicit play tap: force-enable read-replies
-            // master switch (手动点播 ≠ 自动跟读;总开关管自动,手动点开就开)。
-            // Otherwise canPlay=isEnabled&&!isMuted is false when the user has
-            // the master switch off, and the tap is a silent no-op.
+            // [batch9-voice-1b] 自动朗读已删：点读直接发声，不清全局、不改开关。
             // Start clean: this is an explicit request for THIS bubble, not an
             // instruction to append it after a different reply's queued speech.
             bridge.onSpeakText = { [weak vm] text in
                 guard let vm else { return }
                 vm.stopSpeech()
-                if !vm.speakEnabled {
-                    vm.speakEnabled = true
-                    VoiceOutputPreferences.isEnabled = true
-                }
                 vm.speakText(text)
             }
             // [T-message-action-bar 09-11] Bubble action bar's pause/resume/stop.

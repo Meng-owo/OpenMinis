@@ -411,6 +411,10 @@ struct MinisApp: App {
                     // [batch1] Carry the pre-granular master tool switch forward,
                     // once (agent.tools.enabled → agent.tools.agents.enabled).
                     AgentToolSwitch.migrateLegacyIfNeeded()
+                    // [batch9-voice-1b] 自动朗读已删——老用户的开关键静默关掉（不提示）。
+                    if UserDefaults.standard.bool(forKey: "voice.output.readRepliesAloud") {
+                        UserDefaults.standard.set(false, forKey: "voice.output.readRepliesAloud")
+                    }
                     // Refresh model lists once per day to keep them current
                     ProviderConfigStore.shared.refreshAllModelsIfNeeded()
                     // [T-mimo-shadow-voice] One-time upgrade fix: force-refresh

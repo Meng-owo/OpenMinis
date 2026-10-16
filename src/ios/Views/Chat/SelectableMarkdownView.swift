@@ -3459,15 +3459,10 @@ private final class TableCellTextView: UITextView, UITextViewDelegate {
         VoiceOutputPlayer.shared.enqueueSegmented(text, sessionId: VoiceOutputPlayer.manualOwnerId)
     }
 
-    /// Menu-triggered read-aloud bypasses AIChatViewModel's reply-TTS flow, so
-    /// mirror `readReplyFromStart`'s pre-flight here: force the global
-    /// read-replies switch ON (runtime state + persisted pref, un-muting if
-    /// needed) and push "reading" to the capsule — via the active chat VM when
-    /// one is registered, else directly on the global state object.
+    /// [batch9-voice-1b] 菜单点读的状态推送（自动朗读/静音门已删）：把"正在读"
+    /// 推给活动控制器或全局状态；不再改任何全局开关。
     static func activateReadAloudState() {
         let state = VoiceOutputState.shared
-        if !state.isEnabled { state.isEnabled = true }   // didSet persists to prefs
-        if state.isMuted { state.isMuted = false }
         if let vm = state.activeController as? AIChatViewModel {
             vm.isReadingAloud = true
             vm.speechPaused = false

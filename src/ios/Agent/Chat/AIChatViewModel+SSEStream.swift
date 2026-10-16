@@ -96,12 +96,6 @@ extension AIChatViewModel {
             let inputChunkRing: [String]
         }
         var assistantText: String = ""
-        var spokenTextOffset: Int = 0  // characters already submitted to TTS
-        /// Set true after the first textDelta stops the previous reply's TTS.
-        var hasStoppedPreviousTTS = false
-        /// Completed sentences extracted but not yet flushed to TTS — accumulated
-        /// to the dynamic-window size before being sent as one coherent batch.
-        var pendingSpeakBuffer: String = ""
         var toolEntries: [ToolEntry] = []
         var stopReason: AgentStopReason? = nil
         var turnUsage: TokenUsage = TokenUsage()
@@ -274,8 +268,6 @@ extension AIChatViewModel {
         var result = StreamResult()
         var currentTextBlockIdx: Int? = nil
         var currentThinkingBlockIdx: Int? = nil
-        let speakEnabled = await MainActor.run { self.speakEnabled }
-        await MainActor.run { VoiceLog.log("stream start: speakEnabled snapshot=\(self.speakEnabled)") }
 
         // Throttle timestamps (local to this stream processing call)
         var lastTextDeltaFlush: Date = .distantPast
@@ -535,50 +527,6 @@ extension AIChatViewModel {
                 if let blockIdx = currentTextBlockIdx {
                     result.assistantText += text
 
-                    // Streaming TTS: speak completed sentences as they arrive. Don't
-                    // gate on the start-time `speakEnabled` snapshot — read it live
-                    // so toggling read-replies ON mid-reply takes effect this turn.
-                    // `speakQueued` itself re-checks `canSpeakNow`, so when off this
-                    // just advances the spoken offset cheaply.
-                    let liveSpeak = await MainActor.run { self.speakEnabled }
-                    if liveSpeak {
-                        // On the FIRST textDelta of this TURN, clear THIS session's
-                        // previous reply from the TTS queue so the new content takes
-                        // over. Deferred from send() so the old reply can keep playing
-                        // until actual new text arrives. Session-scoped (NOT stopAll):
-                        // with multiple chats running concurrently, a global clear
-                        // here wiped other sessions' queued speech and lost their
-                        // un-flushed text (queue hijack).
-                        //
-                        // ONCE PER TURN, not per iteration: StreamResult is recreated
-                        // on every agent-loop iteration, so gating on its flag alone
-                        // made each iteration's first textDelta stopSession the
-                        // PREVIOUS iteration's still-playing speech. The vm-level
-                        // hasClearedTTSForCurrentTurn (re-armed in send()) makes all
-                        // iterations of one send share a single read-aloud context —
-                        // iteration N+1 appends after iteration N and plays through.
-                        if !result.hasStoppedPreviousTTS {
-                            result.hasStoppedPreviousTTS = true
-                            await MainActor.run {
-                                guard !self.hasClearedTTSForCurrentTurn else { return }
-                                self.hasClearedTTSForCurrentTurn = true
-                                self.stopSpeechForThisSession()
-                            }
-                        }
-                        let (sentences, newOffset) = extractNewSentences(from: result.assistantText, spokenOffset: result.spokenTextOffset)
-                        if !sentences.isEmpty {
-                            result.spokenTextOffset = newOffset
-                            // Append to the pending buffer, keeping a newline between
-                            // sentence units so the dynamic window can cut on a whole-
-                            // sentence/paragraph boundary (no mid-sentence splits →
-                            // consistent timbre across one synthesized batch).
-                            if !result.pendingSpeakBuffer.isEmpty { result.pendingSpeakBuffer += "\n" }
-                            result.pendingSpeakBuffer += sentences.joined(separator: "\n")
-                            let buffered = result.pendingSpeakBuffer
-                            result.pendingSpeakBuffer = await MainActor.run { self.feedDynamicTTS(buffered, force: false) }
-                        }
-                    }
-
                     let now = Date()
                     let elapsed = now.timeIntervalSince(lastTextDeltaFlush)
                     let len = result.assistantText.count
@@ -758,24 +706,6 @@ extension AIChatViewModel {
                 let assistantText = result.assistantText
                 let textIdx = currentTextBlockIdx
 
-                // Force-flush any dynamically-buffered (extracted but un-sent) TTS
-                // text before the tool announcement, so it isn't lost / reordered.
-                if !result.pendingSpeakBuffer.isEmpty {
-                    let buf = result.pendingSpeakBuffer
-                    result.pendingSpeakBuffer = ""
-                    _ = await MainActor.run { self.feedDynamicTTS(buf, force: true) }
-                }
-
-                // Flush any unspoken text before announcing the tool
-                let remainingTextForTool: String
-                if result.spokenTextOffset < result.assistantText.count {
-                    let startIdx = result.assistantText.index(result.assistantText.startIndex, offsetBy: result.spokenTextOffset)
-                    remainingTextForTool = String(result.assistantText[startIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                    result.spokenTextOffset = result.assistantText.count
-                } else {
-                    remainingTextForTool = ""
-                }
-
                 // Re-parse the accumulated assistantText OFF the main thread
                 // so the toolCallComplete flush below doesn't stall the UI
                 // (prepareMarkdownForRender + cmark on 20 KB+ streamed text
@@ -855,12 +785,6 @@ extension AIChatViewModel {
                         logger.debug("[TOOL:RUNNING] \(name) id:\(id.prefix(8)) displayText=\"\(speakDesc)\" content=\"\(blk.content.prefix(120))\"")
                         #endif
                     }
-                    if !remainingTextForTool.isEmpty { self.speakQueued(remainingTextForTool) }
-                    // Read a spoken announcement for the tool — e.g. "正在执行脚本:…"
-                    // — instead of the terse on-screen preview, so listeners get a
-                    // natural cue about what's running. Queued (ordered) so it
-                    // follows any preceding text and precedes the next text.
-                    self.speakQueued(Self.makeToolSpeech(name: name, args: args, title: messages[msgIdx].blocks[blockIdx].toolSummary))
                     scrollToBottomSignal.send()
 
                     // Flush the fresh snapshot + its freshly-parsed markdown
@@ -899,7 +823,6 @@ extension AIChatViewModel {
                 // Reset text block tracking for potential next text block after tool use
                 currentTextBlockIdx = nil
                 result.assistantText = ""
-                result.spokenTextOffset = 0
 
             case .thinkingDelta(let text):
                 // Each contiguous thinking segment becomes its own block, appended in
@@ -1005,92 +928,10 @@ extension AIChatViewModel {
             _streamError = error
         }
         if let err = _streamError { throw err }
-        // Stream ended cleanly. First drain any un-extracted tail past
-        // spokenTextOffset: the streaming look-ahead in extractSentencesStatic
-        // intentionally STOPS on a digit-trailing `.`/`,` at the buffer end
-        // (a possible in-flight decimal), so a reply that genuinely ends on a
-        // number+period ("Total: 100.") leaves that final unit un-extracted.
-        // Now that no more deltas are coming, extract with the complete text so
-        // it isn't dropped, then merge into the pending buffer for the flush.
-        if result.spokenTextOffset < result.assistantText.count {
-            let (tail, newOffset) = extractNewSentences(from: result.assistantText, spokenOffset: result.spokenTextOffset)
-            result.spokenTextOffset = newOffset
-            let leftover = tail.joined(separator: "\n")
-            if !leftover.isEmpty {
-                if !result.pendingSpeakBuffer.isEmpty { result.pendingSpeakBuffer += "\n" }
-                result.pendingSpeakBuffer += leftover
-            }
-            // Even after re-extraction a lone trailing "100." can remain unemitted
-            // (still the last char, digit before it) — sweep the raw remainder so
-            // the tail is never silently lost.
-            if result.spokenTextOffset < result.assistantText.count {
-                let startIdx = result.assistantText.index(result.assistantText.startIndex, offsetBy: result.spokenTextOffset)
-                let rawTail = String(result.assistantText[startIdx...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                result.spokenTextOffset = result.assistantText.count
-                if !rawTail.isEmpty {
-                    if !result.pendingSpeakBuffer.isEmpty { result.pendingSpeakBuffer += "\n" }
-                    result.pendingSpeakBuffer += rawTail
-                }
-            }
-        }
-        // Force-flush any dynamically-buffered TTS text that didn't reach the
-        // window size, so the reply's tail is still read.
-        if !result.pendingSpeakBuffer.isEmpty {
-            let buf = result.pendingSpeakBuffer
-            result.pendingSpeakBuffer = ""
-            _ = await MainActor.run { self.feedDynamicTTS(buf, force: true) }
-        }
         return result
     }
 
     /// Create initial display content from tool name and parsed arguments.
-    /// A natural spoken announcement for a tool that just started running, e.g.
-    /// "正在执行脚本:安装依赖". Follows the reply's language (Chinese when the
-    /// model-provided title contains Han characters, else English). The detail is
-    /// kept short — filename only for paths, a truncated command for shells.
-    nonisolated static func makeToolSpeech(name: String, args: [String: Any], title: String?) -> String {
-        let zh = (title?.range(of: "\\p{Han}", options: .regularExpression) != nil)
-        func fileName(_ p: String?) -> String {
-            guard let p, !p.isEmpty else { return zh ? "文件" : "a file" }
-            return (p as NSString).lastPathComponent
-        }
-        func clip(_ s: String?, _ n: Int) -> String? {
-            guard let s = s?.trimmingCharacters(in: .whitespacesAndNewlines), !s.isEmpty else { return nil }
-            return s.count > n ? String(s.prefix(n)) + "…" : s
-        }
-        // Prefer the model's tool_title as the detail; fall back to a parameter.
-        let detail = clip(title, 40)
-
-        switch name {
-        case "shell_execute":
-            let d = detail ?? clip(args["command"] as? String, 40) ?? ""
-            return zh ? "正在执行脚本:\(d)" : "Executing script: \(d)"
-        case "file_read":
-            let d = detail ?? fileName(args["path"] as? String)
-            return zh ? "正在读取文件:\(d)" : "Reading file: \(d)"
-        case "file_write":
-            let d = detail ?? fileName(args["path"] as? String)
-            return zh ? "正在写入文件:\(d)" : "Writing file: \(d)"
-        case "file_edit":
-            let d = detail ?? fileName(args["path"] as? String)
-            return zh ? "正在编辑文件:\(d)" : "Editing file: \(d)"
-        case "browser_use":
-            let d = detail ?? clip(args["action"] as? String, 40) ?? ""
-            return zh ? "正在操作浏览器:\(d)" : "Using browser: \(d)"
-        case "read_image":
-            let d = detail ?? fileName(args["path"] as? String)
-            return zh ? "正在读取图片:\(d)" : "Reading image: \(d)"
-        case "send_voice":
-            // [tts-optional-title 2026-10-09] tool_title 可选：模型没传就拿
-            // text 开头当展示摘要，不再强制要求。
-            let d = detail ?? clip(args["text"] as? String, 40) ?? ""
-            return zh ? "正在发送语音:\(d)" : "Sending voice: \(d)"
-        default:
-            let d = detail ?? name
-            return zh ? "正在执行:\(d)" : "Running: \(d)"
-        }
-    }
-
     nonisolated private func makeToolPreview(name: String, args: [String: Any]) -> String {
         switch name {
         case "shell_execute":
