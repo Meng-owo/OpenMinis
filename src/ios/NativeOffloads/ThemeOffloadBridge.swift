@@ -21,7 +21,10 @@ import UIKit
             result = out
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -48,7 +51,10 @@ import UIKit
             result = out
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -62,7 +68,10 @@ import UIKit
             result = out
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -79,7 +88,10 @@ import UIKit
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -96,7 +108,10 @@ import UIKit
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -118,7 +133,10 @@ import UIKit
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -132,7 +150,10 @@ import UIKit
                 : ["ok": false, "error": "not_found", "message": "No saved theme \(id)"]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -146,7 +167,10 @@ import UIKit
                 : ["ok": false, "error": "not_found", "message": "No saved theme \(id)"]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 
@@ -160,7 +184,10 @@ import UIKit
                 : ["ok": false, "error": "not_found", "message": "Rename failed"]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return result as NSDictionary
     }
 }

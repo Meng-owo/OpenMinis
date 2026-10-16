@@ -47,7 +47,10 @@ import Foundation
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return out as NSDictionary
     }
 
@@ -66,7 +69,10 @@ import Foundation
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return out as NSDictionary
     }
 }

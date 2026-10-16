@@ -55,7 +55,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
 
         return [
             "count": result.count,
@@ -104,7 +107,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
 
         return [
             "count": result.count,
@@ -164,7 +170,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
 
         return [
             "session_id": sessionId,
@@ -289,7 +298,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -395,7 +407,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -480,7 +495,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -523,7 +541,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -598,7 +619,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -626,7 +650,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             }
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
 
         return [
             "ok": true,
@@ -659,7 +686,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -676,7 +706,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -726,7 +759,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -749,7 +785,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 
@@ -777,7 +816,10 @@ private let logger = AppLogger(category: "SessionsOffload")
             ]
             sem.signal()
         }
-        sem.wait()
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
         return output as NSDictionary
     }
 }

@@ -8203,6 +8203,15 @@ struct SelectableMarkdownView: UIViewRepresentable {
             coord.renderer = existing
         } else if let mid = messageId {
             SelectableMarkdownView.rendererCache[mid] = coord.renderer
+            // [batch7 / W3C-03] Bound the cache (FIFO by first insert). The
+            // old unbounded dict kept one full TextKit stack per unique
+            // assistant message for the app's lifetime — memory grew with
+            // conversation length and never came back.
+            SelectableMarkdownView.rendererCacheOrder.append(mid)
+            while SelectableMarkdownView.rendererCacheOrder.count > SelectableMarkdownView.rendererCacheLimit {
+                let evicted = SelectableMarkdownView.rendererCacheOrder.removeFirst()
+                SelectableMarkdownView.rendererCache.removeValue(forKey: evicted)
+            }
         }
         return coord
     }
@@ -8219,6 +8228,13 @@ struct SelectableMarkdownView: UIViewRepresentable {
     /// stable across the chat session and entries are cheap; in practice
     /// it grows at the rate of unique assistant messages in the live chat.
     @MainActor private static var rendererCache: [UUID: MarkdownNSRenderer] = [:]
+    /// [batch7 / W3C-03] FIFO eviction order for `rendererCache` + the cap.
+    /// Old renderers are dropped once the cap is exceeded; a remount for an
+    /// evicted message simply builds a fresh renderer (the pre-cache
+    /// behaviour) — correctness never depended on the cache, only table
+    /// identity continuity for the streaming window.
+    @MainActor private static var rendererCacheOrder: [UUID] = []
+    @MainActor private static let rendererCacheLimit = 32
 
     func makeUIView(context: Context) -> SelectableMarkdownTextView {
         let textView = SelectableMarkdownTextView()
