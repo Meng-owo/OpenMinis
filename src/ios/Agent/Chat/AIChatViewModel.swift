@@ -2046,9 +2046,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// 时统一补气泡 part（agentHistory 永远不带气泡 part，沿用 context-clean 口径）。
     /// 每轮 runAgentLoop 开始时重置。
     var pendingVoiceBubbles: [String] = []
-    /// [voice-bubble-tool 2026-10-02] 本轮已用 send_voice 发过语音 → StreamEnd 的
-    /// "AI Voice Replies"自动气泡跳过，避免一轮出两个气泡两种声音。
-    var voiceBubbleSentThisTurn = false
     /// Set by cancel() so the task's error handler knows this was a user stop.
     /// Internal-access so concurrent tool extensions can read it. [T-concurrent-tools]
     var userDidCancel = false
@@ -5246,7 +5243,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         var hitTurnLimit = true
         // [voice-bubble-tool 2026-10-02] 新一轮开始：清掉上一轮的气泡记账。
         pendingVoiceBubbles = []
-        voiceBubbleSentThisTurn = false
         // [T-chat-auto-compact-inloop] Count in-loop auto-compactions so a loop
         // that keeps hitting the threshold can't compact forever; when the cap
         // is reached and we're still near capacity, the loop stops as exhausted.
@@ -6087,98 +6083,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
                 hitTurnLimit = false
 
-                // [T-ai-voice-messages 09-12] 醒醒 2 — the turn has fully converged
-                // and the reply is persisted. If this session's "AI Voice Replies"
-                // mode is ON, synthesize the reply and append a wx-style voice
-                // bubble INSIDE the reply's message (extra text part → extra block,
-                // like an image at the end of a wx voice+text message). Rework of
-                // the first cut: a standalone bubble row fought this architecture
-                // (retry targeted the bubble row; the model saw its own bubble
-                // markdown; reload needed special-casing). Inline = the natural
-                // shape here: retry/edit/reload treat the bubble as part of the
-                // reply, zero special cases.
-                if let sid = sessionId,
-                   AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid),
-                   !assistantText.isEmpty,
-                   // [voice-bubble-tool 2026-10-02] 本轮已用 send_voice 发过语音：
-                   // 跳过自动气泡，避免一轮两个气泡两种声音。
-                   !voiceBubbleSentThisTurn {
-                    // [P3-4] A reply that sanitizes to nothing speakable
-                    // (emoji-only etc.) is not a TTS failure — skip silently
-                    // instead of toasting "check your TTS service".
-                    let speakable = !VoiceTextSanitizer.sanitize(assistantText).isEmpty
-                    if !speakable {
-                        logger.info("[AIVoice] nothing speakable — skipped bubble, no toast")
-                    } else if let voice = await AIVoiceMessageComposer.compose(
-                        for: assistantText, sessionId: sid) {
-                        let durParam = voice.duration > 0 ? Int(voice.duration.rounded()) : 0
-                        // [batch9-voice/2] 统一构造（durParam 仍供日志使用）。
-                        let link = AIVoiceMessageComposer.voiceBubbleLink(url: voice.url, duration: voice.duration)
-                        // [T-voice-bubble-context-clean v2 09-12] 修复审查问题14/15:
-                        // 之前的写法把气泡 link append 进 agentHistory——reload 侧会
-                        // 剥，但 live 侧（effectiveAgentHistory/applyRequestImageBudget）
-                        // 没有剥离逻辑，下一轮请求原样带上气泡 markdown，模型看得见
-                        // 自己的气泡格式。单一口径：agentHistory 永远不含气泡 part，
-                        // 气泡只进 DB（渲染用）和 UI。写 DB 时用「真实 parts + 气泡」，
-                        // 内存 agentHistory 保持纯净。（loadSession 的 reload 侧过滤
-                        // 仍保留——历史会话的旧 DB 行可能带气泡 part。）
-                        // 类型注意：agentHistory 的 parts 是 [AgentContentPart]，DB 的
-                        // updateMessageParts 要 [ContentPart]——不手搓映射（ToolUse/
-                        // ToolResult/MediaRef 字段名两套对不上，容易写错），复用
-                        // buildRawMessage 的生产转换，往它的 parts 尾上补气泡 part。
-                        if assistantAgentIdx < agentHistory.count,
-                           let pid = agentHistory[assistantAgentIdx].dbMessageId,
-                           let raw = await buildRawMessage(agentHistory[assistantAgentIdx]) {
-                            var dbParts = raw.parts
-                            dbParts.append(.text(link))
-                            await ChatStore.shared.updateMessageParts(
-                                messageId: pid,
-                                parts: dbParts)
-                        }
-                        // ③ UI: append the bubble block to the SAME message.
-                        await MainActor.run {
-                            guard msgIdx < messages.count else { return }
-                            messages[msgIdx].blocks.append(
-                                AssistantBlock(kind: .text, content: link))
-                        }
-                        logger.info("[AIVoice] appended inline voice bubble dur=\(durParam)s")
-                        // 醒醒 2: 发出来就是自动播放的. GlobalAudioPlayer configures its
-                        // own session (Control Center visibility) — the regular
-                        // read-aloud queue is NOT involved, so a streaming TTS reply
-                        // and the voice bubble don't fight over the audio session.
-                        // [T-voice-bubble-capture-guard] 修复审查问题6: 录音中不抢
-                        // audio session——麦克风捕获与回放互斥，气泡静默跳过自动播
-                        // （气泡还在，点开再听）。
-                        if !VoiceModePreference.shared.isCapturing {
-                            if let fileURL = await resolvePathForDirectRead(
-                                AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
-                                GlobalAudioPlayer.shared.play(url: fileURL)
-                            }
-                        } else {
-                            logger.info("[AIVoice] auto-play skipped — mic capturing")
-                        }
-                    } else {
-                        // [T-voice-bubble-failure-toast 09-12] 修复审查问题1: 合成失败
-                        // 不再静默——开关开着却没气泡，她只会以为功能坏了。Toast 告知
-                        // 原因（没配 TTS 服务/语音组都不可用）。
-                        MinisToast.show(AppLocalized("Voice bubble unavailable — check your TTS service or voice group."),
-                                       systemImage: "exclamationmark.triangle.fill")
-                        logger.info("[AIVoice] synthesis unavailable — skipped bubble")
-                        // [AI-P2-3] Leave a trace in the AI's context so the model
-                        // knows the voice bubble was never sent: append a
-                        // <system-reminder> part to the in-memory assistant
-                        // message. In-flight only, never persisted — same
-                        // contract as the empty-toolresult reminder. Without
-                        // this, a "where's the voice message?" follow-up gets a
-                        // confabulated answer ("I sent it") instead of the truth.
-                        if assistantAgentIdx < agentHistory.count {
-                            agentHistory[assistantAgentIdx].parts.append(.text(
-                                "<system-reminder>No voice-bubble version of this reply was produced (synthesis unavailable or nothing speakable), so the user received the text only — no voice message was sent. If the user asks about a missing voice message, do not claim one was sent.</system-reminder>"
-                            ))
-                        }
-                    }
-                }
-
                 // [T-ios-queued-message-continues-prev-turn] The current turn's
                 // tool loop has fully converged (no tool calls this iteration) and
                 // its final assistant reply is now persisted. If the user queued a
@@ -6203,7 +6107,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     turnUsage = TokenUsage()
                     // [voice-bubble-tool 2026-10-02] 排队消息开启的新一轮：同新 turn。
                     pendingVoiceBubbles = []
-                    voiceBubbleSentThisTurn = false
                     continue
                 }
                 break
@@ -6485,7 +6388,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     turnUsage = TokenUsage()
                     // [voice-bubble-tool 2026-10-02] 排队消息开启的新一轮：同新 turn。
                     pendingVoiceBubbles = []
-                    voiceBubbleSentThisTurn = false
                     continue
                 }
             }

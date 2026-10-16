@@ -90,26 +90,6 @@ enum AIVoiceMessageComposer {
         return "![voice](\(url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
     }
 
-    /// Synthesize the assistant reply text and persist the audio in the session's
-    /// attachments dir. Returns a minis-clone:// URL ready for embedding into a
-    /// `![voice](...)` markdown link. All errors (empty text, every candidate
-    /// failed) are logged and return nil. [AI-P2-3] The caller owns the
-    /// user-visible side of nil: it toasts the failure AND appends a
-    /// <system-reminder> trace to the in-memory assistant message so the model
-    /// knows no voice bubble went out — the nil itself stays silent here.
-    ///
-    /// [voice-bubble-tool 2026-10-02] 这是默认链路版（等价于 voice/group 都不传）。
-    /// 要点名音色/分组的调用方请用下面的 throwing 重载，能拿到"为什么不行"的
-    /// 具体原因（VoiceComposeError 的 description 直接是给模型的中文交代）。
-    static func compose(for text: String, sessionId: String) async -> Result? {
-        do {
-            return try await compose(for: text, sessionId: sessionId, voice: nil, group: nil)
-        } catch {
-            logger.warning("voice message synthesis failed: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     /// [voice-bubble-tool 2026-10-02] send_voice 专用：voice/group 点名版。
     /// - voice: TTS 服务名（服务的 id 也行），用该服务的音色合成。
     /// - group: TTS 分组名（分组 id 也行），按分组成员顺序 fallback。

@@ -7434,7 +7434,7 @@ struct ChatVoiceSettingsSheet: View {
                             AIVoiceMessageComposer.setVoiceReplies(enabled: v, sessionId: sid)
                             if v {
                                 if vm.isProcessing {
-                                    MinisToast.show("已开启AI语音回复，本条将以语音气泡送达")
+                                    MinisToast.show("已开启 AI 语音回复——AI 想发语音时会发语音气泡")
                                 }
                                 vm.stopSpeech()
                             }

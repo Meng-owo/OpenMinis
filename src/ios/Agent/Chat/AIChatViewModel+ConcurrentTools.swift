@@ -1587,8 +1587,7 @@ private extension AIChatViewModel {
             }
             // ② DB：deferred raw 建于工具执行前，这里只记账，落盘时统一补 part。
             pendingVoiceBubbles.append(link)
-            voiceBubbleSentThisTurn = true
-            // ③ 自动播放（与 StreamEnd 自动气泡一致；录音中不抢麦）。
+            // ③ 自动播放（录音中不抢麦）。
             if !VoiceModePreference.shared.isCapturing {
                 if let fileURL = await resolvePathForDirectRead(
                     AIVoiceMessageComposer.linuxPathFor(url: voice.url)) {
