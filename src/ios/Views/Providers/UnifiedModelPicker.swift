@@ -379,7 +379,11 @@ struct UnifiedModelPicker: View {
         // Built-in System engine FIRST — as its own provider section (Phase C), the
         // same collapsible header treatment as any cloud provider, driven by the
         // synthetic local-only instance rather than a parallel systemSection.
-        if !systemEntries.isEmpty {
+        //
+        // [batch9-voice/4] 声音场景（音频输入/输出）：System 引擎作"备选"——
+        // 挪到列表最后（配好的声音/模型在前；默认折叠见 refreshCollapsedState）。
+        let voiceScenarioForSystem = config.effectivePreferModality?.contains { $0 == .audioInput || $0 == .audioOutput } == true
+        if !systemEntries.isEmpty && !voiceScenarioForSystem {
             result.append((SystemVoiceProvider.providerInstance, systemEntries))
         }
         let grouped = Dictionary(grouping: regularEntries, by: { $0.providerInstanceId })
@@ -432,6 +436,10 @@ struct UnifiedModelPicker: View {
                     result.append((instance, entries.sorted(by: ProviderConfigStore.releaseRankOrder)))
                 }
             }
+        }
+        // [batch9-voice/4] 声音场景：System（备选）排在所有实例之后。
+        if !systemEntries.isEmpty && voiceScenarioForSystem {
+            result.append((SystemVoiceProvider.providerInstance, systemEntries))
         }
         return result
     }
@@ -515,7 +523,7 @@ struct UnifiedModelPicker: View {
                 } header: {
                     Text("TTS Services")
                 } footer: {
-                    Text("Independent speech services configured in Settings → Voice. Selecting one makes it the active read-aloud voice.")
+                    Text("Independent speech services configured in Settings → Voice. Selecting one makes it the active voice for read-aloud and AI voice replies.")
                 }
             }
 
@@ -1358,8 +1366,14 @@ struct UnifiedModelPicker: View {
         // visible. Non-voice pickers are unaffected.
         let prefs = config.effectivePreferModality
         let isVoiceScenario = prefs?.contains { $0 == .audioInput || $0 == .audioOutput } == true
-        guard !isVoiceScenario else {
-            collapsedInstanceIds = []
+        if isVoiceScenario {
+            // [batch9-voice/4] 声音场景：System 收成"备选"（默认折叠）——配好的
+            // 声音主导列表，系统 ~60 音色不再铺满；其他实例保持展开（"每个声音
+            // 立即可见"的原意图只对非系统实例保留）。
+            collapsedInstanceIds = Set(entriesByInstance
+                .filter { $0.entries.count > 1 }
+                .filter { VoiceProviderResolver.isSystemEntry($0.instance.id) }
+                .map { $0.instance.id })
             return
         }
         var ids = Set<String>()
