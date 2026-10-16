@@ -525,7 +525,7 @@ private func attachmentPlaceholderTile(icon: String, size: CGFloat) -> some View
             .foregroundStyle(.tertiary)
     }
     .frame(width: size, height: size)
-    .background(Color(.systemGray6))
+    .background(AppearanceStudio.shared.color(.mutedSurface, scope: .chat))
     .clipShape(RoundedRectangle(cornerRadius: 8))
 }
 

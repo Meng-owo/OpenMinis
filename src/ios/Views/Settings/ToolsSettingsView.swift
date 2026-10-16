@@ -140,7 +140,7 @@ struct ToolsSettingsView: View {
     }
 
     func toolRow(_ title: String, tool: String, icon: String, iconSize: CGFloat = 14,
-                 accent: Color = Color.accentColor, isOn: Binding<Bool>) -> some View {
+                 accent: Color = MinisTheme.accent, isOn: Binding<Bool>) -> some View {
         Toggle(isOn: isOn) {
             HStack(spacing: 10) {
                 Image(systemName: icon)

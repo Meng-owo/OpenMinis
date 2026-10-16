@@ -2902,7 +2902,7 @@ struct ContentView: View {
                                 .overlay {
                                     if regeneratingTitleSessionId == session.id {
                                         ZStack {
-                                            Color(.systemBackground).opacity(0.7)
+                                            AppearanceStudio.shared.color(.canvas, scope: .home).opacity(0.7)
                                             ProgressView()
                                         }
                                     }
@@ -3052,7 +3052,7 @@ struct ContentView: View {
                                 .overlay {
                                     if regeneratingTitleSessionId == session.id {
                                         ZStack {
-                                            Color(.systemBackground).opacity(0.7)
+                                            AppearanceStudio.shared.color(.canvas, scope: .home).opacity(0.7)
                                             ProgressView()
                                         }
                                     }
@@ -4238,7 +4238,7 @@ struct ContentView: View {
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(UIColor.secondarySystemGroupedBackground))
+                    .fill(AppearanceStudio.shared.color(.surface, scope: .home))
             )
         }
         .buttonStyle(.plain)
@@ -6970,7 +6970,7 @@ private struct SteppedSlider: View {
             ZStack(alignment: .leading) {
                 // Track background
                 Capsule()
-                    .fill(Color(.systemFill))
+                    .fill(AppearanceStudio.shared.color(.mutedSurface, scope: .home))
                     .frame(height: trackHeight)
                     .position(x: totalW / 2, y: midY)
 
@@ -6985,7 +6985,7 @@ private struct SteppedSlider: View {
                 ForEach(0..<steps, id: \.self) { i in
                     let x = maxStep > 0 ? totalW * CGFloat(i) / maxStep : 0
                     Circle()
-                        .fill(i <= displayValue ? MinisTheme.accent : Color(.systemFill))
+                        .fill(i <= displayValue ? MinisTheme.accent : AppearanceStudio.shared.color(.mutedSurface, scope: .home))
                         .frame(width: tickSize, height: tickSize)
                         .position(x: x, y: midY)
                 }

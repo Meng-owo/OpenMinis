@@ -369,7 +369,7 @@ private struct TestCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(AppearanceStudio.shared.color(.surface, scope: .settings))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         // Auto-play the speech result the moment it arrives, so a voice Quick Test
         // speaks on its own (no manual Play tap) — matching the "tap Quick Test →

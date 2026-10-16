@@ -79,7 +79,7 @@ struct FileBrowserView: View {
                         }) {
                             Text(viewModel.pathComponents[index])
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(MinisTheme.accent)
                         }
                         if index < viewModel.pathComponents.count - 1 {
                             Image(systemName: "chevron.right")
@@ -859,7 +859,7 @@ struct FileItemRow: View {
             if !item.isDirectory {
                 Button(action: onExport) {
                     Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(.blue)
+                        .foregroundColor(MinisTheme.accent)
                 }
                 .buttonStyle(.borderless)
             }
@@ -1639,7 +1639,7 @@ private struct DirectoryPickerView: View {
                         Button { navigateTo(index: index) } label: {
                             Text(pathComponents[index])
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(MinisTheme.accent)
                         }
                         if index < pathComponents.count - 1 {
                             Image(systemName: "chevron.right")
@@ -1670,7 +1670,7 @@ private struct DirectoryPickerView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "folder.fill")
                                 .font(.title2)
-                                .foregroundColor(.blue)
+                                .foregroundColor(MinisTheme.accent)
                             Text(item.name)
                                 .font(.body)
                                 .lineLimit(1)

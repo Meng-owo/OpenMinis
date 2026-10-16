@@ -91,7 +91,7 @@ private struct ToolApprovalDialogContent: View {
                                 }
                             }
                         }
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(AppearanceStudio.shared.color(.surface, scope: .chat))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
@@ -138,10 +138,10 @@ private struct ToolApprovalDialogContent: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 30)
-                .background(Color(.systemGroupedBackground))
+                .background(AppearanceStudio.shared.color(.raised, scope: .chat))
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(AppearanceStudio.shared.color(.raised, scope: .chat))
     }
 }
 

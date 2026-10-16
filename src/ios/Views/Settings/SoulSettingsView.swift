@@ -193,7 +193,7 @@ struct SoulSettingsView: View {
                             .foregroundStyle(Color.white)
                             .frame(width: 18, height: 18)
                             .background(Circle().fill(MinisTheme.accent))
-                            .overlay(Circle().strokeBorder(Color(.systemBackground), lineWidth: 1.5))
+                            .overlay(Circle().strokeBorder(AppearanceStudio.shared.color(.surface, scope: .settings), lineWidth: 1.5))
                             .offset(x: 1, y: 1)
                     }
             }

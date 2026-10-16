@@ -300,10 +300,10 @@ struct BrowserSheetView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(isSelected ? Color.accentColor.opacity(0.15) : Color(UIColor.systemGray5))
+            .background(isSelected ? AppearanceStudio.shared.color(.accent).opacity(0.15) : AppearanceStudio.shared.color(.mutedSurface))
             .clipShape(Capsule())
             .overlay(
-                Capsule().stroke(isSelected ? Color.accentColor.opacity(0.4) : Color.clear, lineWidth: 1)
+                Capsule().stroke(isSelected ? AppearanceStudio.shared.color(.accent).opacity(0.4) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -329,12 +329,12 @@ private struct BrowserAddressBarIcon: View {
         ZStack {
             Image(systemName: "globe")
                 .font(.system(size: 14))
-                .foregroundStyle(isLoading ? Color.accentColor : .secondary)
+                .foregroundStyle(isLoading ? AppearanceStudio.shared.color(.accent) : .secondary)
 
             if isLoading {
                 Circle()
                     .trim(from: 0, to: 0.3)
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .stroke(AppearanceStudio.shared.color(.accent), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .frame(width: 22, height: 22)
                     .rotationEffect(.degrees(spinning ? 360 : 0))
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
@@ -363,10 +363,10 @@ private struct AgentBrowsingOverlay: View {
             // Centered indicator with breathing glow
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(AppearanceStudio.shared.color(.accent))
                     .frame(width: 8, height: 8)
                     .opacity(breathing ? 1.0 : 0.3)
-                    .shadow(color: Color.accentColor.opacity(breathing ? 0.8 : 0), radius: breathing ? 8 : 0)
+                    .shadow(color: AppearanceStudio.shared.color(.accent).opacity(breathing ? 0.8 : 0), radius: breathing ? 8 : 0)
 
                 Text("嘟嘟 is browsing")
                     .font(.system(size: 13, weight: .medium))
@@ -381,7 +381,7 @@ private struct AgentBrowsingOverlay: View {
                         onTakeover()
                     }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 }
             }
             .padding(.horizontal, 20)
@@ -423,7 +423,7 @@ private struct TakeoverActiveBanner: View {
                     .foregroundStyle(.white)
                 Button("交还给AI") { onDone() }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(AppearanceStudio.shared.color(.accent))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -495,7 +495,7 @@ struct BrowserDownloadFloatingButton: View {
                     .modifier(DownloadPulseModifier(active: downloading, legacyPulse: $legacyPulse))
                     .frame(width: 36, height: 36)
                     .background {
-                        Color(.systemBackground)
+                        AppearanceStudio.shared.color(.canvas)
                             .opacity(colorScheme == .dark ? 0.8 : 0.5)
                             .clipShape(Circle())
                     }
@@ -656,7 +656,7 @@ private struct BrowserDownloadPanelRow: View {
                         .foregroundStyle(.secondary)
                     ProgressView(value: progress.fraction)
                         .progressViewStyle(.linear)
-                        .tint(Color.accentColor)
+                        .tint(AppearanceStudio.shared.color(.accent))
                 case .completed(let sizeText):
                     Text("\(sizeText) · \(AppLocalized("Show in Files", comment: "Completed download row hint"))")
                         .font(.system(size: 12))
@@ -709,7 +709,7 @@ private struct BrowserDownloadPanelRow: View {
         switch entry.state {
         case .downloading:
             Image(systemName: "arrow.down.circle")
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 .symbolEffectPulseIfAvailable()
         case .completed:
             Image(systemName: "checkmark.circle.fill")
@@ -754,7 +754,7 @@ struct BrowserDownloadCardRow: View {
                 if case .downloading = entry.state {
                     ProgressView(value: progress.fraction)
                         .progressViewStyle(.linear)
-                        .tint(Color.accentColor)
+                        .tint(AppearanceStudio.shared.color(.accent))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -781,7 +781,7 @@ struct BrowserDownloadCardRow: View {
         switch entry.state {
         case .downloading:
             Image(systemName: "arrow.down.circle")
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 .symbolEffectPulseIfAvailable()
         case .completed:
             Image(systemName: "checkmark.circle.fill")

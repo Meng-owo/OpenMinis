@@ -96,7 +96,7 @@ struct BrowserManagementView: View {
                 Spacer()
                 if pool.userAgentProfile == profile {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 }
             }
         }
@@ -124,7 +124,7 @@ struct BrowserManagementView: View {
                     Spacer()
                     if isSelected {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(AppearanceStudio.shared.color(.accent))
                     }
                 }
             }
@@ -198,7 +198,7 @@ struct BrowserManagementView: View {
                 Spacer()
                 if !isCustomViewportActive {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 }
             }
         }
@@ -215,7 +215,7 @@ struct BrowserManagementView: View {
                 Spacer()
                 if isCustomViewportActive {
                     Image(systemName: "checkmark")
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppearanceStudio.shared.color(.accent))
                 }
             }
         }
@@ -328,12 +328,12 @@ struct BrowserManagementView: View {
                             .padding(.vertical, 6)
                             .background(
                                 isPresetActive(preset)
-                                    ? Color.accentColor.opacity(0.18)
+                                    ? AppearanceStudio.shared.color(.accent).opacity(0.18)
                                     : AppearanceStudio.shared.color(.mutedSurface)
                             )
                             .foregroundStyle(
                                 isPresetActive(preset)
-                                    ? Color.accentColor
+                                    ? AppearanceStudio.shared.color(.accent)
                                     : AppearanceStudio.shared.color(.primaryText)
                             )
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))

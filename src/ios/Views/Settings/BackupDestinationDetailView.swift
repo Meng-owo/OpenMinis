@@ -637,7 +637,7 @@ struct RcloneFolderBrowser: View {
                                 .lineLimit(1)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
-                                .background(Color(.secondarySystemFill), in: Capsule())
+                                .background(AppearanceStudio.shared.color(.mutedSurface, scope: .settings), in: Capsule())
                         }
                         Button {
                             newFolderName = ""

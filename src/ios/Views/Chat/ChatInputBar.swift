@@ -801,7 +801,7 @@ struct QueuedAttachmentPreview: View {
                 .lineLimit(1)
         }
         .frame(width: tileSize, height: tileSize)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(AppearanceStudio.shared.color(.mutedSurface, scope: .chat)))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .opacity(0.7)
     }

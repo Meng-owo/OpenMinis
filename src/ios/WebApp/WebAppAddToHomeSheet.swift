@@ -76,7 +76,7 @@ struct WebAppAddToHomeSheet: View {
                             }
                         }
                         .disabled(opening || titleInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                        .listRowBackground(Color.accentColor)
+                        .listRowBackground(MinisTheme.accent)
                         .foregroundStyle(.white)
                     } footer: {
                         Text("Safari will open the launcher page. Tap the Share button → Add to Home Screen to pin the icon.")

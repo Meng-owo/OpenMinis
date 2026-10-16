@@ -3022,7 +3022,7 @@ struct AIChatView: View {
     private struct ScrollToBottomBackground: View {
         @Environment(\.colorScheme) private var colorScheme
         var body: some View {
-            Color(.systemBackground).opacity(colorScheme == .dark ? 0.8 : 0.92)
+            AppearanceStudio.shared.color(.canvas, scope: .chat).opacity(colorScheme == .dark ? 0.8 : 0.92)
         }
     }
 
@@ -4768,7 +4768,7 @@ struct AIChatView: View {
                         Capsule().fill(
                             isSelected
                             ? ChatColors.accent.opacity(0.2)
-                            : Color(UIColor.systemGray5)
+                            : AppearanceStudio.shared.color(.mutedSurface, scope: .chat)
                         )
                     )
             }
@@ -8584,7 +8584,7 @@ public struct StickerZoomPreviewSheet: View {
                         }
                     }
                     .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(AppearanceStudio.shared.color(.surface, scope: .chat))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .padding()
@@ -8656,7 +8656,7 @@ struct StickerPickerSheet: View {
                                     .background(
                                         selectedCategory == cat
                                             ? ChatColors.accent.opacity(0.18)
-                                            : Color(uiColor: .tertiarySystemFill)
+                                            : AppearanceStudio.shared.color(.mutedSurface, scope: .chat)
                                     )
                                     .foregroundColor(
                                         selectedCategory == cat
@@ -8837,7 +8837,7 @@ struct StickerEditSheet: View {
                                 )
                         } else {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(uiColor: .tertiarySystemFill))
+                                .fill(AppearanceStudio.shared.color(.mutedSurface, scope: .chat))
                                 .frame(width: 84, height: 84)
                                 .overlay(
                                     Image(systemName: "photo.badge.plus")
