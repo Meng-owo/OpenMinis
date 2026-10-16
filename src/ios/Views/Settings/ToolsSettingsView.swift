@@ -141,8 +141,8 @@ struct ToolsSettingsView: View {
 
     func toolRow(_ title: String, tool: String, icon: String, iconSize: CGFloat = 14,
                  accent: Color? = nil, isOn: Binding<Bool>) -> some View {
-        let resolvedAccent = accent ?? AppearanceStudio.shared.color(.accent)
-        Toggle(isOn: isOn) {
+        let resolvedAccent = accent ?? Color(AppearanceStudio.uiColorSnapshot(.accent))
+        return Toggle(isOn: isOn) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: iconSize))
