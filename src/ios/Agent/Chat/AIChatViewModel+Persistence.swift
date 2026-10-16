@@ -1063,8 +1063,10 @@ extension AIChatViewModel {
     /// most once per draft no matter how many callers are waiting.
     private func createSessionForDraft() async -> String {
         let model = selectedModel
-        // ［persona］新会话打上当前人设。
-        let session = await ChatStore.shared.createSession(modelId: model.id, source: sessionSource, personaId: PersonaStore.currentID())
+        // ［persona］新会话打上"草稿锁定的"人设（createDraft 已锁定；未走
+        // createDraft 的路径——如测试直建——再回退当前人设）。[batch9e / W2B-12]
+        let lockedPersona = sessionPersonaId ?? PersonaStore.currentID()
+        let session = await ChatStore.shared.createSession(modelId: model.id, source: sessionSource, personaId: lockedPersona)
         sessionId = session.id
         sessionPersonaId = session.personaId
         Self.activeSessionId = session.id
