@@ -144,7 +144,7 @@ extension AIChatViewModel {
         if !AgentToolSwitch.isToolEnabled(tu.name) {
             let disabledContent = Self.toolsDisabledMessage
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                messages[msgIdx].blocks[blockIdx].toolStatus = .failed
+                messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: disabledContent)
                 messages[msgIdx].blocks[blockIdx].content = disabledContent
             }
             let disabledSnap = ToolSnapshot(type: .text, text: disabledContent, mediaRef: nil, duration: nil)
