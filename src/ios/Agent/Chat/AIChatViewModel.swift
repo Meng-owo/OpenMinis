@@ -2909,13 +2909,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
             // Persist user message and write the DB id back into agentHistory so
             // compact can later resolve boundaries by id.
-            if let persistedId = await self.persistAgentMessage(userMessage), userIdx < self.agentHistory.count {
+            let userPersistedId = await self.persistAgentMessage(userMessage)
+            if let persistedId = userPersistedId, userIdx < self.agentHistory.count {
                 self.agentHistory[userIdx].dbMessageId = persistedId
                 // [T-retry-id-anchor 09-13] Same id onto the UI row, so retry/
                 // edit truncation can anchor on the id instead of counting
                 // bubbles (queued N-in-1 merges broke the counting).
                 await MainActor.run {
                     userMsg.dbRowId = persistedId
+                }
+            } else if userPersistedId == nil {
+                // [batch2 / W1A-13] The user's own message did not land. We keep
+                // sending (some users rely on "send first, save after" to save a
+                // draft), but the failure must be visible instead of silently
+                // producing an orphan answer: mark the bubble and log loudly.
+                logger.error("[Send] user message NOT persisted sid=\(self.sessionId?.prefix(8) ?? "nil") idx=\(userIdx) — bubble marked unsaved")
+                await MainActor.run {
+                    userMsg.persistenceFailed = true
                 }
             }
 

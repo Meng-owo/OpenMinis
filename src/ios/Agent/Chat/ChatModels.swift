@@ -95,6 +95,10 @@ final class ChatMessage: Identifiable, ObservableObject {
     /// nil on rows that never persisted (placeholder/error carriers) — callers
     /// must fall back to the counting path for those.
     var dbRowId: String?
+    /// [batch2 / W1A-13] Set when the user's message failed to persist (disk
+    /// full, degraded DB, rolled-back batch). The bubble shows an "未保存"
+    /// hint so an orphan answer is never mistaken for a complete exchange.
+    var persistenceFailed = false
     /// Links back to the QueuedPrompt so we can withdraw it.
     var queuedPromptId: UUID?
     let timestamp = Date()

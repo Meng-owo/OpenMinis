@@ -1451,11 +1451,17 @@ extension AIChatViewModel {
                     toolUseId: id, output: content, success: !isError, mediaRef: mediaRef, snapshot: snap, pageURL: truncatedURL, status: statusStr
                 )))
             case .imageData(let data, let mimeType, let linuxPath):
-                let ref = await ChatStore.shared.saveMedia(
+                // [batch2 / W3A-01] Never append a ref for a file that failed to
+                // land — degrade to a text placeholder so the turn still goes.
+                if let ref = try? await ChatStore.shared.saveMedia(
                     data: data, mimeType: mimeType, sessionId: sessionId,
                     linuxPath: linuxPath
-                )
-                parts.append(.mediaRef(ref))
+                ) {
+                    parts.append(.mediaRef(ref))
+                } else {
+                    logger.error("[Media] inbound image save failed session=\(sessionId.prefix(8)) mime=\(mimeType) bytes=\(data.count)")
+                    parts.append(.text("[图片保存失败]"))
+                }
             }
         }
 
@@ -1932,11 +1938,18 @@ extension AIChatViewModel {
         let sid = self.sessionId ?? "nil"
         logger.info("[Persist] enter sid=\(sid.prefix(8)) role=\(msg.role.rawValue) parts=\(msg.parts.count)")
         guard let raw = await buildRawMessage(msg, tokenUsage: tokenUsage, snapshots: snapshots, thoughtSignatures: thoughtSignatures, reasoningContent: reasoningContent, streamInterruptCount: streamInterruptCount, modelEntryId: modelEntryId) else {
-            logger.warning("[Persist] buildRawMessage returned nil sid=\(sid.prefix(8)) role=\(msg.role.rawValue) — NOT WRITTEN")
+            logger.error("[Persist] buildRawMessage returned nil sid=\(sid.prefix(8)) role=\(msg.role.rawValue) — NOT WRITTEN")
             return nil
         }
         logger.info("[Persist] built raw.sid=\(raw.sessionId.prefix(8)) raw.id=\(raw.id.prefix(8)) role=\(raw.role.rawValue)")
-        await ChatStore.shared.appendMessage(raw)
+        // [batch2 / W1A-02] appendMessage returns the number of rows that
+        // actually landed; 0 means the write failed (disk full, degraded DB,
+        // rolled-back batch). Never report success for a message that isn't in.
+        let insertedRows = await ChatStore.shared.appendMessage(raw)
+        guard insertedRows > 0 else {
+            logger.error("[Persist] appendMessage FAILED sid=\(raw.sessionId.prefix(8)) raw.id=\(raw.id.prefix(8)) role=\(raw.role.rawValue) — NOT WRITTEN")
+            return nil
+        }
         // Post-write DB sanity check: query count + max(sort_order) for this session
         let stats = await ChatStore.shared.sessionWriteStats(sessionId: raw.sessionId)
         logger.info("[Persist] post-write sid=\(raw.sessionId.prefix(8)) dbCount=\(stats.count) dbMaxSortOrder=\(stats.maxSortOrder)")

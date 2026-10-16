@@ -1335,12 +1335,19 @@ extension AIChatViewModel {
                 ? messages[msgIdx].blocks[blockIdx].imageFilePath : nil,
                let imageData = try? Data(contentsOf: URL(fileURLWithPath: imagePath)),
                let sid = sessionId {
-                let ref = await ChatStore.shared.saveMedia(
+                // [batch2 / W3A-01] Save can fail (disk full, sandbox denial) —
+                // degrade to the text snapshot instead of a ghost media ref.
+                if let ref = try? await ChatStore.shared.saveMedia(
                     data: imageData, mimeType: "image/jpeg", sessionId: sid,
                     originalFileName: "browser_snapshot.jpg", subdir: "browser",
                     linuxPath: toolImageLinuxPath
-                )
-                snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+                ) {
+                    snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+                } else {
+                    let lines = toolOutput.components(separatedBy: "\n")
+                    let lastLines = lines.suffix(20).joined(separator: "\n")
+                    snapshot = ToolSnapshot(type: .text, text: lastLines, mediaRef: nil, duration: toolDuration)
+                }
             } else {
                 let lines = toolOutput.components(separatedBy: "\n")
                 let lastLines = lines.suffix(20).joined(separator: "\n")
@@ -1353,12 +1360,16 @@ extension AIChatViewModel {
                let sid = sessionId {
                 let fileURL = URL(fileURLWithPath: imagePath)
                 let mime = Self.detectImageMime(imageData)
-                let ref = await ChatStore.shared.saveMedia(
+                // [batch2 / W3A-01] Degrade to text when the write fails.
+                if let ref = try? await ChatStore.shared.saveMedia(
                     data: imageData, mimeType: mime, sessionId: sid,
                     originalFileName: fileURL.lastPathComponent, subdir: "images",
                     linuxPath: toolImageLinuxPath
-                )
-                snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+                ) {
+                    snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+                } else {
+                    snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
+                }
             } else {
                 snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
             }

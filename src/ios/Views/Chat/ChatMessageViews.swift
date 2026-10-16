@@ -497,6 +497,16 @@ struct ChatMessageRow: View {
                         }
                     }
                 }
+                // [batch2 / W1A-13] Visible hint when the local write failed —
+                // an orphan answer above a vanished question is worse than
+                // knowing immediately.
+                if message.persistenceFailed {
+                    Text("消息未保存到本地")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ChatColors.destructive)
+                        .padding(.trailing, 4)
+                        .accessibilityLabel("这条消息未保存到本地数据库")
+                }
             }
             .modifier(MinisOpenURLHandler())
             .contentShape(Rectangle())

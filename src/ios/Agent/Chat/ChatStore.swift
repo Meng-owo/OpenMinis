@@ -2808,15 +2808,26 @@ actor ChatStore {
 
     // MARK: - Message CRUD
 
-    func appendMessage(_ message: RawMessage) {
+    /// [batch2 / W1A-02] Returns the number of rows actually inserted (1 on
+    /// success, 0 when the write failed), so callers can surface the failure
+    /// instead of believing the message landed.
+    @discardableResult
+    func appendMessage(_ message: RawMessage) -> Int {
         appendMessages([message])
     }
 
     /// Batch-insert multiple messages in a single SQLite transaction.
     /// This reduces disk I/O by coalescing multiple writes into one fsync.
-    func appendMessages(_ messages: [RawMessage]) {
+    ///
+    /// [batch2 / W1A-02, W3A-05] Returns the number of rows actually inserted.
+    /// All-or-nothing when we own the transaction: any failed row rolls the
+    /// whole batch back and returns 0. Rows that did not land are never
+    /// markDirty'd (the old code marked failed rows too, so sync pushed
+    /// records for messages that exist nowhere).
+    @discardableResult
+    func appendMessages(_ messages: [RawMessage]) -> Int {
         invalidateSessionListCache()
-        guard !messages.isEmpty else { return }
+        guard !messages.isEmpty else { return 0 }
         // Drop assistant messages that carry no content the model could echo back —
         // a stream that aborts before producing any text or tool_use leaves an
         // assistant row with empty parts. On the next turn DeepSeek/OpenAI-compat
@@ -2832,7 +2843,7 @@ actor ChatStore {
         }
         guard !messages.isEmpty else {
             logger.info("[Store] appendMessages: all messages dropped after empty-assistant filter")
-            return
+            return 0
         }
         let dbOK = (db != nil)
         let firstSid = messages.first?.sessionId.prefix(8) ?? "?"
@@ -2843,10 +2854,17 @@ actor ChatStore {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
-        exec("BEGIN TRANSACTION")
+        // [batch2 / W3A-05] Only own a transaction when we're not already inside
+        // one — a nested BEGIN errors out and our COMMIT would then swallow the
+        // caller's outer transaction.
+        let ownsTransaction = sqlite3_get_autocommit(db) != 0
+        if ownsTransaction { exec("BEGIN TRANSACTION") }
 
         var touchedSessions = Set<String>()
+        var insertedCount = 0
+        var failedCount = 0
         for message in messages {
+            var rowInserted = false
             let sortOrder = nextSortOrder(sessionId: message.sessionId)
 
             let partsJSON: String
@@ -2855,6 +2873,7 @@ actor ChatStore {
                 partsJSON = String(data: data, encoding: .utf8) ?? "[]"
             } catch {
                 logger.error("Failed to encode message parts: \(error)")
+                failedCount += 1
                 continue
             }
             // [T-ios-listsessions-part-flags] derived from the parts we just encoded.
@@ -2896,6 +2915,7 @@ actor ChatStore {
                     logger.error("[Store] INSERT step failed rc=\(stepRC) sid=\(message.sessionId.prefix(8)) mid=\(message.id.prefix(8)) so=\(sortOrder) err=\(errMsg)")
                 } else {
                     logger.info("[Store] INSERT ok sid=\(message.sessionId.prefix(8)) mid=\(message.id.prefix(8)) so=\(sortOrder) role=\(message.role.rawValue)")
+                    rowInserted = true
                 }
             } else {
                 let errMsg = String(cString: sqlite3_errmsg(db))
@@ -2903,10 +2923,30 @@ actor ChatStore {
             }
             sqlite3_finalize(stmt)
 
-            touchedSessions.insert(message.sessionId)
-            // Always write dirty mark to DB immediately (crash-safe).
-            // Only the CloudKit upload trigger (scheduleSend) is deferred.
-            markDirty(recordType: "Message", recordId: message.id)
+            // [batch2 / W3A-05] Only rows that actually landed get a dirty mark
+            // and a session touch — a failed row must not create a sync record.
+            if rowInserted {
+                insertedCount += 1
+                touchedSessions.insert(message.sessionId)
+                // Always write dirty mark to DB immediately (crash-safe).
+                // Only the CloudKit upload trigger (scheduleSend) is deferred.
+                markDirty(recordType: "Message", recordId: message.id)
+            } else {
+                failedCount += 1
+            }
+        }
+
+        // [batch2 / W1A-02, W3A-05] All-or-nothing when we own the transaction:
+        // one failed row rolls the batch back and callers get 0, so a message
+        // is never reported written when it isn't. Inside an outer transaction
+        // we can't roll back alone — report the partial loudly instead.
+        if ownsTransaction, failedCount > 0 {
+            exec("ROLLBACK")
+            logger.error("[Store] appendMessages ROLLBACK count=\(messages.count) failed=\(failedCount) sid=\(firstSid) — nothing persisted")
+            return 0
+        }
+        if !ownsTransaction, failedCount > 0 {
+            logger.error("[Store] appendMessages PARTIAL inside outer transaction count=\(messages.count) inserted=\(insertedCount) failed=\(failedCount) sid=\(firstSid)")
         }
 
         // Touch sessions once per session
@@ -2917,7 +2957,7 @@ actor ChatStore {
             pendingSyncSessionIds.insert(sessionId)
         }
 
-        exec("COMMIT")
+        if ownsTransaction { exec("COMMIT") }
 
         // Prune oldest messages if any session exceeds the threshold
         for sessionId in touchedSessions {
@@ -2928,6 +2968,8 @@ actor ChatStore {
         for sessionId in touchedSessions {
             NotificationCenter.default.post(name: .sessionDidUpdate, object: sessionId)
         }
+
+        return insertedCount
     }
 
     /// Diagnostic helper: returns (count, maxSortOrder) for a session. Used to detect
@@ -3421,11 +3463,15 @@ actor ChatStore {
 
     /// Save media data to disk, return a MediaRef.
     /// Files are saved to `Library/MinisChat/minis/<sessionId>/<subdir>/<fileId>.<ext>`.
+    ///
+    /// [batch2 / W3A-01] Throws when the write fails. The old version logged
+    /// the error and still returned a ref (and markDirty'd it), so chat showed
+    /// broken images and sync chased files that exist nowhere.
     func saveMedia(
         data: Data, mimeType: String, sessionId: String,
         originalFileName: String? = nil, subdir: String = "attachments",
         linuxPath: String? = nil
-    ) -> MediaRef {
+    ) throws -> MediaRef {
         let fileId = UUID().uuidString
         let ext = Self.fileExtension(for: mimeType)
 
@@ -3433,12 +3479,12 @@ actor ChatStore {
         let fileURL = minisBaseURL.appendingPathComponent(relativePath)
 
         let dirURL = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
-
         do {
+            try FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
             try data.write(to: fileURL)
         } catch {
-            logger.error("Failed to write media file: \(error)")
+            logger.error("[Media] saveMedia FAILED session=\(sessionId.prefix(8)) mime=\(mimeType) bytes=\(data.count) err=\(error)")
+            throw error
         }
 
         let ref = MediaRef(
