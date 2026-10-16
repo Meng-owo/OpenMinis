@@ -6686,7 +6686,10 @@ struct LoadingDotsView: View {
     var dotSize: CGFloat = 10
     // [T-tokenize-all-colors] accent→ ChatColors.accent was hard-coded blue;
     // follow the theme's accent so a warm palette doesn't leave a stray blue dot.
-    var color: Color = ChatColors.accent
+    // [batch8b] `ChatColors` is @MainActor; a member default value is
+    // evaluated in a nonisolated context, so the snapshot (nonisolated) path
+    // is used here instead — the resolved hex is identical.
+    var color: Color = Color(AppearanceStudio.uiColorSnapshot(.accent, scope: .chat))
     @State private var animating = false
 
     var body: some View {

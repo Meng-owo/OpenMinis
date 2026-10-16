@@ -140,12 +140,13 @@ struct ToolsSettingsView: View {
     }
 
     func toolRow(_ title: String, tool: String, icon: String, iconSize: CGFloat = 14,
-                 accent: Color = MinisTheme.accent, isOn: Binding<Bool>) -> some View {
+                 accent: Color? = nil, isOn: Binding<Bool>) -> some View {
+        let resolvedAccent = accent ?? AppearanceStudio.shared.color(.accent)
         Toggle(isOn: isOn) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: iconSize))
-                    .foregroundStyle(isOn.wrappedValue ? accent : Color.secondary)
+                    .foregroundStyle(isOn.wrappedValue ? resolvedAccent : Color.secondary)
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)

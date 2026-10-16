@@ -231,7 +231,7 @@ struct AlarmListView: View {
             Group {
                 if vm.alarms.isEmpty && !vm.isLoading {
                     VStack(spacing: 12) {
-                        Image(systemName: "alarm")
+                        Image(systemName: "alarm.fill")
                             .font(.system(size: 48, weight: .thin))
                             .foregroundStyle(.secondary)
                         Text("No Alarms")

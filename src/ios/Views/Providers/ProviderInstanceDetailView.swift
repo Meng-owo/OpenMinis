@@ -908,7 +908,7 @@ struct ProviderInstanceDetailView: View {
             Button {
                 pendingDeleteModelEntry = entry
             } label: {
-                Image(systemName: "trash")
+                Image(systemName: "trash.fill")
                     .font(.caption)
                     .foregroundStyle(MinisTheme.destructive)
             }
@@ -945,7 +945,7 @@ struct ProviderInstanceDetailView: View {
         return HStack(spacing: 3) {
             // Input modalities (muted/secondary).
             if modality.contains(.imageInput) {
-                Image(systemName: "photo")
+                Image(systemName: "photo.fill")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(AppLocalized("Image input"))
@@ -976,7 +976,7 @@ struct ProviderInstanceDetailView: View {
                     .accessibilityLabel(AppLocalized("Image output"))
             }
             if modality.contains(.audioOutput) {
-                Image(systemName: "speaker.wave.2")
+                Image(systemName: "speaker.wave.2.fill")
                     .font(.caption2)
                     .foregroundStyle(.tint)
                     .accessibilityLabel(AppLocalized("Audio output"))

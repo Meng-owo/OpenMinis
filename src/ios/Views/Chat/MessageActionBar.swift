@@ -304,7 +304,7 @@ struct ChatFeedbackSheet: View {
                             )
 
                         HStack(alignment: .top, spacing: 5) {
-                            Image(systemName: "info.circle")
+                            Image(systemName: "info.circle.fill")
                                 .font(.system(size: 11))
                             Text("隐身生效：反馈作为独立系统指令注入模型上下文，不在你的气泡中发出；AI 下轮静默执行。")
                                 .font(.system(size: 11))

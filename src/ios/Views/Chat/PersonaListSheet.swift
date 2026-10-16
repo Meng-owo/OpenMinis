@@ -64,7 +64,7 @@ struct PersonaListSheet: View {
                                 editingPersona = copy
                             }
                         } label: {
-                            Label("复制", systemImage: "doc.on.doc")
+                            Label("复制", systemImage: "doc.on.doc.fill")
                         }
                         .tint(.blue)
                     }
@@ -79,7 +79,7 @@ struct PersonaListSheet: View {
                                 editingPersona = copy
                             }
                         } label: {
-                            Label("复制", systemImage: "doc.on.doc")
+                            Label("复制", systemImage: "doc.on.doc.fill")
                         }
                         if !persona.isBuiltIn && store.personas.count > 1 {
                             Button(role: .destructive) {

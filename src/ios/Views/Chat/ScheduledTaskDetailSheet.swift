@@ -137,7 +137,7 @@ struct ScheduledTaskDetailSheet: View {
                                 impact.notificationOccurred(.warning)
                                 confirmDelete = true
                             } label: {
-                                Image(systemName: "trash")
+                                Image(systemName: "trash.fill")
                                     .font(.system(size: fontSettings.scaledApp(14)))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
@@ -166,7 +166,7 @@ struct ScheduledTaskDetailSheet: View {
                             if let cmd = job.prefilledTool?.shellCommand {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack(spacing: 6) {
-                                        Image(systemName: "terminal")
+                                        Image(systemName: "terminal.fill")
                                             .font(.system(size: fontSettings.scaledApp(12)))
                                             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                                         Text("预填命令")

@@ -6536,7 +6536,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         if selectedRange.length > 0, onSpeakText != nil {
             extras.append(UICommand(
                 title: AppLocalized("Read Selection"),
-                image: UIImage(systemName: "speaker.wave.1"),
+                image: UIImage(systemName: "speaker.wave.1.fill"),
                 action: #selector(readSelectionFromMenu(_:))
             ))
         }

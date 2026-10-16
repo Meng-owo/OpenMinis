@@ -1374,7 +1374,9 @@ struct ThinkingLevelSheetView: View {
 // MARK: - Tool Copy Button
 
 private struct ToolCopyButton: View {
-    var accentColor: Color = ChatColors.accent
+    // [batch8b] ChatColors is @MainActor; member default values are
+    // nonisolated — use the snapshot path (same resolved color).
+    var accentColor: Color = Color(AppearanceStudio.uiColorSnapshot(.accent, scope: .chat))
     let content: () -> String
     @State private var copied = false
 

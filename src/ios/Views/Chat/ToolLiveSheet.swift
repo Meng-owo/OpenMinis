@@ -1083,7 +1083,7 @@ struct ToolLiveSheet: View {
     /// Minimal info stub for file_read in snapshot view — avoids duplicating content already shown in chat.
     private func fileReadInfoView(fileName: String, charCount: Int) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "doc.text")
+            Image(systemName: "doc.text.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat))
             Text(fileName)

@@ -684,7 +684,7 @@ private struct BrowserDownloadPanelRow: View {
                     .foregroundStyle(.tertiary)
             case .failed:
                 Button(action: onClear) {
-                    Image(systemName: "trash")
+                    Image(systemName: "trash.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                 }

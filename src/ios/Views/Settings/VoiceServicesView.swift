@@ -246,7 +246,7 @@ struct VoiceServicesView: View {
                 Button {
                     preview(service)
                 } label: {
-                    Image(systemName: "speaker.wave.2")
+                    Image(systemName: "speaker.wave.2.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(MinisTheme.secondaryText)
                 }

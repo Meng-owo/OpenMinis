@@ -149,7 +149,7 @@ private struct ConfigConfirmRow: View {
         case "hide":             return .gray
         case "show":             return .blue
         case "revert":           return .purple
-        default:                 return MinisTheme.accent
+        default:                 return Color(AppearanceStudio.uiColorSnapshot(.accent))
         }
     }
 }

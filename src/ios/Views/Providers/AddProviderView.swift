@@ -1190,7 +1190,7 @@ struct AddProviderView: View {
             Image(systemName: "moon.stars")
                 .foregroundStyle(.indigo)
         case .unsupported:
-            Image(systemName: "questionmark.circle")
+            Image(systemName: "questionmark.circle.fill")
                 .foregroundStyle(.gray)
         }
     }

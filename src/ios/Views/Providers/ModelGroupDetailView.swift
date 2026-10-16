@@ -495,7 +495,7 @@ struct ModelGroupDetailView: View {
             Button {
                 removeMember(entryId: entryId, from: group)
             } label: {
-                Image(systemName: "trash")
+                Image(systemName: "trash.fill")
                     .font(.caption)
                     .foregroundStyle(MinisTheme.destructive)
             }

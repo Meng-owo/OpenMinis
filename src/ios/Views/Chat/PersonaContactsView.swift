@@ -99,7 +99,7 @@ struct PersonaContactsView: View {
                         Button {
                             _ = store.duplicatePersona(persona.id)
                         } label: {
-                            Label("复制", systemImage: "doc.on.doc")
+                            Label("复制", systemImage: "doc.on.doc.fill")
                         }
                         .tint(.blue)
                     }

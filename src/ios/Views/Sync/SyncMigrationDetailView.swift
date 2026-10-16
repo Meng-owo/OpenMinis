@@ -679,7 +679,7 @@ struct SyncMigrationDetailView: View {
                 Button(role: .destructive) {
                     pendingZoneDelete = row
                 } label: {
-                    Image(systemName: "trash")
+                    Image(systemName: "trash.fill")
                 }
                 .buttonStyle(.borderless)
                 // The default _defaultZone is system-managed and can't

@@ -20,7 +20,7 @@ struct MinisAudioPreviewView: View {
     @State private var showShareSheet = false
     @State private var showSavePicker = false
     @State private var artworkImage: UIImage? = nil
-    @State private var dominantColor: Color = AppearanceStudio.shared.color(.surface, scope: .chat)
+    @State private var dominantColor: Color = Color(AppearanceStudio.uiColorSnapshot(.surface, scope: .chat))
 
     var body: some View {
         ZStack(alignment: .top) {

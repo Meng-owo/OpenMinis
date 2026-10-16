@@ -185,7 +185,9 @@ struct CatTailShape: Shape {
 struct WaggingCatIcon: View {
     var isWorking: Bool = false
     var size: CGFloat = 18
-    var color: Color = ChatColors.primaryText
+    // [batch8b] ChatColors is @MainActor; member default values are
+    // nonisolated — use the snapshot path (same resolved color).
+    var color: Color = Color(AppearanceStudio.uiColorSnapshot(.primaryText, scope: .chat))
 
     @State private var tailAngle: Double = 0
 
