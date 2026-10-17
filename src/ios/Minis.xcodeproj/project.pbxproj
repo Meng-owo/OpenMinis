@@ -317,6 +317,8 @@
 		XMSTYLE007 /* AppearanceThemeLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE107 /* AppearanceThemeLibrary.swift */; };
 		XMSTYLE004 /* ThemeOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE104 /* ThemeOffload.m */; };
 		XMSTYLE005 /* ThemeOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE105 /* ThemeOffloadBridge.swift */; };
+		XMSTYLE008 /* ThemeOffloadExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE110 /* ThemeOffloadExtras.swift */; };
+		XMSTYLE009 /* ThemeOffloadExtras+Commands.m in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE111 /* ThemeOffloadExtras+Commands.m */; };
 		E5G000004 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5GWF0003 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5GWF0004 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
@@ -1239,6 +1241,9 @@
 		XMSTYLE104 /* ThemeOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ThemeOffload.m; sourceTree = "<group>"; };
 		XMSTYLE105 /* ThemeOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeOffloadBridge.swift; sourceTree = "<group>"; };
 		XMSTYLE106 /* ThemeOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThemeOffload.h; sourceTree = "<group>"; };
+		XMSTYLE110 /* ThemeOffloadExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeOffloadExtras.swift; sourceTree = "<group>"; };
+		XMSTYLE111 /* ThemeOffloadExtras+Commands.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ThemeOffloadExtras+Commands.m"; sourceTree = "<group>"; };
+		XMSTYLE112 /* ThemeOffloadExtras.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ThemeOffloadExtras.h; sourceTree = "<group>"; };
 		E5QA0101 /* QuickActionRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionRouter.swift; sourceTree = "<group>"; };
 		E5QA0102 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E5QA0103 /* QuickActionWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionWorkflow.swift; sourceTree = "<group>"; };
@@ -2226,6 +2231,9 @@
 				XMSTYLE106 /* ThemeOffload.h */,
 				XMSTYLE104 /* ThemeOffload.m */,
 				XMSTYLE105 /* ThemeOffloadBridge.swift */,
+				XMSTYLE110 /* ThemeOffloadExtras.swift */,
+				XMSTYLE111 /* ThemeOffloadExtras+Commands.m */,
+				XMSTYLE112 /* ThemeOffloadExtras.h */,
 			);
 			path = NativeOffloads;
 			sourceTree = "<group>";
@@ -3417,6 +3425,8 @@
 				XMSTYLE007 /* AppearanceThemeLibrary.swift in Sources */,
 				XMSTYLE004 /* ThemeOffload.m in Sources */,
 				XMSTYLE005 /* ThemeOffloadBridge.swift in Sources */,
+				XMSTYLE008 /* ThemeOffloadExtras.swift in Sources */,
+				XMSTYLE009 /* ThemeOffloadExtras+Commands.m in Sources */,
 				E5G000004 /* AgentActivityAttributes.swift in Sources */,
 				E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */,
 				E5I000001 /* SpeechRecognitionManager.swift in Sources */,

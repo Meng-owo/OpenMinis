@@ -52,6 +52,8 @@ let studioView = read(here.appendingPathComponent("Views/Settings/AppearanceStud
 let kernel = read(here.appendingPathComponent("iSH/ISHKernel.m"))
 let offload = read(here.appendingPathComponent("NativeOffloads/ThemeOffload.m"))
 let offloadBridge = read(here.appendingPathComponent("NativeOffloads/ThemeOffloadBridge.swift"))
+let extras = read(here.appendingPathComponent("NativeOffloads/ThemeOffloadExtras.swift"))
+let extrasCommands = read(here.appendingPathComponent("NativeOffloads/ThemeOffloadExtras+Commands.m"))
 let skillStore = read(here.appendingPathComponent("Agent/Session/SkillStore.swift"))
 let markdown = read(here.appendingPathComponent("Views/Chat/SelectableMarkdownView.swift"))
 let toolLive = read(here.appendingPathComponent("Views/Chat/ToolLiveSheet.swift"))
@@ -176,6 +178,23 @@ check("reset is undoable", pack.contains("func undoThemeReset"))
 check("reset needs force", offload.contains("--force"))
 check("undo command wired", offload.contains("cmd_undo"))
 check("undo bridge exists", offloadBridge.contains("func undoReset"))
+
+// --- Extended AI surface (2026-10-18) ---
+// Avatars, row icons, per-page wallpapers and single colour overrides used to
+// live outside the pack JSON, so an AI could not touch them at all.
+check("extras bridge file", extras.contains("class ThemeOffloadExtras"))
+check("avatar command", extras.contains("func setAvatar"))
+check("assistant avatar", extras.contains("setAssistantAvatar"))
+check("icon command", extras.contains("func setIcon"))
+check("icon slot listing", extras.contains("listIconSlots"))
+check("per-page wallpaper", extras.contains("func setWallpaper"))
+check("single colour", extras.contains("func setColor"))
+check("colour cleared by name", extras.contains("clearOverride"))
+check("extras commands registered", offload.contains("theme_extra_avatar"))
+check("wallpaper scope parsed", extras.contains("AppearanceScope(rawValue: scope)"))
+check("hex rejected before store", extras.contains("allSatisfy({ $0.isHexDigit })"))
+check("extras emit maps ok", extrasCommands.contains("theme_extra_emit"))
+check("host path resolved in objc", extrasCommands.contains("noff_resolve_host_path"))
 
 if failures == 0 {
     print("\nALL PASS")

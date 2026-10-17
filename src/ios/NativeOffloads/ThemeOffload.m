@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import "NativeOffloadUtils.h"
+#import "ThemeOffloadExtras.h"
 #include "kernel/native_offload.h"
 #include <unistd.h>
 
@@ -42,6 +43,10 @@ static NSString *const HELP_TEXT =
      "  export    Dump the current pack as JSON\n"
      "  reset     Restore the default warm-paper pack (needs --force)\n"
      "  undo      Restore the pack and images removed by the last reset\n"
+     "  avatar    Set or clear the user / assistant avatar (--role --file --remove)\n"
+     "  icon      Set, clear or list a settings row icon (--slot --file --remove --list)\n"
+     "  wallpaper Set or clear a page wallpaper (--scope --file --remove)\n"
+     "  color     Set or clear one colour role (--role --hex --scope --variant --clear)\n"
      "  save      Save the current pack into the theme library\n"
      "  list      List saved themes\n"
      "  use       Apply a saved theme by --id\n"
@@ -54,6 +59,15 @@ static NSString *const HELP_TEXT =
      "  --name <text>         save/rename display name\n"
      "  --id <uuid>           saved theme id\n"
      "  --force               reset: confirm wiping every uploaded image\n"
+     "  --role <name>         avatar: user | assistant. color: colour role\n"
+     "  --slot <name>         icon: slot name, see `minis-theme icon --list`\n"
+     "  --scope <name>        wallpaper/color: global home chat settings browser\n"
+     "                        files terminal bottomBar\n"
+     "  --variant <name>      color: light | dark (default light)\n"
+     "  --hex <RRGGBB>        color: replacement value\n"
+     "  --remove              avatar/icon/wallpaper: clear instead of set\n"
+     "  --clear               color: drop the override, fall back to the palette\n"
+     "  --list                icon: list every slot and whether it is customised\n"
      "  --help, -h            Show this help\n"
      "  --compact             Minimize JSON output\n"
      "  -q, --quiet           Output only data field\n"
@@ -234,6 +248,14 @@ static int theme_handler(int argc, char **argv,
         return cmd_reset(argc, argv, stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"undo"]) {
         return cmd_undo(stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"avatar"]) {
+        return theme_extra_avatar(argc, argv, stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"icon"]) {
+        return theme_extra_icon(argc, argv, stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"wallpaper"]) {
+        return theme_extra_wallpaper(argc, argv, stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"color"]) {
+        return theme_extra_color(argc, argv, stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"save"]) {
         return cmd_save(argc, argv, stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"list"]) {
@@ -249,7 +271,7 @@ static int theme_handler(int argc, char **argv,
     noff_emit_help(stderr_fd, HELP_TEXT);
     NSDictionary *err = noff_json_error(TOOL_NAME, subcmd, NOFF_ERR_INVALID_ARGS,
                                          [NSString stringWithFormat:
-                                          @"Unknown command '%@'. Valid: get, apply, export, reset, undo, save, list, use, rename, delete.", subcmd]);
+                                          @"Unknown command '%@'. Valid: get, apply, export, reset, undo, avatar, icon, wallpaper, color, save, list, use, rename, delete.", subcmd]);
     noff_emit_json(stdout_fd, err, compact, quiet);
     return NOFF_EXIT_INVALID_ARGS;
 }
