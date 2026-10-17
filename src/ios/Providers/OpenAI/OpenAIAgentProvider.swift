@@ -162,16 +162,20 @@ final class OpenAIAgentProvider: AgentProvider {
         //  3. stream_options: kelivo never sends it. It stays only for the
         //     official OpenAI endpoint, where include_usage is a documented
         //     feature; strict relays treated it as an unknown field.
+        // [audit-E10] Align with upstream: send stream_options.include_usage
+        // to all compatible endpoints (excluding OpenRouter compat).
         let maxTokensConfigured = model.maxOutputTokens != nil
         let isOpenAIOfficialChat = provider.customBaseURL == nil && !provider.isAzure
-        if maxTokensConfigured {
-            if isOpenAIOfficialChat {
-                body["max_completion_tokens"] = maxTokens
-            } else {
-                body["max_tokens"] = maxTokens
+        if provider.useOpenRouterCompat {
+            body["max_tokens"] = maxTokens
+        } else {
+            if maxTokensConfigured {
+                if isOpenAIOfficialChat {
+                    body["max_completion_tokens"] = maxTokens
+                } else {
+                    body["max_tokens"] = maxTokens
+                }
             }
-        }
-        if isOpenAIOfficialChat {
             body["stream_options"] = ["include_usage": true]
         }
         // [GH#191] Opt this request into Anthropic prompt caching. OpenRouter

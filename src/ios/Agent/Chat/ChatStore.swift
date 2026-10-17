@@ -486,7 +486,7 @@ actor ChatStore {
     //
     // [audit-E11] Root cause of the cross-persona stale cache: `sessionListCache`
     // was already keyed by personaID, but its dirty flag was a SINGLE global
-
+    // Bool (`sessionListCacheDirty = false` when persona A read, so a subsequent
     // read of persona B observed false and served B's stale cached slice).
     //
     // The dictionary itself IS the cache state: a missing key means "stale/uncached,

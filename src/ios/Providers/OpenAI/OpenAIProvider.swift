@@ -1043,16 +1043,25 @@ final class OpenAIProvider: LLMProvider {
         // treat a huge cap as a balance reservation and 400), keep
         // max_completion_tokens/stream_options for the official endpoint
         // only, use legacy max_tokens elsewhere.
+        // [audit-E10 / T-kelivo-tokens-parity] Align with upstream: send
+        // stream_options.include_usage to all compatible endpoints when streaming,
+        // unless running under OpenRouter compatibility (where Anthropic models
+        // would reject the field). This unlocks token usage metrics for DeepSeek,
+        // Moonshot, SiliconFlow, vLLM, etc.
         let isOpenAIOfficialChat = customBaseURL == nil && !isAzure
-        if model.maxOutputTokens != nil {
-            if useOpenRouterCompat || !isOpenAIOfficialChat {
-                body["max_tokens"] = maxTokens
-            } else {
-                body["max_completion_tokens"] = maxTokens
+        if useOpenRouterCompat {
+            body["max_tokens"] = maxTokens
+        } else {
+            if model.maxOutputTokens != nil {
+                if isOpenAIOfficialChat {
+                    body["max_completion_tokens"] = maxTokens
+                } else {
+                    body["max_tokens"] = maxTokens
+                }
             }
-        }
-        if isOpenAIOfficialChat, stream {
-            body["stream_options"] = ["include_usage": true]
+            if stream {
+                body["stream_options"] = ["include_usage": true]
+            }
         }
         // [GH#191] See the matching block in OpenAIAgentProvider — OpenRouter
         // requires an explicit cache_control breakpoint for Claude or nothing is
