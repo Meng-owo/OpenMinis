@@ -83605,24 +83605,24 @@
         }
       }
     },
-    "Send a message first — voice replies switch on per chat.": {
+    "Send a message first to activate this session.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "先发条消息——语音回复按会话开启。"
+            "value": "先发一条消息激活当前会话"
           }
         }
       }
     },
-    "Voice replies on — this reply arrives as a voice bubble.": {
+    "AI voice replies on — the AI sends a voice bubble when it wants to.": {
       "extractionState": "manual",
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "语音回复已开——这条回复会以语音气泡送达。"
+            "value": "已开启 AI 语音回复——AI 想发语音时会发语音气泡"
           }
         }
       }

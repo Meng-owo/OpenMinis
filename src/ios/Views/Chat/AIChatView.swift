@@ -3501,7 +3501,7 @@ struct AIChatView: View {
                     // （还没发出第一条消息，sessionId=nil）点了开关原本静默无
                     // 反应——看起来像按键失灵。Toast 说明「先发一条消息」。
                     guard let sid = vm.sessionId else {
-                        MinisToast.show(AppLocalized("Send a message first — voice replies switch on per chat."),
+                        MinisToast.show(AppLocalized("Send a message first to activate this session."),
                                        systemImage: "exclamationmark.triangle.fill")
                         return
                     }
@@ -3515,7 +3515,7 @@ struct AIChatView: View {
                     // 不让她猜为什么又从头播。
                     if v {
                         if vm.isProcessing {
-                            MinisToast.show(AppLocalized("Voice replies on — this reply arrives as a voice bubble."))
+                            MinisToast.show(AppLocalized("AI voice replies on — the AI sends a voice bubble when it wants to."))
                         }
                         vm.stopSpeech()
                     }
@@ -7428,20 +7428,20 @@ struct ChatVoiceSettingsSheet: View {
                         },
                         set: { v in
                             guard let sid = vm.sessionId else {
-                                MinisToast.show("先发一条消息激活当前会话", systemImage: "exclamationmark.triangle.fill")
+                                MinisToast.show(AppLocalized("Send a message first to activate this session."), systemImage: "exclamationmark.triangle.fill")
                                 return
                             }
                             AIVoiceMessageComposer.setVoiceReplies(enabled: v, sessionId: sid)
                             if v {
                                 if vm.isProcessing {
-                                    MinisToast.show("已开启 AI 语音回复——AI 想发语音时会发语音气泡")
+                                    MinisToast.show(AppLocalized("AI voice replies on — the AI sends a voice bubble when it wants to."))
                                 }
                                 vm.stopSpeech()
                             }
                         }
                     )) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("AI 语音回复")
+                            Text(AppLocalized("AI Voice Replies"))
                                 .font(.body.weight(.medium))
                             Text("以语音气泡发送语音消息")
                                 .font(.caption)
