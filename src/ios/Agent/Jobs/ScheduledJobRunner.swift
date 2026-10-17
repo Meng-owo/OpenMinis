@@ -259,7 +259,17 @@ enum ScheduledJobRunner {
             } else {
                 ok = true
             }
-            registry.recordFire(job.id, sessionId: session.id, ok: ok, preview: firePreview)
+            // [audit-B9] Same state machine as the other targets: a successful
+            // fire moves the job to .running (and maps the session) before the
+            // history row is recorded — previously only .childOfCurrent did
+            // this, so an ordinary task never showed "运行中".
+            if ok {
+                registry.markRunning(job.id, sessionId: session.id)
+                registry.recordFire(job.id, sessionId: session.id, ok: true,
+                                    preview: firePreview, bumpCounter: false)
+            } else {
+                registry.recordFire(job.id, sessionId: session.id, ok: false, preview: firePreview)
+            }
             return session.id
 
         case .followUp(let sid):
@@ -286,7 +296,15 @@ enum ScheduledJobRunner {
             logger.info("[Sched] FIRE \(job.logLabel) → follow-up \(sid.prefix(8)) outcome=\(String(describing: outcome))")
             let ok: Bool
             if case .rejected = outcome { ok = false } else { ok = true }
-            registry.recordFire(job.id, sessionId: sid, ok: ok, preview: String(prompt.prefix(60)))
+            // [audit-B9] See the .new branch — all four targets share the same
+            // running-state bookkeeping now.
+            if ok {
+                registry.markRunning(job.id, sessionId: sid)
+                registry.recordFire(job.id, sessionId: sid, ok: true,
+                                    preview: String(prompt.prefix(60)), bumpCounter: false)
+            } else {
+                registry.recordFire(job.id, sessionId: sid, ok: false, preview: String(prompt.prefix(60)))
+            }
             return sid
 
         case .rerun(let sid, let messageId):
@@ -297,7 +315,14 @@ enum ScheduledJobRunner {
                 return (dict["ok"] as? Bool) ?? false
             }.value
             logger.info("[Sched] FIRE \(job.logLabel) → rerun \(sid.prefix(8))/\(messageId.prefix(8)) ok=\(ok)")
-            registry.recordFire(job.id, sessionId: sid, ok: ok, preview: "rerun:\(messageId.prefix(8))")
+            // [audit-B9] Same running-state bookkeeping as the other targets.
+            if ok {
+                registry.markRunning(job.id, sessionId: sid)
+                registry.recordFire(job.id, sessionId: sid, ok: true,
+                                    preview: "rerun:\(messageId.prefix(8))", bumpCounter: false)
+            } else {
+                registry.recordFire(job.id, sessionId: sid, ok: false, preview: "rerun:\(messageId.prefix(8))")
+            }
             return ok ? sid : nil
 
         case .childOfCurrent(let parentSid, _):
