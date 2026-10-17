@@ -479,22 +479,35 @@ actor ChatStore {
     // MB) — every redundant call minted a whole new batch that SwiftUI kept
     // referencing across body passes. With this cache, back-to-back calls with
     // no intervening write return the SAME array (no new Strings). Guarded by
-    // `sessionListCacheDirty`, set true by every list-affecting mutation below.
+
     // ChatStore is an actor, so these fields need no extra locking.
     // ［persona］按人设 key：切换人设不串缓存。
+    // [T-ios-listsessions-cache / audit-E11] Cached [ChatSession] per persona.
+    //
+    // [audit-E11] Root cause of the cross-persona stale cache: `sessionListCache`
+    // was already keyed by personaID, but its dirty flag was a SINGLE global
+
+    // read of persona B observed false and served B's stale cached slice).
+    //
+    // The dictionary itself IS the cache state: a missing key means "stale/uncached,
+    // re-query SQLite"; an existing entry means "fresh". Invalidating a single
+    // persona removes its key; invalidating all removes all keys. No separate
+    // boolean can get out of step with the dictionary.
+    // ChatStore is an actor, so access needs no extra locking.
     private var sessionListCache: [String: [ChatSession]] = [:]
-    private var sessionListCacheDirty = true
 
     /// [T-ios-listsessions-cache] Mark the cached session list stale. Called by
-    /// every mutation that can change what listSessions() returns — the row set
-    /// (create/delete), ordering (updated_at via touchSession), or a displayed
-    /// field (title/category/pin/model/preview text from new messages).
-    /// `internal` rather than `private` so the backup restore path
-    /// (ChatStore+BackupRestore.swift) can invalidate after its own row writes —
-    /// Swift's `private` is file-scoped, so an extension in another file cannot
-    /// see it.
-    func invalidateSessionListCache() {
-        sessionListCacheDirty = true
+    /// every mutation that can change what listSessions() returns.
+    ///
+    /// [audit-E11] Optional `personaId`: when given, invalidates ONLY that
+    /// persona's slice; nil invalidates all personas (the safe default used by
+    /// general mutations like iCloud sync merges).
+    func invalidateSessionListCache(personaId: String? = nil) {
+        if let pid = personaId {
+            sessionListCache.removeValue(forKey: pid)
+        } else {
+            sessionListCache.removeAll(keepingCapacity: true)
+        }
     }
 
     init() {
@@ -1256,7 +1269,7 @@ actor ChatStore {
         // hundreds-of-MB StringStorage growth from redundant listSessions()
         // calls (proven via malloc_history).
         // ［persona］缓存按人设 key。
-        if !sessionListCacheDirty, let cached = sessionListCache[pid] {
+        if let cached = sessionListCache[pid] {
             return cached
         }
         // Session-list preview policy:
@@ -1439,7 +1452,7 @@ actor ChatStore {
         // calls return this same array until a mutation invalidates it.
         // ［persona］按人设 key 存。
         sessionListCache[pid] = sessions
-        sessionListCacheDirty = false
+
         return sessions
     }
 
