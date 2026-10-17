@@ -166,7 +166,6 @@ struct SessionMemoryView: View {
                 ))
                 found += 1
             }
-            dayOffset += 1
         }
 
         return items
