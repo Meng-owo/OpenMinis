@@ -435,6 +435,8 @@ final class AssistantBlock: Identifiable, ObservableObject {
             return action.isEmpty ? "Memory" : action
         case .askUserTool:
             return "向用户提问"
+        case .genericTool(let name):
+            return name.isEmpty ? "Tool" : name
         case .info:
             return ""
         }
@@ -452,6 +454,10 @@ enum AssistantBlockKind: Equatable {
     case readImageTool(path: String)
     case memoryTool(action: String)
     case askUserTool
+    /// [audit-C3] Any tool without a dedicated kind — rendered with its own
+    /// name + a generic wrench glyph instead of masquerading as a shell tool
+    /// (the old fallback sent all 13 unlisted tools down the terminal path).
+    case genericTool(name: String)
     case info
 
     /// Tool-call kinds — everything `ToolCapsuleView` renders. The message

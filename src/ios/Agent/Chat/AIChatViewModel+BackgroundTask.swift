@@ -340,6 +340,7 @@ extension AIChatViewModel {
         case .readImageTool: toolName = "read_image"
         case .memoryTool: toolName = "memory"
         case .askUserTool: toolName = "ask_user"
+        case .genericTool(let n): toolName = n
         case .info: toolName = "info"
         }
 

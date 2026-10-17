@@ -300,6 +300,8 @@ struct ChatMessageRow: View {
                 parts.append("Memory: \(action)\n\(block.content)")
             case .askUserTool:
                 parts.append("Ask user:\n\(block.content)")
+            case .genericTool(let name):
+                parts.append("\(name)\n\(block.content)")
             case .thinking:
                 if !block.content.isEmpty { parts.append("[Thinking]\n\(block.content)") }
             case .info:

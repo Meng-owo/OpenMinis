@@ -719,6 +719,8 @@ struct ToolLiveSheet: View {
             return "\(truncateParam(action))"
         case .askUserTool:
             return "ask_user_input_v0"
+        case .genericTool(let name):
+            return name
         case .info:
             return ""
         }
@@ -739,6 +741,7 @@ struct ToolLiveSheet: View {
         case .readImageTool: Image(systemName: "photo.fill")
         case .memoryTool: Image(systemName: "brain.head.profile")
         case .askUserTool: Image(systemName: "questionmark.circle.fill")
+        case .genericTool: Image(systemName: "wrench.adjustable.fill")
         case .info: Image(systemName: "arrow.triangle.2.circlepath")
         case .text: Image(systemName: "text.alignleft")
         case .thinking: Image("ThinkingIcon")
@@ -1961,6 +1964,7 @@ struct ToolLiveSheet: View {
         case .readImageTool: return "嘟嘟 is reading Image"
         case .memoryTool: return "嘟嘟 is using Memory"
         case .askUserTool: return "嘟嘟 is asking You"
+        case .genericTool(let name): return name.isEmpty ? "嘟嘟" : "嘟嘟 is using \(name)"
         case .info: return "嘟嘟"
         case .text: return "嘟嘟"
         case .thinking: return "嘟嘟"
@@ -1995,6 +1999,7 @@ struct ToolLiveSheet: View {
         case .readImageTool: return ChatColors.accent
         case .memoryTool: return ChatColors.accent
         case .askUserTool: return ChatColors.accent
+        case .genericTool: return ChatColors.accent
         case .info: return .secondary
         case .text: return .primary
         case .thinking: return ChatColors.accent
@@ -2336,6 +2341,7 @@ private struct ToolPreviewThumbnail: View {
         case .readImageTool: return ChatColors.accent
         case .memoryTool: return ChatColors.accent
         case .askUserTool: return ChatColors.accent
+        case .genericTool: return ChatColors.accent
         case .info: return .secondary
         case .text: return .primary
         case .thinking: return ChatColors.accent

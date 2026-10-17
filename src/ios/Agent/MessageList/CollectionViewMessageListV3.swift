@@ -299,6 +299,7 @@ private struct BridgedAssistantBlockV3: View {
         case .readImageTool: return "assistantReadImageBlock"
         case .memoryTool: return "assistantMemoryBlock"
         case .askUserTool: return "assistantAskUserBlock"
+        case .genericTool: return "assistantGenericToolBlock"
         case .info: return "assistantInfoBlock"
         }
     }
@@ -3525,6 +3526,7 @@ extension CollectionViewMessageListV3 {
                         case .browserTool: "browser_use"
                         case .readImageTool: "read_image"
                         case .memoryTool: "memory"
+                        case .genericTool(let name): name
                         default: "unknown"
                         }
                         AppLogger(category: "ToolLC").info("[ToolLifecycle] RENDERED_CHATUI toolId=\(block.toolUseId?.prefix(20) ?? "nil") tool=\(toolName) sid=\(sid) appState=\(appState) suspended=\(suspended) isProcessing=\(processing) caller=\(caller)")

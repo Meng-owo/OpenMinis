@@ -967,7 +967,7 @@ extension AIChatViewModel {
 
             let isToolBlock: Bool
             switch block.kind {
-            case .shellTool, .fileReadTool, .fileWriteTool, .fileEditTool, .browserTool, .readImageTool, .memoryTool, .askUserTool:
+            case .shellTool, .fileReadTool, .fileWriteTool, .fileEditTool, .browserTool, .readImageTool, .memoryTool, .askUserTool, .genericTool:
                 isToolBlock = true
             default:
                 isToolBlock = false
