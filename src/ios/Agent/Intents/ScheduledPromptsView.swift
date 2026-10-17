@@ -106,6 +106,11 @@ struct ScheduledPromptEditor: View {
     @State private var repeatRule: ScheduledPromptRepeat = .daily
     @State private var weekday: Int = 1
     @State private var enabled = true
+    /// [audit-B5] The session this prompt is bound to; nil = a fresh session
+    /// per fire (bind-on-first-wake). Editable here so the binding is VISIBLE
+    /// and can be cleared — the footer used to reference a "session field"
+    /// that existed only as a model field, not as UI.
+    @State private var boundSessionId: String?
     @State private var loaded = false
 
     private static let fmt: DateFormatter = {
@@ -146,6 +151,27 @@ struct ScheduledPromptEditor: View {
                 Text(AppLocalized("Sent automatically when you tap the notification. If you leave the session field empty in the manager, each fire continues the same session created by the first wake.",
                                   comment: "Scheduled prompt editor footer"))
             }
+            // [audit-B5] The binding row: shows which session this prompt will
+            // continue into, and lets the user cut it loose again. Empty =
+            // bind-on-first-wake (the row says so instead of staying silent).
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(AppLocalized("Session binding"))
+                            .foregroundStyle(MinisTheme.primaryText)
+                        Text(boundSessionId.map { "\u{2026}" + $0.prefix(8) } ?? AppLocalized("Not bound yet — the first wake opens a session and binds it here."))
+                            .font(.caption)
+                            .foregroundStyle(MinisTheme.secondaryText)
+                    }
+                    Spacer()
+                    if boundSessionId != nil {
+                        Button(AppLocalized("Unbind")) { boundSessionId = nil }
+                            .font(.caption)
+                    }
+                }
+            } header: {
+                Text(AppLocalized("Session"))
+            }
         }
         .navigationTitle(prompt == nil
             ? AppLocalized("New Scheduled Prompt")
@@ -169,6 +195,7 @@ struct ScheduledPromptEditor: View {
                 repeatRule = p.repeatRule
                 weekday = p.weekday
                 enabled = p.enabled
+                boundSessionId = p.sessionId
                 var comps = DateComponents()
                 comps.hour = p.hour
                 comps.minute = p.minute
@@ -187,6 +214,7 @@ struct ScheduledPromptEditor: View {
         p.repeatRule = repeatRule
         p.weekday = weekday
         p.enabled = enabled
+        p.sessionId = boundSessionId
         Task {
             await store.upsert(p)
             dismiss()
