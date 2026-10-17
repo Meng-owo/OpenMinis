@@ -81,6 +81,37 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
     }
 }
 
+/// The sixteen colour roles, grouped by what they paint.
+///
+/// The palette used to be one flat list of sixteen rows. That is why picking a
+/// colour felt like "一选一片都是那个颜色" — with no grouping, the only visible
+/// structure was the order they happened to be declared in, and every row
+/// wrote to the same global scope. Grouping makes the shape of the palette
+/// legible before you touch anything.
+enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
+    case surfaces, text, chat, status
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .surfaces: return "底与卡片"
+        case .text: return "文字"
+        case .chat: return "聊天"
+        case .status: return "状态"
+        }
+    }
+
+    var roles: [AppearanceColorRole] {
+        switch self {
+        case .surfaces: return [.canvas, .surface, .raised, .mutedSurface, .border]
+        case .text: return [.primaryText, .secondaryText, .accent]
+        case .chat: return [.userBubble, .assistantBubble, .input, .searchField, .toolCard]
+        case .status: return [.success, .warning, .destructive]
+        }
+    }
+}
+
 @MainActor
 final class AppearanceStudio: ObservableObject {
     static let shared = AppearanceStudio()

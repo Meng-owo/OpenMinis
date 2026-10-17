@@ -19,6 +19,8 @@ struct AppearanceStudioView: View {
     @State private var saveName: String = ""
     @State private var errorText: String?
     @State private var showResetConfirm = false
+    /// [T-palette-scope] Which page the palette editor is currently writing to.
+    @State private var paletteScope: AppearanceScope = .global
     // [T-appearance-collapsible] Most appearance sections start collapsed so
     // the page reads as a short index; expand what you're here for.
     @State private var showPalette = false
@@ -80,7 +82,7 @@ struct AppearanceStudioView: View {
             }
 
             CollapsibleSection(title: "色盘",
-                               footer: "每行下面标了它管哪里。浅色和深色会跟着系统外观切换，统一作用于全局所有页面。",
+                               footer: "选一个页面单独调色；没单独调过的会跟随「全部页面」。每行下面标了它管哪里。",
                                isExpanded: $showPalette) {
                 Picker("色盘", selection: $variant) {
                     ForEach(AppearanceVariant.allCases) { item in
@@ -89,23 +91,32 @@ struct AppearanceStudioView: View {
                 }
                 .pickerStyle(.segmented)
 
-                ForEach(AppearanceColorRole.allCases.filter { $0 != .userBubble && $0 != .assistantBubble && $0 != .toolCard }) { role in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 12) {
-                            ColorPicker(role.title,
-                                        selection: studio.colorBinding(role,
-                                                                       scope: .global,
-                                                                       variant: variant),
-                                        supportsOpacity: false)
-                            Text("#\(studio.hex(role, scope: .global, variant: variant))")
-                                .font(.system(.caption, design: .monospaced))
-                                .foregroundStyle(studio.color(.secondaryText, scope: .global,
-                                                              variant: variant))
-                            Spacer()
+                // [T-palette-scope] The resolver always supported per-page
+                // overrides — `hex()` falls back scope → global → built-in —
+                // but this editor hard-coded `scope: .global` on every row, so
+                // the only way to change a colour was to change it everywhere.
+                // That is the "一选一片都是那个颜色" complaint: one picker, one
+                // colour, every page. Scope is now a choice.
+                Picker("改哪个页面", selection: $paletteScope) {
+                    ForEach(AppearanceScope.allCases) { scope in
+                        Text(scope.title).tag(scope)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if paletteScope != .global {
+                    Text("这一页只改「\(paletteScope.title)」。其余页面仍用「全部页面」的色。")
+                        .font(.caption2)
+                        .foregroundStyle(studio.color(.secondaryText, scope: .settings, variant: variant).opacity(0.85))
+                }
+
+                ForEach(AppearanceColorRoleGroup.allCases) { group in
+                    Section {
+                        ForEach(group.roles.filter { $0 != .userBubble && $0 != .assistantBubble && $0 != .toolCard }) { role in
+                            paletteRow(role)
                         }
-                        Text(role.hint)
-                            .font(.caption2)
-                            .foregroundStyle(studio.color(.secondaryText, scope: .global, variant: variant).opacity(0.8))
+                    } header: {
+                        Text(group.title)
                     }
                 }
             }
@@ -514,6 +525,45 @@ struct AppearanceStudioView: View {
             Text("会清掉你上传的全部图片、色盘和形状设置。恢复之后可以用「撤销上一次恢复」拿回来。")
         }
         .listRowBackground(AppearanceStudio.shared.color(.surface, scope: .settings))
+    }
+
+    // MARK: - 色盘单行
+    /// One colour role row, bound to the scope picked above.
+    ///
+    /// The hex text is the RESOLVED value, so on a page-scope row that has no
+    /// override yet it shows the inherited global colour — which is what the
+    /// user is actually looking at. A dot marks rows that carry their own
+    /// override, and tapping it drops back to inheriting.
+    @ViewBuilder
+    private func paletteRow(_ role: AppearanceColorRole) -> some View {
+        let resolved = studio.hex(role, scope: paletteScope, variant: variant)
+        let owned = studio.hasOverride(role, scope: paletteScope, variant: variant)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                ColorPicker(role.title,
+                            selection: studio.colorBinding(role,
+                                                           scope: paletteScope,
+                                                           variant: variant),
+                            supportsOpacity: false)
+                Text("#\(resolved)")
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(studio.color(.secondaryText, scope: .settings, variant: variant))
+                Spacer()
+                if owned && paletteScope != .global {
+                    Button {
+                        studio.clearOverride(role, scope: paletteScope, variant: variant)
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward.circle")
+                            .foregroundStyle(studio.color(.accent, scope: .settings, variant: variant))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("这一页恢复跟随全局"))
+                }
+            }
+            Text(role.hint)
+                .font(.caption2)
+                .foregroundStyle(studio.color(.secondaryText, scope: .settings, variant: variant).opacity(0.8))
+        }
     }
 
     // MARK: - 预览条：聊天小样放不下的六个角色
