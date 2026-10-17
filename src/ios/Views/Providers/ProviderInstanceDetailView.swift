@@ -488,6 +488,10 @@ struct ProviderInstanceDetailView: View {
     @ViewBuilder
     private func oauthCredentialView(_ instance: ProviderInstance) -> some View {
         let isAuth = oauthIsAuthenticated(instance)
+        // [audit-F12 / T-oauth-keep-credentials] Refresh was rejected: the
+        // credential is kept (never auto-deleted) but unusable until the user
+        // signs in again.
+        let needsReauth = isAuth && ProviderKeychainHelper.oauthNeedsReauth(instanceId: instance.id)
         let detail = oauthDetail(instance)
         // Subscribe to auth state changes (Keychain token save/delete)
         let _ = oauthRefreshTrigger
@@ -501,21 +505,44 @@ struct ProviderInstanceDetailView: View {
                     Text(detail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if needsReauth {
+                        Text(AppLocalized("Sign-in expired. Sign in again to keep using this provider."))
+                            .font(.caption)
+                            .foregroundStyle(MinisTheme.destructive)
+                    }
                 }
                 Spacer()
                 if isAuth {
                     Circle()
-                        .fill(MinisTheme.success)
+                        .fill(needsReauth ? MinisTheme.destructive : MinisTheme.success)
                         .frame(width: 8, height: 8)
                 }
             }
 
             HStack(spacing: 12) {
-                if isAuth {
-                    Button(AppLocalized("Copy Token")) {
-                        Task { await oauthCopyToken(instance) }
+                if needsReauth {
+                    Button(AppLocalized("Sign In Again")) {
+                        // Kimi uses the RFC 8628 device-code sheet; others run inline.
+                        if instance.providerType == .kimiCode {
+                            showKimiLogin = true
+                        } else {
+                            Task {
+                                await oauthLogin(instance)
+                                await MainActor.run {
+                                    oauthRefreshTrigger.toggle()
+                                }
+                            }
+                        }
                     }
                     .font(.caption.weight(.medium))
+                }
+                if isAuth {
+                    if !needsReauth {
+                        Button(AppLocalized("Copy Token")) {
+                            Task { await oauthCopyToken(instance) }
+                        }
+                        .font(.caption.weight(.medium))
+                    }
                     Button(AppLocalized("Sign Out"), role: .destructive) {
                         oauthLogout(instance)
                         oauthRefreshTrigger.toggle()

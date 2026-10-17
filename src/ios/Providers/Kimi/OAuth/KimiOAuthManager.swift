@@ -223,7 +223,7 @@ final class KimiOAuthManager: ObservableObject {
                 error: error,
                 isFatal: KimiOAuthRefreshCoordinator.isRefreshTokenInvalid,
                 loadCurrent: { ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: KimiTokenStorage.self) },
-                deleteCredentials: { ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId) },
+                markNeedsReauth: { ProviderKeychainHelper.markOAuthNeedsReauth(instanceId: instanceId) },
                 log: { [weak self] in self?.logger.info($0) }
             )
         }

@@ -243,7 +243,7 @@ final class ClaudeOAuthManager: NSObject, ObservableObject {
             error: error,
             isFatal: isFatal,
             loadCurrent: { ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: ClaudeTokenStorage.self) },
-            deleteCredentials: { ProviderKeychainHelper.deleteOAuthToken(instanceId: instanceId) },
+            markNeedsReauth: { ProviderKeychainHelper.markOAuthNeedsReauth(instanceId: instanceId) },
             log: { logger.info($0) }
         )
     }

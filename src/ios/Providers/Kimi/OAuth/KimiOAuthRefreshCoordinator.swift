@@ -52,11 +52,11 @@ enum KimiOAuthRefreshCoordinator {
         )
     }
 
-    /// Decide what storage to use (or whether to clear credentials) after a
+    /// Decide what storage to use (or whether to mark the instance for re-login) after a
     /// refresh attempt threw `error`.
     ///
     /// Critical guard — *compare-before-delete*: on a token-invalid error we
-    /// clear stored credentials ONLY when the currently-persisted refresh token
+    /// mark the instance for re-login ONLY when the currently-persisted refresh token
     /// is still the one we failed with. If a concurrent refresh already rotated
     /// it, this request is stale and returning `current` preserves the
     /// freshly-written token instead of wiping it.
@@ -66,7 +66,7 @@ enum KimiOAuthRefreshCoordinator {
         error: Error,
         isFatal: (LLMError) -> Bool,
         loadCurrent: () -> KimiTokenStorage?,
-        deleteCredentials: () -> Void,
+        markNeedsReauth: () -> Void,
         log: ((String) -> Void)? = nil
     ) throws -> KimiTokenStorage {
         // Re-load the latest persisted state — a concurrent winner may have
@@ -78,8 +78,14 @@ enum KimiOAuthRefreshCoordinator {
                 log?("Stale invalid_grant ignored — token already rotated; keeping new credentials")
                 return current
             }
-            log?("Refresh token invalid, clearing credentials: \(llmError)")
-            deleteCredentials()
+            // [audit-F12 / T-oauth-keep-credentials] Never delete on a rejected
+            // refresh: the classifier can misread a transient reply, and a
+            // wiped credential cannot be recovered. Mark the instance so the UI
+            // shows it red and routing skips it; the mark lapses on its own once
+            // a new credential is stored (re-login, or a Keychain sync from a
+            // peer), and only an explicit Sign Out removes the blob.
+            log?("Refresh token invalid, marking instance for re-login (credentials kept): \(llmError)")
+            markNeedsReauth()
             throw LLMError.invalidAPIKey(detail: "Kimi: refresh token invalid — \(llmError)")
         }
 

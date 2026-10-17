@@ -312,6 +312,9 @@ final class ProviderRowCredentialCache: @unchecked Sendable {
     struct Display {
         let isConfigured: Bool
         let summary: String
+        /// [audit-F12 / T-oauth-keep-credentials] OAuth credential kept but its
+        /// refresh was rejected — row renders red until the user signs in again.
+        var needsReauth = false
     }
 
     /// Backstop only — `authRevision` is the primary invalidation signal.
@@ -363,6 +366,7 @@ private struct InstanceRow: View {
         ProviderRowCredentialCache.shared.value(for: instance.id, revision: store.authRevision) {
             let configured: Bool
             let summary: String
+            var needsReauth = false
             switch instance.credentialType {
             case .apiKey:
                 // Single Keychain read serves BOTH the dot and the masked subtitle;
@@ -380,11 +384,13 @@ private struct InstanceRow: View {
                 }
             case .oauth:
                 let authed = Self.probeOAuthAuthenticated(instance)
-                configured = authed
-                summary = authed ? AppLocalized("Authenticated")
-                                 : AppLocalized("Not authenticated")
+                needsReauth = authed && ProviderKeychainHelper.oauthNeedsReauth(instanceId: instance.id)
+                configured = authed && !needsReauth
+                summary = needsReauth ? AppLocalized("Sign-in expired")
+                    : authed ? AppLocalized("Authenticated")
+                    : AppLocalized("Not authenticated")
             }
-            return .init(isConfigured: configured, summary: summary)
+            return .init(isConfigured: configured, summary: summary, needsReauth: needsReauth)
         }
     }
 
@@ -420,7 +426,9 @@ private struct InstanceRow: View {
         let _ = store.authRevision  // subscribe to OAuth state changes
         HStack(spacing: 12) {
             Circle()
-                .fill(isConfigured && instance.isEnabled ? MinisTheme.success : AppearanceStudio.shared.color(.secondaryText).opacity(0.4))
+                .fill(credentialDisplay.needsReauth ? MinisTheme.destructive
+                      : isConfigured && instance.isEnabled ? MinisTheme.success
+                      : AppearanceStudio.shared.color(.secondaryText).opacity(0.4))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -435,7 +443,7 @@ private struct InstanceRow: View {
                         .foregroundStyle(.quaternary)
                     Text(credentialSummary)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(credentialDisplay.needsReauth ? AnyShapeStyle(MinisTheme.destructive) : AnyShapeStyle(.secondary))
                         .lineLimit(1)
                 }
                 if modelCount > 0 {
