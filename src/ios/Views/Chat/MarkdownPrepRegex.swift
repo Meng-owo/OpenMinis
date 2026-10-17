@@ -397,7 +397,30 @@ func splitStreamingTableTail(_ markdown: String) -> (prefix: String, plainSuffix
     let tailLen = len - tailStart
     guard tailLen > 0 else { return (markdown, "") }
     let tail = nsString.substring(with: NSRange(location: tailStart, length: tailLen))
-    guard tail.contains("|") else { return (markdown, "") }
+    // [audit-F10 / T-ios-inline-code-streaming-flicker] The in-flight line must
+    // LOOK LIKE a table row — start with `|` — not merely contain one somewhere.
+    //
+    // `contains("|")` matched ordinary prose: a pipe anywhere in the sentence
+    // (`a|b`, a shell pipeline, a CJK vertical bar) sent the whole line down
+    // the plain-text path, where inline syntax is deliberately NOT parsed. A
+    // completed `` `uuid` `` span sitting in that line therefore rendered as
+    // unstyled body text while it was in flight, and snapped to the code pill
+    // the moment the line terminated — the mid-span colour break users see on
+    // long UUIDs and hashes. The span was never parsed inconsistently; it was
+    // parsed by cmark in one frame and bypassed entirely in the next.
+    //
+    // `hasPrefix("|")` after leading whitespace is the same test
+    // `insertBlankLineAfterTable` below already uses to decide what a table
+    // line is, and its comment gives the same rationale: prose containing an
+    // inline `|` must not be promoted to a table. Keeping the two definitions
+    // identical is what stops one pass from treating a line as a table row
+    // while the other does not.
+    //
+    // This only NARROWS when the split fires. Real streaming table rows still
+    // take the plain-text path, so the per-chunk TableAttachment rebuild storm
+    // stays fixed.
+    let tailTrimmed = tail.drop(while: { $0 == " " || $0 == "\t" })
+    guard tailTrimmed.hasPrefix("|") else { return (markdown, "") }
     let prefix = nsString.substring(with: NSRange(location: 0, length: tailStart))
     return (prefix, tail)
 }
