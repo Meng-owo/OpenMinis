@@ -632,7 +632,6 @@
 		RCL000118 /* BackupRunController.swift in Sources */ = {isa = PBXBuildFile; fileRef = RCL000218 /* BackupRunController.swift */; };
 		RCL000119 /* BackupHistoryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RCL000219 /* BackupHistoryDetailView.swift */; };
 		RCL000120 /* BackupCategoryIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = RCL000220 /* BackupCategoryIcon.swift */; };
-		RCL000121 /* BackupHUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = RCL000221 /* BackupHUD.swift */; };
 		RCL000122 /* BackupSnapshotService.swift in Sources */ = {isa = PBXBuildFile; fileRef = RCL000222 /* BackupSnapshotService.swift */; };
 /* End PBXBuildFile section */
 
@@ -1418,7 +1417,6 @@
 		RCL000218 /* BackupRunController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupRunController.swift; sourceTree = "<group>"; };
 		RCL000219 /* BackupHistoryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHistoryDetailView.swift; sourceTree = "<group>"; };
 		RCL000220 /* BackupCategoryIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCategoryIcon.swift; sourceTree = "<group>"; };
-		RCL000221 /* BackupHUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupHUD.swift; sourceTree = "<group>"; };
 		RCL000222 /* BackupSnapshotService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSnapshotService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -2597,7 +2595,6 @@
 				RCL000219 /* BackupHistoryDetailView.swift */,
 				BKP000244 /* BackupSkippedFilesView.swift */,
 				RCL000220 /* BackupCategoryIcon.swift */,
-				RCL000221 /* BackupHUD.swift */,
 				RCL000216 /* BackupDestinationDetailView.swift */,
 				BKP000216 /* BackupRestoreView.swift */,
 				E5MNT0101 /* MountedFoldersManager.swift */,
@@ -3517,7 +3514,6 @@
 				RCL000115 /* BackupDestinationPicker.swift in Sources */,
 				RCL000119 /* BackupHistoryDetailView.swift in Sources */,
 				RCL000120 /* BackupCategoryIcon.swift in Sources */,
-				RCL000121 /* BackupHUD.swift in Sources */,
 				RCL000122 /* BackupSnapshotService.swift in Sources */,
 				RCL000116 /* BackupDestinationDetailView.swift in Sources */,
 				BKP000113 /* BackupCrypto.swift in Sources */,
