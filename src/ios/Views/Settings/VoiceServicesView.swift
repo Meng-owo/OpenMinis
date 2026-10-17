@@ -29,6 +29,8 @@ struct VoiceServicesView: View {
     @State private var editing: TTSServiceOptions?
     @State private var showAddSheet = false
     @State private var showSystemEditor = false
+    /// [audit-A7] 系统语音开闸确认框。
+    @State private var showSystemSwitchConfirm = false
     /// TTSServiceStore is a plain Sendable (read from the synthesis queue too),
     /// not an ObservableObject — this throws on its change notification so the
     /// list re-renders on add / edit / delete / selection.
@@ -76,6 +78,17 @@ struct VoiceServicesView: View {
             }
         }
         .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
+        // [audit-A7] 系统语音开闸确认（与 C2 同款口径：先问，再改路由）。
+        .confirmationDialog("把发声切换为系统语音吗？", isPresented: $showSystemSwitchConfirm, titleVisibility: .visible) {
+            Button("切换为系统语音") {
+                VoiceOutputPreferences.systemVoiceAllowed = true
+                store.setSelectedServiceId(nil)
+                MinisToast.show("已切换为系统语音发声", systemImage: "waveform")
+            }
+            Button("保持当前设置", role: .cancel) {}
+        } message: {
+            Text("系统语音当前被静音。允许后它会参与朗读与 AI 语音回复；随时可在本页关闭。")
+        }
     }
 
     // MARK: Services
@@ -104,8 +117,9 @@ struct VoiceServicesView: View {
     /// editor (voice roster + pitch/volume/speed), same as any cloud service.
     /// [T-system-voice-off 09-12] 修复审查问题7: with the "Allow System voice"
     /// switch OFF this engine never speaks, so the row must SAY so — dimmed,
-    /// "muted by setting" caption, and tapping it flips the setting instead of
-    /// silently selecting a voice that can't sound.
+    /// "muted by setting" caption.
+    /// [audit-A7] 点被静音的行不再静默开闸（与 SystemVoiceEditorView 的 C2
+    /// 确认口径一致）：一次点选会永久开启系统语音，先弹确认框由用户决定。
     private var systemRow: some View {
         // [audit-A6] "正在使用"不再只看"没选服务"——服务/默认分组/模型组三级
         // 逐层让位判定，与聊天语音设置弹窗的标签共用同一条解析链
@@ -116,10 +130,9 @@ struct VoiceServicesView: View {
             if allowed {
                 store.setSelectedServiceId(nil)
             } else {
-                // Tapping the muted System row turns it back on (one less hop
-                // than scrolling to the Playback toggle).
-                VoiceOutputPreferences.systemVoiceAllowed = true
-                store.setSelectedServiceId(nil)
+                // [audit-A7] 静默开闸 → 确认框（与 C2 同一口径：改路由先确认，
+                // 不能让一次点选永久开启系统语音）。
+                showSystemSwitchConfirm = true
             }
         } label: {
             HStack(spacing: 12) {
