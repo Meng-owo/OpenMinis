@@ -235,6 +235,25 @@ final class AppearanceStudio: ObservableObject {
         persistColors()
     }
 
+    /// [audit-D6] True when any page-scoped (non-global) color override exists.
+    /// No current editor writes these — legacy builds' per-page editors did —
+    /// but the resolver still lets them win over the global palette, and
+    /// nothing in the UI can show or clear one.
+    var hasNonGlobalColorOverrides: Bool {
+        let prefix = AppearanceScope.global.rawValue + "."
+        return customColors.keys.contains { !$0.hasPrefix(prefix) }
+    }
+
+    /// [audit-D6] Drop every non-global color override, keeping the user's
+    /// global palette. Before this, the only way to clear a stray page-scope
+    /// key was「恢复默认色盘」, which wipes the whole palette with it.
+    func clearNonGlobalColorOverrides() {
+        let prefix = AppearanceScope.global.rawValue + "."
+        customColors = customColors.filter { $0.key.hasPrefix(prefix) }
+        persistColors()
+        configureUIKitSurfaces()
+    }
+
     func applyPreset(_ preset: AppearancePreset) {
         let palettes = preset.colors
         for variant in AppearanceVariant.allCases {

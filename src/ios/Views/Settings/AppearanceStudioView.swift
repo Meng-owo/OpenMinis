@@ -121,6 +121,13 @@ struct AppearanceStudioView: View {
                 Button("恢复默认色盘", role: .destructive) {
                     studio.resetColors()
                 }
+                // [audit-D6] 作用域管理最小面：存在页级残留覆盖时才现身，
+                // 一键清掉但不碰全局色盘。
+                if studio.hasNonGlobalColorOverrides {
+                    Button("清除页面级配色覆盖", role: .destructive) {
+                        studio.clearNonGlobalColorOverrides()
+                    }
+                }
             } header: {
                 Text("预设")
             }
