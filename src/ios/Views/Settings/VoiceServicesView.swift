@@ -1,5 +1,13 @@
 import SwiftUI
 
+// MARK: - 选声链路共享文案
+
+/// [audit-A10] 选声链路说明——语音服务页与 TTS 分组页四处页脚共用同一段话，
+/// 终结"三处三种口径"；明确含 TTS 分组一级（旧文案全漏了它）。
+enum VoiceServicesCopy {
+    static let routingNote = "发声候选：默认 TTS 分组里的服务（按分组顺序自动切换）、单独选中的服务（自带厂商/密钥/音色）、声音模型组；系统语音只在「允许系统语音」开启时参与。"
+}
+
 // MARK: - Voice Services (kelivo-style TTS service list)
 //
 // [T-tts-services 09-11] The list page of the independent TTS layer. One row per
@@ -114,7 +122,7 @@ struct VoiceServicesView: View {
         } header: {
             Text("Text-to-Speech")
         } footer: {
-            Text("Pick which voice speaks for read-aloud and AI voice replies. A service here is a complete synthesis target on its own — vendor, endpoint, key, model, voice and tuning. Nothing selected falls to the Voice Output model group. The built-in System voice only speaks when \"Allow System voice\" is on.")
+            Text(VoiceServicesCopy.routingNote)
         }
     }
 
@@ -186,7 +194,7 @@ struct VoiceServicesView: View {
         } header: {
             Text("分组")
         } footer: {
-            Text("把多个 TTS 服务装进一个分组，发语音时按顺序自动切换。")
+            Text(VoiceServicesCopy.routingNote)
         }
     }
 

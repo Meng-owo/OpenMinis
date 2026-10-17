@@ -26,7 +26,7 @@ struct TTSGroupsView: View {
                         Text("还没有 TTS 分组")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        Text("把多个 TTS 服务装进一个分组，发语音时按顺序自动切换——第一个挂了换下一个。")
+                        Text(VoiceServicesCopy.routingNote)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -72,7 +72,7 @@ struct TTSGroupsView: View {
                         }
                     }
                 } footer: {
-                    Text("发语音（AI 语音回复、send_voice）优先走默认分组里的服务，按顺序自动切换。")
+                    Text(VoiceServicesCopy.routingNote)
                 }
             }
         }
