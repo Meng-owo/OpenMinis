@@ -31,7 +31,7 @@ struct EvolutionSettingsView: View {
                 Toggle("记录工具轨迹", isOn: $settings.isRecordingEnabled)
                 Toggle("自动整理候选经验", isOn: $extractionEnabled)
             } footer: {
-                Text("记录只存脱敏后的轨迹（工具名 / 耗时 / 成败 / 参数摘要），原始内容不落库；关掉即为零采集。")
+                Text("记录只存脱敏后的轨迹（工具名 / 耗时 / 成败 / 参数摘要），原始内容不落库；关掉即只停「采集」——库里已有的经验照常参与注入，不受影响。")
             }
 
             Section {

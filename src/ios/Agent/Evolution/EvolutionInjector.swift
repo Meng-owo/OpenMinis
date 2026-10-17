@@ -137,7 +137,12 @@ final class EvolutionInjector: @unchecked Sendable {
     }
 
     private func refreshIfStale(sessionId: String?) {
-        guard EvolutionSettings.recordingEnabled else { return }
+        // [audit-D3] This used to guard on `recordingEnabled` too — so flipping
+        // the COLLECTION switch off also froze this cache and killed injection
+        // of every lesson already in the library (a cold start with the toggle
+        // off: never refreshes at all). Recording governs collection only
+        // (EvolutionRecorder / EvolutionExtractor); what may be INJECTED is
+        // governed by `mode` alone — see the guard in `turnFragment` above.
         let budget = EvolutionSettings.budgetTokens
         lock.lock()
         let due = Date().timeIntervalSince(lastRefreshAt) > Constants.refreshInterval
