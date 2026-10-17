@@ -110,10 +110,14 @@ enum CSSThemeVariables {
     /// appearance, so this variable follows the user's theme and its dark
     /// variant for free. `isDark` stays in the signature because every other
     /// variable here takes it and the call sites pass it uniformly.
-    static func success(isDark: Bool) -> Color { MinisTheme.success }
+    static func success(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+        studio.color(.success, scope: scope, variant: isDark ? .dark : .light)
+    }
 
     /// --color-warning
-    static func warning(isDark: Bool) -> Color { MinisTheme.warning }
+    static func warning(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+        studio.color(.warning, scope: scope, variant: isDark ? .dark : .light)
+    }
 }
 
 // MARK: - 顶角圆角 Shape 工具
