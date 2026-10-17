@@ -84,6 +84,10 @@ struct AgentCallback: Equatable {
     /// this was the last one. UI-facing: it lets the card say the task is still
     /// planned, which the firing text alone cannot convey.
     var nextFireAt: String?
+    /// [audit-C4] The pulse flag travels WITH the message: the card must
+    /// render from the envelope even after the job is gone (deleted, cleared,
+    /// or synced from a peer), instead of vanishing with the registry entry.
+    var isPulse: Bool = false
     /// [T-agent-model-identity] tier requested / resolved / effective model.
     /// Serialised as attributes so the parent model can read them and the
     /// callback cell / sheet can show the same identity the block shows.
@@ -94,7 +98,7 @@ struct AgentCallback: Equatable {
          summary: String?, body: String, siblings: String? = nil, modelIdentity: HelperModelIdentity? = nil,
          agent: String? = nil,
          fireIndex: Int? = nil, remaining: Int? = nil, triggerLabel: String? = nil,
-         nextFireAt: String? = nil) {
+         nextFireAt: String? = nil, isPulse: Bool = false) {
         self.kind = kind; self.jobId = jobId; self.childSessionId = childSessionId
         self.agent = agent
         self.title = title; self.status = status; self.tier = tier; self.elapsed = elapsed
@@ -102,6 +106,7 @@ struct AgentCallback: Equatable {
         self.body = body; self.siblings = siblings; self.modelIdentity = modelIdentity
         self.fireIndex = fireIndex; self.remaining = remaining; self.triggerLabel = triggerLabel
         self.nextFireAt = nextFireAt
+        self.isPulse = isPulse
     }
 
     /// The attribute subset of the identity payload carried on the tag.
@@ -149,6 +154,9 @@ struct AgentCallback: Equatable {
         if let remaining, remaining >= 0 { attrs.append(("remaining", String(remaining))) }
         if let triggerLabel, !triggerLabel.isEmpty { attrs.append(("trigger", triggerLabel)) }
         if let nextFireAt, !nextFireAt.isEmpty { attrs.append(("next_fire_at", nextFireAt)) }
+        // [audit-C4] Only ever present on a pulse firing — an ordinary
+        // scheduled / agent envelope serialises exactly as before.
+        if isPulse { attrs.append(("pulse", "1")) }
         if let id = modelIdentity {
             let payload = id.payload()
             for key in Self.identityAttrs {
@@ -215,7 +223,8 @@ struct AgentCallback: Equatable {
                              fireIndex: attrs["fire"].flatMap { Int($0) },
                              remaining: attrs["remaining"].flatMap { Int($0) },
                              triggerLabel: attrs["trigger"],
-                             nextFireAt: attrs["next_fire_at"])
+                             nextFireAt: attrs["next_fire_at"],
+                             isPulse: attrs["pulse"] == "1")
     }
 
     /// One-line stand-in for session previews / notifications, where the

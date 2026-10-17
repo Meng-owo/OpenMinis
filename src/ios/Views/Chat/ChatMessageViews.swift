@@ -285,23 +285,13 @@ struct ChatMessageRow: View {
             if message.isSystemReminderOnly {
                 EmptyView()
             } else if let callback = message.agentCallback {
-                if callback.kind == .scheduled {
-                    // 普通定时任务：保持完全隐身（不打扰）
-                    // [T-scheduled-prefill-and-pulse] 脉搏类任务留一张轻声卡片，
-                    // 因为那正是「小梦主动想找醒醒」——值得被看见。
-                    if let job = AgentJobRegistry.shared.job(id: callback.jobId), job.isPulse {
-                        ScheduledPulseCardView(jobId: callback.jobId,
-                                               title: callback.title,
-                                               fireIndex: callback.fireIndex,
-                                               remaining: callback.remaining)
-                            .padding(.horizontal, 4)
-                    } else {
-                        EmptyView()
-                    }
-                } else {
-                    AgentCallbackCellView(callback: callback, sessionId: nil)
-                        .opacity(message.isCompactedHistory ? 0.5 : 1.0)
-                }
+                // [audit-C5] The 隐身 / 脉搏-card decision lives INSIDE the cell
+                // now (AgentCallbackCellView.isPulsePresentation) — one judgment,
+                // shared with the list's height precalc. This branch used to
+                // re-decide from the registry, which both duplicated the rule
+                // and let a cleared job fall between the two copies.
+                AgentCallbackCellView(callback: callback, sessionId: nil)
+                    .opacity(message.isCompactedHistory ? 0.5 : 1.0)
             } else {
                 userRow
                     .opacity(message.isCompactedHistory ? 0.5 : 1.0)

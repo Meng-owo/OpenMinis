@@ -262,10 +262,34 @@ struct AgentCallbackCellView: View {
         kind == .scheduled ? 0 : 64
     }
 
+    /// [audit-C4/C5] The ONE place the pulse/ordinary rendering decision is
+    /// made — the cell renders from it and the message list's height precalc
+    /// measures from it, so render and height cannot disagree (they did: the
+    /// cell hid every scheduled callback while the list re-drew pulses from
+    /// the registry, and a cleared task fell between the two and vanished).
+    /// The registry ENHANCES (live state, pause control); the envelope is the
+    /// fallback so a message outlives its job.
+    @MainActor
+    static func isPulsePresentation(_ callback: AgentCallback) -> Bool {
+        if let job = AgentJobRegistry.shared.job(id: callback.jobId) { return job.isPulse }
+        return callback.isPulse
+    }
+
     var body: some View {
         if callback.kind == .scheduled {
-            // 醒醒专属隐身模式：定时任务在视觉上完全静默，不产生任何卡片干扰，自然回访
-            EmptyView()
+            // [audit-C4/C5] 醒醒专属隐身模式仍管普通定时任务（完全静默）；但脉搏
+            // 卡从这里出——判定只有这一处（isPulsePresentation），且数据以信封
+            // 为主：任务被删/清了，卡片照样按消息里的 fire/remaining/title 渲染
+            // 成轻卡（没有暂停键），不再整个消失。
+            if Self.isPulsePresentation(callback) {
+                ScheduledPulseCardView(jobId: callback.jobId,
+                                       title: callback.title,
+                                       fireIndex: callback.fireIndex,
+                                       remaining: callback.remaining)
+                    .padding(.horizontal, 4)
+            } else {
+                EmptyView()
+            }
         } else {
             HStack(spacing: 10) {
                 ZStack {

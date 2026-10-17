@@ -469,7 +469,10 @@ enum ScheduledJobRunner {
             fireIndex: fireIndex,
             remaining: remaining,
             triggerLabel: job.trigger.logLabel,
-            nextFireAt: nextFire.map { iso($0) }
+            nextFireAt: nextFire.map { iso($0) },
+            // [audit-C4] The card must survive the job: pulse-ness rides the
+            // envelope so a deleted / cleared task still renders its light card.
+            isPulse: job.isPulse
         )
         return callback.xml
     }
