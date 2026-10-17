@@ -10,6 +10,45 @@ import os.log
 // into streamMessage. They are the same request. [diag-0800 Q2]
 private let logger = AppLogger(category: "AnthropicStreamTransport")
 
+/// [audit-F11 / T-oauth-cloudflare-403 issue #360] Single source of truth for
+/// the Claude-CLI mimicry headers, shared by the chat transport (here) and the
+/// OAuth token exchange (`ClaudeOAuthManager`). Cloudflare Bot Management
+/// decides from exactly this set whether the caller looks like the official
+/// CLI; when only one of the two paths sent them, the asymmetry read to the
+/// user as "chat works but I can't log in" — a 403 challenge page where JSON
+/// was expected. `anthropic-beta` is deliberately NOT here: it negotiates
+/// message-API features and has no meaning on a token request.
+///
+/// On bumping: `User-Agent` tracks the CLI release (pinned ≥2.1.251 for
+/// subscription-model gating, OpenMinis#301). The `X-Stainless-*` values do
+/// NOT move with it — they track the Anthropic TypeScript SDK and the Node
+/// runtime, both on independent cadences.
+enum ClaudeCLIMimicry {
+    static let headers: [String: String] = [
+        "User-Agent": "claude-cli/2.1.251 (external, cli)",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Package-Version": "0.106.0",
+        "X-Stainless-OS": "Linux",
+        "X-Stainless-Arch": "arm64",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Runtime-Version": "v24.18.0",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Timeout": "600",
+        "X-App": "cli",
+        "Anthropic-Dangerous-Direct-Browser-Access": "true",
+    ]
+
+    /// Apply every mimicry header to `request`.
+    static func apply(to request: NSMutableURLRequest) {
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+    }
+
+    /// Apply every mimicry header to `request`.
+    static func apply(to request: inout URLRequest) {
+        for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
+    }
+}
+
 /// Replaces `x-api-key` with `Authorization: Bearer` via a custom URLProtocol.
 ///
 /// Since `HTTPRequest` properties are module-internal in SwiftAnthropic,
@@ -612,22 +651,19 @@ private final class OAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
         }
         mutable.setValue(flags.joined(separator: ","), forHTTPHeaderField: "anthropic-beta")
 
-        // Stainless / CLI fingerprint headers. User-Agent intentionally pinned
-        // to claude-cli/2.1.251 — Anthropic gates newer subscription models
-        // (e.g. claude-fable-5-1) on CLI ≥ 2.1.251 (OpenMinis#301). Keep
-        // Stainless values stable unless a real CLI capture shows they must
-        // move; bump UA when Anthropic raises the floor again.
-        mutable.setValue("claude-cli/2.1.251 (external, cli)", forHTTPHeaderField: "User-Agent")
-        mutable.setValue("js", forHTTPHeaderField: "X-Stainless-Lang")
-        mutable.setValue("0.106.0", forHTTPHeaderField: "X-Stainless-Package-Version")
-        mutable.setValue("Linux", forHTTPHeaderField: "X-Stainless-OS")
-        mutable.setValue("arm64", forHTTPHeaderField: "X-Stainless-Arch")
-        mutable.setValue("node", forHTTPHeaderField: "X-Stainless-Runtime")
-        mutable.setValue("v24.18.0", forHTTPHeaderField: "X-Stainless-Runtime-Version")
-        mutable.setValue("0", forHTTPHeaderField: "X-Stainless-Retry-Count")
-        mutable.setValue("600", forHTTPHeaderField: "X-Stainless-Timeout")
-        mutable.setValue("cli", forHTTPHeaderField: "X-App")
-        mutable.setValue("true", forHTTPHeaderField: "Anthropic-Dangerous-Direct-Browser-Access")
+        // Stainless / CLI fingerprint headers — single source of truth, shared
+        // with the token path (ClaudeOAuthManager). [audit-F11] The values used
+        // to be spelled out here; a second copy in the token exchange was free
+        // to drift, and the drift IS the bug — the token endpoint sent NO
+        // mimicry headers, and on Cloudflare-scored networks that asymmetry
+        // read to the user as "chat works but I can't log in".
+        //
+        // User-Agent intentionally pinned to claude-cli/2.1.251 — Anthropic
+        // gates newer subscription models (e.g. claude-fable-5-1) on
+        // CLI ≥ 2.1.251 (OpenMinis#301). Keep Stainless values stable unless a
+        // real CLI capture shows they must move; bump UA when Anthropic raises
+        // the floor again — and bump it HERE, once.
+        ClaudeCLIMimicry.apply(to: mutable)
 
         // Materialize httpBodyStream → httpBody so patchers and debug capture can read it.
         #if DEBUG

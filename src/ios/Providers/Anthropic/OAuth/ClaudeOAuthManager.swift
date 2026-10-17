@@ -348,6 +348,19 @@ final class ClaudeOAuthManager: NSObject, ObservableObject {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // [audit-F11 / T-oauth-cloudflare-403 issue #360] The token path sent NO
+        // mimicry headers, while the chat path has sent them since the OAuth
+        // transport was written. Cloudflare Bot Management decides from exactly
+        // this set whether the caller looks like the official CLI, so on a
+        // network it scores as suspicious the asymmetry read to the user as
+        // "chat works but I can't log in" — a 403 challenge page where JSON was
+        // expected.
+        //
+        // Shared with the chat path (OAuthHTTPClient.swift) rather than copied,
+        // so the two cannot drift apart again. `anthropic-beta` is deliberately
+        // absent: it negotiates message-API features and has no meaning here.
+        ClaudeCLIMimicry.apply(to: &request)
+
         let jsonData = try JSONSerialization.data(withJSONObject: body)
         request.httpBody = jsonData
 
