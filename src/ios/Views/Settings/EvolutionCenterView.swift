@@ -10,6 +10,8 @@ struct EvolutionCenterView: View {
     @State private var counts: [String: Int] = [:]
     @State private var runs: [EvolutionRun] = []
     @State private var loading = false
+    /// [E05] 注入台账：影子/启用每次参考的记账（recentInjections 的首个业务消费者）。
+    @State private var injections: [EvolutionInjection] = []
     /// [audit-D4] 维护/清空的就地回执。
     @State private var maintenanceNote: String?
     @State private var confirmClear = false
@@ -51,6 +53,24 @@ struct EvolutionCenterView: View {
                     }
                 } footer: {
                     Text("默认「影子」：只记录、不使用——攒够对比数据、你审过之后，再考虑开「启用」。")
+                }
+
+                // [E05] 把影子模式"记录「本来会参考哪几条」给你看"的承诺兑现：
+                // 台账此前只有写侧（insert）和读 API（recentInjections，零消费者）。
+                Section {
+                    if injections.isEmpty {
+                        Text("还没有注入记账。开「影子」用一会儿，这里会记下每次「本来会参考」的条目。")
+                            .foregroundStyle(.secondary)
+                            .font(.footnote)
+                    } else {
+                        ForEach(injections, id: \.id) { inj in
+                            injectionRow(inj)
+                        }
+                    }
+                } header: {
+                    Text("最近注入")
+                } footer: {
+                    Text("影子与启用都会记账：影子记「本来会参考哪几条」，启用记「真的注入了哪几条」；上面的「影子命中」是总数。")
                 }
 
                 // [audit-D4] 维护入口：此前 prune() / clearAll() 全仓零调用，
@@ -182,6 +202,23 @@ struct EvolutionCenterView: View {
         .padding(.vertical, 1)
     }
 
+    /// [E05] 单条注入记账：影子=eye（"本来会参考"）、启用=下箭头（真的注入了）。
+    private func injectionRow(_ inj: EvolutionInjection) -> some View {
+        let isShadow = inj.mode == EvolutionMode.shadow.rawValue
+        return HStack(spacing: 10) {
+            Image(systemName: isShadow ? "eye" : "arrow.down.circle.fill")
+                .foregroundStyle(isShadow ? Color.secondary : Color.green)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(inj.injectedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.callout)
+                Text("经验 \(inj.lessonId.prefix(8)) · \(inj.tokenCost) token\(inj.sessionId.map { " · 会话 \($0.prefix(6))" } ?? "")")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 1)
+    }
+
     private func statusSymbol(_ status: EvolutionRunStatus) -> String {
         switch status {
         case .ok: return "checkmark.circle"
@@ -224,6 +261,7 @@ struct EvolutionCenterView: View {
         guard let store = EvolutionStore.shared else { return }
         counts = await store.counts()
         runs = await store.recentRuns(limit: 30)
+        injections = await store.recentInjections(limit: 12)
     }
 }
 
