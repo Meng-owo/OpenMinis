@@ -3506,18 +3506,13 @@ struct AIChatView: View {
                         return
                     }
                     AIVoiceMessageComposer.setVoiceReplies(enabled: v, sessionId: sid)
-                    // [T-voice-bubble-no-double-read 09-12] Turning the
-                    // bubble mode ON mid-turn stops the streaming
-                    // read-aloud queue immediately — the bubble that
-                    // lands at StreamEnd is the single audio source.
-                    // [T-voice-bubble-mid-turn 09-12] 修复审查问题5: mid-turn 开启
-                    // 时前半段已经读过了，气泡合成的却是整段——直接说清楚生效范围，
-                    // 不让她猜为什么又从头播。
+                    // [batch1-A2] 开语音回复不再掐用户手点的朗读——StreamEnd 自动
+                    // 气泡已拆（batch9-voice/5），没有"双读"风险；这里只负责
+                    // mid-turn 开启时把新语义（AI 想发才发）讲清楚。
                     if v {
                         if vm.isProcessing {
                             MinisToast.show(AppLocalized("AI voice replies on — the AI sends a voice bubble when it wants to."))
                         }
-                        vm.stopSpeech()
                     }
                 }
             )) {
@@ -7436,7 +7431,6 @@ struct ChatVoiceSettingsSheet: View {
                                 if vm.isProcessing {
                                     MinisToast.show(AppLocalized("AI voice replies on — the AI sends a voice bubble when it wants to."))
                                 }
-                                vm.stopSpeech()
                             }
                         }
                     )) {
