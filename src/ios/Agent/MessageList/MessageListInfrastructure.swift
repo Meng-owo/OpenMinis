@@ -1220,6 +1220,9 @@ final class CellStateBridgeV2: ObservableObject {
     /// [batch9d / W1C-08] 本会话绑定人设 id（cell 配置时从 VM 复制），供气泡名/
     /// 正则显示面使用——与"回答的人"保持同一身份。
     @Published var sessionPersonaId: String?
+    /// [audit-C1] 本会话 id（同样在 cell 配置时从 VM 复制）；回调卡的详情
+    /// 路由需要它（见 AgentCallbackCellView 的 openAgentCallback 通知）。
+    @Published var sessionId: String?
     @Published var toolSnapshots: [ToolSnapshotItem] = []
     /// Tool detail sheet — owned by footer, triggered by block cells.
     @Published var detailBlock: AssistantBlock?

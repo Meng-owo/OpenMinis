@@ -244,6 +244,10 @@ struct ChatMessageRow: View {
     /// [batch9d / W1C-08] 会话绑定人设 id——气泡名/正则显示按它取；
     /// nil（草稿态/未传）回退全局当前人设。
     var sessionPersonaId: String? = nil
+    /// [audit-C1] 本行所属会话 id——回调卡点开详情时随通知带上，
+    /// 只让「来源会话」的宿主弹 sheet（分屏/多标签下可能有多个聊天界面活着）。
+    /// 由 bridge 在 cell 配置时从 VM 复制（与 sessionPersonaId 同路）。
+    var sessionId: String? = nil
     @State private var showUsage = false
     @State private var showCompactSummary = false
     /// [T-ios-delete-from-message] Confirmation gate for the suffix delete.
@@ -322,7 +326,7 @@ struct ChatMessageRow: View {
                 // shared with the list's height precalc. This branch used to
                 // re-decide from the registry, which both duplicated the rule
                 // and let a cleared job fall between the two copies.
-                AgentCallbackCellView(callback: callback, sessionId: nil)
+                AgentCallbackCellView(callback: callback, sessionId: sessionId)
                     .opacity(message.isCompactedHistory ? 0.5 : 1.0)
             } else {
                 userRow

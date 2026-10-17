@@ -372,6 +372,9 @@ struct AIChatView: View {
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
+    /// [audit-C1] 回调卡点开详情的投递口：卡片原样发 openAgentCallback 通知，
+    /// 本会话的宿主在这里接住，用与工具卡同一张 ToolLiveSheet 呈现。
+    @State private var callbackDetailTarget: AgentCallbackDetailTarget?
     @State private var showClearChatConfirm = false
     /// [T-action-bar 09-12] Assistant action bar delete needs an explicit
     /// confirmation because the safe data-consistent operation removes the
@@ -1114,6 +1117,22 @@ struct AIChatView: View {
             SessionMCPsView(sessionId: vm.sessionId) {
                 await vm.ensureSessionReturningId()
             }
+        }
+        // [audit-C1] 回调卡箭头终于有去处：只让来源会话的宿主弹（分屏/多标签
+        // 下可能有多个 AIChatView 活着）；通知没带 sessionId 时按兜底放行。
+        .onReceive(NotificationCenter.default.publisher(for: .openAgentCallback)) { note in
+            let info = note.userInfo ?? [:]
+            if let sid = info["sessionId"] as? String, sid != vm.sessionId { return }
+            guard let cb = info["callback"] as? AgentCallback else { return }
+            callbackDetailTarget = AgentCallbackDetailTarget(callback: cb)
+        }
+        .sheet(item: $callbackDetailTarget) { target in
+            ToolLiveSheet(toolBlocks: [target.block],
+                          initialIdx: 0,
+                          toolSnapshots: vm.toolSnapshots,
+                          browserPool: vm.browserTabPool,
+                          onBrowserTakeover: { vm.browserTakeoverActive = true },
+                          onTakeoverDone: { vm.resumeFromBrowserTakeover() })
         }
         .sheet(isPresented: $showSessionMemory) {
             SessionMemoryView(vm: cached.vm)

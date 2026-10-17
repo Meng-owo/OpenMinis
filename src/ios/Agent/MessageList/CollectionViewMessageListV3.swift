@@ -686,7 +686,8 @@ private struct BridgedWholeMessageV3: View {
             onTakeoverDone: bridge.onTakeoverDone,
             browserPool: nil,
             toolSnapshots: [],
-            sessionPersonaId: bridge.sessionPersonaId
+            sessionPersonaId: bridge.sessionPersonaId,
+            sessionId: bridge.sessionId
         )
         .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
         .frame(maxWidth: .infinity)
@@ -1580,6 +1581,7 @@ extension CollectionViewMessageListV3 {
 
             bridge.isActiveMessage = isActive
             bridge.sessionPersonaId = vm.sessionPersonaId
+            bridge.sessionId = vm.sessionId
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
             bridge.browserPool = vm.browserTabPool
