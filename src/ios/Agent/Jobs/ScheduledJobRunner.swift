@@ -144,7 +144,10 @@ enum ScheduledJobRunner {
     /// `run --id`: fire regardless of the trigger, off-schedule. The armed
     /// timer (if any) keeps its own cadence.
     static func fireNow(_ job: AgentJob) async -> [String: Any] {
-        let sid = await fire(job)
+        // [audit-B4] Manual run: the armed schedule keeps its insurance
+        // notification for its next fire (the old unconditional cancel left
+        // the next scheduled fire uninsured).
+        let sid = await fire(job, keepInsurance: true)
         return ["fired": sid != nil, "session_id": sid ?? NSNull()]
     }
 
@@ -200,13 +203,18 @@ enum ScheduledJobRunner {
 
     /// Land the prompt on the target. Returns the session the prompt went to.
     @discardableResult
-    private static func fire(_ job: AgentJob, upstreamJobId: String? = nil) async -> String? {
+    private static func fire(_ job: AgentJob, upstreamJobId: String? = nil, keepInsurance: Bool = false) async -> String? {
         let registry = AgentJobRegistry.shared
         var prompt = job.prompt ?? ""
         if let up = upstreamJobId, let upstream = registry.job(id: up) {
             prompt = prompt.replacingOccurrences(of: "{{result}}", with: upstream.resultText ?? "")
         }
-        cancelInsurance(job)
+        // [audit-B4] A SCHEDULED fire consumes its own one-shot insurance
+        // notification; a MANUAL run (`fireNow` / run --id) must NOT — the
+        // armed timer for the next scheduled fire still needs that backstop.
+        if !keepInsurance {
+            cancelInsurance(job)
+        }
 
         switch job.target {
         case .new:
