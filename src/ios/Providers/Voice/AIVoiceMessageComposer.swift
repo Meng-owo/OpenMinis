@@ -360,7 +360,12 @@ enum AIVoiceMessageComposer {
             // 取消透传（不能 try? 吞掉），普通失败才 continue 试下一个。
             do {
                 let data = try await synthesizeChunked(text, limit: 1000, { chunk in
-                    try await provider.synthesize(VoiceOutputRequest(input: chunk, model: entry.model.id))
+                    // [audit-F8] 分块兜底也是真实发声路径——voice/resolvedModel
+                    // 同补，否则长回复一旦触发分块就又在默认音色上复发。
+                    try await provider.synthesize(VoiceOutputRequest(input: chunk,
+                                                                    model: entry.model.id,
+                                                                    voice: entry.model.id,
+                                                                    resolvedModel: entry.model))
                 })
                 if !data.isEmpty {
                     logger.info("[AIVoice] synthesized via model-group entry \(entry.model.displayName)")

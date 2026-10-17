@@ -59,6 +59,10 @@ struct VoiceOutputRequest {
     /// 0.25 ~ 4.0, nil = 1.0 (provider default).
     let speed: Float?
     let responseFormat: VoiceOutputFormat
+    /// [audit-F8 / T-ios-tts-voice-never-sent] The resolved model this request
+    /// is aimed at — lets providers route by the catalog entry behind `model`
+    /// string. nil = the provider only knows `model` (legacy behaviour).
+    let resolvedModel: LLMModel?
     /// [T-tts-services 09-11] Vendor-specific tuning, keyed by `TTSKnob.key`
     /// (emotion / volume / pitch / languageType / outputFormat / instruction /
     /// region / workspaceId / sampleRate / language / format). Empty for the
@@ -71,12 +75,14 @@ struct VoiceOutputRequest {
          voice: String? = nil,
          speed: Float? = nil,
          responseFormat: VoiceOutputFormat = .mp3,
+         resolvedModel: LLMModel? = nil,
          extras: [String: String] = [:]) {
         self.input = input
         self.model = model
         self.voice = voice
         self.speed = speed
         self.responseFormat = responseFormat
+        self.resolvedModel = resolvedModel
         self.extras = extras
     }
 

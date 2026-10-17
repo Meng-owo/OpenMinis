@@ -89,10 +89,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         let label: String
         let provider: any VoiceOutputCapable
         /// [T-tts-services 09-11] Builds the synthesis request for a text unit.
-        /// The legacy Model-Group path emits a bare `VoiceOutputRequest(input:
-        /// model:)`; the TTS service path folds in the vendor's voice id and
-        /// tuning knobs. Keeping this per-candidate means the two layers never
-        /// have to agree on a shared parameter shape.
+        /// The Model-Group path now carries model + voice (= the entry's model
+        /// id — entries double as voices here) + resolvedModel (F8); the TTS
+        /// service path folds in the vendor's voice id and tuning knobs.
+        /// Keeping this per-candidate means the two layers never have to agree
+        /// on a shared parameter shape.
         let makeRequest: (String) -> VoiceOutputRequest
     }
     /// STICKY cursor: the ModelEntry.id we're currently synthesizing with. Persists
@@ -462,7 +463,18 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                 return Candidate(key: entry.id,
                                  label: entry.model.displayName,
                                  provider: p,
-                                 makeRequest: { VoiceOutputRequest(input: $0, model: entry.model.id) })
+                                 // [audit-F8 / T-ios-tts-voice-never-sent] voice: 必须
+                                 // 随请求发送：读 request.voice 优先的供应商（Azure/
+                                 // Xunfei/Gemini/基类 OpenAI 兼容体）此前拿到 nil，全
+                                 // 都回退到各自默认音色——"试听都对、播放永远默认女声"
+                                 // 的根因。模型条目在本架构里兼作音色（见
+                                 // VoiceProviderTemplate 的目录说明），所以
+                                 // voice = model.id；resolvedModel 供按目录路由的
+                                 // 供应商使用。
+                                 makeRequest: { VoiceOutputRequest(input: $0,
+                                                                   model: entry.model.id,
+                                                                   voice: entry.model.id,
+                                                                   resolvedModel: entry.model) })
             }
         }
         guard !candidates.isEmpty else {
