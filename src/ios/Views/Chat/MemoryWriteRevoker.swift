@@ -1,5 +1,33 @@
 import Foundation
 
+// MARK: - [audit-E7] 记忆文件日历日期共享助手
+
+/// [audit-E7] Single source of truth for "recent daily-log date strings
+/// (YYYY-MM-DD)".
+///
+/// Anchors at the start of `today` and steps by CALENDAR days (`byAdding: .day`).
+/// Stepping by `-86400s` from `Date()` lands on the wrong date around DST
+/// transitions (a 23/25-hour day shifts the result into the day before
+/// yesterday in the early hours), skipping a daily log and skewing labels
+/// and lookups. The injection path already knew this (AIChatViewModel+MemoryTools:29);
+/// this helper shares the exact same rule with UI and revoke.
+enum MemoryLogDates {
+    static let dateFormat = "yyyy-MM-dd"
+
+    /// Date strings for `today`, `today - 1 day`, ... up to `count` calendar days.
+    static func recentDays(count: Int, from now: Date = Date()) -> [String] {
+        guard count > 0 else { return [] }
+        let cal = Calendar.current
+        let todayStart = cal.startOfDay(for: now)
+        let fmt = DateFormatter()
+        fmt.dateFormat = dateFormat
+        return (0..<count).map { dayOffset in
+            let date = cal.date(byAdding: .day, value: -dayOffset, to: todayStart) ?? todayStart
+            return fmt.string(from: date)
+        }
+    }
+}
+
 // MARK: - Memory write revocation
 
 /// [T-ios-memory-write-revoke] Shared undo for a `memory_write` tool call:
@@ -42,12 +70,8 @@ enum MemoryWriteRevoker {
         // not the globally-current one.
         let memDir = PersonaStore.memoryDir(for: personaID ?? PersonaStore.currentID())
 
-        let dateFmt = DateFormatter()
-        dateFmt.dateFormat = "yyyy-MM-dd"
-        let candidates = [
-            dateFmt.string(from: Date()),
-            dateFmt.string(from: Date().addingTimeInterval(-86400))
-        ]
+        // [audit-E7] Calendar days (shared with injection and UI), not -86400s.
+        let candidates = MemoryLogDates.recentDays(count: 2)
 
         for dateStr in candidates {
             let fileURL = memDir.appendingPathComponent("\(dateStr).md")

@@ -135,16 +135,12 @@ struct SessionMemoryView: View {
         }
 
         // Most recent 3 daily logs with content (matches system prompt injection logic)
-        let dateFmt = DateFormatter()
-        dateFmt.dateFormat = "yyyy-MM-dd"
-        let today = Date()
+        // [audit-E7] Calendar-day stepping via shared MemoryLogDates (matches
+        // AIChatViewModel+MemoryTools injection logic; -86400s caused DST drift).
         var found = 0
-        var dayOffset = 0
-        let maxLookback = 30
+        let dates = MemoryLogDates.recentDays(count: 30)
 
-        while found < 3 && dayOffset < maxLookback {
-            let date = today.addingTimeInterval(-Double(dayOffset) * 86400)
-            let dateStr = dateFmt.string(from: date)
+        for (dayOffset, dateStr) in dates.enumerated() where found < 3 {
             let fileName = "\(dateStr).md"
             let fileURL = memDir.appendingPathComponent(fileName)
             if fm.fileExists(atPath: fileURL.path),
@@ -480,12 +476,8 @@ private struct MemoryWriteDetailView: View {
         let fm = FileManager.default
         // ［persona］按本会话人设回写记忆目录。
         let memDir = PersonaStore.memoryDir(for: personaID)
-        let dateFmt = DateFormatter()
-        dateFmt.dateFormat = "yyyy-MM-dd"
-        let candidates = [
-            dateFmt.string(from: Date()),
-            dateFmt.string(from: Date().addingTimeInterval(-86400))
-        ]
+        // [audit-E7] Calendar days via shared MemoryLogDates.
+        let candidates = MemoryLogDates.recentDays(count: 2)
 
         for dateStr in candidates {
             let fileURL = memDir.appendingPathComponent("\(dateStr).md")
