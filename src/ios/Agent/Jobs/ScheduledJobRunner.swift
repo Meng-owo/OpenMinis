@@ -356,8 +356,11 @@ enum ScheduledJobRunner {
                                                                parentToolUseId: nil)
             ProviderConfigStore.shared.setBinding(
                 SessionModelBinding(sessionId: session.id, primarySource: resolution.source), for: session.id)
-            applySubAgentThinkingLevel(subAgent: builtIn, childSessionId: session.id,
-                                       parentSessionId: parentSid, entry: resolution.entry)
+            // [batch7][AUD-B7-0] `applySubAgentThinkingLevel` is an instance
+            // method on AIChatViewModel; call it on the parent VM we already
+            // resolved above instead of a bare (unresolvable) symbol.
+            parentVM.applySubAgentThinkingLevel(subAgent: builtIn, childSessionId: session.id,
+                                                parentSessionId: parentSid, entry: resolution.entry)
             let (child, _) = ViewModelCache.shared.getOrCreate(for: session.id)
             await child.loadSession()
             child.sessionSource = sourceTag

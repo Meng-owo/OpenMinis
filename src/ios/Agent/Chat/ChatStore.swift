@@ -5363,6 +5363,12 @@ extension RawMessage {
                 case "ask_user_input_v0", "askUser":
                     kind = .askUserTool
                     content = "向用户提问…"
+                case SubAgentDefinition.toolName:
+                    // [batch7][AUD-B7-3] Restore the persisted sub agent block
+                    // as a delegate card, not a shell block — otherwise every
+                    // historical run came back looking like a terminal.
+                    kind = .delegateTool(title: tu.description ?? "")
+                    content = "Delegating..."
                 default:
                     kind = .shellTool(command: tu.name)
                     content = tu.name

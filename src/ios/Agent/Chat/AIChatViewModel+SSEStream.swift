@@ -454,6 +454,7 @@ extension AIChatViewModel {
                     case "browser_use": .browserTool(action: "")
                     case "read_image": .readImageTool(path: "")
                     case "memory_write", "memory_get": .memoryTool(action: name)
+                    case SubAgentDefinition.toolName: .delegateTool(title: "")
                     case "ask_user_input_v0", "askUser": .askUserTool
                     default: .genericTool(name: name)
                     }
@@ -761,6 +762,13 @@ extension AIChatViewModel {
                         if let path = args["path"] as? String {
                             messages[msgIdx].blocks[blockIdx].kind = .readImageTool(path: path)
                         }
+                    case SubAgentDefinition.toolName:
+                        // [batch7][AUD-B7-2] The card's own title: prefer the
+                        // tool_title the model wrote, fall back to a bare title
+                        // arg. Without this the block kept the empty placeholder
+                        // title from contentBlockStart until the result landed.
+                        let title = (args["tool_title"] as? String) ?? (args["title"] as? String) ?? ""
+                        messages[msgIdx].blocks[blockIdx].kind = .delegateTool(title: title)
                     default: break
                     }
                     // Store serialized tool input args for introspection
