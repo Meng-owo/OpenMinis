@@ -5,10 +5,14 @@ import Foundation
 // [T-ai-voice-messages 09-12] 醒醒 2：「我想要里面的ai自己也能发语音，发出来就是
 // 自动播放的。有气泡UI像wx那样会动的，有动态效果。」
 //
-// Flow (triggered from StreamEnd when per-session "AI Voice Replies" is ON):
-//   1. Sanitize the assistant text (strip markdown, keep plain text).
-//   2. Synthesize via the read-aloud candidate chain (service → group → System).
-//   3. Write the WAV bytes to the session's attachments dir.
+// Flow (driven by the `send_voice` tool when per-session "AI Voice Replies" is
+// ON; the old StreamEnd auto-compose fallback was removed in batch9-voice/5 —
+// bubbles are sent only when the model ASKS to，想发才发):
+//   1. Sanitize the model-supplied text (strip markdown, keep plain text).
+//   2. Synthesize via the candidate chain (default TTS group → selected
+//      service → model group; System only when "Allow System voice" is on).
+//   3. Write the WAV/MP3 bytes to the session's attachments dir (+ a .txt
+//      transcript sidecar for the bubble's 转文字).
 //   4. Return a minis-clone:// URL + duration for the caller to embed into a
 //      markdown audio link. The link renders as a WX-style voice bubble via
 //      AudioAttachment (detects `voice_bubble=1` query param).
