@@ -262,6 +262,14 @@ final class AppearanceStudio: ObservableObject {
         configureUIKitSurfaces()
     }
 
+    /// Read-only view of the raw override map, for the theme undo snapshot.
+    /// `exportColors` cannot serve here: it resolves every role to a concrete
+    /// hex, which would turn "never overridden" into a hard-coded value and
+    /// make the restored palette diverge from the original.
+    func exportColorOverrides() -> [String: String] {
+        customColors
+    }
+
     func applyPreset(_ preset: AppearancePreset) {
         let palettes = preset.colors
         for variant in AppearanceVariant.allCases {

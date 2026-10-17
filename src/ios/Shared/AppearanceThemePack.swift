@@ -539,11 +539,11 @@ extension AppearanceStudio {
     /// one-way door, and `minis-theme reset` put that door behind an AI
     /// command. Everything wiped here is first copied aside so `undoReset`
     /// can put it back.
-    nonisolated static var themeUndoDirectory: URL {
+    var themeUndoDirectory: URL {
         // Dot-prefixed on purpose: the backup tree exporter walks this
         // directory with `.skipsHiddenFiles`, so a snapshot never doubles the
         // size of an appearance backup.
-        let dir = appearanceDirectoryURL.appendingPathComponent(".undo", isDirectory: true)
+        let dir = appearanceDirectory.appendingPathComponent(".undo", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }
@@ -554,7 +554,7 @@ extension AppearanceStudio {
     /// that fails halfway cannot leave the previous undo snapshot destroyed
     /// and the new one empty.
     private func captureThemeUndoSnapshot() -> URL? {
-        let dir = Self.themeUndoDirectory
+        let dir = themeUndoDirectory
         let scratch = dir.deletingLastPathComponent()
             .appendingPathComponent(".undo-staging", isDirectory: true)
         try? FileManager.default.removeItem(at: scratch)
@@ -565,7 +565,8 @@ extension AppearanceStudio {
         if let data = UserDefaults.standard.data(forKey: Self.packKey) {
             try? data.write(to: scratch.appendingPathComponent("pack.json"), options: .atomic)
         }
-        if let colors = try? JSONEncoder().encode(customColors) {
+        let overrides: [String: String] = exportColorOverrides()
+        if let colors = try? JSONEncoder().encode(overrides) {
             try? colors.write(to: scratch.appendingPathComponent("colors.json"), options: .atomic)
         }
         for key in AppearanceThemePack.categoryKeys {
@@ -592,14 +593,14 @@ extension AppearanceStudio {
 
     /// True when a reset snapshot is on disk and can be restored.
     var canUndoThemeReset: Bool {
-        let dir = Self.themeUndoDirectory
+        let dir = themeUndoDirectory
         return FileManager.default.fileExists(atPath: dir.appendingPathComponent("pack.json").path)
     }
 
     /// Restores the pack and images captured by the last `resetThemePack`.
     @discardableResult
     func undoThemeReset() -> Bool {
-        let dir = Self.themeUndoDirectory
+        let dir = themeUndoDirectory
         let packURL = dir.appendingPathComponent("pack.json")
         guard let data = try? Data(contentsOf: packURL),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

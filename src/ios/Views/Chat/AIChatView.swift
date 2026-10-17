@@ -273,6 +273,10 @@ struct AIChatView: View {
     @State private var inputAtScrollBottom: Bool = true
     @State private var inputBarHeight: CGFloat = 0
     @State private var inputBarHeightDebounce: Task<Void, Never>?
+    /// [T-inputbar-stretch] Delay before the plus drawer opens after a keyboard
+    /// dismissal. Long enough for the keyboard's own animation to finish
+    /// driving the bottom inset, short enough to still read as one gesture.
+    static let keyboardDismissLead: TimeInterval = 0.24
     /// [T-voice-inputbar-anim-tail] The most recent ON-SCREEN composer height
     /// reported by onGeometryChange. The debounced commit reads THIS instead of
     /// the height captured when its 300ms timer was armed: the panel's
@@ -935,12 +939,22 @@ struct AIChatView: View {
         }
         .onChange(of: inputFocused) { focused in
             if focused && (showPlusPanel || showStickerPanel) {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    showPlusPanel = false
-                    showStickerPanel = false
-                }
+                // [T-inputbar-stretch] Drawer down while the keyboard rises.
+                // Collapse without animation first so only the keyboard is
+                // moving the bottom inset; the two-driver race is what made
+                // the composer stretch on the way in.
+                showPlusPanel = false
+                showStickerPanel = false
             }
         }
+        // [T-inputbar-stretch] Drawer open/close changes the composer's own
+        // height, and the debounce can commit a mid-transition sample. Re-arm
+        // the seed on every toggle so the next geometry callback re-measures
+        // immediately instead of waiting for a foreground round trip — the
+        // previous self-heal only ran on `scenePhase == .active`, which is why
+        // a stretched bar survived until the user left the app.
+        .onChange(of: showPlusPanel) { _ in reseedInputBarHeight() }
+        .onChange(of: showStickerPanel) { _ in reseedInputBarHeight() }
         .alert(AppLocalized("Compact Above"), isPresented: Binding(
             get: { compactConfirmMessageId != nil },
             set: { if !$0 { compactConfirmMessageId = nil } }
@@ -3369,16 +3383,39 @@ struct AIChatView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             if isPanelOpen {
                 // 点叉叉按钮关闭弹窗，并直接弹出输入法键盘
+                // [T-inputbar-stretch] Same two-driver race in reverse: the
+                // drawer collapse and the keyboard rise both move the bottom
+                // inset. Collapse first, raise the keyboard after it lands.
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
                     showPlusPanel = false
                     showStickerPanel = false
                 }
-                inputFocused = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.keyboardDismissLead) {
+                    inputFocused = true
+                }
             } else {
+                // [T-inputbar-stretch] Keyboard down and drawer up used to
+                // start in the same layout pass. The keyboard dismissal drives
+                // the bottom safe-area inset one way while the drawer
+                // transition drives it the other, so for the length of the
+                // keyboard animation the composer is laid out against two
+                // competing heights — that is the stretch users see, and the
+                // debounced height capture can settle on a mid-animation
+                // value and stay there. Let the keyboard finish first.
+                let wasEditing = inputFocused
                 inputFocused = false
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
-                    showPlusPanel = true
-                    showStickerPanel = false
+                if wasEditing {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Self.keyboardDismissLead) {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                            showPlusPanel = true
+                            showStickerPanel = false
+                        }
+                    }
+                } else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.76)) {
+                        showPlusPanel = true
+                        showStickerPanel = false
+                    }
                 }
             }
         } label: {
@@ -4401,6 +4438,19 @@ struct AIChatView: View {
         // SwiftUI's .global space is the window's own coordinate space, so the
         // window's bounds (origin .zero) — not its frame — is the right rect.
         return window.bounds
+    }
+
+    /// Makes the next composer geometry callback re-measure authoritatively.
+    ///
+    /// The leading-edge seed only fires while `didSeedInputBarHeight` is
+    /// false. Clearing it on a drawer toggle means the height is recomputed
+    /// against the drawer's real frame instead of surviving on whatever the
+    /// debounce committed mid-transition.
+    private func reseedInputBarHeight() {
+        didSeedInputBarHeight = false
+        inputBarHeightDebounce?.cancel()
+        inputBarHeightDebounce = nil
+        AppLogger(category: "InputBarLayout").info("inputBarHeight reseed after drawer toggle (was \(inputBarHeight))")
     }
 
     /// Shared transition modifier for the `/` and `@` popups. Layout (popup
