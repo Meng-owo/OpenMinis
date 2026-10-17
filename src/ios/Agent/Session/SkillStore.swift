@@ -128,7 +128,26 @@ final class SkillStore: ObservableObject {
         try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
         if sqlite3_open(dbPath, &db) != SQLITE_OK {
             print("[SkillStore] Failed to open skills.db")
+            return
         }
+        // [audit-E3] skills.db is written concurrently by both SkillStore and
+        // MCPStore (mcp_session_overrides table). Without a busy timeout a
+        // collision immediately failed with SQLITE_BUSY; WAL mode lets readers
+        // and writers proceed concurrently.
+        sqlite3_busy_timeout(db, 5000)
+        sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nil, nil, nil)
+    }
+
+    /// [audit-E3] Execute a step that expects SQLITE_DONE and log if it failed.
+    @discardableResult
+    private func stepDone(_ stmt: OpaquePointer?, op: String) -> Bool {
+        let rc = sqlite3_step(stmt)
+        if rc != SQLITE_DONE {
+            let msg = db.flatMap { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+            AppLogger(category: "SkillStore").error("[SkillStore] \(op) failed rc=\(rc): \(msg)")
+            return false
+        }
+        return true
     }
 
     private func createTables() {

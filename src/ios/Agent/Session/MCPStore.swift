@@ -198,7 +198,24 @@ final class MCPStore: ObservableObject {
         try? fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
         if sqlite3_open(dbPath, &db) != SQLITE_OK {
             AppLogger(category: "MCPStore").error("Failed to open skills.db for MCP overrides")
+            return
         }
+        // [audit-E3] Mirror SkillStore's busy timeout and WAL configuration
+        // so writes to mcp_session_overrides don't clash with skill writes.
+        sqlite3_busy_timeout(db, 5000)
+        sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nil, nil, nil)
+    }
+
+    /// [audit-E3] Execute a step that expects SQLITE_DONE and log if it failed.
+    @discardableResult
+    private func stepDone(_ stmt: OpaquePointer?, op: String) -> Bool {
+        let rc = sqlite3_step(stmt)
+        if rc != SQLITE_DONE {
+            let msg = db.flatMap { String(cString: sqlite3_errmsg($0)) } ?? "unknown"
+            AppLogger(category: "MCPStore").error("[MCPStore] \(op) failed rc=\(rc): \(msg)")
+            return false
+        }
+        return true
     }
 
     private func createTables() {
@@ -221,7 +238,7 @@ final class MCPStore: ObservableObject {
         sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
         sqlite3_bind_text(stmt, 2, (serverId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
         sqlite3_bind_int(stmt, 3, enabled ? 1 : 0)
-        sqlite3_step(stmt)
+        stepDone(stmt, op: "dbSetSessionOverride")
     }
 
     private func dbDeleteSessionOverride(sessionId: String, serverId: String) {
@@ -231,7 +248,7 @@ final class MCPStore: ObservableObject {
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
         sqlite3_bind_text(stmt, 2, (serverId as NSString).utf8String, -1, Self.SQLITE_TRANSIENT_DB)
-        sqlite3_step(stmt)
+        stepDone(stmt, op: "dbDeleteSessionOverride")
     }
 
     /// Drop every per-session override for a server being deleted, so a
