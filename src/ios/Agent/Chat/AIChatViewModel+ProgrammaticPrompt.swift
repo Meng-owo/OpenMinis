@@ -355,6 +355,20 @@ extension AIChatViewModel {
         messages[msgIdx].blocks[blockIdx].content = json
     }
 
+    /// [batch7-fix] Stop this turn from being driven by sub agent results,
+    /// without cancelling the turn itself. Lives here (not only in the
+    /// non-compiled HelperRunner) because the card's Stop button calls it.
+    func muteDelegationResultsLive(reason: String) {
+        guard !delegationResultsMuted else { return }
+        delegationResultsMuted = true
+        logger.info("[subagent_task] parent \(self.sessionId?.prefix(8) ?? "nil") muted for sub agent results — \(reason)")
+    }
+
+    /// [batch7-fix] Release the render state a transcript page allocated for
+    /// this VM. The local build has no separate render-state object, so this
+    /// is the honest no-op the caller can rely on.
+    func helperReleaseRenderState() {}
+
     /// [batch7][AUD-B7-6] Write a delegate block located by tool_use id —
     /// the index-free twin of `writeDelegateBlock`, used by the closing chain
     /// where the parent's block indices may have moved.

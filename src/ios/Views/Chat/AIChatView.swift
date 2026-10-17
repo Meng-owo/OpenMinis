@@ -5136,7 +5136,7 @@ private struct ProviderImportSheet: View {
 
 // MARK: - Nav Bar Modifiers
 
-private struct NavTitleFrameModifier: ViewModifier {
+struct NavTitleFrameModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 26, *) {
             // [NavTitleTopClip 2026-07-23] The principal titleView aligns to the
@@ -5161,7 +5161,7 @@ private struct NavTitleFrameModifier: ViewModifier {
     }
 }
 
-private struct NavBarStyleModifier: ViewModifier {
+struct NavBarStyleModifier: ViewModifier {
     @Binding var topSafeAreaInset: CGFloat
 
     func body(content: Content) -> some View {

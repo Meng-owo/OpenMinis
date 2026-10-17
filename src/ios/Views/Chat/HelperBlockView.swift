@@ -330,7 +330,7 @@ struct HelperBlockInfo {
         // not know how it ended, and the transcript may well be intact. Use
         // the same secondary grey the rest of the card's chrome uses so it
         // reads as "no information" rather than "error".
-        default: return ChatColors.secondaryText
+        default: return Color(AppearanceStudio.uiColorSnapshot(.secondaryText))
         }
     }
 
@@ -511,7 +511,10 @@ struct HelperBlockView: View {
                     // the job callback, and both check this flag.
                     if let parent = registry.parentSession(ofChild: childId),
                        let parentVM = ViewModelCache.shared.get(for: parent) {
-                        parentVM.muteDelegationResults(reason: reason)
+                        // [batch7-fix] `muteDelegationResults` lives in HelperRunner,
+                        // which is kept in-tree but NOT compiled. The live runtime
+                        // exposes the same capability as a settable flag.
+                        parentVM.muteDelegationResultsLive(reason: reason)
                     }
                     let stopped = registry.cancelSiblings(ofChild: childId, reason: reason)
                     // No job behind it (the registry is in-memory, so a run
@@ -1075,7 +1078,9 @@ struct HelperDetailCard: View {
         guard let childId else { latestImagePath = nil; return }
         // [T-vmcache-pools] Still the child pool: opening a child to read a
         // thumbnail must not move it into the user's own budget.
-        let (vm, fresh) = ViewModelCache.shared.getOrCreate(for: childId, kind: .child)
+        // [batch7-fix] The local ViewModelCache takes only `for:` — the `kind:`
+        // pool argument exists upstream but not in this tree.
+        let (vm, fresh) = ViewModelCache.shared.getOrCreate(for: childId)
         if fresh || vm.messages.isEmpty { await vm.loadSession() }
         for msg in vm.messages.reversed() where msg.role == .assistant {
             for b in msg.blocks.reversed() {

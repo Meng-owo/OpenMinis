@@ -136,7 +136,7 @@ struct HelperTranscriptPage: View {
             // ChatColors.background on iOS 16–18 (NavBarStyleModifier), and
             // the 46 pt principal frame so the two-row title is never clipped
             // (NavTitleFrameModifier).
-            .modifier(NavBarStyleModifier(topSafeAreaInset: $topSafeAreaInset, measuresSafeArea: false))
+            .modifier(NavBarStyleModifier(topSafeAreaInset: $topSafeAreaInset))
             .navigationBarTitleDisplayMode(.inline)
             // [T-agent-transcript-navbar-lost] Pin the bar visible. This page
             // is the ROOT of its NavigationStack, and SwiftUI auto-hides a
@@ -284,7 +284,7 @@ struct HelperTranscriptPage: View {
             try? await Task.sleep(nanoseconds: 700_000_000)   // 0.7s
             guard !Task.isCancelled else { return }
             guard !vm.isProcessing else { return }
-            vm.releaseRenderState()
+            vm.helperReleaseRenderState()
             releaseTask = nil
         }
     }
@@ -416,11 +416,12 @@ private struct HelperTranscript: View {
 
     var body: some View {
         GeometryReader { geo in
+            // [batch7-fix] Local initializer has no onBrowserTakeover /
+            // onTakeoverDone parameters; order is maxContentWidth →
+            // floatingBarHeight → inputBarHeight.
             CollectionViewMessageListV3(
                 vm: vm,
                 inputFocused: false,
-                onBrowserTakeover: { vm.browserTakeoverActive = true },
-                onTakeoverDone: { vm.resumeFromBrowserTakeover() },
                 maxContentWidth: geo.size.width,
                 floatingBarHeight: 0,
                 inputBarHeight: 0
