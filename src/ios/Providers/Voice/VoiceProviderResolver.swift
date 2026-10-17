@@ -283,6 +283,41 @@ enum VoiceProviderResolver {
         label(for: resolvedOutputEntry(), includeInstance: includeInstance)
     }
 
+    /// [audit-A6/D2] "此刻谁会发声"的唯一口径 —— 语音服务页的 System 行判定与
+    /// 聊天语音设置弹窗的「朗读声音」标签共用同一条解析链，避免再出现
+    /// "正在使用"与真实发声方错位。顺序：选中服务 → 播放器运行时（上次真正
+    /// 发声的模型）→ 默认 TTS 分组 → 模型组解析。
+    static func effectiveVoiceLabel() -> String {
+        let svcStore = TTSServiceStore.shared
+        if let svc = svcStore.selectedService(), svc.enabled,
+           svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
+            return svc.name
+        }
+        if let instance = VoiceOutputPlayer.shared.activeModelLabel {
+            return instance
+        }
+        let groupStore = TTSGroupStore.shared
+        if let g = groupStore.defaultGroup(), !groupStore.defaultGroupCandidates().isEmpty {
+            return "分组 · \(g.name)"
+        }
+        return outputModelLabel()
+    }
+
+    /// [audit-A6] System 内建引擎此刻是否真的在发声链上 —— 服务、默认 TTS 分组、
+    /// 模型组三级逐层让位检查。此前只看 `selectedServiceId == nil`，把"没选服务"
+    /// 错当成"就是 System"（建了默认分组/模型组时其实都不是它）。
+    static func isSystemVoiceEffectivelyActive() -> Bool {
+        let svcStore = TTSServiceStore.shared
+        if let svc = svcStore.selectedService(), svc.enabled,
+           svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
+            return false
+        }
+        if !TTSGroupStore.shared.defaultGroupCandidates().isEmpty { return false }
+        guard VoiceOutputPreferences.systemVoiceAllowed else { return false }
+        guard let first = resolvedOutputCandidates().first else { return false }
+        return isSystemEntry(first.providerInstanceId)
+    }
+
     /// Name of the group the resolved ASR entry belongs to (the configured voice
     /// input group), or nil when the offline System / a bare override is in use.
     static func inputGroupName() -> String? {

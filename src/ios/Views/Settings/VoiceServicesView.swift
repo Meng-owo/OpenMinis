@@ -107,7 +107,10 @@ struct VoiceServicesView: View {
     /// "muted by setting" caption, and tapping it flips the setting instead of
     /// silently selecting a voice that can't sound.
     private var systemRow: some View {
-        let isActive = store.selectedServiceId == nil
+        // [audit-A6] "正在使用"不再只看"没选服务"——服务/默认分组/模型组三级
+        // 逐层让位判定，与聊天语音设置弹窗的标签共用同一条解析链
+        // (VoiceProviderResolver.isSystemVoiceEffectivelyActive)。
+        let isActive = VoiceProviderResolver.isSystemVoiceEffectivelyActive()
         let allowed = VoiceOutputPreferences.systemVoiceAllowed
         return Button {
             if allowed {
