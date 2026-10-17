@@ -2212,11 +2212,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if !text.isEmpty {
             SpeechRecognitionManager.saveInputModePreference(voiceUsedInComposition ? "voice" : "text")
             // [T-voice-bubble-default 09-13] 醒醒 2: she SPEAKS to the AI →
-            // the reply should arrive as a voice bubble too (wx semantics:
-            // voice in, voice out). Auto-enable AI Voice Replies for this
-            // session on the first voice-composed send; a typed send never
-            // turns it on, and she can still switch it off per session from
-            // the voice-options menu — auto-on only touches the default.
+            // AI Voice Replies 默认开（wx 体感：说进来、也可以说出去）。
+            // [batch1-A5] 开关语义 = 允许模型主动发语音气泡（想发才发），不是
+            // "回复必变气泡"——整条自动合成已随 StreamEnd 兜底拆除
+            //（batch9-voice/5）。Auto-enable this session on the first
+            // voice-composed send; a typed send never turns it on, and she can
+            // still switch it off per session from the voice-options menu —
+            // auto-on only touches the default.
             if voiceUsedInComposition, let sid = sessionId,
                !AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) {
                 AIVoiceMessageComposer.setVoiceReplies(enabled: true, sessionId: sid)
