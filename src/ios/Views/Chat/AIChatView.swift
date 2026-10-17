@@ -7454,13 +7454,23 @@ struct ChatStickerPanel: View {
                                 Task.detached(priority: .utility) {
                                     if let res = try? await store.recognizeSticker(imageData: data) {
                                         await MainActor.run {
+                                            // [T-sticker-category] The model picks a
+                                            // drawer from the fixed list; honour it.
+                                            // This used to pass `targetCategory`, so
+                                            // every batch-imported sticker landed in
+                                            // whatever drawer was open and the whole
+                                            // recognition result for `category` was
+                                            // thrown away — 16 drawers collapsed into
+                                            // one. Fall back to the open drawer only
+                                            // when the model returned nothing usable.
+                                            let resolved = res.category.trimmingCharacters(in: .whitespacesAndNewlines)
                                             store.updateSticker(
                                                 id: newItem.id,
                                                 title: res.title,
                                                 content: res.content,
                                                 scenario: res.scenario,
                                                 shortDesc: res.shortDesc,
-                                                category: targetCategory
+                                                category: resolved.isEmpty ? targetCategory : resolved
                                             )
                                         }
                                     }

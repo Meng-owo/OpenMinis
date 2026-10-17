@@ -516,6 +516,42 @@ struct AppearanceStudioView: View {
         .listRowBackground(AppearanceStudio.shared.color(.surface, scope: .settings))
     }
 
+    // MARK: - 预览条：聊天小样放不下的六个角色
+    private var previewRoleStrip: some View {
+        HStack(spacing: 6) {
+            roleSwatch(.raised, "浮层")
+            roleSwatch(.mutedSurface, "浅底")
+            roleSwatch(.toolCard, "工具卡")
+            roleSwatch(.success, "成功")
+            roleSwatch(.warning, "警告")
+            roleSwatch(.destructive, "危险")
+        }
+        .padding(.horizontal, 2)
+    }
+
+    /// One chip: the role's colour as the fill, its own label on top.
+    /// The label uses the role colour itself so a bad value is visible here
+    /// before it shows up in a screen the user has to go hunt for.
+    private func roleSwatch(_ role: AppearanceColorRole, _ label: String) -> some View {
+        let tint = studio.color(role, variant: variant)
+        return Text(label)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity)
+            .frame(height: 22)
+            .background(
+                tint.opacity(0.16),
+                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(tint.opacity(0.45), lineWidth: 0.6)
+            )
+            .accessibilityLabel(Text("\(label) 预览"))
+    }
+
     // MARK: - [10-15 1-1 醒醒] 顶部固定实时预览区
     // 包含：搜索栏、卡片（弹窗边风格）、AI气泡、我的气泡、输入框、强调色发送按钮
     // 全部绑定全局颜色角色（AppearanceStudio 是 ObservableObject，颜色改动自动重画）
@@ -656,6 +692,13 @@ struct AppearanceStudioView: View {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(studio.color(.border, variant: variant).opacity(0.6), lineWidth: 0.6)
             )
+
+            // [T-preview-coverage] The strip below covers the roles the chat
+            // mock above cannot show: 浮层 / 浅底 / 工具卡 / 成功 / 警告 / 危险.
+            // Before this, six of the sixteen colour roles had no preview at
+            // all — the settings page let you change them with no way to see
+            // the result short of finding the screen that used them.
+            previewRoleStrip
         }
         .padding(.horizontal, 16)
         .padding(.top, 6)
