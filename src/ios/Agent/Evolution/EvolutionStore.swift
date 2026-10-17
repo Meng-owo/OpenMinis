@@ -863,7 +863,9 @@ final class EvolutionSettings: ObservableObject {
         mode = raw.flatMap(EvolutionMode.init(rawValue:)) ?? .shadow
         isRecordingEnabled = UserDefaults.standard.object(forKey: Self.recordingKey) as? Bool ?? true
         let budget = UserDefaults.standard.object(forKey: Self.budgetKey) as? Int
-        injectionBudgetTokens = budget ?? 400
+        // [audit-D5] 0 used to be both "unset" and "no budget" — clamp to the
+        // real UI range; true OFF is the mode switch, not a zero budget.
+        injectionBudgetTokens = min(800, max(50, budget ?? 400))
     }
 
     // MARK: Thread-safe reads for background writers (UserDefaults is itself thread-safe)
@@ -878,6 +880,8 @@ final class EvolutionSettings: ObservableObject {
     }
 
     nonisolated static var budgetTokens: Int {
-        (UserDefaults.standard.object(forKey: budgetKey) as? Int) ?? 400
+        // [audit-D5] Same clamp on the background-read side, so a legacy 0
+        // stored value cannot zero out the injector fragment.
+        min(800, max(50, (UserDefaults.standard.object(forKey: budgetKey) as? Int) ?? 400))
     }
 }

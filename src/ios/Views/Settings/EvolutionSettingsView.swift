@@ -35,11 +35,11 @@ struct EvolutionSettingsView: View {
             }
 
             Section {
-                Stepper(value: $settings.injectionBudgetTokens, in: 0...800, step: 50) {
+                Stepper(value: $settings.injectionBudgetTokens, in: 50...800, step: 50) {
                     Text("注入预算：约 \(settings.injectionBudgetTokens) token")
                 }
             } footer: {
-                Text("「启用」模式下每轮最多注入的经验长度；影子模式下只用来估算这份对比。")
+                Text("「启用」模式下每轮最多注入的经验长度；影子模式下只用来估算这份对比。预算最低 50——要完全停用请把上面的模式切到「关闭」。")
             }
 
             Section {
