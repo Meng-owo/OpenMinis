@@ -427,16 +427,13 @@ final class MountedFoldersManager {
 
     /// Resolve bookmarks and hold security scopes for all entries. Call once at app launch.
     ///
-    /// **Must not block the main thread.** `URL(resolvingBookmarkData:)` for a
-    /// bookmark pointing into another app's FileProvider domain (e.g. iCloud
-    /// Drive, Obsidian) forwards through `FPDaemonConnection` which makes a
-    /// **synchronous XPC call** to the owning FileProvider extension. If that
-    /// extension is slow or unresponsive (seen in practice on iOS 26.4.1 with
-    /// iCloud Drive vaults), the main thread hangs and iOS kills the app with
-    /// 0x8BADF00D after ~20s. We therefore do the resolution on a background
-    /// queue and hop back to the main actor to commit scope acquisition and
-    /// state. A soft timeout ensures the main actor is never starved even if
-    /// the background task itself hangs forever waiting on XPC.
+    /// **Must not block the main thread** — see `resolveAndCommit` for the XPC
+    /// hazard this guards against. [audit-F6 / T-headless-mount-activation] Now
+    /// delegates to the awaitable pass (`ensureActivated`) so the foreground and
+    /// headless paths cannot drift apart, and so a headless intent arriving
+    /// moments later joins THIS pass instead of starting a second resolve of
+    /// the same bookmarks. Still fire-and-forget for the caller: `.onAppear`
+    /// must not block the first frame on FileProvider.
     func activateAll() {
         let snapshot = entries
         mountLog.info("activateAll: \(snapshot.count) entries to resolve")
@@ -444,13 +441,102 @@ final class MountedFoldersManager {
             pushExternalMountSnapshot()
             return
         }
-        Task.detached(priority: .userInitiated) {
-            for entry in snapshot {
-                await Self.resolveAndCommit(entry: entry)
+        Task { await self.ensureActivated() }
+    }
+
+    // MARK: - [audit-F6 / T-headless-mount-activation] Awaitable activation
+
+    /// True once an activation pass has finished (successfully or not) in this
+    /// process. Guards the fast path in `ensureActivated`.
+    private var didCompleteActivationPass = false
+
+    /// In-flight activation, so concurrent callers await one pass instead of
+    /// racing several resolves of the same bookmarks.
+    private var activationPass: Task<Void, Never>?
+
+    /// Resolve every configured mount and publish the snapshot, RETURNING ONLY
+    /// WHEN THAT IS DONE. Safe to call repeatedly and from several callers at
+    /// once — the work happens at most once per process.
+    ///
+    /// Why this exists: `activateAll()` is fire-and-forget and is invoked from
+    /// the root view's `.onAppear`. A headless AppIntent launch
+    /// (`openAppWhenRun = false`, e.g. a Shortcuts automation after the app was
+    /// force-quit) never builds that view, so activation never ran at all: no
+    /// security scope was acquired, `activeURLs` stayed empty, and
+    /// `pushExternalMountSnapshot` therefore dropped every entry through its
+    /// `compactMap`. The agent then started against an empty external-mount
+    /// snapshot and `/var/minis/mounts/<name>` was missing — while the
+    /// bookmarks themselves were on disk the whole time, which is why opening
+    /// the app once "fixed" it.
+    ///
+    /// Bounded by construction: `resolveAndCommit` already races each bookmark
+    /// against a 5s timeout and records `.failed` rather than hanging, so the
+    /// worst case here is 5s per configured mount and never unbounded. Callers
+    /// that want a hard ceiling regardless of mount count should use
+    /// `ensureActivated(timeout:)`.
+    func ensureActivated() async {
+        if didCompleteActivationPass { return }
+        if let existing = activationPass {
+            await existing.value
+            return
+        }
+        let snapshot = entries
+        mountLog.info("ensureActivated: starting pass over \(snapshot.count) entries")
+        // The class is @MainActor, so this Task inherits main-actor isolation;
+        // `resolveAndCommit` does its own hop to a background queue for the
+        // blocking XPC resolve and only comes back here to commit.
+        let pass = Task {
+            // Resolve CONCURRENTLY, not one after another: on device each cold
+            // FileProvider bookmark measures ~5s (synchronous XPC), so serially
+            // four mounts would take ~20s — long enough that any sane ceiling
+            // would expire with most mounts still missing. The resolves are
+            // independent, so running them together turns ~20s into ~5s.
+            await withTaskGroup(of: Void.self) { group in
+                for entry in snapshot {
+                    // Skip anything a previous partial pass already activated.
+                    if self.activeURLs[entry.id] != nil { continue }
+                    group.addTask { await Self.resolveAndCommit(entry: entry) }
+                }
+                await group.waitForAll()
             }
-            await MainActor.run {
-                MountedFoldersManager.shared.pushExternalMountSnapshot()
-            }
+            self.pushExternalMountSnapshot()
+            self.didCompleteActivationPass = true
+            self.activationPass = nil
+            mountLog.info("ensureActivated: pass complete — \(self.activeURLs.count)/\(self.entries.count) active")
+        }
+        activationPass = pass
+        await pass.value
+    }
+
+    /// `ensureActivated()` with a hard ceiling on how long the caller waits.
+    ///
+    /// For headless AppIntents: iOS gives them a short execution budget, so
+    /// waiting indefinitely for a cold FileProvider is not an option — but a
+    /// mount that misses the deadline is not fatal either, because the pass
+    /// keeps running in the background and pushes its snapshot when it lands.
+    /// On expiry this RETURNS rather than cancelling: a slow mount still
+    /// becomes usable mid-run instead of being abandoned. The agent simply
+    /// starts without it.
+    func ensureActivated(timeout: TimeInterval) async {
+        if didCompleteActivationPass { return }
+        let started = Date()
+        // Start the pass without awaiting it, then wait on the completion flag.
+        //
+        // The obvious shape — racing `await pass.value` against `Task.sleep`
+        // in a task group — does NOT work here: this type is `@MainActor`, so
+        // awaiting the activation task keeps handing main-actor turns back to
+        // it and the sleep never gets to win (measured failing). Polling a
+        // flag never awaits the work, so the deadline is real.
+        Task { await self.ensureActivated() }
+        let deadline = Date().addingTimeInterval(max(0, timeout))
+        while !didCompleteActivationPass && Date() < deadline {
+            try? await Task.sleep(nanoseconds: 50_000_000)   // 50ms
+        }
+        let ms = Int(Date().timeIntervalSince(started) * 1000)
+        if didCompleteActivationPass {
+            mountLog.info("ensureActivated(timeout:) completed in \(ms)ms")
+        } else {
+            mountLog.warning("ensureActivated(timeout:) gave up after \(ms)ms — agent starts without external mounts; the pass continues in the background")
         }
     }
 
