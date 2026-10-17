@@ -10,6 +10,9 @@ struct EvolutionCenterView: View {
     @State private var counts: [String: Int] = [:]
     @State private var runs: [EvolutionRun] = []
     @State private var loading = false
+    /// [audit-D4] 维护/清空的就地回执。
+    @State private var maintenanceNote: String?
+    @State private var confirmClear = false
 
     /// [P6-2][evolution] 订阅首次参考通知：候选被注入参考时，顶部横幅可见。
     @ObservedObject private var noticeCenter = EvolutionNoticeCenter.shared
@@ -50,6 +53,30 @@ struct EvolutionCenterView: View {
                     Text("默认「影子」：只记录、不使用——攒够对比数据、你审过之后，再考虑开「启用」。")
                 }
 
+                // [audit-D4] 维护入口：此前 prune() / clearAll() 全仓零调用，
+                // 页上只有注释在承诺"会出现在进化中心"。
+                Section {
+                    Button {
+                        runMaintenance()
+                    } label: {
+                        Label("立即维护（清理过期/超限）", systemImage: "wrench.and.screwdriver")
+                    }
+                    Button(role: .destructive) {
+                        confirmClear = true
+                    } label: {
+                        Label("清空进化库", systemImage: "trash")
+                    }
+                    if let note = maintenanceNote {
+                        Text(note)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("维护")
+                } footer: {
+                    Text("维护只删过期 / 超限的轨迹与注入记账（经验条目永不物理删除）；清空会抹掉全部进化数据，不可恢复。")
+                }
+
                 Section {
                     if runs.isEmpty {
                         Text("还没有轨迹。用一会儿，任务收尾后这里就有账了。")
@@ -70,6 +97,21 @@ struct EvolutionCenterView: View {
             }
             .modifier(EvolutionCenterEmbeddedTitle(embedded: embedded))
             .refreshable { await reload() }
+            .confirmationDialog("清空进化库？", isPresented: $confirmClear, titleVisibility: .visible) {
+                Button("清空", role: .destructive) {
+                    Task {
+                        guard let store = EvolutionStore.shared else { return }
+                        await store.clearAll()
+                        // 注入器可能还留着清空前的缓存片段——失效，下一轮重读。
+                        EvolutionInjector.shared.invalidate()
+                        maintenanceNote = "进化库已清空"
+                        await reload()
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("所有经验、轨迹与注入记账都会被删除，无法恢复。")
+            }
             .task { await reload() }
         }
     }
@@ -164,6 +206,16 @@ struct EvolutionCenterView: View {
             parts.append("会话 \(sid.prefix(6))")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// [audit-D4] Bounded-growth pass, on demand — `prune()` had no caller.
+    private func runMaintenance() {
+        Task {
+            guard let store = EvolutionStore.shared else { return }
+            await store.prune()
+            maintenanceNote = "已清理过期与超限的轨迹 / 注入记录"
+            await reload()
+        }
     }
 
     private func reload() async {

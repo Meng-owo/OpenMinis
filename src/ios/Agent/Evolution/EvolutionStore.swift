@@ -780,8 +780,10 @@ actor EvolutionStore {
 
     // MARK: Maintenance
 
-    /// Bounded growth: TTL first, then row caps (most-recent kept). Called
-    /// explicitly by the S3 maintenance job — never per insert (unlike the
+    /// Bounded growth: TTL first, then row caps (most-recent kept). [audit-D4]
+    /// Surfaced as the evolution center's「立即维护」entry — the S3 maintenance
+    /// job this comment used to reference was never built, so before that
+    /// entry existed this was dead code. Never per insert (unlike the
     /// 1000-row config audit, these tables are hot).
     func prune(maxActionRows: Int = Limits.maxActionRows,
                maxRunRows: Int = Limits.maxRunRows,
