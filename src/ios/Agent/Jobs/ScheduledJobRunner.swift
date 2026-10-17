@@ -103,6 +103,21 @@ enum ScheduledJobRunner {
 
         case .onCompletion(let ofJobId):
             job.nextFireAt = nil
+            // [audit-B3] Waiting for a finish notification that may NEVER come
+            // left this task awaiting forever (holding its slot and its
+            // keep-alive company). Settle immediately when the upstream is
+            // already terminal — or gone entirely: the restored copy of a
+            // waiter whose producer finished while the app was closed lands
+            // here on the very first (re-)arm.
+            if Self.upstreamAlreadySettled(ofJobId) {
+                logger.info("[Sched] upstream \(ofJobId.prefix(8)) already settled — firing \(job.logLabel) immediately")
+                job.task = Task { @MainActor in
+                    await fire(job, upstreamJobId: ofJobId)
+                    AgentJobRegistry.shared.finish(job.id, state: .done, result: nil, keepIfChildRunning: true)
+                }
+                logger.info("[Sched] ARMED \(job.logLabel) next=event(already settled)")
+                return
+            }
             job.task = Task { @MainActor in
                 let seq = NotificationCenter.default.notifications(named: .agentJobDidFinish)
                 for await note in seq {
@@ -114,6 +129,16 @@ enum ScheduledJobRunner {
             }
         }
         logger.info("[Sched] ARMED \(job.logLabel) next=\(job.nextFireAt.map { Self.iso($0) } ?? "event")")
+    }
+
+    /// [audit-B3] True when waiting for `ofJobId`'s finish notification would
+    /// wait forever: the upstream is already terminal, or no longer registered
+    /// at all. `arm()` is the single entry the live, enable and restore paths
+    /// all go through, so checking here covers every way a waiter can be
+    /// (re)armed.
+    private static func upstreamAlreadySettled(_ ofJobId: String) -> Bool {
+        guard let upstream = AgentJobRegistry.shared.job(id: ofJobId) else { return true }
+        return upstream.state.isTerminal
     }
 
     /// `run --id`: fire regardless of the trigger, off-schedule. The armed
