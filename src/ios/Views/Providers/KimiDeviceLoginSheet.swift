@@ -72,7 +72,12 @@ struct KimiDeviceLoginSheet: View {
         }
         .interactiveDismissDisabled(phase == .starting)
         .onAppear { start() }
-        .onDisappear { loginTask?.cancel() }
+        // [audit-F7 / T-copilot-safari-cancels-poll] `presentSafari` presents on
+        // the TOP view controller, i.e. over this sheet, so opening the
+        // verification page covered the sheet, SwiftUI sent `onDisappear`, and
+        // the poll was cancelled at the precise moment the user left to
+        // authorize. Real exits still cancel: `finish()` and `start()`'s retry.
+        .onDisappear { }
     }
 
     @ViewBuilder
@@ -145,8 +150,26 @@ struct KimiDeviceLoginSheet: View {
 
     private func finish(_ success: Bool) {
         loginTask?.cancel()
+        // [audit-F7 / T-copilot-safari-cancels-poll] Now that the poll survives
+        // Safari covering this sheet, authorization completes with Safari still
+        // on screen, so it has to be dismissed too.
+        dismissPresentedSafari()
         onFinish(success)
         dismiss()
+    }
+
+    /// Dismiss the `SFSafariViewController` this sheet presented, if present.
+    /// Type-checked so an unrelated presentation is never torn down.
+    private func dismissPresentedSafari() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene }).first,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        else { return }
+        var topVC = root
+        while let presented = topVC.presentedViewController { topVC = presented }
+        if topVC is SFSafariViewController {
+            topVC.dismiss(animated: true)
+        }
     }
 
     /// Open the verification page in an in-app SFSafariViewController — matching
