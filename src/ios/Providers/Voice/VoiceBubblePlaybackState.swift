@@ -50,6 +50,15 @@ enum VoiceBubblePlaybackState {
         loadAll()[fileName]
     }
 
+    /// [audit-A8] 续听位：这条没听完（且确实听了进去）就返回应恢复的播放位置，
+    /// 否则 nil。播放器加载新文件时用它做"从上次停的地方接着放"；气泡徽章的
+    /// 显隐也用同一个判据，保证"有徽章 = 点播放真能续"。
+    static func resumePosition(for fileName: String, duration: Double) -> Double? {
+        guard duration > 2, let p = progress(for: fileName),
+              !p.finished, p.position > 1.0, p.position < duration - 0.5 else { return nil }
+        return p.position
+    }
+
     static func clearProgress(for fileName: String) {
         var all = loadAll()
         all.removeValue(forKey: fileName)

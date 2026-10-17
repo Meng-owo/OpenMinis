@@ -151,6 +151,14 @@ class GlobalAudioPlayer: ObservableObject {
                     VoiceNowPlaying.shared.refresh()
                     return
                 }
+                // [audit-A8] 续听：这条上次没听完的话，从停的位置接着放
+                //（播完的/贴着结尾的不续，避免每回都从头再来）。
+                if let resume = VoiceBubblePlaybackState.resumePosition(
+                    for: loadURL.deletingPathExtension().lastPathComponent, duration: dur) {
+                    p.currentTime = resume
+                    self.currentTime = resume
+                    logger.info("[AudioPlayback] 续听 \(loadURL.lastPathComponent) @ \(String(format: "%.1f", resume))s")
+                }
                 // Start playing immediately. Declaring `.mediaAttachment` preempts
                 // reply TTS (mutually exclusive) and applies the playback profile.
                 AudioSessionCoordinator.shared.begin(.mediaAttachment)
@@ -741,6 +749,11 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
     private let waveHost = UIView()
     private var barLayers: [CALayer] = []
 
+    /// [audit-A8] 续听徽章（kicker 行右侧小胶囊："续听 mm:ss"）。
+    private let resumeBadge = UIView()
+    private let resumeLabel = UILabel()
+    private var resumeBadgeWidth: CGFloat = 62
+
     // MARK: - Init
 
     init(frame: CGRect, fileURL: URL?, duration: Double, soulName: String, voiceText: String) {
@@ -752,6 +765,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         backgroundColor = .clear
         buildUI()
         bindPlayer()
+        refreshResumeBadge()
         if knownDuration <= 0 { probeDuration() }
     }
 
@@ -870,6 +884,16 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         marqueeTrack.backgroundColor = .clear
         marqueeClip.addSubview(marqueeTrack)
         buildMarquee()
+
+        // [audit-A8] 续听徽章：这条语音上次没听完时，kicker 行右侧亮"续听 mm:ss"。
+        resumeBadge.backgroundColor = textColor.withAlphaComponent(0.06)
+        resumeBadge.layer.cornerRadius = 7
+        resumeBadge.isHidden = true
+        cardView.addSubview(resumeBadge)
+        resumeLabel.font = .systemFont(ofSize: 10, weight: .semibold)
+        resumeLabel.textColor = subTextColor
+        resumeLabel.textAlignment = .center
+        resumeBadge.addSubview(resumeLabel)
     }
 
     private func setKicker(_ text: String) {
@@ -960,7 +984,14 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         let metaX = M.padH + M.catW + M.metaGap
         let metaW = max(60, playX - M.playTrail - metaX)
         kickerDot.frame = CGRect(x: metaX, y: M.padTop + 3, width: 6, height: 6)
-        kickerLabel.frame = CGRect(x: metaX + 13, y: M.padTop, width: max(40, metaW - 13), height: 13)
+        // [audit-A8] 续听徽章占 kicker 行右侧；亮出时收窄 kicker 防撞。
+        let badgeX = playX - M.playTrail - resumeBadgeWidth
+        resumeBadge.frame = CGRect(x: badgeX, y: M.padTop + 1, width: resumeBadgeWidth, height: 14)
+        resumeLabel.frame = resumeBadge.bounds
+        let kickerW = resumeBadge.isHidden
+            ? max(40, metaW - 13)
+            : max(40, min(metaW - 13, badgeX - 6 - (metaX + 13)))
+        kickerLabel.frame = CGRect(x: metaX + 13, y: M.padTop, width: kickerW, height: 13)
         titleLabel.frame = CGRect(x: metaX, y: M.padTop + 15, width: metaW, height: 22)
         marqueeClip.frame = CGRect(x: metaX, y: M.padTop + 39, width: metaW, height: 15)
         if let unit = marqueeUnits.first {
@@ -1054,6 +1085,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         } else {
             updateLively(passed: 0, playing: false)
         }
+        refreshResumeBadge()
     }
 
     private func applyProgress(time: Double, activeURL: URL?, duration: Double) {
@@ -1091,6 +1123,26 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         }
     }
 
+    /// [audit-A8] 续听徽章显隐 + 文案（"续听 mm:ss"）。与 resumePosition 同判据，
+    /// 保证"有徽章 = 点播放真能续"。
+    private func refreshResumeBadge() {
+        guard !isPlayingFile, let url = fileURL else {
+            resumeBadge.isHidden = true
+            setNeedsLayout()
+            return
+        }
+        let key = url.deletingPathExtension().lastPathComponent
+        if let pos = VoiceBubblePlaybackState.resumePosition(for: key, duration: knownDuration) {
+            resumeLabel.text = "续听 \(Self.format(pos))"
+            let w = resumeLabel.sizeThatFits(CGSize(width: 120, height: 14)).width + 14
+            resumeBadgeWidth = max(44, w.rounded())
+            resumeBadge.isHidden = false
+        } else {
+            resumeBadge.isHidden = true
+        }
+        setNeedsLayout()
+    }
+
     private func applyRate(_ rate: Float) {
         speedButton.setTitle(Self.rateLabel(rate), for: .normal)
     }
@@ -1104,6 +1156,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
                 guard let self, self.knownDuration <= 0 else { return }
                 self.knownDuration = d
                 self.totalLabel.text = Self.format(d)
+                self.refreshResumeBadge()
             }
         }
     }
