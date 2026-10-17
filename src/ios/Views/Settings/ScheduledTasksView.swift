@@ -251,7 +251,16 @@ guard let id = pendingDeleteId else { return }
 
             Toggle("", isOn: Binding<Bool>(
                 get: { job.isEnabled },
-                set: { registry.setEnabled(jobId: job.id, enabled: $0) }
+                set: { v in
+                    // [audit-B1] Flipping the switch on a finished task now
+                    // really re-activates it (registry resets state + re-arms);
+                    // say so, because the row's badge changes 已完成 → 等待中.
+                    let reactivating = v && job.state.isTerminal
+                    registry.setEnabled(jobId: job.id, enabled: v)
+                    if reactivating {
+                        MinisToast.show("已重新激活「\(job.title)」，等待下次触发", systemImage: "arrow.clockwise")
+                    }
+                }
             ))
             .labelsHidden()
             .toggleStyle(SwitchToggleStyle(tint: CSSThemeVariables.accent(isDark: isDark)))

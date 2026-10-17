@@ -109,15 +109,22 @@ struct ScheduledTaskDetailSheet: View {
                             .disabled(isRunningNow)
 
                             // Enable / Disable Toggle
+                            // [audit-B1] On a TERMINAL task this is a reactivation
+                            // (registry resets the state and re-arms the trigger),
+                            // not a resume — label and toast say so.
                             Button {
                                 let impact = UIImpactFeedbackGenerator(style: .light)
                                 impact.impactOccurred()
+                                let reactivating = !job.isEnabled && job.state.isTerminal
                                 registry.setEnabled(jobId: job.id, enabled: !job.isEnabled)
+                                if reactivating {
+                                    MinisToast.show("已重新激活，等待下次触发", systemImage: "arrow.clockwise")
+                                }
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: job.isEnabled ? "pause.fill" : "play.fill")
                                         .font(.system(size: fontSettings.scaledApp(12)))
-                                    Text(job.isEnabled ? "暂停" : "恢复")
+                                    Text(job.isEnabled ? "暂停" : (job.state.isTerminal ? "重新激活" : "恢复"))
                                         .font(.system(size: fontSettings.scaledApp(14), weight: .medium))
                                 }
                                 .padding(.horizontal, 16)

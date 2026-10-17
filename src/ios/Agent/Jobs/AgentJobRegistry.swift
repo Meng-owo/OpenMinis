@@ -530,6 +530,15 @@ enum AgentJobState: String {
     case pending, running, done, cancelled, failed
     /// The wall-clock budget elapsed and the run was cut short.
     case timeout
+
+    /// [audit-B1] A terminal task cannot be re-armed by flipping the switch
+    /// alone — enabling one means "reactivate it" (see `setEnabled`).
+    var isTerminal: Bool {
+        switch self {
+        case .done, .cancelled, .failed, .timeout: return true
+        case .pending, .running: return false
+        }
+    }
 }
 
 /// One registered job. A class so the registry can hand out a stable
@@ -700,6 +709,20 @@ final class AgentJob: Identifiable {
         runSessionId = nil
         startedAt = nil
         finishedAt = nil
+    }
+
+    /// [audit-B1] Put a TERMINAL job back into the schedulable state so the
+    /// enable switch can actually arm it. Unlike `rearm()` (one fire of a
+    /// repeating job ended), this clears the terminal leftovers too: the
+    /// finished result and — for a finite loop — the spent fire budget, so
+    /// re-activating "3 × 1h" gives a full 3 again.
+    fileprivate func reactivate() {
+        state = .pending
+        runSessionId = nil
+        startedAt = nil
+        finishedAt = nil
+        resultText = nil
+        if case .loop(_, let count) = trigger { remaining = count }
     }
 
     /// [T-sub-agents-busy] Running far past any budget it could have been
@@ -963,6 +986,15 @@ final class AgentJobRegistry: ObservableObject {
     /// `minis-scheduled enable|disable` — re-arms or disarms the trigger.
     func setEnabled(jobId: String, enabled: Bool) {
         guard let job = jobs[jobId] else { return }
+        // [audit-B1] A finished task used to "enable" into nothing: the switch
+        // read green, the flag persisted, and `arm` still refused because the
+        // state was terminal — a silent dead switch. Enabling a TERMINAL task
+        // now means "reactivate it": reset to the schedulable state before
+        // arming, so the switch and the timer agree. Pausing still just disarms.
+        if enabled, job.state.isTerminal {
+            job.reactivate()
+            logger.info("[Jobs] REACTIVATE \(job.logLabel)")
+        }
         job.isEnabled = enabled
         if enabled {
             ScheduledJobRunner.arm(job)
