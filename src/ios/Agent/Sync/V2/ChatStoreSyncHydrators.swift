@@ -1072,23 +1072,30 @@ enum ChatStoreSyncHydrators {
         let content: String     // block body (everything after the <!-- --> line)
     }
 
-    /// Parse a daily log file into its constituent MemoryEntry blocks.
-    /// Splits on "<!-- " prefix lines (used as block boundaries by executeMemoryWrite).
-    private static func parseMemoryEntries(from text: String) -> [MemoryEntry] {
+    /// Parse a daily log file into an optional preamble (text before the first
+    /// `<!-- timestamp -->` marker) and its constituent MemoryEntry blocks.
+    /// [audit-E9] Preserving preamble stops an inbound iCloud merge from
+    /// stripping handwritten headings, instructions, or non-timestamped notes.
+    private static func parseMemoryEntries(from text: String) -> (preamble: String?, entries: [MemoryEntry]) {
         let lines = text.components(separatedBy: "\n")
         var entries: [MemoryEntry] = []
+        var preambleLines: [String] = []
         var currentTimestamp: String? = nil
         var currentLines: [String] = []
 
         for line in lines {
             if line.hasPrefix("<!-- "), line.hasSuffix(" -->") {
-                // Flush previous block
+                // Flush previous block or capture preamble before the first marker
                 if let ts = currentTimestamp {
                     let body = currentLines.joined(separator: "\n")
                         .trimmingCharacters(in: .whitespacesAndNewlines)
                     if !body.isEmpty {
                         entries.append(MemoryEntry(timestamp: ts, content: body))
                     }
+                } else if !currentLines.isEmpty {
+                    let p = currentLines.joined(separator: "\n")
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !p.isEmpty { preambleLines.append(p) }
                 }
                 // Start new block — extract timestamp between "<!-- " and " -->"
                 let inner = String(line.dropFirst(5).dropLast(4))
@@ -1105,15 +1112,25 @@ enum ChatStoreSyncHydrators {
             if !body.isEmpty {
                 entries.append(MemoryEntry(timestamp: ts, content: body))
             }
+        } else if !currentLines.isEmpty {
+            // Entire file had no markers — captured as single preamble
+            let p = currentLines.joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !p.isEmpty { preambleLines.append(p) }
         }
-        return entries
+        let preamble = preambleLines.isEmpty ? nil : preambleLines.joined(separator: "\n\n")
+        return (preamble, entries)
     }
 
-    /// Serialise a list of MemoryEntry back into daily log file format (newest first).
-    private static func serialiseMemoryEntries(_ entries: [MemoryEntry]) -> String {
+    /// Serialise entries back into daily log format (preamble first, then newest first).
+    private static func serialiseMemoryEntries(_ entries: [MemoryEntry], preamble: String? = nil) -> String {
         let sorted = entries.sorted { $0.timestamp > $1.timestamp }
-        return sorted.map { "<!-- \($0.timestamp) -->\n\($0.content)\n" }
-                     .joined(separator: "\n")
+        let body = sorted.map { "<!-- \($0.timestamp) -->\n\($0.content)\n" }
+                         .joined(separator: "\n")
+        if let p = preamble, !p.isEmpty {
+            return p + "\n\n" + body
+        }
+        return body
     }
 
     private static func buildMemoryDaily(recordId: String) async -> PortableRecord? {
@@ -1134,7 +1151,7 @@ enum ChatStoreSyncHydrators {
         else { return nil }
 
         let entries: [MemoryEntry] = {
-            let parsed = parseMemoryEntries(from: text)
+            let (pre, parsed) = parseMemoryEntries(from: text)
             if !parsed.isEmpty { return parsed }
             // 无 <!-- 时间戳 --> 标记的旧文件：整文件当一条传（时间戳取文件
             // mtime），别让它卡在"已标脏但永远传不上去"。合并路径不动，
@@ -1199,10 +1216,13 @@ enum ChatStoreSyncHydrators {
         // then rewrite the whole file from remote entries only, silently
         // dropping the local day. Skip the merge instead.
         var localEntries: [MemoryEntry] = []
+        var localPreamble: String? = nil
         if fm.fileExists(atPath: url.path) {
             do {
                 let localText = try String(contentsOf: url, encoding: .utf8)
-                localEntries = parseMemoryEntries(from: localText)
+                let parsed = parseMemoryEntries(from: localText)
+                localPreamble = parsed.preamble
+                localEntries = parsed.entries
             } catch {
                 logger.error("[SyncCore] mergeMemoryDaily: local file unreadable, skipping merge to avoid clobber: \(dateKey) err=\(error)")
                 return
@@ -1275,7 +1295,8 @@ enum ChatStoreSyncHydrators {
             return
         }
         let allEntries = Array(merged.values)
-        let newText = serialiseMemoryEntries(allEntries)
+        // [audit-E9] Preserve the local file's preamble across sync merges.
+        let newText = serialiseMemoryEntries(allEntries, preamble: localPreamble)
 
         try? fm.createDirectory(at: url.deletingLastPathComponent(),
                                  withIntermediateDirectories: true)
