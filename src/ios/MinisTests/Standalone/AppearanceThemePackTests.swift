@@ -51,6 +51,7 @@ let list = read(here.appendingPathComponent("Views/ContentView.swift"))
 let studioView = read(here.appendingPathComponent("Views/Settings/AppearanceStudioView.swift"))
 let kernel = read(here.appendingPathComponent("iSH/ISHKernel.m"))
 let offload = read(here.appendingPathComponent("NativeOffloads/ThemeOffload.m"))
+let offloadBridge = read(here.appendingPathComponent("NativeOffloads/ThemeOffloadBridge.swift"))
 let skillStore = read(here.appendingPathComponent("Agent/Session/SkillStore.swift"))
 let markdown = read(here.appendingPathComponent("Views/Chat/SelectableMarkdownView.swift"))
 let toolLive = read(here.appendingPathComponent("Views/Chat/ToolLiveSheet.swift"))
@@ -155,6 +156,26 @@ check("v1 gated on entitlement", engine.contains("guard ICloudSharedZoneTranspor
 check("migration shim gated ×4", migration.components(separatedBy: "hasCloneICloudEntitlement()").count > 4)
 check("entitlements clone icloud", entitlements.contains("iCloud.com.openminis.clone"))
 check("entitlements not official icloud", !entitlements.contains("iCloud.com.openminis.app"))
+
+// --- Partial packs must not destroy user images (2026-10-18) ---
+// A missing categoryImages key used to mean "delete that file". Any AI call
+// carrying colors only wiped all 16 uploaded category images.
+check("decode merges onto a base", pack.contains("merging base: AppearanceThemePack = .default"))
+check("category map falls back", pack.contains("fallback: base.categoryImages"))
+check("missing key keeps file", pack.contains("guard let value = map[key] else { continue }"))
+check("empty string is the delete signal", pack.contains("if value.isEmpty {"))
+check("apply keeps unmentioned markers", pack.contains("let mentioned = Set(pack.categoryImages.keys)"))
+check("encoded bytes skip re-encode", pack.contains("func writeEncodedImage"))
+check("wallpaper takes raw bytes", studio.contains("func setWallpaperEncoded"))
+check("thinking card takes raw bytes", pack.contains("func setThinkingCardImageEncoded"))
+check("input bar takes raw bytes", pack.contains("func setInputBarImageEncoded"))
+check("ai apply merges live pack", offloadBridge.contains("merging: live"))
+check("clipboard import merges live pack", studioView.contains("merging: studio.currentThemePack()"))
+check("reset snapshots first", pack.contains("func captureThemeUndoSnapshot"))
+check("reset is undoable", pack.contains("func undoThemeReset"))
+check("reset needs force", offload.contains("--force"))
+check("undo command wired", offload.contains("cmd_undo"))
+check("undo bridge exists", offloadBridge.contains("func undoReset"))
 
 if failures == 0 {
     print("\nALL PASS")

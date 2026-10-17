@@ -55,15 +55,33 @@ static NSString *const HELP_TEXT =
      "  --compact              Minimize JSON output\n"
      "  -q, --quiet            Output only data field\n";
 
+/// Emits a bridge result and maps it to a process exit code.
+///
+/// Every sticker command used to answer `NOFF_EXIT_SUCCESS` no matter what
+/// the bridge said, so `minis-stickers get --id nope` exited 0 with
+/// `{"ok": false}` on stdout. An agent reading the exit code saw success and
+/// reported a sticker it never found. Mirrors `minis-theme`'s emit_bridge.
+static int emit_stickers(NSDictionary *data, NSString *action,
+                         int stdout_fd, BOOL compact, BOOL quiet) {
+    id okVal = data[@"ok"];
+    BOOL ok = [okVal isKindOfClass:[NSNumber class]] ? [okVal boolValue] : YES;
+    if (!ok) {
+        NSString *msg = data[@"message"] ?: data[@"error"] ?: @"sticker command failed";
+        NSDictionary *err = noff_json_error(TOOL_NAME, action, NOFF_ERR_INVALID_ARGS, msg);
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
+    noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, action, data), compact, quiet);
+    return NOFF_EXIT_SUCCESS;
+}
+
 static int cmd_list(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
     NSString *category = noff_find_arg(argc, argv, "--category");
     NSString *limitRaw = noff_find_arg(argc, argv, "--limit");
     NSInteger limit = limitRaw ? [limitRaw integerValue] : 0;
 
     NSDictionary *data = [StickersOffloadBridge listStickersWithCategory:category limit:limit];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"list", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"list", stdout_fd, compact, quiet);
 }
 
 static int cmd_get(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
@@ -74,9 +92,7 @@ static int cmd_get(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL com
         return NOFF_EXIT_INVALID_ARGS;
     }
     NSDictionary *data = [StickersOffloadBridge getStickerWithId:idVal];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"get", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"get", stdout_fd, compact, quiet);
 }
 
 static int cmd_edit(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
@@ -92,9 +108,7 @@ static int cmd_edit(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL co
     NSString *content = noff_find_arg(argc, argv, "--content");
 
     NSDictionary *data = [StickersOffloadBridge editStickerWithId:idVal title:title desc:desc category:cat content:content];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"edit", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"edit", stdout_fd, compact, quiet);
 }
 
 static int cmd_delete(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
@@ -105,9 +119,7 @@ static int cmd_delete(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL 
         return NOFF_EXIT_INVALID_ARGS;
     }
     NSDictionary *data = [StickersOffloadBridge deleteStickerWithId:idVal];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"delete", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"delete", stdout_fd, compact, quiet);
 }
 
 static int cmd_batch_move(int argc, char **argv, int stdout_fd, int stderr_fd, BOOL compact, BOOL quiet) {
@@ -120,16 +132,12 @@ static int cmd_batch_move(int argc, char **argv, int stdout_fd, int stderr_fd, B
     }
     NSArray *ids = [rawIds componentsSeparatedByString:@","];
     NSDictionary *data = [StickersOffloadBridge batchMoveWithIds:ids category:cat];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"batch-move", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"batch-move", stdout_fd, compact, quiet);
 }
 
 static int cmd_categories(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
     NSDictionary *data = [StickersOffloadBridge listCategories];
-    NSDictionary *result = noff_json_envelope(TOOL_NAME, @"categories", data);
-    noff_emit_json(stdout_fd, result, compact, quiet);
-    return NOFF_EXIT_SUCCESS;
+    return emit_stickers(data, @"categories", stdout_fd, compact, quiet);
 }
 
 static int stickers_handler(int argc, char **argv, int stdin_fd, int stdout_fd, int stderr_fd) {

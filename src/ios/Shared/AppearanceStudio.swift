@@ -254,6 +254,14 @@ final class AppearanceStudio: ObservableObject {
         configureUIKitSurfaces()
     }
 
+    /// Replaces the whole color override map. Used by theme undo, which has
+    /// to put back the exact palette a reset wiped — including its absence.
+    func restoreColorOverrides(_ overrides: [String: String]) {
+        customColors = overrides
+        persistColors()
+        configureUIKitSurfaces()
+    }
+
     func applyPreset(_ preset: AppearancePreset) {
         let palettes = preset.colors
         for variant in AppearanceVariant.allCases {
@@ -367,6 +375,26 @@ final class AppearanceStudio: ObservableObject {
 
     func setWallpaper(_ image: UIImage, for scope: AppearanceScope, dark: Bool = false) {
         guard let data = Self.backgroundJPEG(image, dark: dark) else { return }
+        writeWallpaperData(data, for: scope)
+    }
+
+    /// Stores wallpaper bytes that are already encoded.
+    ///
+    /// A pack carries a JPEG; decoding it into a UIImage and re-encoding
+    /// threw away a generation and inflated the file. Re-encoding now only
+    /// happens when the image is larger than the wallpaper edge limit.
+    func setWallpaperEncoded(_ data: Data, for scope: AppearanceScope) {
+        if let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 {
+            let longest = max(image.size.width, image.size.height)
+            if longest > 2200 {
+                setWallpaper(image, for: scope)
+                return
+            }
+        }
+        writeWallpaperData(data, for: scope)
+    }
+
+    private func writeWallpaperData(_ data: Data, for scope: AppearanceScope) {
         try? data.write(to: wallpaperURL(scope), options: .atomic)
         // [T-wallpaper-clear] Choosing a new image re-enables global
         // fallback for this scope (the clear only sticks until overridden).
@@ -675,10 +703,23 @@ extension Color {
 }
 
 extension UIColor {
+    /// Parses `RRGGBB` / `RRGGBBAA` / `#RGB` style hex.
+    ///
+    /// The scanner used to be asked for a number and never checked whether it
+    /// got one, so `"ZZZZZZ"` scanned to 0 and rendered pure black while `""`
+    /// rendered grey — two different wrong answers, neither reported. A value
+    /// that does not parse now falls back to the same neutral grey the pack
+    /// normalizer uses, so a bad hex is visible as one consistent colour
+    /// instead of silently turning text black.
     convenience init(hex: String) {
         let raw = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var value: UInt64 = 0
-        Scanner(string: raw).scanHexInt64(&value)
+        let scanner = Scanner(string: raw)
+        let parsed = scanner.scanHexInt64(&value)
+        guard parsed, scanner.isAtEnd, raw.count == 6 || raw.count == 8 else {
+            self.init(red: 0x80 / 255, green: 0x80 / 255, blue: 0x80 / 255, alpha: 1)
+            return
+        }
         let r, g, b, a: CGFloat
         switch raw.count {
         case 8:

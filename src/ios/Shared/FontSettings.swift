@@ -149,12 +149,25 @@ final class FontSettings: ObservableObject {
         appBaseScale = FontScaleLevel(rawValue: ud.integer(forKey: Keys.appBase)) ?? .default
         // Defer to after first window is available
         DispatchQueue.main.async { [weak self] in self?.applyAppScaleToAllWindows() }
+        // Windows created later (new scene, external display, restoration)
+        // missed the override entirely; re-apply whenever one activates.
+        NotificationCenter.default.addObserver(
+            forName: UIScene.didActivateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyAppScaleToAllWindows()
+        }
     }
 
     // MARK: - UIKit global application
 
     /// Override the preferred content size category on all connected UIWindows.
     /// This affects UIKit views, SwiftUI sheets, and any presented view controllers.
+    ///
+    /// Re-applied on scene activation: a window created after the last slider
+    /// move (a new scene, an iPad external display, a state restoration)
+    /// started life with the system category and never picked the override up.
     func applyAppScaleToAllWindows() {
         guard #available(iOS 17.0, *) else { return }
         // Skip if default — no need to override system traits
@@ -205,11 +218,21 @@ final class FontSettings: ObservableObject {
 
 /// Applies app-base font scaling via `dynamicTypeSize`.
 /// Use on sheet content and any view that doesn't inherit the root environment.
+///
+/// At `.default` this applies nothing. `.dynamicTypeSize(.large)` is a hard
+/// pin, not a no-op — it overrode the reader's own iOS Dynamic Type setting,
+/// so someone running Larger Text system-wide got it silently forced back to
+/// the default inside every screen that used this modifier. Leaving the
+/// environment untouched at default lets the system value through.
 private struct AppFontScaleModifier: ViewModifier {
     @ObservedObject private var fontSettings = FontSettings.shared
 
     func body(content: Content) -> some View {
-        content.dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
+        if fontSettings.appBaseScale == .default {
+            content
+        } else {
+            content.dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
+        }
     }
 }
 

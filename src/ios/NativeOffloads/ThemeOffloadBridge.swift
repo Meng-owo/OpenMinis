@@ -33,8 +33,19 @@ import UIKit
         var result: [String: Any] = [:]
         Task { @MainActor in
             guard let data = json.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let pack = try? AppearanceThemePack.decode(obj) else {
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                result = [
+                    "ok": false,
+                    "error": "invalid_pack",
+                    "message": "JSON is not a theme pack.",
+                ]
+                sem.signal()
+                return
+            }
+            // Merge onto the live pack: an AI call that only names colors must
+            // not reset radii, fonts, images, or anything else it left out.
+            let live = AppearanceStudio.shared.currentThemePack()
+            guard let pack = try? AppearanceThemePack.decode(obj, merging: live) else {
                 result = [
                     "ok": false,
                     "error": "invalid_pack",
@@ -85,7 +96,26 @@ import UIKit
                 "reset": true,
                 "id": AppearanceThemePack.default.id,
                 "name": AppearanceThemePack.default.name,
+                "undoAvailable": AppearanceStudio.shared.canUndoThemeReset,
             ]
+            sem.signal()
+        }
+        if sem.wait(timeout: .now() + 5) == .timedOut {
+            // [batch7 / W3C-01] Never hang the caller forever.
+            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+        }
+        return result as NSDictionary
+    }
+
+    @objc public static func undoReset() -> NSDictionary {
+        let sem = DispatchSemaphore(value: 0)
+        var result: [String: Any] = [:]
+        Task { @MainActor in
+            let ok = AppearanceStudio.shared.undoThemeReset()
+            result = ok
+                ? ["ok": true, "restored": true]
+                : ["ok": false, "error": "no_snapshot",
+                   "message": "No theme reset to undo. The snapshot only covers the last reset."]
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {

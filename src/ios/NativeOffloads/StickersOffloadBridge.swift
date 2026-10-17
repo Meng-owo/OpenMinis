@@ -183,12 +183,25 @@ import UIKit
                 sem.signal()
                 return
             }
-            store.batchMoveCategory(ids: setIds, newCategory: trimmedCat)
-            out = [
-                "ok": true,
-                "moved_count": setIds.count,
-                "category": trimmedCat
-            ]
+            // Report what actually moved. This used to echo the requested
+            // count, so moving five unknown ids answered moved_count: 5.
+            let moved = store.batchMoveCategory(ids: setIds, newCategory: trimmedCat)
+            if moved == 0 {
+                out = [
+                    "ok": false,
+                    "error": "no_matching_stickers",
+                    "message": "None of the given ids exist.",
+                    "moved_count": 0,
+                    "category": trimmedCat,
+                ]
+            } else {
+                out = [
+                    "ok": true,
+                    "moved_count": moved,
+                    "requested_count": setIds.count,
+                    "category": trimmedCat,
+                ]
+            }
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {

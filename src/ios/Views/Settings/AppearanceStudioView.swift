@@ -18,6 +18,7 @@ struct AppearanceStudioView: View {
     @State private var categoryImageItem: PhotosPickerItem?
     @State private var saveName: String = ""
     @State private var errorText: String?
+    @State private var showResetConfirm = false
     // [T-appearance-collapsible] Most appearance sections start collapsed so
     // the page reads as a short index; expand what you're here for.
     @State private var showPalette = false
@@ -286,7 +287,12 @@ struct AppearanceStudioView: View {
                     importPackFromClipboard()
                 }
                 Button("恢复默认主题包", role: .destructive) {
-                    studio.resetThemePack()
+                    showResetConfirm = true
+                }
+                if studio.canUndoThemeReset {
+                    Button("撤销上一次恢复") {
+                        _ = studio.undoThemeReset()
+                    }
                 }
             }
 
@@ -498,6 +504,14 @@ struct AppearanceStudioView: View {
             Button("好", role: .cancel) { errorText = nil }
         } message: {
             Text(errorText ?? "")
+        }
+        .alert("恢复默认主题包？", isPresented: $showResetConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("恢复", role: .destructive) {
+                studio.resetThemePack()
+            }
+        } message: {
+            Text("会清掉你上传的全部图片、色盘和形状设置。恢复之后可以用「撤销上一次恢复」拿回来。")
         }
         .listRowBackground(AppearanceStudio.shared.color(.surface, scope: .settings))
     }
@@ -794,7 +808,10 @@ struct AppearanceStudioView: View {
             return
         }
         do {
-            let pack = try AppearanceThemePack.decode(obj)
+            let pack = try AppearanceThemePack.decode(
+                obj,
+                merging: studio.currentThemePack()
+            )
             studio.applyThemePack(pack)
         } catch {
             errorText = error.localizedDescription

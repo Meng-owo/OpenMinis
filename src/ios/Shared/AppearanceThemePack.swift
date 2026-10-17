@@ -151,8 +151,14 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         raw.keys.contains { themePackSignalKeys.contains($0) }
     }
 
-    static func decode(_ raw: [String: Any]) throws -> AppearanceThemePack {
-        // Old / partial packs: fill missing keys from `.default` and treat as schema 5.
+    /// - Parameter base: Pack supplying every key `raw` does not carry.
+    ///   Pass the pack currently on screen for partial updates (AI `minis-theme
+    ///   apply`, clipboard import) so untouched fields — the category image
+    ///   markers in particular — survive. Keep `.default` when decoding a
+    ///   complete snapshot: a stored pack, or a saved theme in the library.
+    static func decode(_ raw: [String: Any],
+                       merging base: AppearanceThemePack = .default) throws -> AppearanceThemePack {
+        // Old / partial packs: fill missing keys from `base` and treat as schema 5.
         // Reject only JSON that does not look like a theme pack at all.
         guard looksLikeThemePack(raw) else {
             throw AppearanceThemePackError.notAThemePack
@@ -167,16 +173,15 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             if let s = raw[k] as? String, let d = Double(s) { return d }
             return fallback
         }
-        func map(_ k: String) -> [String: String] {
+        func map(_ k: String, fallback: [String: String]) -> [String: String] {
             if let typed = raw[k] as? [String: String] { return typed }
-            guard let anyMap = raw[k] as? [String: Any] else { return [:] }
+            guard let anyMap = raw[k] as? [String: Any] else { return fallback }
             var out: [String: String] = [:]
             for (key, val) in anyMap {
                 if let s = val as? String { out[key] = s }
             }
             return out
         }
-        let base = AppearanceThemePack.default
         var pack = AppearanceThemePack(
             id: str("id", fallback: base.id),
             name: str("name", fallback: base.name),
@@ -192,9 +197,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             thinkingCardImageOpacity: min(1, max(0.05, num("thinkingCardImageOpacity", fallback: base.thinkingCardImageOpacity))),
             listRowFillHex: (raw["listRowFillHex"] as? String).map(normalizeHex),
             listIconShape: AppearanceListIconShape.parse(str("listIconShape", fallback: base.listIconShape)).rawValue,
-            categoryIcons: filterCategoryMap(map("categoryIcons"), symbols: true),
-            categoryColors: filterCategoryMap(map("categoryColors"), symbols: false),
-            categoryImages: filterCategoryMap(map("categoryImages"), symbols: true),
+            categoryIcons: filterCategoryMap(map("categoryIcons", fallback: base.categoryIcons), symbols: true),
+            categoryColors: filterCategoryMap(map("categoryColors", fallback: base.categoryColors), symbols: false),
+            categoryImages: filterCategoryMap(map("categoryImages", fallback: base.categoryImages), symbols: true),
             inputBarRadius: clampRadius(num("inputBarRadius", fallback: base.inputBarRadius)),
             inputBarStyle: AppearanceBubbleStyle.parse(str("inputBarStyle", fallback: base.inputBarStyle)).rawValue,
             inputBarJPEGBase64: raw["inputBarJPEGBase64"] as? String,
@@ -204,8 +209,8 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             fontFamily: AppearanceFontFamily.parse(str("fontFamily", fallback: base.fontFamily)).rawValue,
             wallpaperShade: raw["wallpaperShade"] == nil ? nil : min(0.65, max(0, num("wallpaperShade", fallback: 0.08))),
             surfaceOpacity: raw["surfaceOpacity"] == nil ? nil : min(1, max(0.35, num("surfaceOpacity", fallback: 0.88))),
-            colorsLight: normalizeHexMap(map("colorsLight")),
-            colorsDark: normalizeHexMap(map("colorsDark")),
+            colorsLight: normalizeHexMap(map("colorsLight", fallback: base.colorsLight)),
+            colorsDark: normalizeHexMap(map("colorsDark", fallback: base.colorsDark)),
             wallpaperJPEGBase64: raw["wallpaperJPEGBase64"] as? String
         )
         if pack.id.isEmpty { pack.id = base.id }
@@ -332,8 +337,11 @@ fileprivate func clampRadius(_ value: Double) -> Double {
 
 fileprivate func normalizeHex(_ raw: String) -> String {
     let trimmed = raw.trimmingCharacters(in: CharacterSet.alphanumerics.inverted).uppercased()
-    if trimmed.count == 6 || trimmed.count == 8 { return trimmed }
-    return "808080"
+    guard trimmed.count == 6 || trimmed.count == 8 else { return "808080" }
+    // Length alone let "ZZZZZZ" through, which scanned to 0 and painted
+    // black. Require actual hex digits so a typo lands on neutral grey.
+    guard trimmed.allSatisfy({ $0.isHexDigit }) else { return "808080" }
+    return trimmed
 }
 
 fileprivate func normalizeHexMap(_ map: [String: String]) -> [String: String] {
@@ -447,12 +455,23 @@ extension AppearanceStudio {
         objectWillChange.send()
     }
 
+    /// Applies a pack to the live studio.
+    ///
+    /// Image payloads are optional: a nil base64 means "this call does not
+    /// carry that image", so the file on disk stays. Callers that mean to
+    /// remove an image call `removeWallpaper` / `removeThinkingCardImage` /
+    /// `removeInputBarImage` instead of relying on an omission.
     func applyThemePack(_ pack: AppearanceThemePack, wallpaper: UIImage? = nil) {
         var stored = pack
         stored.wallpaperJPEGBase64 = nil
         stored.thinkingCardJPEGBase64 = nil
         stored.inputBarJPEGBase64 = nil
-        stored.categoryImages = [:]
+        // Keep markers for category images the caller did not mention.
+        // applyCategoryImages below reconciles the rest against disk.
+        let mentioned = Set(pack.categoryImages.keys)
+        var markers = currentThemePack().categoryImages
+        for key in mentioned { markers[key] = pack.categoryImages[key] }
+        stored.categoryImages = markers
         persistPack(stored)
         if !pack.colorsLight.isEmpty || !pack.colorsDark.isEmpty {
             applyPackColors(light: pack.colorsLight, dark: pack.colorsDark)
@@ -462,19 +481,16 @@ extension AppearanceStudio {
         if let wallpaper {
             setWallpaper(wallpaper, for: .global)
         } else if let b64 = pack.wallpaperJPEGBase64,
-                  let data = Data(base64Encoded: b64),
-                  let image = UIImage(data: data) {
-            setWallpaper(image, for: .global)
+                  let data = Data(base64Encoded: b64) {
+            setWallpaperEncoded(data, for: .global)
         }
         if let b64 = pack.thinkingCardJPEGBase64,
-           let data = Data(base64Encoded: b64),
-           let image = UIImage(data: data) {
-            setThinkingCardImage(image)
+           let data = Data(base64Encoded: b64) {
+            setThinkingCardImageEncoded(data)
         }
         if let b64 = pack.inputBarJPEGBase64,
-           let data = Data(base64Encoded: b64),
-           let image = UIImage(data: data) {
-            setInputBarImage(image)
+           let data = Data(base64Encoded: b64) {
+            setInputBarImageEncoded(data)
         }
         applyCategoryImages(pack.categoryImages)
         configureUIKitSurfaces()
@@ -517,7 +533,114 @@ extension AppearanceStudio {
         return pack
     }
 
+    /// Snapshot directory for the most recent destructive theme operation.
+    ///
+    /// `reset` deletes every user image and the whole pack. It used to be a
+    /// one-way door, and `minis-theme reset` put that door behind an AI
+    /// command. Everything wiped here is first copied aside so `undoReset`
+    /// can put it back.
+    nonisolated static var themeUndoDirectory: URL {
+        // Dot-prefixed on purpose: the backup tree exporter walks this
+        // directory with `.skipsHiddenFiles`, so a snapshot never doubles the
+        // size of an appearance backup.
+        let dir = appearanceDirectoryURL.appendingPathComponent(".undo", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// Files a reset would destroy: pack JSON plus every image the pack owns.
+    ///
+    /// Built in a scratch directory and swapped in at the end, so a capture
+    /// that fails halfway cannot leave the previous undo snapshot destroyed
+    /// and the new one empty.
+    private func captureThemeUndoSnapshot() -> URL? {
+        let dir = Self.themeUndoDirectory
+        let scratch = dir.deletingLastPathComponent()
+            .appendingPathComponent(".undo-staging", isDirectory: true)
+        try? FileManager.default.removeItem(at: scratch)
+        guard (try? FileManager.default.createDirectory(at: scratch,
+                                                        withIntermediateDirectories: true)) != nil else {
+            return nil
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.packKey) {
+            try? data.write(to: scratch.appendingPathComponent("pack.json"), options: .atomic)
+        }
+        if let colors = try? JSONEncoder().encode(customColors) {
+            try? colors.write(to: scratch.appendingPathComponent("colors.json"), options: .atomic)
+        }
+        for key in AppearanceThemePack.categoryKeys {
+            let src = categoryImageURL(key)
+            if FileManager.default.fileExists(atPath: src.path) {
+                try? FileManager.default.copyItem(at: src, to: scratch.appendingPathComponent("category-\(key).jpg"))
+            }
+        }
+        for (name, src) in [("thinking-card.jpg", thinkingCardURL()),
+                            ("input-bar.jpg", inputBarImageURL())] {
+            if FileManager.default.fileExists(atPath: src.path) {
+                try? FileManager.default.copyItem(at: src, to: scratch.appendingPathComponent(name))
+            }
+        }
+        // Only replace the live snapshot once the new one is complete.
+        guard FileManager.default.fileExists(atPath: scratch.appendingPathComponent("pack.json").path) else {
+            try? FileManager.default.removeItem(at: scratch)
+            return nil
+        }
+        try? FileManager.default.removeItem(at: dir)
+        try? FileManager.default.moveItem(at: scratch, to: dir)
+        return dir
+    }
+
+    /// True when a reset snapshot is on disk and can be restored.
+    var canUndoThemeReset: Bool {
+        let dir = Self.themeUndoDirectory
+        return FileManager.default.fileExists(atPath: dir.appendingPathComponent("pack.json").path)
+    }
+
+    /// Restores the pack and images captured by the last `resetThemePack`.
+    @discardableResult
+    func undoThemeReset() -> Bool {
+        let dir = Self.themeUndoDirectory
+        let packURL = dir.appendingPathComponent("pack.json")
+        guard let data = try? Data(contentsOf: packURL),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let restored = try? AppearanceThemePack.decode(obj) else {
+            return false
+        }
+        UserDefaults.standard.set(data, forKey: Self.packKey)
+        themePackLock.lock()
+        cachedThemePack = restored
+        themePackLoaded = true
+        themePackLock.unlock()
+        themePackRevision += 1
+
+        if let colors = try? Data(contentsOf: dir.appendingPathComponent("colors.json")),
+           let decoded = try? JSONDecoder().decode([String: String].self, from: colors) {
+            restoreColorOverrides(decoded)
+        }
+        for key in AppearanceThemePack.categoryKeys {
+            let src = dir.appendingPathComponent("category-\(key).jpg")
+            if FileManager.default.fileExists(atPath: src.path) {
+                let dst = categoryImageURL(key)
+                try? FileManager.default.removeItem(at: dst)
+                try? FileManager.default.copyItem(at: src, to: dst)
+                ThumbnailCache.shared.removeThumbnail(for: dst.path)
+            }
+        }
+        for (name, dst) in [("thinking-card.jpg", thinkingCardURL()),
+                            ("input-bar.jpg", inputBarImageURL())] {
+            let src = dir.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: src.path) {
+                try? FileManager.default.removeItem(at: dst)
+                try? FileManager.default.copyItem(at: src, to: dst)
+                ThumbnailCache.shared.removeThumbnail(for: dst.path)
+            }
+        }
+        objectWillChange.send()
+        return true
+    }
+
     func resetThemePack() {
+        _ = captureThemeUndoSnapshot()
         UserDefaults.standard.removeObject(forKey: Self.packKey)
         try? FileManager.default.removeItem(at: thinkingCardURL())
         try? FileManager.default.removeItem(at: inputBarImageURL())
@@ -614,19 +737,7 @@ extension AppearanceStudio {
 
     func setCategoryImage(_ image: UIImage, for key: String) {
         guard AppearanceThemePack.categoryKeys.contains(key) else { return }
-        let maxEdge: CGFloat = 256
-        let size = image.size
-        let scale = min(1, maxEdge / max(size.width, size.height, 1))
-        let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = true
-        format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        if let data = rendered.jpegData(compressionQuality: 0.86) {
-            try? data.write(to: categoryImageURL(key), options: .atomic)
-        }
+        writeDownscaledJPEG(image, to: categoryImageURL(key), maxEdge: 256, quality: 0.86)
         var pack = currentThemePack()
         pack.categoryImages[key] = "file"
         persistPack(pack)
@@ -645,32 +756,45 @@ extension AppearanceStudio {
         }
     }
 
+    /// Applies the pack's category-image map.
+    ///
+    /// Missing key = "not mentioned" → leave the file and its marker alone.
+    /// This used to treat a missing key as a delete request, so any partial
+    /// pack (an AI call carrying colors only, a legacy JSON without the map)
+    /// wiped every user-supplied category image. Explicit removal has to say
+    /// so: an empty string for that key.
     private func applyCategoryImages(_ map: [String: String]) {
-        var kept: [String: String] = [:]
+        var pack = currentThemePack()
         for key in AppearanceThemePack.categoryKeys {
-            guard let value = map[key], !value.isEmpty else {
+            guard let value = map[key] else { continue }
+            if value.isEmpty {
                 try? FileManager.default.removeItem(at: categoryImageURL(key))
+                ThumbnailCache.shared.removeThumbnail(for: categoryImageURL(key).path)
+                pack.categoryImages.removeValue(forKey: key)
                 continue
             }
             if value == "file" {
                 if FileManager.default.fileExists(atPath: categoryImageURL(key).path) {
-                    kept[key] = "file"
+                    pack.categoryImages[key] = "file"
+                } else {
+                    pack.categoryImages.removeValue(forKey: key)
                 }
                 continue
             }
-            guard let data = Data(base64Encoded: value), let image = UIImage(data: data) else {
+            guard let data = Data(base64Encoded: value), UIImage(data: data) != nil else {
+                // Undecodable payload: keep whatever is already on disk
+                // rather than silently dropping the user's image.
                 continue
             }
-            writeCategoryImageFile(image, for: key)
-            kept[key] = "file"
+            writeEncodedImage(data, to: categoryImageURL(key), maxEdge: 256, quality: 0.86)
+            pack.categoryImages[key] = "file"
         }
-        var pack = currentThemePack()
-        pack.categoryImages = kept
         persistPack(pack)
     }
 
-    private func writeCategoryImageFile(_ image: UIImage, for key: String) {
-        let maxEdge: CGFloat = 256
+    /// Writes a downscaled JPEG and drops the cached thumbnail for that path.
+    private func writeDownscaledJPEG(_ image: UIImage, to url: URL,
+                                    maxEdge: CGFloat, quality: CGFloat) {
         let size = image.size
         let scale = min(1, maxEdge / max(size.width, size.height, 1))
         let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
@@ -680,10 +804,29 @@ extension AppearanceStudio {
         let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
-        if let data = rendered.jpegData(compressionQuality: 0.86) {
-            try? data.write(to: categoryImageURL(key), options: .atomic)
-            ThumbnailCache.shared.removeThumbnail(for: categoryImageURL(key).path)
+        if let data = rendered.jpegData(compressionQuality: quality) {
+            try? data.write(to: url, options: .atomic)
+            ThumbnailCache.shared.removeThumbnail(for: url.path)
         }
+    }
+
+    /// Stores an image payload that already arrived as encoded bytes.
+    ///
+    /// Round-tripping through UIImage and re-encoding a second time cost
+    /// roughly 3x the bytes and a visible generation loss on every apply.
+    /// The bytes are only re-encoded when they exceed the target edge, which
+    /// is the one case where re-encoding actually buys something.
+    private func writeEncodedImage(_ data: Data, to url: URL,
+                                   maxEdge: CGFloat, quality: CGFloat) {
+        if let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 {
+            let longest = max(image.size.width, image.size.height)
+            if longest > maxEdge {
+                writeDownscaledJPEG(image, to: url, maxEdge: maxEdge, quality: quality)
+                return
+            }
+        }
+        try? data.write(to: url, options: .atomic)
+        ThumbnailCache.shared.removeThumbnail(for: url.path)
     }
 
     private func thinkingCardURL() -> URL {
@@ -704,20 +847,15 @@ extension AppearanceStudio {
     }
 
     func setThinkingCardImage(_ image: UIImage) {
-        let maxEdge: CGFloat = 1400
-        let size = image.size
-        let scale = min(1, maxEdge / max(size.width, size.height, 1))
-        let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = true
-        format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        if let data = rendered.jpegData(compressionQuality: 0.82) {
-            try? data.write(to: thinkingCardURL(), options: .atomic)
-            ThumbnailCache.shared.removeThumbnail(for: thinkingCardURL().path)
-        }
+        writeDownscaledJPEG(image, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82)
+        var pack = currentThemePack()
+        pack.thinkingCardJPEGBase64 = nil
+        persistPack(pack)
+    }
+
+    /// Stores an already-encoded thinking-card image without a re-encode round trip.
+    func setThinkingCardImageEncoded(_ data: Data) {
+        writeEncodedImage(data, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82)
         var pack = currentThemePack()
         pack.thinkingCardJPEGBase64 = nil
         persistPack(pack)
@@ -755,20 +893,15 @@ extension AppearanceStudio {
     }
 
     func setInputBarImage(_ image: UIImage) {
-        let maxEdge: CGFloat = 1400
-        let size = image.size
-        let scale = min(1, maxEdge / max(size.width, size.height, 1))
-        let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
-        let format = UIGraphicsImageRendererFormat()
-        format.opaque = true
-        format.scale = 1
-        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        if let data = rendered.jpegData(compressionQuality: 0.82) {
-            try? data.write(to: inputBarImageURL(), options: .atomic)
-            ThumbnailCache.shared.removeThumbnail(for: inputBarImageURL().path)
-        }
+        writeDownscaledJPEG(image, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82)
+        var pack = currentThemePack()
+        pack.inputBarJPEGBase64 = nil
+        persistPack(pack)
+    }
+
+    /// Stores an already-encoded input-bar image without a re-encode round trip.
+    func setInputBarImageEncoded(_ data: Data) {
+        writeEncodedImage(data, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82)
         var pack = currentThemePack()
         pack.inputBarJPEGBase64 = nil
         persistPack(pack)

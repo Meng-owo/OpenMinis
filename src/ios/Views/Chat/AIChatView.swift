@@ -7014,9 +7014,8 @@ struct ChatStickerPanel: View {
                         ForEach(store.categories, id: \.self) { cat in
                             Button {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                let count = selectedStickerIds.count
-                                store.batchMoveCategory(ids: selectedStickerIds, newCategory: cat)
-                                MinisToast.show("已将 \(count) 个表情移动至「\(cat)」")
+                                let moved = store.batchMoveCategory(ids: selectedStickerIds, newCategory: cat)
+                                MinisToast.show("已将 \(moved) 个表情移动至「\(cat)」")
                                 selectedStickerIds.removeAll()
                             } label: {
                                 Text(cat)
@@ -8059,14 +8058,18 @@ public final class StickerStore: ObservableObject {
         saveToDisk()
     }
 
-    public func batchMoveCategory(ids: Set<String>, newCategory: String) {
-        guard !ids.isEmpty else { return }
+    @discardableResult
+    public func batchMoveCategory(ids: Set<String>, newCategory: String) -> Int {
+        guard !ids.isEmpty else { return 0 }
+        var moved = 0
         for i in 0..<stickers.count {
             if ids.contains(stickers[i].id) {
                 stickers[i].category = newCategory
+                moved += 1
             }
         }
-        saveToDisk()
+        if moved > 0 { saveToDisk() }
+        return moved
     }
 
     public func recordUse(id: String) {

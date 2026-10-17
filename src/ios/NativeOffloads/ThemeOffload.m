@@ -19,6 +19,7 @@
 + (NSDictionary * _Nonnull)applyJSON:(NSString * _Nonnull)json;
 + (NSDictionary * _Nonnull)exportJSONWithIncludeWallpaper:(BOOL)includeWallpaper;
 + (NSDictionary * _Nonnull)resetPack;
++ (NSDictionary * _Nonnull)undoReset;
 + (NSDictionary * _Nonnull)saveCurrentWithName:(NSString * _Nonnull)name;
 + (NSDictionary * _Nonnull)listSaved;
 + (NSDictionary * _Nonnull)applySavedWithId:(NSString * _Nonnull)id;
@@ -39,7 +40,8 @@ static NSString *const HELP_TEXT =
      "  get       Show the current theme pack (no wallpaper bytes)\n"
      "  apply     Apply a theme pack from --file or stdin JSON\n"
      "  export    Dump the current pack as JSON\n"
-     "  reset     Restore the default warm-paper pack\n"
+     "  reset     Restore the default warm-paper pack (needs --force)\n"
+     "  undo      Restore the pack and images removed by the last reset\n"
      "  save      Save the current pack into the theme library\n"
      "  list      List saved themes\n"
      "  use       Apply a saved theme by --id\n"
@@ -51,6 +53,7 @@ static NSString *const HELP_TEXT =
      "  --wallpaper           export: include wallpaper JPEG as base64\n"
      "  --name <text>         save/rename display name\n"
      "  --id <uuid>           saved theme id\n"
+     "  --force               reset: confirm wiping every uploaded image\n"
      "  --help, -h            Show this help\n"
      "  --compact             Minimize JSON output\n"
      "  -q, --quiet           Output only data field\n"
@@ -144,9 +147,25 @@ static int cmd_export(int argc, char **argv, int stdout_fd, BOOL compact, BOOL q
     return emit_bridge(raw, @"export", stdout_fd, compact, quiet);
 }
 
-static int cmd_reset(int stdout_fd, BOOL compact, BOOL quiet) {
+static int cmd_reset(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
+    // Reset deletes every image the user supplied. The old behaviour made
+    // that one keystroke away from an AI turn with no way back; now it
+    // refuses without --force and the deleted files land in an undo snapshot.
+    if (!noff_has_flag(argc, argv, "--force")) {
+        NSDictionary *err = noff_json_error(
+            TOOL_NAME, @"reset", NOFF_ERR_INVALID_ARGS,
+            @"reset wipes every uploaded image and the whole pack. "
+             "Pass --force to confirm. `minis-theme undo` restores the last reset.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_INVALID_ARGS;
+    }
     NSDictionary *raw = [ThemeOffloadBridge resetPack];
     return emit_bridge(raw, @"reset", stdout_fd, compact, quiet);
+}
+
+static int cmd_undo(int stdout_fd, BOOL compact, BOOL quiet) {
+    NSDictionary *raw = [ThemeOffloadBridge undoReset];
+    return emit_bridge(raw, @"undo", stdout_fd, compact, quiet);
 }
 
 static int cmd_save(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
@@ -212,7 +231,9 @@ static int theme_handler(int argc, char **argv,
     } else if ([subcmd isEqualToString:@"export"]) {
         return cmd_export(argc, argv, stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"reset"]) {
-        return cmd_reset(stdout_fd, compact, quiet);
+        return cmd_reset(argc, argv, stdout_fd, compact, quiet);
+    } else if ([subcmd isEqualToString:@"undo"]) {
+        return cmd_undo(stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"save"]) {
         return cmd_save(argc, argv, stdout_fd, compact, quiet);
     } else if ([subcmd isEqualToString:@"list"]) {
@@ -228,7 +249,7 @@ static int theme_handler(int argc, char **argv,
     noff_emit_help(stderr_fd, HELP_TEXT);
     NSDictionary *err = noff_json_error(TOOL_NAME, subcmd, NOFF_ERR_INVALID_ARGS,
                                          [NSString stringWithFormat:
-                                          @"Unknown command '%@'. Valid: get, apply, export, reset, save, list, use, rename, delete.", subcmd]);
+                                          @"Unknown command '%@'. Valid: get, apply, export, reset, undo, save, list, use, rename, delete.", subcmd]);
     noff_emit_json(stdout_fd, err, compact, quiet);
     return NOFF_EXIT_INVALID_ARGS;
 }
