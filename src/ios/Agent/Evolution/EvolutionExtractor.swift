@@ -40,6 +40,12 @@ enum EvolutionExtractor {
         var recoveriesByTool: [String: [(fail: EvolutionAction, success: EvolutionAction)]] = [:]
 
         // Rule 1 inputs: tool_error failures per tool.
+        //
+        // `host_error` is deliberately excluded. Those failures come from the
+        // app (mounts, entitlements, sandboxed paths), not from how the model
+        // called the tool, so a "try different arguments" lesson is worse than
+        // no lesson: it sends the next run straight back into the same wall.
+        // They are still recorded and shown in the evolution centre.
         for action in actions where action.status == .fail {
             let errorClass = action.errorClass ?? "tool_error"
             guard errorClass == "tool_error" else { continue }

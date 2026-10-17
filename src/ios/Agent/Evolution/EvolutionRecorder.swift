@@ -110,7 +110,9 @@ enum EvolutionRecorder {
             : EvolutionRedactor.digest(String(resultText.prefix(scanBudget)))
         let durationMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
         let finishedAt = Date()
-        let errorClass: String? = cancelled ? "cancelled" : (isError ? "tool_error" : nil)
+        let errorClass: String? = cancelled
+            ? "cancelled"
+            : (isError ? Self.classifyError(resultText) : nil)
 
         Task.detached(priority: .utility) {
             guard let store = EvolutionStore.shared else { return }
@@ -136,6 +138,29 @@ enum EvolutionRecorder {
     static func mapStatus(cancelled: Bool, isError: Bool) -> EvolutionActionStatus {
         if cancelled { return .cancelled }
         return isError ? .fail : .success
+    }
+
+    /// Sorts a failed tool call into "the tool refused" vs "the app is broken".
+    ///
+    /// Everything used to be recorded as `tool_error`, and the extractor's only
+    /// rule keys on exactly that string. So a failure caused by the app — a
+    /// missing mount, a denied entitlement, a path the sandbox will not reach —
+    /// was fed to the lesson builder as if the model had used the tool wrong.
+    /// The resulting lesson tells it to retry with different arguments, which
+    /// cannot work, and the next run repeats the same wall. Splitting the
+    /// classes keeps those cases out of the retry lessons entirely.
+    static func classifyError(_ resultText: String) -> String {
+        let text = resultText.lowercased()
+        let hostMarkers = [
+            "no such file or directory", "permission denied", "operation not permitted",
+            "not mounted", "mount table", "entitlement", "sandbox",
+            "errno", "eacces", "enoent", "code=513", "-34018",
+            "未授权", "没有权限", "找不到路径",
+        ]
+        if hostMarkers.contains(where: { text.contains($0) }) {
+            return "host_error"
+        }
+        return "tool_error"
     }
 }
 
