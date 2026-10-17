@@ -7584,18 +7584,11 @@ struct ChatVoiceSettingsSheet: View {
     }
 
     private func refreshModelLabel() {
-        // [batch9-voice-1b / VT-C1] 标签口径修正：先看**用户选中的 TTS 服务**
-        //（朗读与气泡的真实发声方）；未选服务时退回播放器的运行时值；最后才
-        // 用模型组解析——不再出现"未发声时永远显示 System"的错位。
-        if let svc = TTSServiceStore.shared.selectedService() {
-            modelLabel = svc.name
-            return
-        }
-        if let instance = VoiceOutputPlayer.shared.activeModelLabel {
-            modelLabel = instance
-            return
-        }
-        modelLabel = VoiceProviderResolver.outputModelLabel()
+        // [audit-D2/A6] 标签改用与语音服务页共用的解析链
+        // (VoiceProviderResolver.effectiveVoiceLabel)：选中服务 → 播放器运行时
+        // （上次真正发声的模型）→ 默认 TTS 分组 → 模型组。标签即"会自动发声的
+        // 那档"，与点进去能改的层级对齐（服务/分组/模型/系统音色都在 picker 里）。
+        modelLabel = VoiceProviderResolver.effectiveVoiceLabel()
     }
 }
 
