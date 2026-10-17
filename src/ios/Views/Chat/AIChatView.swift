@@ -7449,7 +7449,7 @@ struct ChatVoiceSettingsSheet: View {
                     Text("针对当前会话生效。")
                 }
 
-                // 实时播报状态与控制（收口悬浮播放器全部调节）
+                // 朗读状态与控制（收口悬浮播放器全部调节）
                 Section {
                     HStack {
                         HStack(spacing: 8) {
@@ -7486,7 +7486,10 @@ struct ChatVoiceSettingsSheet: View {
                         }
                     }
                 } header: {
-                    Text("实时播报状态")
+                    // [audit-批0] 复看更名：自动朗读已删，此处实为手动点读的
+                    // 实时状态 + 遥控（继续/暂停/停止），"实时播报"易读成自动
+                    // 播报类功能名——按现状命名。
+                    Text("朗读状态与控制")
                 }
 
                 Section {
