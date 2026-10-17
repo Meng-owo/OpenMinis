@@ -308,18 +308,25 @@ private struct MemoryFileEditView: View {
             // doesn't dismiss or change, so without this the user gets no
             // signal that the write landed.
             MinisToast.show(AppLocalized("Saved"))
-            // Enqueue for iCloud v2 sync. GLOBAL.md uses its own singleton
-            // record; per-day logs use the dateKey from the filename.
+            // [audit-E2] Mark the record that belongs to the persona whose
+            // file was actually just edited — `<pid>/<base>` for non-default
+            // personas (the default keeps the historic bare forms). The old
+            // code always marked the DEFAULT persona's records, so editing a
+            // non-default persona's memory pushed the default persona's file
+            // (and left the edit itself un-synced).
+            let pid = PersonaStore.currentID()
             if isGlobal {
                 Task {
-                    await ChatStore.shared.markDirty(recordType: "MemoryGlobalV2",
-                                                     recordId: "memory-global")
+                    await ChatStore.shared.markDirty(
+                        recordType: "MemoryGlobalV2",
+                        recordId: MemorySyncRecordID.scoped(pid: pid, base: MemorySyncRecordID.globalBase))
                 }
             } else {
                 let stem = (fileName as NSString).deletingPathExtension
                 Task {
-                    await ChatStore.shared.markDirty(recordType: "MemoryDailyV2",
-                                                     recordId: stem)
+                    await ChatStore.shared.markDirty(
+                        recordType: "MemoryDailyV2",
+                        recordId: MemorySyncRecordID.scoped(pid: pid, base: stem))
                 }
             }
             NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
