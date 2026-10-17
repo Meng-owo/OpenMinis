@@ -80304,7 +80304,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "settings_memory_global_enabled"
+            "value": "Activar la memoria para las nuevas sesiones"
           }
         },
         "fr": {
@@ -80362,7 +80362,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "settings_memory_global_enabled_footer"
+            "value": "Si está desactivada, las nuevas sesiones omiten GLOBAL.md y la memoria diaria de forma predeterminada. Las sesiones existentes conservan su propia configuración."
           }
         },
         "fr": {
@@ -80987,7 +80987,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "shortcut.cameraChat.title"
+            "value": "Chat con cámara"
           }
         },
         "fr": {
@@ -81046,7 +81046,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "shortcut.newChat.title"
+            "value": "Nuevo chat"
           }
         },
         "fr": {
@@ -81105,7 +81105,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "shortcut.voiceChat.title"
+            "value": "Chat por voz"
           }
         },
         "fr": {
