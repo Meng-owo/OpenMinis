@@ -22,6 +22,12 @@ struct SyncedSession: Syncable {
     var modelBinding: String?
     var pinnedAt: Date?
     var folderId: String?
+    // [batch7][T-p1-delegate-task] Child-session linkage; optional, no version
+    // bump (same shape as folderId). Old builds ignore it on read and omit it
+    // on write — both decode as nil here, so they show the child as a normal
+    // session titled "Agent · …" (accepted build-skew).
+    var parentSessionId: String?
+    var parentToolUseId: String?
     var source: String?
     /// [batch6b / W3A-08] The session's true last-activity time (message
     /// activity). `updatedAt` above now carries only the METADATA clock that
@@ -53,6 +59,10 @@ struct SyncedSession: Syncable {
                 // `source` (e.g. "shortcut") never left the origin device,
                 // so the shortcuts bolt badge never rendered on any peer.
                 F.optionalString("source",   \SyncedSession.source),
+                // [batch7][T-p1-delegate-task] Same optional-field treatment:
+                // old peers omit them on write and read them back as nil.
+                F.optionalString("parentSessionId", \SyncedSession.parentSessionId),
+                F.optionalString("parentToolUseId", \SyncedSession.parentToolUseId),
                 // [batch6b / W3A-08] Activity clock, separate from the LWW
                 // metadata clock. Optional — old peers omit it (→ nil).
                 F.optionalDate("contentUpdatedAt", \SyncedSession.contentUpdatedAt),
@@ -77,6 +87,8 @@ struct SyncedSession: Syncable {
             modelBinding: modelBinding,
             pinnedAt: s.pinnedAt,
             folderId: s.folderId,
+            parentSessionId: s.parentSessionId,
+            parentToolUseId: s.parentToolUseId,
             source: s.source,
             contentUpdatedAt: s.updatedAt
         )

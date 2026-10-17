@@ -975,3 +975,149 @@ extension AIChatViewModel {
         logger.info("[subagent_task] thinking=\(level.rawValue) on child \(childSessionId.prefix(8))")
     }
 }
+
+
+// MARK: - [batch7] Resume an interrupted sub agent from its persisted block
+
+extension AIChatViewModel {
+    /// [batch7][T-sub-agents-resume-from-block] Restart a sub agent whose run
+    /// was interrupted (app killed, crash) so its parent block still reads
+    /// "interrupted" and no registry job exists any more.
+    ///
+    /// The live `resumeSubAgentTask` path needs the ORIGINAL job (its id and
+    /// target); after a relaunch the registry is empty — which is exactly the
+    /// state this button exists for. Everything is rebuilt from persisted
+    /// facts: the child session row (parent linkage), the parent's block
+    /// (tool_use id + result JSON), and the roster. The resumed run then
+    /// continues through the same child pool, budget and callback channel as
+    /// a fresh delegation.
+    ///
+    /// Returns nil on success, or a human-readable reason on refusal.
+    @MainActor
+    func resumeInterruptedHelper(childSessionId childId: String) async -> String? {
+        guard !isSubAgentChild else { return "a sub agent cannot resume another" }
+        guard let parentSid = sessionId else { return "no session" }
+        guard await ChatStore.shared.sessionExists(id: childId) else {
+            return "that sub agent's session no longer exists"
+        }
+        let registry = AgentJobRegistry.shared
+        // Already running (double tap, or resumed from another surface).
+        if registry.list().contains(where: { $0.runSessionId == childId
+            && ($0.state == .running || $0.state == .pending) }) {
+            return nil
+        }
+
+        // ── Rebuild the identity from persisted state ────────────────────
+        guard let childSession = await ChatStore.shared.getSession(childId),
+              let toolUseId = childSession.parentToolUseId,
+              childSession.parentSessionId == parentSid else {
+            return "that sub agent is not part of this conversation"
+        }
+        var parentBlock: AssistantBlock?
+        for msg in messages {
+            if let b = msg.blocks.first(where: { $0.toolUseId == toolUseId }) {
+                parentBlock = b
+                break
+            }
+        }
+        var payload: [String: Any]?
+        if let parentBlock {
+            payload = AIChatViewModel.parseDelegateResult(parentBlock.content)
+        }
+        var title = AppLocalized("Agent")
+        if let t = payload?["title"] as? String, !t.isEmpty {
+            title = t
+        } else if let t = childSession.title, !t.isEmpty {
+            title = t
+        }
+        // The definition may have been renamed or deleted while the app was
+        // away; falling back to the built-in keeps the run possible, and the
+        // result records which one actually ran.
+        var agentName = payload?["agent"] as? String
+        if agentName?.isEmpty ?? true { agentName = parentBlock?.helperAgentName }
+        let roster = SubAgentStore.shared.subAgents
+        var subAgent = roster.first { $0.isBuiltIn } ?? SubAgentDefinition.makeBuiltIn()
+        var namedAgentMissing: String?
+        if let agentName, !agentName.isEmpty {
+            if let named = roster.first(where: { $0.name == agentName }) {
+                subAgent = named
+            } else {
+                namedAgentMissing = agentName
+                logger.warning("[subagent_task] RESUME agent \(agentName) no longer exists — falling back to the built-in")
+            }
+        }
+
+        guard let resolution = SubAgentModelResolver.resolve(subAgent: subAgent, parent: self) else {
+            return "no model is configured to run it on"
+        }
+
+        // ── Child VM: same pool + session setup as a fresh delegation ────
+        let (child, fresh) = ViewModelCache.shared.getOrCreate(for: childId)
+        if fresh || child.messages.isEmpty { await child.loadSession() }
+        guard !child.isProcessing else {
+            return "that sub agent's session is busy with a turn right now; try again in a moment"
+        }
+        child.sessionSource = "helper"
+        child.memoryEnabled = false
+        child.suppressGeneralCompletionNotification = true
+
+        let job = registry.register(title: title, origin: .tool, trigger: .immediate,
+                                    target: .childOfCurrent(parentSessionId: parentSid,
+                                                            parentToolUseId: toolUseId),
+                                    prompt: nil, then: .followUpParent(template: nil))
+        job.subAgentName = subAgent.name
+        job.modelOrigin = resolution.origin.rawValue
+        job.modelIdentity = HelperModelIdentity.make(resolution: resolution)
+        job.wasResumed = true
+
+        child.subAgentBrief = SubAgentBrief(parentSessionId: parentSid,
+                                            parentToolUseId: toolUseId,
+                                            jobId: job.id,
+                                            title: title,
+                                            instructions: subAgent.instructions,
+                                            budgetMinutes: AIChatViewModel.helperMaxMinutes)
+        ProviderConfigStore.shared.setBinding(
+            SessionModelBinding(sessionId: childId, primarySource: resolution.source), for: childId)
+        // A resumed run re-resolves its model, so it re-seeds the thinking
+        // level too — otherwise resume silently drops it for the rest of the run.
+        applySubAgentThinkingLevel(subAgent: subAgent, childSessionId: childId,
+                                   parentSessionId: parentSid, entry: resolution.entry)
+
+        // [T-sub-agents-resume] Re-attach the child to its parent block — the
+        // same link a fresh delegation makes. Without it the block keeps a nil
+        // helperChildSessionId and every surface that reaches the child
+        // through it goes dead (the transcript button's JSON fallback stops
+        // working the moment the resumed run overwrites `content`).
+        for msg in messages where msg.role == .assistant {
+            if let block = msg.blocks.first(where: { $0.toolUseId == toolUseId }) {
+                block.helperChildSessionId = childId
+                block.helperModel = job.modelIdentity
+                block.helperAgentName = subAgent.name
+                if block.toolSummary?.isEmpty ?? true { block.toolSummary = title }
+                break
+            }
+        }
+
+        // ── Continue the run ─────────────────────────────────────────────
+        let outcome = child.submitProgrammaticPrompt(Self.subAgentResumeNotice,
+                                                     origin: .job(jobId: job.id), silent: true)
+        guard outcome == .sent else {
+            job.then = AgentJobThen.none
+            registry.finish(job.id, state: .failed, result: nil)
+            return "the sub agent session did not restart (\(String(describing: outcome)))"
+        }
+        registry.markRunning(job.id, sessionId: childId)
+        // Budget restarts: the original one died with the process.
+        job.task = Task { @MainActor [weak child] in
+            try? await Task.sleep(nanoseconds: UInt64(AIChatViewModel.helperMaxMinutes) * 60 * 1_000_000_000)
+            guard !Task.isCancelled, let child, child.isProcessing else { return }
+            logger.warning("[subagent_task] budget \(AIChatViewModel.helperMaxMinutes)min elapsed — stopping resumed child \(childId.prefix(8))")
+            child.cancel()
+        }
+        if let missing = namedAgentMissing {
+            transientNotice = String(format: AppLocalized("Sub agent \"%@\" no longer exists — resumed with the built-in agent"), missing)
+        }
+        logger.info("[subagent_task] RESUME-FROM-BLOCK job=\(job.id.prefix(8)) child=\(childId.prefix(8)) parent=\(parentSid.prefix(8)) agent=\(subAgent.name)")
+        return nil
+    }
+}

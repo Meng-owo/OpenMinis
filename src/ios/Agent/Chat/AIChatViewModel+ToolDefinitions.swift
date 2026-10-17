@@ -272,7 +272,10 @@ extension AIChatViewModel {
                 "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user on the block in the tool bar."),
                 "action": AgentToolParam(type: .string, description: "The subagent action to perform: delegate (default), status, steer, cancel or resume."),
                 "task": AgentToolParam(type: .string, description: "action=delegate only, required. The complete, self-contained brief: goal, constraints, and return format."),
-                "agent": AgentToolParam(type: .string, description: "action=delegate only. Which sub agent runs this task."),
+                // [T-sub-agents-v1] enumValues are the enabled sub agent names,
+                // rebuilt every turn (the schema is not cached), so a rename takes
+                // effect on the next request and the model cannot invent a name.
+                "agent": AgentToolParam(type: .string, description: "action=delegate only. Which sub agent runs this task. Pick the one whose description matches the work; omit it to use the general one.", enumValues: SubAgentStore.shared.subAgents.map(\.name)),
                 "wait": AgentToolParam(type: .boolean, description: "action=delegate only. false (default) returns at once with status=running; true blocks until done."),
                 "job_id": AgentToolParam(type: .string, description: "action=status/steer/cancel/resume. The job_id returned when the task started. status may omit it to list every delegation of this conversation."),
                 "message": AgentToolParam(type: .string, description: "action=steer only, required. The correction instruction to the running sub agent.")
@@ -763,3 +766,42 @@ public final class ToolCatalogRouter: @unchecked Sendable {
     }
 }
 
+
+// MARK: - Sub agent roster  [batch7][G5]
+
+extension AIChatViewModel {
+    /// The "which sub agent for which job" section of the system prompt.
+    ///
+    /// [batch7][G5] Built from the same roster the `agent` parameter's
+    /// enumValues come from, so a name can never be advertised in one and
+    /// rejected by the other. The per-line Model note tells the model where
+    /// each agent runs (a pinned group vs Auto), which is information only —
+    /// the model does not choose it — but explains why two agents can behave
+    /// differently on the same task.
+    ///
+    /// Cost is bounded by SubAgentLimits (10 × (40 + 200) chars), with a
+    /// defensive prefix(200) here in case a definition reached storage through
+    /// some path that skipped the clamp.
+    @MainActor
+    static func subAgentRosterSection() -> String {
+        let roster = SubAgentStore.shared.subAgents
+        guard !roster.isEmpty else { return "" }
+        let store = ProviderConfigStore.shared
+        var lines = ["Available sub agents (pass the name as \(SubAgentDefinition.toolName).agent):"]
+        for def in roster {
+            let desc = String(def.description.prefix(SubAgentLimits.descriptionMaxLength))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let model: String
+            if let gid = def.modelGroupId, let group = store.group(for: gid) {
+                // Pinned by the user: every run of this agent uses the group.
+                model = "fixed — \(group.name)"
+            } else {
+                // Auto: the resolver follows this conversation's model.
+                model = "Auto — follows this conversation's model"
+            }
+            lines.append("- \(def.name) — \(desc) Model: \(model).")
+        }
+        lines.append("Prefer a specific sub agent when its description matches; otherwise use the general one.")
+        return lines.joined(separator: "\n") + "\n"
+    }
+}

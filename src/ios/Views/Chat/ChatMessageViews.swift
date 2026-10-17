@@ -302,6 +302,10 @@ struct ChatMessageRow: View {
                 parts.append("Image: \(path)")
             case .memoryTool(let action):
                 parts.append("Memory: \(action)\n\(block.content)")
+            case .delegateTool(let t):
+                // [batch7] Copy keeps the card's title when it has one; the
+                // content is the progress line / result JSON as-is.
+                parts.append(t.isEmpty ? "Sub agent:\n\(block.content)" : "\(t):\n\(block.content)")
             case .askUserTool:
                 parts.append("Ask user:\n\(block.content)")
             case .genericTool(let name):

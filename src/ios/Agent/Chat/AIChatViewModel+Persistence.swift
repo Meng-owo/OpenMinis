@@ -1314,7 +1314,7 @@ extension AIChatViewModel {
     /// where the few most-recent sessions all used a model the user has
     /// since removed.
     private static func resolveLastUsedEntry(excludingSessionId: String, store: ProviderConfigStore) async -> ModelEntry? {
-        let recents = await ChatStore.shared.listSessions()
+        let recents = await ChatStore.shared.listSessions().filter { !$0.isChild }
         let scanLimit = 20
         var scanned = 0
         for session in recents {

@@ -483,6 +483,10 @@
 		E5TLC0001 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
 		E5TRC001 /* ThinkingRuleCoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TRC002 /* ThinkingRuleCoding.swift */; };
 		E5TRC0010 /* ThinkingRulesCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TRC0020 /* ThinkingRulesCollection.swift */; };
+		E5HBV0001 /* HelperBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5HBV0011 /* HelperBlockView.swift */; };
+		E5AJR0004 /* HelperSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AJR0014 /* HelperSheet.swift */; };
+		E5SCH0004 /* HelperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0014 /* HelperSettingsView.swift */; };
+		E5SAC0010 /* SubAgentsCollection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SAC0020 /* SubAgentsCollection.swift */; };
 		E5TRE001 /* ThinkingRuleEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TRE002 /* ThinkingRuleEditorView.swift */; };
 		E5TRS001 /* ThinkingRulesSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TRS002 /* ThinkingRulesSection.swift */; };
 		E5TWF001 /* ThinkingWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TWF002 /* ThinkingWireFormat.swift */; };
@@ -1203,6 +1207,7 @@
 		E5N0000132F3B941A00049557 /* SkillsManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillsManagementView.swift; sourceTree = "<group>"; };
 		E5N0000142F3B941A00049557 /* MemoryManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryManagementView.swift; sourceTree = "<group>"; };
 		EVOF00006 /* EvolutionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionSettingsView.swift; sourceTree = "<group>"; };
+		E5SCH0014 /* HelperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSettingsView.swift; sourceTree = "<group>"; };
 		EVOF00007 /* EvolutionCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionCenterView.swift; sourceTree = "<group>"; };
 		EVOF00008 /* EvolutionLessonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EvolutionLessonsView.swift; sourceTree = "<group>"; };
 		E5N0000152F3B941A00049557 /* SessionMemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionMemoryView.swift; sourceTree = "<group>"; };
@@ -1269,6 +1274,7 @@
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
 		E5TRC002 /* ThinkingRuleCoding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThinkingRuleCoding.swift; path = Thinking/ThinkingRuleCoding.swift; sourceTree = "<group>"; };
 		E5TRC0020 /* ThinkingRulesCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThinkingRulesCollection.swift; path = Config/Collections/ThinkingRulesCollection.swift; sourceTree = "<group>"; };
+		E5SAC0020 /* SubAgentsCollection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SubAgentsCollection.swift; path = Config/Collections/SubAgentsCollection.swift; sourceTree = "<group>"; };
 		E5TRE002 /* ThinkingRuleEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingRuleEditorView.swift; sourceTree = "<group>"; };
 		E5TRS002 /* ThinkingRulesSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingRulesSection.swift; sourceTree = "<group>"; };
 		E5TWF002 /* ThinkingWireFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ThinkingWireFormat.swift; path = Thinking/ThinkingWireFormat.swift; sourceTree = "<group>"; };
@@ -1386,6 +1392,8 @@
 		F1MCPSTORE /* MCPStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPStore.swift; sourceTree = "<group>"; };
 		F1S00011 /* ChatSessionIdEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatSessionIdEnvironment.swift; sourceTree = "<group>"; };
 		F1T00010 /* ToolLiveSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolLiveSheet.swift; sourceTree = "<group>"; };
+		E5HBV0011 /* HelperBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperBlockView.swift; sourceTree = "<group>"; };
+		E5AJR0014 /* HelperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperSheet.swift; sourceTree = "<group>"; };
 		F1VMCP01 /* MCPIntegrationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPIntegrationsView.swift; sourceTree = "<group>"; };
 		F1VMCP02 /* MCPFormSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPFormSheet.swift; sourceTree = "<group>"; };
 		F1VMCP03 /* MCPJSONImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPJSONImportSheet.swift; sourceTree = "<group>"; };
@@ -2085,6 +2093,7 @@
 				E5CFG001F /* ModelsCollection.swift */,
 				E5CFG0030 /* GroupsCollection.swift */,
 				E5TRC0020 /* ThinkingRulesCollection.swift */,
+				E5SAC0020 /* SubAgentsCollection.swift */,
 				E5CFG0031 /* EnvVarsCollection.swift */,
 				E5S000011 /* DeviceIdentity.swift */,
 				F1S00010 /* Environment */,
@@ -2558,6 +2567,8 @@
 				E5PERSONA104 /* PersonaSettingsView.swift */,
 				E5N0000122F3B941A00049557 /* SessionSkillsView.swift */,
 				F1T00010 /* ToolLiveSheet.swift */,
+				E5HBV0011 /* HelperBlockView.swift */,
+				E5AJR0014 /* HelperSheet.swift */,
 				E53000015 /* UsageStatsView.swift */,
 				F1W00012 /* WebPreviewSheet.swift */,
 				A11Y0002 /* ChatAccessibilityAnnouncer.swift */,
@@ -2584,6 +2595,7 @@
 				E5J000013 /* ConfigAuditView.swift */,
 				E5N0000142F3B941A00049557 /* MemoryManagementView.swift */,
 				EVOF00006 /* EvolutionSettingsView.swift */,
+				E5SCH0014 /* HelperSettingsView.swift */,
 				EVOF00007 /* EvolutionCenterView.swift */,
 				EVOF00008 /* EvolutionLessonsView.swift */,
 				E8A000013 /* OffloadPermissionSettingsView.swift */,
@@ -3472,6 +3484,11 @@
 				E5CFG000F /* ModelsCollection.swift in Sources */,
 				E5CFG0020 /* GroupsCollection.swift in Sources */,
 				E5TRC0010 /* ThinkingRulesCollection.swift in Sources */,
+				E5HBV0001 /* HelperBlockView.swift in Sources */,
+				E5AJR0004 /* HelperSheet.swift in Sources */,
+				E5AMI0001 /* HelperModelIdentity.swift in Sources */,
+				E5SCH0004 /* HelperSettingsView.swift in Sources */,
+				E5SAC0010 /* SubAgentsCollection.swift in Sources */,
 				E5CFG0021 /* EnvVarsCollection.swift in Sources */,
 				E5Q000001 /* BPETokenizer.swift in Sources */,
 				E5MDS0003 /* MarkdownStripper.swift in Sources */,

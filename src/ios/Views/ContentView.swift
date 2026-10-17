@@ -885,6 +885,19 @@ struct ContentView: View {
     // diff key (see sessionRowKeys) so the ForEach can't skip re-materializing
     // the row whose running state changed.
     @ObservedObject private var sidebarActivityTracker = SessionActivityTracker.shared
+    /// [batch7][A2#12] Observed so a sub agent starting/finishing re-renders
+    /// the sidebar rows (the running indicator unions it in below).
+    @ObservedObject private var sidebarJobRegistry = AgentJobRegistry.shared
+
+    /// [batch7][A2#12] Parent sessions whose sub agents are still running —
+    /// unioned into the row's running indicator so a conversation whose own
+    /// loop is idle but whose delegated agent still works reads as busy,
+    /// the same rule the send button uses for Stop.
+    private var subAgentParentIds: Set<String> {
+        Set(sidebarJobRegistry.list().compactMap { job in
+            job.state == .running && job.target.isChildOfCurrent ? job.target.parentSessionId : nil
+        })
+    }
     // Folder-header aggregates (anyUnread / anyPaused) read the badge store
     // during sidebarGroups; observing it here is what re-derives those
     // aggregates when a badge flips. Row-level observation alone would only
@@ -1364,7 +1377,10 @@ struct ContentView: View {
     private var effectsWired: some View {
         overlaysWired
         .task {
-            sessions = await ChatStore.shared.listSessions()
+            // [batch7][T-p1-delegate-task] Sub agent child sessions are
+            // reachable only through their parent (the transcript sheet) —
+            // never as top-level conversations.
+            sessions = await ChatStore.shared.listSessions().filter { !$0.isChild }
             // Folders must load WITH the first session batch: groupedSessionIDs
             // treats a folder_id whose folder isn't loaded as an orphan and
             // renders the session ungrouped, so a first paint with sessions
@@ -2906,7 +2922,8 @@ struct ContentView: View {
                                 // Pass running/suspended as VALUES so a flip
                                 // changes the SessionRow value → body re-evals
                                 // in place (same identity, no cell rebuild).
-                                isActive: sidebarActivityTracker.isActive(session.id),
+                                isActive: sidebarActivityTracker.isActive(session.id)
+                                    || subAgentParentIds.contains(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
                                 highlightQuery: isSearching ? searchText : nil,
                                 matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
@@ -3058,7 +3075,8 @@ struct ContentView: View {
                                 // Pass running/suspended as VALUES so a flip
                                 // changes the SessionRow value → body re-evals
                                 // in place (same identity, no cell rebuild).
-                                isActive: sidebarActivityTracker.isActive(session.id),
+                                isActive: sidebarActivityTracker.isActive(session.id)
+                                    || subAgentParentIds.contains(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
                                 highlightQuery: isSearching ? searchText : nil,
                                 matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
@@ -4388,7 +4406,10 @@ struct ContentView: View {
         }
         sessionRefreshInFlight = true
         Task(priority: .utility) { @MainActor in
-            sessions = await ChatStore.shared.listSessions()
+            // [batch7][T-p1-delegate-task] Sub agent child sessions are
+            // reachable only through their parent (the transcript sheet) —
+            // never as top-level conversations.
+            sessions = await ChatStore.shared.listSessions().filter { !$0.isChild }
             folders = await ChatStore.shared.listFolders()
             clearSelectionIfDangling()
             sessionRefreshInFlight = false
@@ -7577,6 +7598,20 @@ private struct SettingsSheet: View {
                             Text("Agent Tools")
                         } icon: {
                             QuietAppIcon(id: QuietIconSlot.agentTools.id, systemName: QuietIconSlot.agentTools.systemName)
+                        }
+                    }
+                    // [batch7][T-sub-agents-v1] Directly under Agent Tools: the
+                    // two pages are the tool surface (which tools exist) and
+                    // the delegation surface (who runs a delegated task), so
+                    // they read as a pair. The page was unreachable before —
+                    // the roster had no UI to build or edit it.
+                    NavigationLink {
+                        HelperSettingsView()
+                    } label: {
+                        Label {
+                            Text("Sub Agents")
+                        } icon: {
+                            QuietAppIcon(id: QuietIconSlot.subAgents.id, systemName: QuietIconSlot.subAgents.systemName)
                         }
                     }
                     NavigationLink {

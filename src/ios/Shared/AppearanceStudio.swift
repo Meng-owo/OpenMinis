@@ -915,6 +915,8 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
     /// `.terminal`, so customising the terminal icon silently changed this
     /// row's icon too — two features, one slot.
     case scheduled
+    /// [batch7] Settings → Agent Runtime 的「Sub Agents」行（子代理设置页）。
+    case subAgents
 
     var id: String { rawValue }
     var title: String {
@@ -944,6 +946,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "桥·对外连接"
         case .webSearch: return "联网搜索"
         case .scheduled: return "定时任务与脉搏"
+        case .subAgents: return "子代理"
         case .agentTools: return "工具开关"
         }
     }
@@ -974,6 +977,7 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
         case .bridgeRelay: return "antenna.radiowaves.left.and.right"
         case .webSearch: return "magnifyingglass"
         case .scheduled: return "clock.arrow.circlepath"
+        case .subAgents: return "person.2.fill"
         case .agentTools: return "wrench.and.screwdriver.fill"
         }
     }

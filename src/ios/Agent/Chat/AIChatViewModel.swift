@@ -1823,6 +1823,17 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
            let mcpFragment = MCPStore.shared.systemPromptSnippet(for: sid, personaID: sessionPersonaId) {
             p += "\n\n" + mcpFragment
         }
+        // [batch7][G5] Sub agent roster — the same list the tool schema's
+        // `agent` enumValues come from, so a name can never be advertised
+        // in one place and rejected in the other. Same gate as the tool
+        // itself: none for a child session, none while Sub Agents are off;
+        // an empty roster returns "" and changes nothing.
+        if !isSubAgentChild, Self.toolEnabled(.agents) {
+            let rosterFragment = Self.subAgentRosterSection()
+            if !rosterFragment.isEmpty {
+                p += "\n\n" + rosterFragment
+            }
+        }
         // [tts-paper 2026-10-02] TTS 能力纸条：用户这轮在聊语音/TTS 才塞进
         // prompt（见 TTSPaper.paperIfRelevant 的宽松触发判定），做展开详情。
         // [tts-standing 2026-10-09] 常驻能力声明：只要配了 TTS 服务/分组，
@@ -4631,6 +4642,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 case .browserTool: return "browser"
                 case .readImageTool: return "readImage"
                 case .memoryTool: return "memory"
+                case .delegateTool: return "delegate"
                 case .askUserTool: return "askUser"
                 case .genericTool: return "genericTool"
                 case .info: return "info"
@@ -6716,7 +6728,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var mentionAnchor: Int = -1
 
 
-
     /// In-memory thinking level for sessions not yet persisted (no sessionId yet).
     /// nil = user hasn't explicitly set one; fall back to the default group's level.
     private var pendingThinkingLevel: ThinkingLevel?
@@ -6813,69 +6824,3 @@ enum LLMProviderError: LocalizedError {
         }
     }
 }
-
-/// What one served turn of an agent loop ran on — recorded by the send loop on
-/// the vm (`lastEffectiveModel`) so the registry / status projections can read
-/// it without reaching into the loop. Request side is known the moment the
-/// stream opens; `responseModel` arrives with the first response event that
-/// names the model.
-///
-/// [AUD-02] Hollowed to `entryId`-only during the decouple: `lastEffectiveModel`
-/// was never written, so `HelperModelIdentity.merge` had nothing to fold in and
-/// every card's "actual model" line was empty, silently. Restored in full.
-struct EffectiveModelRecord: Equatable {
-    var entryId: String?
-    var providerLabel: String?
-    var providerType: String?
-    var modelId: String?
-    var modelName: String?
-    var responseModel: String?
-}
-
-extension EffectiveModelRecord {
-    /// Request-side facts for the entry the send loop is serving a turn on.
-    @MainActor
-    static func make(entryId: String, store: ProviderConfigStore = .shared) -> EffectiveModelRecord? {
-        guard let entry = store.entry(for: entryId) else { return nil }
-        var rec = EffectiveModelRecord()
-        rec.entryId = entry.id
-        rec.modelId = entry.model.id
-        rec.modelName = entry.model.displayName
-        if let inst = store.instance(for: entry.providerInstanceId) {
-            rec.providerLabel = inst.label
-            rec.providerType = inst.providerType.rawValue
-        } else {
-            rec.providerType = entry.model.provider
-        }
-        return rec
-    }
-}
-
-// MARK: - Recording on the vm
-
-extension AIChatViewModel {
-    /// The send loop is about to serve (or has just served) a turn on
-    /// `entryId` — after group fallback moved it, this is the backup entry.
-    /// A change of entry drops the previously reported response model: it
-    /// named a different provider's answer.
-    func noteEffectiveEntry(_ entryId: String?) {
-        guard let entryId, !entryId.isEmpty else { return }
-        if lastEffectiveModel?.entryId == entryId { return }
-        guard var rec = EffectiveModelRecord.make(entryId: entryId) else { return }
-        rec.responseModel = nil
-        lastEffectiveModel = rec
-        logger.info("[ModelIdentity] effective entry=\(entryId) model=\(rec.modelId ?? "?") provider=\(rec.providerLabel ?? "?") sid=\(sessionId?.prefix(8) ?? "nil")")
-    }
-
-    /// The API named the model serving the current turn.
-    func noteResponseModel(_ reported: String) {
-        let trimmed = reported.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        var rec = lastEffectiveModel ?? EffectiveModelRecord()
-        guard rec.responseModel != trimmed else { return }
-        rec.responseModel = trimmed
-        lastEffectiveModel = rec
-        logger.info("[ModelIdentity] response model=\(trimmed) entry=\(rec.entryId ?? "?") sid=\(sessionId?.prefix(8) ?? "nil")")
-    }
-}
-

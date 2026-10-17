@@ -375,6 +375,10 @@ struct AIChatView: View {
     /// [audit-C1] 回调卡点开详情的投递口：卡片原样发 openAgentCallback 通知，
     /// 本会话的宿主在这里接住，用与工具卡同一张 ToolLiveSheet 呈现。
     @State private var callbackDetailTarget: AgentCallbackDetailTarget?
+    // [batch7][T-agent-transcript-navbar] Sub agent transcript opened from a
+    // notification tap / intent / debug RPC. Opening from the block card or
+    // the tool sheet stacks its own presentation instead.
+    @State private var helperSheetTarget: HelperSheetTarget?
     @State private var showClearChatConfirm = false
     /// [T-action-bar 09-12] Assistant action bar delete needs an explicit
     /// confirmation because the safe data-consistent operation removes the
@@ -1133,6 +1137,21 @@ struct AIChatView: View {
                           browserPool: vm.browserTabPool,
                           onBrowserTakeover: { vm.browserTakeoverActive = true },
                           onTakeoverDone: { vm.resumeFromBrowserTakeover() })
+        }
+        // [batch7] Sub agent transcript route: notification / intent / debug
+        // post `.openHelperSheet` with the child + parent session ids; only
+        // the matching host presents (multi-window safe), no id passes through.
+        .onReceive(NotificationCenter.default.publisher(for: .openHelperSheet)) { note in
+            let info = note.userInfo ?? [:]
+            guard let childId = info["childSessionId"] as? String, !childId.isEmpty else { return }
+            if let parent = info["parentSessionId"] as? String, !parent.isEmpty,
+               let mine = vm.sessionId, parent != mine { return }
+            let title = (info["title"] as? String) ?? ""
+            helperSheetTarget = HelperSheetTarget(id: childId, title: title)
+        }
+        .sheet(item: $helperSheetTarget) { target in
+            HelperTranscriptPage(target: target)
+                .helperTranscriptSheetStyle()
         }
         .sheet(isPresented: $showSessionMemory) {
             SessionMemoryView(vm: cached.vm)
@@ -5822,7 +5841,7 @@ private struct MoveToSessionSheet: View {
             }
         }
         .task {
-            sessions = ChatStore.shared.listSessions()
+            sessions = ChatStore.shared.listSessions().filter { !$0.isChild }
         }
     }
 

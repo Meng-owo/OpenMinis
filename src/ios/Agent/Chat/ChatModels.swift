@@ -380,6 +380,18 @@ final class AssistantBlock: Identifiable, ObservableObject {
     @Published var streamingFileContent: String?
     /// Child session ID for helper delegate_task tool blocks.
     @Published var helperChildSessionId: String? = nil
+    /// [T-p1-delegate-task] Live tier / resolved / effective model of the agent
+    /// this `delegate_task` block spawned. Set by HelperRunner at start and
+    /// updated in place as the child confirms its model; after a reload it is
+    /// parsed from the persisted result JSON instead (HelperBlockInfo).
+    @Published var helperModel: HelperModelIdentity?
+    /// [T-sub-agents-badge] Which sub agent definition is running this block,
+    /// set once the child has actually started.
+    @Published var helperAgentName: String?
+    /// [T-sub-agents-queue-orphan] This block was persisted as `status: queued`,
+    /// but the in-memory queue that would have started it is gone (app restart).
+    /// Set by the cold-start reconcile rather than read live.
+    @Published var helperQueueLost: Bool = false
     /// Whether a thinking block is expanded (persisted across cell reuse).
     @Published var isThinkingExpanded: Bool = false
     /// True once the user has manually tapped this thinking block's header.
@@ -433,6 +445,8 @@ final class AssistantBlock: Identifiable, ObservableObject {
             return (!path.isEmpty && name != "/" && name.contains(".")) ? name : "Read image"
         case .memoryTool(let action):
             return action.isEmpty ? "Memory" : action
+        case .delegateTool(let title):
+            return title.isEmpty ? AppLocalized("Agent") : title
         case .askUserTool:
             return "向用户提问"
         case .genericTool(let name):
@@ -453,6 +467,10 @@ enum AssistantBlockKind: Equatable {
     case browserTool(action: String)
     case readImageTool(path: String)
     case memoryTool(action: String)
+    /// [T-p1-delegate-task] A `delegate_task` call: `title` is the helper's
+    /// tool_title. The block's content is a live progress line while the
+    /// helper runs and the result JSON afterwards.
+    case delegateTool(title: String)
     case askUserTool
     /// [audit-C3] Any tool without a dedicated kind — rendered with its own
     /// name + a generic wrench glyph instead of masquerading as a shell tool

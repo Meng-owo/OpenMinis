@@ -202,6 +202,12 @@ enum ChatStoreSyncHydrators {
         // omits the key entirely and must not clear the local origin marker.
         let sourceFieldPresent = record.fields["source"] != nil
         let source = optionalStringField(record, "source")
+        // [batch7][T-p1-delegate-task] Same presence distinction for
+        // child-session linkage: an old-build peer's record omits the keys
+        // entirely and must not clear a local parent.
+        let parentFieldPresent = record.fields["parentSessionId"] != nil
+        let parentSessionId = optionalStringField(record, "parentSessionId")
+        let parentToolUseId = optionalStringField(record, "parentToolUseId")
 
         var session = ChatSession(
             id: id, title: title, category: category, modelId: modelId,
@@ -218,7 +224,10 @@ enum ChatStoreSyncHydrators {
             remoteFolderId: folderId,
             remoteHasFolderField: folderFieldPresent,
             remoteSource: source,
-            remoteHasSourceField: sourceFieldPresent
+            remoteHasSourceField: sourceFieldPresent,
+            remoteParentSessionId: parentSessionId,
+            remoteParentToolUseId: parentToolUseId,
+            remoteHasParentField: parentFieldPresent
         )
     }
 

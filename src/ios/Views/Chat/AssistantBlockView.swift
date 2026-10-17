@@ -107,6 +107,22 @@ struct AssistantBlockView: View {
                 isStreaming: isActiveMessage && message.blocks.last?.id == block.id
             )
             .padding(.vertical, 2)
+        case .delegateTool:
+            // [batch7][T-subagent-control-capsule] A real delegation renders
+            // the sub agent's own card (status / tier / elapsed / summary) —
+            // the block's raw content is a live progress line and then the
+            // result JSON, which the generic capsule would print verbatim.
+            // A control call (status / steer / cancel / resume) is the model
+            // operating on its own agents — an ordinary tool call, so it gets
+            // the ordinary tool capsule.
+            if HelperBlockInfo.controlSummary(block) != nil {
+                ToolCapsuleView(block: block, icon: "slider.horizontal.3", accentColor: HelperAccent.color,
+                                commandStartTime: commandStartTime, onStop: onStop,
+                                toolSnapshots: toolSnapshots, detailBlock: $detailBlock,
+                                sessionPersonaId: sessionPersonaId)
+            } else {
+                HelperBlockView(block: block, detailBlock: $detailBlock)
+            }
         case .shellTool, .fileReadTool, .fileWriteTool, .fileEditTool,
              .browserTool, .readImageTool, .memoryTool, .askUserTool,
              .genericTool:
@@ -192,6 +208,9 @@ struct AssistantBlockView: View {
         case .browserTool: return "globe"
         case .readImageTool: return "photo.fill"
         case .memoryTool: return "brain.head.profile"
+        // [batch7] Sub agent blocks: real delegations render their own card;
+        // this icon serves the CONTROL-call capsule branch.
+        case .delegateTool: return "slider.horizontal.3"
         case .askUserTool: return "questionmark.circle.fill"
         case .genericTool: return "wrench.adjustable.fill"
         case .text, .thinking, .info: return "wrench.and.screwdriver.fill"
@@ -433,6 +452,7 @@ struct ToolCapsuleView: View {
         case .readImageTool: toolName = "read_image"
         case .memoryTool:    toolName = "memory"
         case .askUserTool:   toolName = "ask_user_input_v0"
+        case .delegateTool:  toolName = SubAgentDefinition.toolName
         case .genericTool(let name): toolName = name
         case .text, .thinking, .info: toolName = "unknown"
         }

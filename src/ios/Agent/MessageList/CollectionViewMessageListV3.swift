@@ -298,6 +298,9 @@ private struct BridgedAssistantBlockV3: View {
         case .browserTool: return "assistantBrowserBlock"
         case .readImageTool: return "assistantReadImageBlock"
         case .memoryTool: return "assistantMemoryBlock"
+        // [batch7][T-p1-delegate-task] Sub agent block — own cell identity so
+        // a kind flip (progress line -> result) can never reuse a capsule cell.
+        case .delegateTool: return "assistantDelegateBlock"
         case .askUserTool: return "assistantAskUserBlock"
         case .genericTool: return "assistantGenericToolBlock"
         case .info: return "assistantInfoBlock"
@@ -3521,6 +3524,7 @@ extension CollectionViewMessageListV3 {
                            let block = messages[msgIdx].blocks.first(where: { $0.id == blockId }),
                            block.toolUseId != nil {
                         let toolName: String = switch block.kind {
+                        case .delegateTool: SubAgentDefinition.toolName
                         case .shellTool: "shell_execute"
                         case .fileReadTool: "file_read"
                         case .fileWriteTool: "file_write"
@@ -4138,6 +4142,12 @@ extension CollectionViewMessageListV3 {
                 // 40→36 (-4) mid-decel; the +4 growths that motivated 40 were actually
                 // collapsed THINKING blocks (handled above with headerH = 40).
                 case .readImageTool: return 36
+                // [batch7][T-subagent-control-capsule] A real delegation card
+                // measures ~58pt (a two-line card with 12pt vertical padding
+                // per side); a control call is an ordinary 36pt capsule.
+                // Estimating both at 36 seeded every delegate cell short.
+                case .delegateTool:
+                    return HelperBlockInfo.isControlOnly(block) ? 36 : 58
                 case .info:
                     let lineCount = max(1, block.content.components(separatedBy: "\n").count)
                     return CGFloat(20 + lineCount * 16)

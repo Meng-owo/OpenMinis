@@ -58,7 +58,7 @@ class StorageManagementViewModel: ObservableObject {
             // Per-session minis files: Library/MinisChat/minis/<sessionId>/
             let minisBaseURL = libraryURL.appendingPathComponent("MinisChat/minis", isDirectory: true)
             // Get all chat sessions
-            let chatSessions = await ChatStore.shared.listSessions()
+            let chatSessions = await ChatStore.shared.listSessions().filter { !$0.isChild }
 
             // Build a set of session IDs
             let sessionIds = Set(chatSessions.map(\.id))

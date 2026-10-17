@@ -114,7 +114,7 @@ actor TypedVocabularyBuilder {
     /// than reinvent.
     static func fetchUserMessages(since: Double) async -> [SourceMessage] {
         var result: [SourceMessage] = []
-        let sessions = await ChatStore.shared.listSessions()
+        let sessions = await ChatStore.shared.listSessions().filter { !$0.isChild }
         for session in sessions {
             let raws = await ChatStore.shared.loadMessages(sessionId: session.id)
             for raw in raws where raw.role == .user {

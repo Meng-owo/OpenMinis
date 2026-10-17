@@ -338,11 +338,16 @@ struct ToolLiveSheet: View {
     enum ActiveSecondarySheet: Identifiable {
         case takeoverBrowser
         case linkPreview(URL)
+        /// [batch7][T-agent-transcript-halfsheet] The sub agent's live
+        /// conversation, stacked on top of this tool sheet so closing it
+        /// comes back here.
+        case agentTranscript(HelperSheetTarget)
 
         var id: String {
             switch self {
             case .takeoverBrowser: return "takeoverBrowser"
             case .linkPreview(let url): return "linkPreview:\(url.absoluteString)"
+            case .agentTranscript(let t): return "agentTranscript:\(t.id)"
             }
         }
     }
@@ -515,6 +520,9 @@ struct ToolLiveSheet: View {
                 }
             case .linkPreview(let url):
                 MinisLinkPreviewView(url: url, browserPool: browserPool)
+            case .agentTranscript(let target):
+                HelperTranscriptPage(target: target)
+                    .helperTranscriptSheetStyle()
             }
         }
     }
@@ -657,6 +665,26 @@ struct ToolLiveSheet: View {
                             .background(ChatColors.secondaryBg)
                             .clipShape(Circle())
                     }
+                } else if case .delegateTool = block.kind {
+                    // [batch7][T-agent-detail-buttons] A sub agent block has no
+                    // shell command to prefill; its top-right action is the
+                    // child's live conversation, behind a chat-bubble glyph.
+                    // The child id falls back to the persisted result JSON
+                    // when the live link is gone (reload / app restart).
+                    Button {
+                        let childId = block.helperChildSessionId
+                            ?? (AIChatViewModel.parseDelegateResult(block.content)?["child_session_id"] as? String)
+                        guard let childId else { return }
+                        let title = block.toolSummary ?? block.toolDescription
+                        activeSheet = .agentTranscript(HelperSheetTarget(id: childId, title: title))
+                    } label: {
+                        Image(systemName: "text.bubble")
+                            .font(.system(size: 14))
+                            .foregroundStyle(ChatColors.primaryText)
+                            .frame(width: 32, height: 32)
+                            .background(ChatColors.secondaryBg)
+                            .clipShape(Circle())
+                    }
                 } else {
                     Button { showTerminal = true } label: {
                         toolIcon
@@ -717,6 +745,8 @@ struct ToolLiveSheet: View {
             return "read_image(\(truncateParam(path)))"
         case .memoryTool(let action):
             return "\(truncateParam(action))"
+        case .delegateTool(let t):
+            return t.isEmpty ? SubAgentDefinition.toolName : "\(SubAgentDefinition.toolName)(\(truncateParam(t)))"
         case .askUserTool:
             return "ask_user_input_v0"
         case .genericTool(let name):
@@ -741,6 +771,7 @@ struct ToolLiveSheet: View {
         case .readImageTool: Image(systemName: "photo.fill")
         case .memoryTool: Image(systemName: "brain.head.profile")
         case .askUserTool: Image(systemName: "questionmark.circle.fill")
+        case .delegateTool: Image(systemName: "person.2.fill")
         case .genericTool: Image(systemName: "wrench.adjustable.fill")
         case .info: Image(systemName: "arrow.triangle.2.circlepath")
         case .text: Image(systemName: "text.alignleft")
@@ -765,8 +796,14 @@ struct ToolLiveSheet: View {
             case .memoryTool:
                 let content = memoryWriteContentFromArgs() ?? block.content
                 memoryEditorContent(content, action: memoryActionName(), isStreaming: true)
+            case .delegateTool:
+                HelperDetailCard(block: block)
             default: textContent
             }
+        } else if case .delegateTool = block.kind {
+            // [batch7] A sub agent's persisted content is the result JSON —
+            // never show it raw; the detail card parses it.
+            HelperDetailCard(block: block)
         } else if let snap = currentSnapshot {
             // Completed with a persisted snapshot — render it
             snapshotContent(snap)
@@ -1963,6 +2000,7 @@ struct ToolLiveSheet: View {
         case .browserTool: return "嘟嘟 is using Browser"
         case .readImageTool: return "嘟嘟 is reading Image"
         case .memoryTool: return "嘟嘟 is using Memory"
+        case .delegateTool(let t): return t.isEmpty ? "嘟嘟 is delegating" : "嘟嘟 is delegating: \(t)"
         case .askUserTool: return "嘟嘟 is asking You"
         case .genericTool(let name): return name.isEmpty ? "嘟嘟" : "嘟嘟 is using \(name)"
         case .info: return "嘟嘟"
@@ -1999,6 +2037,7 @@ struct ToolLiveSheet: View {
         case .readImageTool: return ChatColors.accent
         case .memoryTool: return ChatColors.accent
         case .askUserTool: return ChatColors.accent
+        case .delegateTool: return HelperAccent.color
         case .genericTool: return ChatColors.accent
         case .info: return .secondary
         case .text: return .primary
@@ -2341,6 +2380,7 @@ private struct ToolPreviewThumbnail: View {
         case .readImageTool: return ChatColors.accent
         case .memoryTool: return ChatColors.accent
         case .askUserTool: return ChatColors.accent
+        case .delegateTool: return HelperAccent.color
         case .genericTool: return ChatColors.accent
         case .info: return .secondary
         case .text: return .primary

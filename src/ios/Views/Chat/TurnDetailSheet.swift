@@ -550,6 +550,7 @@ struct TurnDetailSheet: View {
         case .readImageTool: Image(systemName: "photo.fill")
         case .memoryTool: Image(systemName: "brain.head.profile")
         case .askUserTool: Image(systemName: "questionmark.circle.fill")
+        case .delegateTool: Image(systemName: "person.2.fill")
         case .genericTool: Image(systemName: "wrench.adjustable.fill")
         case .thinking: Image("ThinkingIcon")
         case .text: Image(systemName: "text.alignleft")
@@ -566,6 +567,7 @@ struct TurnDetailSheet: View {
         case .browserTool: return AppLocalized("Browser")
         case .readImageTool: return AppLocalized("Image read")
         case .memoryTool: return AppLocalized("Memory")
+        case .delegateTool: return AppLocalized("Sub agent")
         case .askUserTool: return AppLocalized("Question")
         case .genericTool(let name): return name
         case .thinking: return AppLocalized("Thinking")

@@ -1,6 +1,16 @@
 import Foundation
 import Combine
 
+// [batch7][G7] NOT COMPILED — kept in-tree intentionally (TODO), not deleted.
+// This file is the original helper-runner design (`HelperConfig`-based). The
+// LIVE sub agent runtime in this build is
+// `AIChatViewModel+ProgrammaticPrompt.swift` (SubAgentBrief-based); this file
+// is deliberately absent from the Xcode Sources phase because compiling it
+// today would redeclare `parseDelegateResult` / `executeDelegateTaskQueued` /
+// `executeDelegateTask` against the live runtime and reference the retired
+// `helperConfig` property. Decision待定: 复活需要与活体运行时合并（重写）；
+// 删除需要明确点头。Kept for reference per the audit plan (复活 or 删 or TODO).
+
 private let logger = AppLogger(category: "HelperRunner")
 
 // [T-p1-delegate-task] The `delegate_task` tool: the model autonomously hands

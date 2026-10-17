@@ -496,6 +496,20 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
                     object: nil,
                     userInfo: ["sessionId": sessionId]
                 )
+                // [batch7][T-p2-background-helper] A helper insurance
+                // notification also names the child: once the parent chat is
+                // up, open its read-only transcript so the user lands on what
+                // the notice was actually about. The delay covers the push
+                // animation; the chat view ignores the event when the parent
+                // does not match. Producer: JobInsuranceNotification's
+                // userInfo (ScheduledJobRunner fires it with childSessionId).
+                if let childId = userInfo["childSessionId"] as? String, !childId.isEmpty {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        NotificationCenter.default.post(
+                            name: .openHelperSheet, object: nil,
+                            userInfo: ["childSessionId": childId, "title": "", "parentSessionId": sessionId])
+                    }
+                }
             }
         }
         completionHandler()

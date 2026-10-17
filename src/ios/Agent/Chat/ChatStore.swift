@@ -53,6 +53,14 @@ struct ChatSession: Identifiable, Codable, Hashable {
     var remoteDeviceName: String? // human-readable name of the remote device
     var pinnedAt: Date?       // non-nil if session is pinned; timestamp of when it was pinned
     var folderId: String?     // non-nil if filed into a folder; NULL = ungrouped
+    /// [batch7][T-p1-delegate-task] Non-nil ⇒ this is a hidden CHILD session
+    /// (a sub agent run spawned by `subagent_task`). Visibility is derived
+    /// from this one column: nil → home list; set → reachable only from the
+    /// parent (the transcript sheet).
+    var parentSessionId: String?
+    /// The parent's `subagent_task` tool_use id that spawned this child, or
+    /// nil for a child created without a tool block (scheduled).
+    var parentToolUseId: String?
     /// ［persona］归属人设 id。nil = 老数据，视为默认人设。
     var personaId: String? = nil
     /// [batch6b / W3A-08] Last METADATA edit (rename/category/pin/folder/
@@ -65,6 +73,9 @@ struct ChatSession: Identifiable, Codable, Hashable {
 
     /// Whether this session is pinned to the top of the list.
     var isPinned: Bool { pinnedAt != nil }
+
+    /// Whether this session is a hidden child of another session.
+    var isChild: Bool { parentSessionId != nil }
 
     /// Whether this session belongs to a folder.
     var isFiled: Bool { folderId != nil }
@@ -98,6 +109,8 @@ struct ChatSession: Identifiable, Codable, Hashable {
             // without this the sidebar would keep rendering the row in its old
             // section until some unrelated mutation bumped the diff.
             && lhs.folderId == rhs.folderId
+            // Promotion (clearing the parent) must re-sort the list.
+            && lhs.parentSessionId == rhs.parentSessionId
             && lhs.title == rhs.title
             && lhs.category == rhs.category
             && lhs.source == rhs.source
@@ -707,6 +720,11 @@ actor ChatStore {
         // (push only after priority=0 drains in each batch).
         addColumnIfMissing(table: "sync_dirty_records", column: "priority", definition: "INTEGER NOT NULL DEFAULT 0")
         addColumnIfMissing(table: "sync_dirty_records", column: "created_at", definition: "REAL NOT NULL DEFAULT 0")
+        // [batch7][T-p1-delegate-task] Child-session linkage for sub agents:
+        // optional columns, no version bump — pre-column rows read as NULL
+        // (`nil` ⇒ top-level), so an old database shows exactly the old list.
+        addColumnIfMissing(table: "sessions", column: "parent_session_id", definition: "TEXT")
+        addColumnIfMissing(table: "sessions", column: "parent_tool_use_id", definition: "TEXT")
 
         // [T-token-attribution-snapshot] Which model actually produced each
         // message, captured at write time.
@@ -1073,7 +1091,7 @@ actor ChatStore {
         let now = Date()
         // ［persona］不传则归属当前人设。
         let pid = personaId ?? PersonaStore.currentID()
-        let session = ChatSession(
+        var session = ChatSession(
             id: UUID().uuidString,
             title: title,
             category: nil,
@@ -1083,6 +1101,10 @@ actor ChatStore {
             source: source,
             personaId: pid
         )
+        // [batch7][T-p1-delegate-task] Child-session linkage rides on the
+        // session value too, so the caller's returned object matches the row.
+        session.parentSessionId = parentSessionId
+        session.parentToolUseId = parentToolUseId
 
         // [T-memory-enabled-new-session-bug] Explicitly write memory_enabled
         // from the global default. Previously the INSERT omitted the column
@@ -1104,7 +1126,7 @@ actor ChatStore {
         let rawObj = UserDefaults.standard.object(forKey: "memory.global.enabled")
         memDiagLogger.info("[MemDiag] createSession sid=\(session.id.prefix(8)) rawDefaults=\(String(describing: rawObj)) resolved=\(globalMemoryEnabled) → bind memory_enabled=\(globalMemoryEnabled ? 1 : 0)")
 
-        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled, persona_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        let sql = "INSERT INTO sessions (id, title, model_id, created_at, updated_at, source, memory_enabled, persona_id, parent_session_id, parent_tool_use_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, (session.id as NSString).utf8String, -1, nil)
@@ -1115,6 +1137,8 @@ actor ChatStore {
             bindOptionalText(stmt, index: 6, value: source)
             sqlite3_bind_int(stmt, 7, globalMemoryEnabled ? 1 : 0)
             bindOptionalText(stmt, index: 8, value: pid)
+            bindOptionalText(stmt, index: 9, value: parentSessionId)
+            bindOptionalText(stmt, index: 10, value: parentToolUseId)
             let rc = sqlite3_step(stmt)
             memDiagLogger.info("[MemDiag] createSession INSERT step rc=\(rc) (101=DONE) sid=\(session.id.prefix(8))")
         } else {
@@ -1354,7 +1378,11 @@ actor ChatStore {
                    -- by index, so a new column goes at the end to leave every
                    -- existing index untouched.
                    s.folder_id,
-                   s.persona_id
+                   s.persona_id,
+                   -- [batch7][T-p1-delegate-task] Child-session linkage.
+                   -- Appended LAST so every existing column index stays put.
+                   s.parent_session_id,
+                   s.parent_tool_use_id
             FROM sessions s
             WHERE (s.persona_id IS ?1 OR (s.persona_id IS NULL AND ?2 = '\(PersonaStore.defaultPersonaID)'))
             ORDER BY s.updated_at DESC
@@ -1432,14 +1460,20 @@ actor ChatStore {
                     ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 11)) : nil
                 let folderId = Self.colTextOpt(stmt, 14)
                 let personaId = Self.colTextOpt(stmt, 15)
+                // [batch7][T-p1-delegate-task] Child-session linkage.
+                let parentSessionId = Self.colTextOpt(stmt, 16)
+                let parentToolUseId = Self.colTextOpt(stmt, 17)
 
-                sessions.append(ChatSession(
+                var row = ChatSession(
                     id: id, title: title, category: category, modelId: modelId,
                     createdAt: createdAt, updatedAt: updatedAt, lastMessage: lastMessage,
                     source: source, lastSyncedAt: lastSyncedAt,
                     remoteDeviceId: remoteDeviceId, pinnedAt: pinnedAt,
                     folderId: folderId, personaId: personaId
-                ))
+                )
+                row.parentSessionId = parentSessionId
+                row.parentToolUseId = parentToolUseId
+                sessions.append(row)
             }
         }
         sqlite3_finalize(stmt)
@@ -2101,7 +2135,7 @@ actor ChatStore {
     }
 
     func getSession(_ id: String) -> ChatSession? {
-        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at, folder_id, meta_updated_at FROM sessions WHERE id = ?"
+        let sql = "SELECT id, title, model_id, created_at, updated_at, category, source, pinned_at, folder_id, meta_updated_at, parent_session_id, parent_tool_use_id FROM sessions WHERE id = ?"
         var stmt: OpaquePointer?
         var session: ChatSession?
 
@@ -2121,11 +2155,16 @@ actor ChatStore {
                 let metaUpdatedAt: Date? = sqlite3_column_type(stmt, 9) != SQLITE_NULL
                     ? Date(timeIntervalSince1970: sqlite3_column_double(stmt, 9)) : nil
 
+                // [batch7][T-p1-delegate-task] Child-session linkage.
+                let parentSessionId = sqlite3_column_text(stmt, 10).map { String(cString: $0) }
+                let parentToolUseId = sqlite3_column_text(stmt, 11).map { String(cString: $0) }
                 session = ChatSession(
                     id: id, title: title, category: category, modelId: modelId,
                     createdAt: createdAt, updatedAt: updatedAt, source: source,
                     pinnedAt: pinnedAt, folderId: folderId, metaUpdatedAt: metaUpdatedAt
                 )
+                session?.parentSessionId = parentSessionId
+                session?.parentToolUseId = parentToolUseId
             }
         }
         sqlite3_finalize(stmt)
@@ -2709,6 +2748,14 @@ actor ChatStore {
 
     func deleteSession(_ id: String) {
         invalidateSessionListCache()
+        // [batch7][T-p1-delegate-task] Cascade to child (sub agent) sessions
+        // FIRST — they are reachable only through this parent, so an orphaned
+        // child would be invisible (home list filters them out) yet still
+        // occupy storage and sync. Each goes through the full funnel below
+        // (cloud tombstone + local rows + recent-delete mark).
+        for childId in childSessionIds(of: id) {
+            deleteSession(childId)
+        }
         // Queue cloud deletions BEFORE removing local rows so the SELECTs
         // below can still enumerate child ids. Peers receive op=delete
         // for the session + each child and apply them as hard deletes
@@ -2733,7 +2780,32 @@ actor ChatStore {
     /// noisy round-trip and risk a delete-loop with peers that haven't
     /// yet drained the same tombstone.
     func deleteSessionLocalOnly(_ id: String) {
+        // [batch7][T-p1-delegate-task] Inbound peer delete: the peer already
+        // tombstoned the children, so mirror the cascade locally without
+        // re-queueing cloud deletes.
+        for childId in childSessionIds(of: id) {
+            deleteSessionLocalOnly(childId)
+        }
         deleteSessionLocalRowsOnly(id)
+    }
+
+    /// [batch7][T-p1-delegate-task] Ids of the hidden child sessions of
+    /// `parentId` — the one query every delete path uses to expand a
+    /// user's selection to what really goes away.
+    func childSessionIds(of parentId: String) -> [String] {
+        let sql = "SELECT id FROM sessions WHERE parent_session_id = ?"
+        var stmt: OpaquePointer?
+        var ids: [String] = []
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (parentId as NSString).utf8String, -1, nil)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 0) {
+                    ids.append(String(cString: c))
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        return ids
     }
 
     /// True if a session row exists locally. Lightweight existence check
@@ -6620,9 +6692,26 @@ extension ChatStore {
     ///   local folder assignment must be preserved, whereas a new-build peer
     ///   sending an explicit nil means "ungrouped on that device" and, when
     ///   remote is newer, that wins (folder_id rides the session's LWW).
-    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, remoteFolderId: String? = nil, remoteHasFolderField: Bool = false, remoteSource: String? = nil, remoteHasSourceField: Bool = false) {
+    func mergeRemoteSession(_ session: ChatSession, fromDeviceId: String, memoryEnabled: Bool = true, modelBinding: String? = nil, remotePinnedAtRaw: Date? = nil, remoteFolderId: String? = nil, remoteHasFolderField: Bool = false, remoteSource: String? = nil, remoteHasSourceField: Bool = false, remoteParentSessionId: String? = nil, remoteParentToolUseId: String? = nil, remoteHasParentField: Bool = false) {
         invalidateSessionListCache()
-        // Check if local session exists and its updated_at + pinned_at
+        // [batch7][T-p1-delegate-task] Parent linkage is immutable for the life
+        // of a child (only a future "promote" clears it), so the merge rule is
+        // simple: adopt the peer's value whenever the peer's record carries the
+        // field. An old-build peer omitting it must not clear ours. Runs as a
+        // defer so it covers both the UPDATE and the INSERT paths below.
+        defer {
+            if remoteHasParentField {
+                let pSql = "UPDATE sessions SET parent_session_id = ?, parent_tool_use_id = ? WHERE id = ?"
+                var pStmt: OpaquePointer?
+                if sqlite3_prepare_v2(db, pSql, -1, &pStmt, nil) == SQLITE_OK {
+                    bindOptionalText(pStmt, index: 1, value: remoteParentSessionId)
+                    bindOptionalText(pStmt, index: 2, value: remoteParentToolUseId)
+                    sqlite3_bind_text(pStmt, 3, (session.id as NSString).utf8String, -1, nil)
+                    sqlite3_step(pStmt)
+                }
+                sqlite3_finalize(pStmt)
+            }
+        }
         var localUpdatedAt: Double?
         var localPinnedAt: Double?
         var localFolderId: String?

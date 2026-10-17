@@ -326,27 +326,55 @@ enum ScheduledJobRunner {
             return ok ? sid : nil
 
         case .childOfCurrent(let parentSid, _):
+            // [batch7][G6] Defence in depth behind the arming-side check in
+            // the bridges: a job armed while Sub Agents were on must not spawn
+            // a helper after the switch went off. Recorded as a failed fire.
+            guard AgentToolSwitch.agents.isEnabled else {
+                logger.warning("[Sched] fire \(job.id.prefix(8)): child-of-current refused — Sub Agents are off (Settings › Sub Agents)")
+                registry.recordFire(job.id, sessionId: nil, ok: false)
+                return nil
+            }
             let (parentVM, parentFresh) = ViewModelCache.shared.getOrCreate(for: parentSid)
             if parentFresh { await parentVM.loadSession() }
-            let modelId = parentVM.resolveCurrentEntry()?.model.id ?? "default"
+            // [batch7][G6] Run the scheduled child as a REAL sub agent — the
+            // same resolver, model binding, thinking level and brief a
+            // delegated run gets. The old arm created a bare hidden session on
+            // the parent's raw model id, so the child never reported through
+            // the sub agent channel and its card could not say what it ran on.
+            let builtIn = SubAgentStore.shared.subAgents.first { $0.isBuiltIn }
+                ?? SubAgentDefinition.makeBuiltIn()
+            guard let resolution = SubAgentModelResolver.resolve(subAgent: builtIn, parent: parentVM) else {
+                logger.warning("[Sched] fire \(job.id.prefix(8)): parent has no resolvable model")
+                registry.recordFire(job.id, sessionId: nil, ok: false)
+                return nil
+            }
             let title = job.label ?? job.title
-            let session = await ChatStore.shared.createSession(modelId: modelId,
+            let session = await ChatStore.shared.createSession(modelId: resolution.entry.model.id,
                                                                title: AgentJobRegistry.childSessionTitle(title),
                                                                source: sourceTag,
                                                                parentSessionId: parentSid,
                                                                parentToolUseId: nil)
+            ProviderConfigStore.shared.setBinding(
+                SessionModelBinding(sessionId: session.id, primarySource: resolution.source), for: session.id)
+            applySubAgentThinkingLevel(subAgent: builtIn, childSessionId: session.id,
+                                       parentSessionId: parentSid, entry: resolution.entry)
             let (child, _) = ViewModelCache.shared.getOrCreate(for: session.id)
             await child.loadSession()
             child.sessionSource = sourceTag
             child.memoryEnabled = false
             child.suppressGeneralCompletionNotification = true
-            // NOTE: HelperConfig / shared browser pool intentionally NOT set —
-            // HelperRunner.swift was decoupled from the build in 8a611fe to
-            // force a build past compile errors, so those symbols don't exist.
-            // The child still runs and reports back through AgentJobRegistry's
-            // default `.followUpParent` arm. Reviving the full subagent chain
-            // (HelperConfig + shared browserTabPool + model identity) is a
-            // separate task — see memory 2026-10-12.
+            child.subAgentBrief = SubAgentBrief(parentSessionId: parentSid,
+                                                parentToolUseId: "",
+                                                jobId: job.id,
+                                                title: title,
+                                                instructions: builtIn.instructions,
+                                                budgetMinutes: AIChatViewModel.helperMaxMinutes)
+            job.subAgentName = builtIn.name
+            job.modelOrigin = resolution.origin.rawValue
+            // [T-agent-model-identity] A scheduled child has no parent block;
+            // the job carries its identity so the completion callback and the
+            // transcript page still say what it ran on.
+            job.modelIdentity = HelperModelIdentity.make(resolution: resolution)
 
             if let prefillOutput = await runPrefilledToolIfNeeded(job, targetSessionId: session.id) {
                 prompt += "\n\n" + prefillOutput
