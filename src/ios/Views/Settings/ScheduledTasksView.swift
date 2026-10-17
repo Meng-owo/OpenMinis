@@ -49,7 +49,7 @@ guard let id = pendingDeleteId else { return }
             HStack {
                 Text("定时任务与脉搏")
                     .font(.system(size: fontSettings.scaledApp(20), weight: .bold))
-                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark, scope: .settings))
 
                 Spacer()
 
@@ -58,9 +58,9 @@ guard let id = pendingDeleteId else { return }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
                         .frame(width: 32, height: 32)
-                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                        .background(CSSThemeVariables.optionBg(isDark: isDark, scope: .settings))
                         .clipShape(Circle())
                 }
             }
@@ -74,27 +74,27 @@ guard let id = pendingDeleteId else { return }
             // way a user would want to know about before trusting either.
             Text("这些任务在应用内运行：到点由 Minis 自己触发。应用不在时不会执行——下次打开会重新挂上，并把这期间错过的触发记成一笔。")
                 .font(.system(size: fontSettings.scaledApp(11)))
-                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.bottom, 10)
 
             Divider()
-                .overlay(CSSThemeVariables.divider(isDark: isDark))
+                .overlay(CSSThemeVariables.divider(isDark: isDark, scope: .settings))
 
             // Body
             if allJobs.isEmpty {
                 VStack(spacing: 14) {
                     Image(systemName: "clock.badge.questionmark")
                         .font(.system(size: fontSettings.scaledApp(44)))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.6))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings).opacity(0.6))
                     Text("暂无挂载的定时任务或脉搏")
                         .font(.system(size: fontSettings.scaledApp(15), weight: .medium))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
                     Text("可以在聊天里直接创建一个。")
                         .font(.system(size: fontSettings.scaledApp(12)))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings).opacity(0.7))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                 }
@@ -109,14 +109,14 @@ guard let id = pendingDeleteId else { return }
                             HStack(alignment: .top, spacing: 10) {
                                 Image(systemName: "bell.slash")
                                     .font(.system(size: fontSettings.scaledApp(15)))
-                                    .foregroundStyle(CSSThemeVariables.warning(isDark: isDark))
+                                    .foregroundStyle(CSSThemeVariables.warning(isDark: isDark, scope: .settings))
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text("系统通知被关掉了")
                                         .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark, scope: .settings))
                                     Text("任务到点时应用不在前台，就没有任何提醒；打开通知可让兜底提醒恢复。")
                                         .font(.system(size: fontSettings.scaledApp(11)))
-                                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
                                         .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
@@ -164,10 +164,10 @@ guard let id = pendingDeleteId else { return }
                     Text(pendingJob?.deleteConfirmMessage ?? "删除后无法恢复。")
                 }
                 .scrollContentBackground(.hidden)
-                .background(CSSThemeVariables.bg(isDark: isDark))
+                .background(CSSThemeVariables.bg(isDark: isDark, scope: .settings))
             }
         }
-        .background(CSSThemeVariables.bg(isDark: isDark))
+        .background(CSSThemeVariables.bg(isDark: isDark, scope: .settings))
         .sheet(item: Binding<IdentifiableJobId?>(
             get: { selectedJobId.map { IdentifiableJobId(id: $0) } },
             set: { selectedJobId = $0?.id }
@@ -186,23 +186,23 @@ guard let id = pendingDeleteId else { return }
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: fontSettings.scaledApp(20)))
-                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark, scope: .settings))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: fontSettings.scaledApp(11)))
-                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
                 Text("\(count)")
                     .font(.system(size: fontSettings.scaledApp(18), weight: .bold))
-                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark, scope: .settings))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(CSSThemeVariables.card(isDark: isDark))
+        .background(CSSThemeVariables.card(isDark: isDark, scope: .settings))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark, scope: .settings), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
@@ -211,16 +211,16 @@ guard let id = pendingDeleteId else { return }
         HStack(spacing: 12) {
             Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
                 .font(.system(size: fontSettings.scaledApp(16), weight: .semibold))
-                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark, scope: .settings))
                 .frame(width: 34, height: 34)
-                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                .background(CSSThemeVariables.accentSoft(isDark: isDark, scope: .settings))
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(job.title)
                         .font(.system(size: fontSettings.scaledApp(15), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark, scope: .settings))
                         .lineLimit(1)
 
                     if job.isPulse {
@@ -228,8 +228,8 @@ guard let id = pendingDeleteId else { return }
                             .font(.system(size: fontSettings.scaledApp(10), weight: .bold))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
-                            .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                            .background(CSSThemeVariables.accentSoft(isDark: isDark, scope: .settings))
+                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark, scope: .settings))
                             .clipShape(Capsule())
                     }
                 }
@@ -237,12 +237,12 @@ guard let id = pendingDeleteId else { return }
                 HStack(spacing: 8) {
                     Text(job.trigger.humanLabel)
                         .font(.system(size: fontSettings.scaledApp(12)))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings))
 
                     if let next = job.nextFireAt {
                         Text("下次: \(formatNext(next))")
                             .font(.system(size: fontSettings.scaledApp(11)))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark, scope: .settings).opacity(0.8))
                     }
                 }
             }
@@ -268,7 +268,7 @@ guard let id = pendingDeleteId else { return }
                 }
             ))
             .labelsHidden()
-            .toggleStyle(SwitchToggleStyle(tint: CSSThemeVariables.accent(isDark: isDark)))
+            .toggleStyle(SwitchToggleStyle(tint: CSSThemeVariables.accent(isDark: isDark, scope: .settings)))
         }
         .padding(.vertical, 4)
     }
