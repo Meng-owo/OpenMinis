@@ -18,13 +18,26 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     // MARK: - Full enumeration (initial sync)
 
     func enumerateItems(for observer: NSFileProviderEnumerationObserver, startingAt page: NSFileProviderPage) {
-        let items = listItems()
-        os_log("enumerateItems container=%{public}@ recursive=%d count=%d",
-               log: Self.log, type: .info,
-               containerItemIdentifier.rawValue, recursive ? 1 : 0, items.count)
-        FPSyncTraceLog.log("enumerateItems id=\(containerItemIdentifier.rawValue) recursive=\(recursive) count=\(items.count)")
-        observer.didEnumerate(items)
-        observer.finishEnumerating(upTo: nil)
+        // [audit-E5] Do NOT swallow directory-read errors into `[]` — that
+        // makes iOS Files mistake an unreadable directory (permissions,
+        // disk glitch, App Group lockup) for a genuine empty folder, and can
+        // prompt a destructive sync against an empty snapshot. Propagate the
+        // error so Files shows "Cannot Connect" instead of blank.
+        do {
+            let items = try listItemsThrowing()
+            os_log("enumerateItems container=%{public}@ recursive=%d count=%d",
+                   log: Self.log, type: .info,
+                   containerItemIdentifier.rawValue, recursive ? 1 : 0, items.count)
+            FPSyncTraceLog.log("enumerateItems id=\(containerItemIdentifier.rawValue) recursive=\(recursive) count=\(items.count)")
+            observer.didEnumerate(items)
+            observer.finishEnumerating(upTo: nil)
+        } catch {
+            os_log("enumerateItems container=%{public}@ failed: %{public}@",
+                   log: Self.log, type: .error,
+                   containerItemIdentifier.rawValue, error.localizedDescription)
+            FPSyncTraceLog.log("enumerateItems id=\(containerItemIdentifier.rawValue) ERROR=\(error.localizedDescription)")
+            observer.finishEnumeratingWithError(error)
+        }
     }
 
     // MARK: - Change enumeration (incremental updates)
@@ -111,6 +124,12 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
     }
 
     private func listItems() -> [FileProviderItem] {
+        (try? listItemsThrowing()) ?? []
+    }
+
+    /// [audit-E5] Throwing counterpart: preserves the underlying FileManager
+    /// error so `enumerateItems` can fail honestly via `finishEnumeratingWithError`.
+    private func listItemsThrowing() throws -> [FileProviderItem] {
         // Trash is not supported — always return empty.
         if containerItemIdentifier == .trashContainer {
             return []
@@ -119,20 +138,18 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
         let dirURL = directoryURL()
         let fm = FileManager.default
         if containerItemIdentifier == .rootContainer {
-            try? fm.createDirectory(at: dirURL, withIntermediateDirectories: true)
+            try fm.createDirectory(at: dirURL, withIntermediateDirectories: true)
         }
 
         if recursive {
             return listItemsRecursively(at: dirURL, parentIdentifier: containerItemIdentifier)
         }
 
-        guard var contents = try? fm.contentsOfDirectory(
+        var contents = try fm.contentsOfDirectory(
             at: dirURL,
             includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey, .contentModificationDateKey],
             options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
+        )
 
         // Defensive: never expose a disk entry whose name collides with a
         // system-reserved FileProvider identifier. A prior bug allowed
