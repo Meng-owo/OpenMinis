@@ -1604,6 +1604,11 @@ private extension AIChatViewModel {
             throw CancellationError()
         } catch {
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // [audit-批0补足] 合成失败要有用户可见的即时交代——a652fad 拆
+            // StreamEnd 兜底时丢掉的失败 Toast（"开关开着却没气泡，看起来像
+            // 坏了"）。模型侧同时拿到具体原因（下方 settle），双轨并行。
+            MinisToast.show(AppLocalized("Voice bubble unavailable — check your TTS service or voice group."),
+                            systemImage: "exclamationmark.triangle.fill")
             return settle("Error: \(msg)", false)
         }
     }
