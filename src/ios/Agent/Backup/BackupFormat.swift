@@ -32,6 +32,18 @@ enum BackupFormat {
 
 /// User-facing backup categories (§3). The raw value is the manifest key and
 /// the on-disk directory name, so renaming one is a format change.
+// [audit-E12] 备份类别纳入考量与豁免清单：
+// 1. evolution（自进化经验）：属于模型自身沉淀的运行经验，重置设备后建议
+//    重新从真实会话提炼，避免跨设备脏经验污染；且数据量随运行单向增长，
+//    暂不进基础备份包。
+// 2. subagents（子代理）：子代理整面处于演进期（计划批7），其配置目前依托
+//    会话与提示词存留，待子代理面整修后再统一规划备份结构。
+// 3. tts（TTS独立服务与分组）：敏感密钥均保存在 Keychain，且配置依托
+//    UserDefaults，目前通过 iCloud Keychain 跨设备自动同步；独立备份包
+//    若含云端密钥有安全泄露隐患，故豁免。
+// 4. browserHistory（浏览器历史与快照）：属于设备本地瞬态缓存，且含敏感
+//    会话 Cookie，按安全原则不随通用备份导出。
+// 以上模块暂不增设独立 wire 格式枚举，避免破坏现网跨版本备份解析兼容性。
 enum BackupCategory: String, Codable, CaseIterable, Sendable {
     case chats
     case sharedFiles = "shared_files"
