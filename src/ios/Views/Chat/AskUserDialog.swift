@@ -11,12 +11,17 @@ import SwiftUI
 // MARK: - CSS 全局色彩变量定义
 
 @MainActor
-public enum CSSThemeVariables {
+/// Colours as CSS-style variables.
+///
+/// `internal`, not `public`: these take `AppearanceScope` as a default
+/// argument, and a public signature cannot carry an internal type's case
+/// there. Nothing outside the module used them anyway.
+enum CSSThemeVariables {
     private static var studio: AppearanceStudio { .shared }
 
     /// --color-card / var(--dudu-card)
     /// [4-1 醒醒] 背景卡接入全局 surface 角色，支持壁纸透明度
-    public static func card(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func card(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         if studio.hasWallpaper(scope) {
             return studio.color(.surface, scope: scope, variant: isDark ? .dark : .light).opacity(studio.surfaceOpacity)
         }
@@ -25,76 +30,76 @@ public enum CSSThemeVariables {
 
     /// --color-bg / var(--dudu-cream)
     /// [4-1 醒醒] 背景底衬接入全局 canvas 角色
-    public static func bg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func bg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.canvas, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-text-main / var(--dudu-brown)
     /// [4-1 醒醒] 主文字接入全局 primaryText 角色
-    public static func textMain(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func textMain(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.primaryText, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-text-dim / var(--dudu-text-dim)
     /// [4-1 醒醒] 次文字接入全局 secondaryText 角色
-    public static func textDim(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func textDim(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.secondaryText, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-divider / var(--dudu-divider)
     /// [4-1 醒醒] 分隔线接入全局 border 角色
-    public static func divider(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func divider(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.border, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-accent-soft / var(--dudu-pink-soft)
     /// [4-1 醒醒] 柔和强调色由 accent 角色动态派生
-    public static func accentSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func accentSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.accent, scope: scope, variant: isDark ? .dark : .light).opacity(0.18)
     }
 
     /// --color-accent / var(--dudu-pink)
     /// [4-1 醒醒] 强调色接入全局 accent 角色
-    public static func accent(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func accent(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.accent, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-accent-fg
     /// [4-1 醒醒] 强调色前景字（按钮等）
-    public static func accentFg(isDark: Bool) -> Color {
+    static func accentFg(isDark: Bool) -> Color {
         Color.white
     }
 
     /// --color-option-bg (输入框/未选中胶囊底色)
     /// [10-15 1-3 醒醒] 输入框与选项底色接入全局 input 角色（同族统一，不再硬编码 hex）
-    public static func optionBg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func optionBg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.input, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-option-border (输入框/未选中胶囊边框)
     /// [10-15 1-3 醒醒] 输入框与选项边线接入全局 border 角色
-    public static func optionBorder(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func optionBorder(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.border, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-scrim / rgba(42, 42, 46, 0.28)
-    public static func scrim(isDark: Bool) -> Color {
+    static func scrim(isDark: Bool) -> Color {
         isDark ? Color.black.opacity(0.65) : Color(hex: "#2A2A2E").opacity(0.28)
     }
 
     /// --color-sheet-shadow / rgba(139, 115, 108, 0.16)
-    public static func sheetShadow(isDark: Bool) -> Color {
+    static func sheetShadow(isDark: Bool) -> Color {
         isDark ? Color.black.opacity(0.45) : Color(hex: "#8B736C").opacity(0.16)
     }
 
     /// --color-danger
     /// [4-1 醒醒] 危险操作接入全局 destructive 角色
-    public static func danger(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func danger(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.destructive, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-danger-soft
-    public static func dangerSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func dangerSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
         studio.color(.destructive, scope: scope, variant: isDark ? .dark : .light).opacity(0.18)
     }
 
@@ -105,10 +110,10 @@ public enum CSSThemeVariables {
     /// appearance, so this variable follows the user's theme and its dark
     /// variant for free. `isDark` stays in the signature because every other
     /// variable here takes it and the call sites pass it uniformly.
-    public static func success(isDark: Bool) -> Color { MinisTheme.success }
+    static func success(isDark: Bool) -> Color { MinisTheme.success }
 
     /// --color-warning
-    public static func warning(isDark: Bool) -> Color { MinisTheme.warning }
+    static func warning(isDark: Bool) -> Color { MinisTheme.warning }
 }
 
 // MARK: - 顶角圆角 Shape 工具
