@@ -3724,6 +3724,17 @@ extension CollectionViewMessageListV3 {
         /// No on-screen view is touched; pure TextKit measurement (usedRect).
         static func measureUserBubbleHeight(for message: ChatMessage, cvWidth: CGFloat,
                                             cache: inout [String: CGFloat]) -> CGFloat? {
+            // [audit-C2] A callback message renders as a fixed card (or nothing /
+            // the small pulse card) — NEVER as its raw XML. Measuring the XML
+            // text put a tall, wrong estimate under a 64pt cell, and every
+            // scroll that landed near one corrected mid-decel. Heights come
+            // from the SAME decision the renderer uses.
+            if let cb = message.agentCallback {
+                return MainActor.assumeIsolated {
+                    AgentCallbackCellView.rowHeight(for: cb)
+                }
+            }
+
             // userDisplayText: strip the <user-attached-files> block, trim.
             var text = message.content
             if let start = text.range(of: "<user-attached-files>") {

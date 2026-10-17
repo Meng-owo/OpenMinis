@@ -301,6 +301,14 @@ struct ScheduledPulseCardView: View {
     var fireIndex: Int?
     var remaining: Int?
 
+    /// [audit-C2] Fixed geometry so the message list can precompute this row's
+    /// height exactly — the estimator cannot measure a SwiftUI card, and a
+    /// mismatch is the "wrong offset near the card" scroll correction. The
+    /// frame caps the card content; `rowHeight` adds the card's own outer
+    /// `.padding(.vertical, 3)` for the list.
+    static let cardHeight: CGFloat = 56
+    static let rowHeight: CGFloat = cardHeight + 6
+
     @State private var showingDetail = false
 
     @ObservedObject private var fontSettings = FontSettings.shared
@@ -395,6 +403,7 @@ struct ScheduledPulseCardView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .frame(height: Self.cardHeight)
         .background(CSSThemeVariables.card(isDark: isDark))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)

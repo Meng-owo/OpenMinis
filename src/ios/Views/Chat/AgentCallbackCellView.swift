@@ -275,6 +275,19 @@ struct AgentCallbackCellView: View {
         return callback.isPulse
     }
 
+    /// [audit-C2] Total row height for a callback MESSAGE — what the list's
+    /// precalc must return, including the cell's own vertical paddings. The
+    /// constant counterpart of what `body` actually renders.
+    @MainActor
+    static func rowHeight(for callback: AgentCallback) -> CGFloat {
+        switch callback.kind {
+        case .scheduled:
+            return isPulsePresentation(callback) ? ScheduledPulseCardView.rowHeight : 0
+        default:
+            return rowHeight(for: callback.kind)   // 64 — card 56 + 2×4pt padding
+        }
+    }
+
     var body: some View {
         if callback.kind == .scheduled {
             // [audit-C4/C5] 醒醒专属隐身模式仍管普通定时任务（完全静默）；但脉搏
