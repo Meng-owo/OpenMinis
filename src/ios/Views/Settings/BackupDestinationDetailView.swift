@@ -594,6 +594,16 @@ struct RcloneFolderBrowser: View {
     var body: some View {
         NavigationStack {
             Form {
+                // [batch5-return] Errors at the TOP: this browser's errorText
+                // (listing / mkdir / name validation) used to ride the floating
+                // HUD, which was deleted as dead code — with no replacement it
+                // would have gone silent. Top placement keeps the message
+                // visible above a long folder list.
+                if let errorText {
+                    Section {
+                        Text(errorText).font(.footnote).foregroundStyle(MinisTheme.destructive)
+                    }
+                }
                 Section {
                     if !currentDir.isEmpty {
                         Button {
@@ -654,7 +664,6 @@ struct RcloneFolderBrowser: View {
                 }
 
             }
-            .backupHUD($errorText)
             .navigationTitle("Backup Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

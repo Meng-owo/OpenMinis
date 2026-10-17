@@ -70,6 +70,21 @@ struct RcloneAddServerView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // [batch5-return] Errors are shown inline in BOTH phases now.
+                // Connect-time messages sit next to the form the user just
+                // filled in; browse-time ones (listing / mkdir / name
+                // validation) previously rode the floating HUD, which was
+                // deleted as dead code — they would have gone silent with it.
+                // Rendered FIRST so a long folder list can't push the message
+                // off-screen (the same reason the floating HUD existed).
+                if let errorText {
+                    Section {
+                        Text(errorText)
+                            .font(.footnote)
+                            .foregroundStyle(MinisTheme.destructive)
+                    }
+                }
+
                 if connectedRemote == nil {
                     typeSection
                     if backend != nil {
@@ -80,22 +95,7 @@ struct RcloneAddServerView: View {
                     browseSection
                 }
 
-                // Connect-time errors stay inline: the user is looking at
-                // the form they just filled in, and the message belongs next
-                // to it. Errors raised while BROWSING (mkdir, listing) go to
-                // the HUD instead — see backupHUD below — because the folder
-                // list can be long enough to push an inline row off screen.
-                if let errorText, connectedRemote == nil {
-                    Section {
-                        Text(errorText)
-                            .font(.footnote)
-                            .foregroundStyle(MinisTheme.destructive)
-                    }
-                }
             }
-            .backupHUD(Binding(
-                get: { connectedRemote == nil ? nil : errorText },
-                set: { if $0 == nil { errorText = nil } }))
             .navigationTitle(connectedRemote == nil ? "Add Server" : "Choose Folder")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
