@@ -180,24 +180,19 @@ struct ProviderInstancesView: View {
         // [T-provider-group-swipe-actions] Swipe-Edit lands on the very screen
         // the row taps into, so there is one provider editor, not two.
         //
-        // `NavigationLink(isActive:)` rather than `navigationDestination(item:)`:
-        // this target still deploys to iOS 16 and that modifier is 17+ (same
-        // reason BackupSettingsView uses the hidden-link form). Kept in a
-        // `.background` so it adds no visible row.
-        .background {
-            NavigationLink(isActive: Binding(
-                get: { editingInstanceId != nil },
-                set: { if !$0 { editingInstanceId = nil } }
-            )) {
-                // Resolved at push time: if the provider was deleted while this
-                // was open, show nothing rather than a detail screen bound to a
-                // vanished id.
-                if let id = editingInstanceId,
-                   store.instances.contains(where: { $0.id == id }) {
-                    ProviderInstanceDetailView(instanceId: id)
-                }
-            } label: { EmptyView() }
-            .opacity(0)
+        // [audit-F1 / T-swipe-edit-white-screen] The destination is built from
+        // the id captured at push time, NOT re-read from `editingInstanceId`
+        // inside the closure. The previous form guarded the destination with
+        // `if let id = editingInstanceId, store.instances.contains(id)`, which
+        // yielded NO content whenever that read came back empty during the
+        // swipe's retraction — pushing an opaque blank screen the user was
+        // stuck on. See SwipeEditDestination.swift for the full mechanism.
+        //
+        // The deleted-while-open case that guard was aiming at is handled by
+        // ProviderInstanceDetailView itself, which is reached the same way by
+        // the row tap and so must already tolerate a vanishing instance.
+        .swipeEditDestination(item: $editingInstanceId) { id in
+            ProviderInstanceDetailView(instanceId: id)
         }
         // Same wording and same call (`store.removeInstance`) as the Delete
         // button inside ProviderInstanceDetailView — the swipe is a shortcut to

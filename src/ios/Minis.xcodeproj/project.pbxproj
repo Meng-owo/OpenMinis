@@ -425,6 +425,7 @@
 		E5PERSONA02 /* PersonaSwitcherRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA102 /* PersonaSwitcherRow.swift */; };
 		E5PERSONA03 /* PersonaListSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA103 /* PersonaListSheet.swift */; };
 		E5PQS0003 /* PersonaQuickSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PQS0103 /* PersonaQuickSwitcher.swift */; };
+		E5SED0001 /* SwipeEditDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SED0101 /* SwipeEditDestination.swift */; };
 		E5MSS0001 /* ModelSearchScorer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MSS0101 /* ModelSearchScorer.swift */; };
 		E5PERSONA04 /* PersonaSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA104 /* PersonaSettingsView.swift */; };
 		E5N0000062F3B941A00049557 /* AlarmListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5N0000162F3B941A00049557 /* AlarmListView.swift */; };
@@ -1209,6 +1210,7 @@
 		E5PERSONA102 /* PersonaSwitcherRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaSwitcherRow.swift; sourceTree = "<group>"; };
 		E5PERSONA103 /* PersonaListSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaListSheet.swift; sourceTree = "<group>"; };
 		E5PQS0103 /* PersonaQuickSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaQuickSwitcher.swift; sourceTree = "<group>"; };
+		E5SED0101 /* SwipeEditDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeEditDestination.swift; sourceTree = "<group>"; };
 		E5MSS0101 /* ModelSearchScorer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSearchScorer.swift; sourceTree = "<group>"; };
 		E5PERSONA104 /* PersonaSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaSettingsView.swift; sourceTree = "<group>"; };
 		E5N0000162F3B941A00049557 /* AlarmListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmListView.swift; sourceTree = "<group>"; };
@@ -2628,6 +2630,7 @@
 				E5TRS002 /* ThinkingRulesSection.swift */,
 				E5TRE002 /* ThinkingRuleEditorView.swift */,
 				E5D00030 /* ProviderInstancesView.swift */,
+				E5SED0101 /* SwipeEditDestination.swift */,
 				E5MSS0101 /* ModelSearchScorer.swift */,
 				E5SVP0031 /* ShadowVoiceProviderDetailView.swift */,
 				E5D00035 /* SessionModelPicker.swift */,
@@ -3377,6 +3380,7 @@
 				E5D00008 /* ModelsDevAPI.swift in Sources */,
 				E5D00009 /* URLBuilding.swift in Sources */,
 				E5D00020 /* ProviderInstancesView.swift in Sources */,
+				E5SED0001 /* SwipeEditDestination.swift in Sources */,
 				E5MSS0001 /* ModelSearchScorer.swift in Sources */,
 				E5D00021 /* ProviderInstanceDetailView.swift in Sources */,
 				E5TRS001 /* ThinkingRulesSection.swift in Sources */,
