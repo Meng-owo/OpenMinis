@@ -44,7 +44,7 @@ struct SoulSettingsView: View {
                 previewCard
             }
 
-            Section(AppLocalized("Identity")) {
+            Section {
                 LabeledContent(AppLocalized("Name")) {
                     TextField("嘟嘟", text: $name)
                         .multilineTextAlignment(.trailing)
@@ -60,6 +60,8 @@ struct SoulSettingsView: View {
                         Text(opt.label).tag(opt.value)
                     }
                 }
+            } header: {
+                Text(AppLocalized("Identity"))
             } footer: {
                 // [audit-D1] 说清它现在真的会生效：作为回复语言硬约束写进人设提示。
                 Text("回复语言：选「中文 / 英文」后，会作为硬约束写进人设提示（每条都按它回复）；「自动」= 跟随你说话的语言。")
