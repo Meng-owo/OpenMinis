@@ -355,6 +355,92 @@ extension AIChatViewModel {
         messages[msgIdx].blocks[blockIdx].content = json
     }
 
+    /// [batch7][AUD-B7-6] Write a delegate block located by tool_use id —
+    /// the index-free twin of `writeDelegateBlock`, used by the closing chain
+    /// where the parent's block indices may have moved.
+    func writeDelegateBlock(toolUseId: String, content: String, status: ToolBlockStatus? = nil) {
+        for msg in messages where msg.role == .assistant {
+            if let block = msg.blocks.first(where: { $0.toolUseId == toolUseId }) {
+                block.content = content
+                if let status, block.toolStatus != status { block.toolStatus = status }
+                return
+            }
+        }
+    }
+
+    /// [batch7][AUD-B7-6] The ◐ progress line the block parser reads while a
+    /// delegation is still running. Mirrors HelperRunner's format exactly so
+    /// the same parse path (icon · title · tool · status · clock) applies.
+    static func progressLine(title: String, tool: String, status: String, elapsed: TimeInterval) -> String {
+        let s = Int(elapsed)
+        let clock = String(format: "%d:%02d", s / 60, s % 60)
+        var parts = ["◐ \(AppLocalized("Agent")) · \(title)"]
+        if !tool.isEmpty { parts.append(tool) }
+        if !status.isEmpty { parts.append(String(status.prefix(80))) }
+        parts.append(clock)
+        return parts.joined(separator: " · ")
+    }
+
+    /// [batch7][AUD-B7-6] Classify a child's raw error message into the short
+    /// label the card shows. Moved here from HelperRunner (which is kept
+    /// in-tree but not compiled): the live delegate path needs it to fill the
+    /// completion payload's `error_kind`.
+    nonisolated static func errorKind(_ raw: String?) -> String? {
+        guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+        let s = raw.lowercased()
+        // Ordered most-specific first: an overload response also contains
+        // "429"-adjacent wording on some providers, and a context error often
+        // mentions "token" which the quota branch would otherwise claim.
+        if s.contains("context") && (s.contains("length") || s.contains("window") || s.contains("too long")) {
+            return AppLocalized("Context limit")
+        }
+        if s.contains("rate limit") || s.contains("429") || s.contains("too many requests") {
+            return AppLocalized("Rate limited")
+        }
+        if s.contains("quota") || s.contains("insufficient") || s.contains("credit") || s.contains("billing") {
+            return AppLocalized("Quota exhausted")
+        }
+        if s.contains("overload") || s.contains("529") || s.contains("503") || s.contains("unavailable") {
+            return AppLocalized("Provider overloaded")
+        }
+        if s.contains("timed out") || s.contains("timeout") { return AppLocalized("Timed out") }
+        if s.contains("unauthor") || s.contains("401") || s.contains("403")
+            || s.contains("api key") || s.contains("credential") {
+            return AppLocalized("Auth failed")
+        }
+        if s.contains("offline") || s.contains("network") || s.contains("connection")
+            || s.contains("host") || s.contains("internet") {
+            return AppLocalized("Network error")
+        }
+        if s.contains("cancel") { return AppLocalized("Cancelled") }
+        return nil
+    }
+
+    /// [batch7][AUD-B7-6] Persist the final delegate JSON into the stored
+    /// tool_result so a reload shows the same finished card, not the running
+    /// snapshot that was last written before the process died.
+    func persistFinalDelegateResult(toolUseId: String, content: String, status: ToolBlockStatus) {
+        guard let sid = sessionId else { return }
+        let success: Bool = { if case .success = status { return true }; return false }()
+        let statusText: String? = { if case .failed(let m) = status { return m }; return nil }()
+        Task { @MainActor in
+            let raws = await ChatStore.shared.loadMessages(sessionId: sid)
+            for raw in raws where raw.role == .user {
+                guard raw.parts.contains(where: { if case .toolResult(let tr) = $0 { return tr.toolUseId == toolUseId }; return false }) else { continue }
+                let parts: [ContentPart] = raw.parts.map { part in
+                    guard case .toolResult(let tr) = part, tr.toolUseId == toolUseId else { return part }
+                    return .toolResult(ToolResult(toolUseId: tr.toolUseId, output: content, success: success,
+                                                  mediaRef: tr.mediaRef, snapshot: tr.snapshot,
+                                                  pageURL: tr.pageURL, status: statusText))
+                }
+                await ChatStore.shared.updateMessageParts(messageId: raw.id, parts: parts)
+                await ChatStore.shared.markDirty(recordType: "Message", recordId: raw.id)
+                return
+            }
+            logger.warning("[subagent_task] final result NOT persisted — no stored tool_result for \(toolUseId.prefix(12))")
+        }
+    }
+
     /// Whether this view model is the child of a delegation.
     var isSubAgentChild: Bool { subAgentBrief != nil }
 
@@ -816,6 +902,13 @@ extension AIChatViewModel {
             }
             let json = Self.delegateJSON([
                 "ok": true, "status": "queued",
+                // [batch7][AUD-B7-7] A queued DELEGATION has no child session
+                // yet (it has not started), so it cannot carry
+                // child_session_id — which is the marker HelperBlockInfo uses
+                // to tell a delegation from a control call. Without this flag
+                // it matched the "status=queued + job_id ⇒ steer" rule and was
+                // rendered as a 36pt control capsule instead of a card.
+                "delegation": true,
                 "queued_behind": max(0, registry.runningChildJobCount + registry.queuedCount(parent: parentSid) - 1),
                 "detail": "All \(AgentJobRegistry.maxConcurrentChildJobs) slots are busy. This task is QUEUED and starts automatically as soon as one frees; its result arrives as a new message like any other. Do not re-delegate it.",
             ])
@@ -864,6 +957,19 @@ extension AIChatViewModel {
         child.sessionSource = "helper"
         child.memoryEnabled = false
         child.suppressGeneralCompletionNotification = true
+
+        // [batch7][AUD-B7-5] Bind the parent block to this run the moment it
+        // exists — the same three fields HelperRunner set at start. Without
+        // them the card has no child id (Stop, transcript and detail all go
+        // dead), no live model line, and no agent badge until a reload.
+        if msgIdx >= 0, msgIdx < messages.count,
+           blockIdx >= 0, blockIdx < messages[msgIdx].blocks.count {
+            let blk = messages[msgIdx].blocks[blockIdx]
+            blk.helperChildSessionId = session.id
+            blk.helperModel = job.modelIdentity
+            blk.helperAgentName = subAgent.name
+            if blk.toolSummary?.isEmpty ?? true { blk.toolSummary = childTitle }
+        }
         child.subAgentBrief = SubAgentBrief(parentSessionId: parentSid,
                                             parentToolUseId: toolUseId,
                                             jobId: job.id,
@@ -909,7 +1015,7 @@ extension AIChatViewModel {
                 "status": state.rawValue,
                 "job_id": job.id,
                 "agent": subAgent.name,
-                "session_id": session.id,
+                "child_session_id": session.id,
                 "summary": job.summaryLine ?? "",
                 "result": result,
             ])
@@ -923,7 +1029,7 @@ extension AIChatViewModel {
             "status": "running",
             "job_id": job.id,
             "agent": subAgent.name,
-            "session_id": session.id,
+            "child_session_id": session.id,
             "model": resolution.modelLabel,
             "model_origin": resolution.origin.rawValue,
             "detail": "The sub agent is working in the background in its own session. Its result arrives as a new message in this conversation (a completion card) — do NOT re-delegate the task, and do not wait: continue with anything else the user asked for. Stop it with action=cancel and its job_id.",
@@ -933,6 +1039,72 @@ extension AIChatViewModel {
         }
         let out = Self.delegateJSON(json)
         writeDelegateBlock(msgIdx: msgIdx, blockIdx: blockIdx, out)
+
+        // [batch7][AUD-B7-6] The background run's whole closing chain. The old
+        // arm returned here with nothing attached: no progress line ever
+        // reached the parent block (it sat on the "running" snapshot from the
+        // start JSON), and when the run ended nothing wrote the final JSON
+        // back, so the card stayed "running" until the app reloaded. Both
+        // halves are keyed by tool_use id, which survives the parent's later
+        // turns and reloads — indices do not.
+        let startedAt = Date()
+        let startedTitle = childTitle
+
+        // (A) Live mirror: once a second, the child's current tool + activity.
+        let mirror = Task { @MainActor [weak self] in
+            while !Task.isCancelled, child.isProcessing {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                // Re-check AFTER the sleep: the completion hook cancels this
+                // task and writes the final JSON while we may be asleep — a
+                // write here would overwrite it with a stale progress line.
+                guard !Task.isCancelled, child.isProcessing, let self else { return }
+                let info = SessionActivityTracker.shared.sessionToolInfo[session.id]
+                self.writeDelegateBlock(toolUseId: toolUseId,
+                                        content: Self.progressLine(title: startedTitle,
+                                                                   tool: info?.toolName ?? "",
+                                                                   status: info?.toolStatus ?? AppLocalized("running in background"),
+                                                                   elapsed: Date().timeIntervalSince(startedAt)),
+                                        status: .running)
+            }
+        }
+
+        // (B) Completion: one final JSON, whichever path closes the job.
+        job.completionHook = { [weak self] finished in
+            mirror.cancel()
+            guard let self else { return }
+            let result = finished.resultText ?? ""
+            let loopStatus = finished.state == .done ? "completed" : finished.state.rawValue
+            let reportedStatus = Self.resolvedStatus(loopStatus, result: result)
+            var payload: [String: Any] = [
+                "ok": reportedStatus == "completed",
+                "status": reportedStatus,
+                "result": result.isEmpty ? Self.emptyResultNote(status: loopStatus) : result,
+                "agent": finished.subAgentName ?? subAgent.name,
+                "child_session_id": session.id,
+                "job_id": finished.id,
+                "elapsed_s": Int(finished.elapsed ?? 0),
+                "delivered_as": "new turn in this conversation",
+                "summary": finished.summaryLine ?? "",
+                "model_origin": resolution.origin.rawValue,
+                "escalation_requested": result.contains("[ESCALATE]"),
+                "error_kind": Self.errorKind(child.errorMessage) ?? NSNull(),
+                "error_detail": child.errorMessage ?? NSNull(),
+            ]
+            if let identity = finished.modelIdentity {
+                payload.merge(identity.payload()) { _, new in new }
+            }
+            let finalStatus: ToolBlockStatus = switch finished.state {
+            case .done: .success
+            case .cancelled: .cancelled
+            case .timeout: .failed(message: AppLocalized("Timed out"))
+            default: .failed(message: AppLocalized("Failed"))
+            }
+            let finalJSON = Self.delegateJSON(payload)
+            self.writeDelegateBlock(toolUseId: toolUseId, content: finalJSON, status: finalStatus)
+            self.persistFinalDelegateResult(toolUseId: toolUseId, content: finalJSON, status: finalStatus)
+            logger.info("[subagent_task] BACKGROUND END job=\(finished.id.prefix(8)) state=\(finished.state.rawValue)")
+        }
+
         logger.info("[subagent_task] STARTED job=\(job.id.prefix(8)) agent=\(subAgent.name) child=\(session.id.prefix(8)) model=\(resolution.modelLabel)")
         return (out, true)
     }

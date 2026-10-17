@@ -255,6 +255,11 @@ struct HelperBlockInfo {
         // marker saying the run was interrupted midway), and keying on that
         // hid the very block the user had just resumed. Bridged JSON booleans
         // also read as Int, so `resumed is Int` matched `resumed: true`.
+        // [batch7][AUD-B7-7] An explicit delegation marker wins over every
+        // shape rule below: a queued delegation legitimately has no child
+        // session yet, and its "status=queued + job_id" shape is otherwise
+        // indistinguishable from a steer.
+        if obj["delegation"] as? Bool == true { return false }
         if obj["child_session_id"] is String { return false }
         if obj["agents"] != nil { return true }                  // action=status
         if obj["child_session_ids"] != nil { return true }        // action=resume
