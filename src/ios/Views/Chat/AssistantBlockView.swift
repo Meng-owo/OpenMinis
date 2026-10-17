@@ -116,7 +116,8 @@ struct AssistantBlockView: View {
             ToolCapsuleView(block: block, icon: Self.toolCapsuleIcon(for: block.kind), accentColor: ChatColors.accent,
                             commandStartTime: commandStartTime, onStop: onStop,
                             browserPool: Self.toolCapsuleNeedsBrowserPool(for: block.kind) ? browserPool : nil,
-                            toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
+                            toolSnapshots: toolSnapshots, detailBlock: $detailBlock,
+                            sessionPersonaId: sessionPersonaId)
         case .info:
             let allLines = block.content.components(separatedBy: "\n").filter { !$0.isEmpty }
             // Separate reason lines (⚠️) from the final switched line (✅)
@@ -362,6 +363,8 @@ struct ToolCapsuleView: View {
     var browserPool: BrowserTabPool?
     var toolSnapshots: [ToolSnapshotItem] = []
     @Binding var detailBlock: AssistantBlock?
+    /// [audit-E6] 本行会话的人设 id——撤销记忆时按它找文件（nil 回退全局当前）。
+    var sessionPersonaId: String? = nil
     @State private var dotsActive = false
     /// [T-tool-bg-suspended-hint] Drives the background-suspension info alert.
     @State private var showBgHintAlert = false
@@ -689,7 +692,8 @@ struct ToolCapsuleView: View {
                 // `content` parse can still come back empty here (malformed or
                 // still-streaming args). Report that rather than failing silently.
                 if let written = memoryWriteContent {
-                    revokeMemoryResult = MemoryWriteRevoker.revoke(writtenContent: written)
+                    revokeMemoryResult = MemoryWriteRevoker.revoke(writtenContent: written,
+                                                                   personaID: sessionPersonaId)
                 } else {
                     revokeMemoryResult = AppLocalized("No written content to revoke.")
                 }

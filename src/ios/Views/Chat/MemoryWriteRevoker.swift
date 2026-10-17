@@ -22,17 +22,25 @@ enum MemoryWriteRevoker {
     /// Returns a user-facing result string — `"Removed from <date>.md"` on
     /// success, otherwise a not-found / write-error message. Callers surface it
     /// directly in an alert or toast.
-    static func revoke(writtenContent: String) -> String {
+    ///
+    /// [audit-E6] `personaID` names whose memory dir the entry lives in — the
+    /// WRITING session's persona, not whatever persona happens to be globally
+    /// current right now (they differ whenever the user switches persona after
+    /// the write, and the entry then lives in a dir this lookup never visited).
+    /// nil falls back to the current persona for legacy callers.
+    static func revoke(writtenContent: String, personaID: String? = nil) -> String {
         let written = writtenContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !written.isEmpty else {
             return AppLocalized("No written content to revoke.")
         }
 
         let fm = FileManager.default
-        // [batch5 / W2B-01/W2B-05] The daily log lives in the current persona
-        // dir — the legacy root path made revoke fail for every non-default
-        // persona (and silently no-op for the default one).
-        let memDir = PersonaStore.memoryDir(for: PersonaStore.currentID())
+        // [batch5 / W2B-01/W2B-05] The daily log lives in the persona dir —
+        // the legacy root path made revoke fail for every non-default persona
+        // (and silently no-op for the default one).
+        // [audit-E6] …and it is the SESSION's persona (passed by the caller),
+        // not the globally-current one.
+        let memDir = PersonaStore.memoryDir(for: personaID ?? PersonaStore.currentID())
 
         let dateFmt = DateFormatter()
         dateFmt.dateFormat = "yyyy-MM-dd"

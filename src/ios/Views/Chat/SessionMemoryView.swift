@@ -533,7 +533,9 @@ private struct MemoryWriteDetailView: View {
         guard let written = currentWrittenContent else {
             return AppLocalized("No written content to revoke.")
         }
-        return MemoryWriteRevoker.revoke(writtenContent: written)
+        // [audit-E6] The detail view carries the persona the entry was
+        // written under — revoke must look THERE, not at "whoever is current".
+        return MemoryWriteRevoker.revoke(writtenContent: written, personaID: personaID)
     }
 }
 
