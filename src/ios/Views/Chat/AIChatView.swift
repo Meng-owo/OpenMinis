@@ -2080,6 +2080,22 @@ struct AIChatView: View {
                 showStickerPanel = false
             }
         }
+        // [batch7-fix] The drawer is conditionally rendered, so removing it and
+        // presenting a sheet in the SAME update transaction made SwiftUI drop
+        // the presentation: every tile that opened a sheet went dead while the
+        // sticker branch (which keeps the drawer mounted) kept working. Yield
+        // one runloop turn so the drawer leaves the tree first. The sticker
+        // branch is exempt — it swaps drawers in place and must stay instant.
+        if item != .sticker {
+            DispatchQueue.main.async {
+                performPlusPanelAction(item)
+            }
+            return
+        }
+        performPlusPanelAction(item)
+    }
+
+    private func performPlusPanelAction(_ item: PlusPanelItemType) {
         switch item {
         case .photo:
             showPhotoPicker = true
