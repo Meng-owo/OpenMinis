@@ -157,12 +157,12 @@ enum ChatStoreSyncHydrators {
         )
         h.register(
             recordType: "MemoryGlobalV2",
-            builder: { _ in await buildMemoryGlobal() },
+            builder: { id in await buildMemoryGlobal(recordId: id) },
             merger: { record in await mergeMemoryGlobal(record: record) }
         )
         h.register(
             recordType: "MemoryDailyV2",
-            builder: { id in await buildMemoryDaily(dateKey: id) },
+            builder: { id in await buildMemoryDaily(recordId: id) },
             merger: { record in await mergeMemoryDaily(record: record) }
         )
 
@@ -990,9 +990,12 @@ enum ChatStoreSyncHydrators {
 
     // MARK: - Memory Global (GLOBAL.md singleton)
 
-    private static func buildMemoryGlobal() async -> PortableRecord? {
-        // ［persona］记忆同步（MemoryGlobalV2/MemoryDailyV2）只跟默认人设。
-        let url = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
+    private static func buildMemoryGlobal(recordId: String) async -> PortableRecord? {
+        // [audit-E1] Persona-scoped: the record id names whose GLOBAL.md this
+        // record carries — bare "memory-global" is the default persona's
+        // (historic form), "<pid>/memory-global" is anyone else's.
+        let (pid, _) = MemorySyncRecordID.parse(recordId)
+        let url = PersonaStore.memoryDir(for: pid)
                     .appendingPathComponent("GLOBAL.md")
         let fm = FileManager.default
         guard fm.fileExists(atPath: url.path),
@@ -1007,7 +1010,7 @@ enum ChatStoreSyncHydrators {
                let d = attrs[.modificationDate] as? Date { return d }
             return Date()
         }()
-        let synced = SyncedMemoryGlobal(contentMarkdown: text, updatedAt: mtime)
+        let synced = SyncedMemoryGlobal(id: recordId, contentMarkdown: text, updatedAt: mtime)
         return SyncableTypeRegistry.shared.metadata(for: "MemoryGlobalV2")?.buildPortable(synced)
     }
 
@@ -1018,7 +1021,10 @@ enum ChatStoreSyncHydrators {
         }
         let remoteUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
 
-        let url = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
+        // [audit-E1] Resolve the target persona from the record id — one
+        // parser shared with every writer, so the sides cannot disagree.
+        let (pid, _) = MemorySyncRecordID.parse(record.id.id)
+        let url = PersonaStore.memoryDir(for: pid)
                     .appendingPathComponent("GLOBAL.md")
         let fm = FileManager.default
 
@@ -1110,7 +1116,10 @@ enum ChatStoreSyncHydrators {
                      .joined(separator: "\n")
     }
 
-    private static func buildMemoryDaily(dateKey: String) async -> PortableRecord? {
+    private static func buildMemoryDaily(recordId: String) async -> PortableRecord? {
+        // [audit-E1] Persona-scoped id: "<pid>/<date>" for non-default
+        // personas, the historic bare "<date>" for the default one.
+        let (pid, dateKey) = MemorySyncRecordID.parse(recordId)
         // Only sync last 30 days
         let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
@@ -1118,7 +1127,7 @@ enum ChatStoreSyncHydrators {
             return nil  // Too old — skip
         }
 
-        let url = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
+        let url = PersonaStore.memoryDir(for: pid)
                     .appendingPathComponent("\(dateKey).md")
         guard let text = try? String(contentsOf: url, encoding: .utf8),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -1151,7 +1160,7 @@ enum ChatStoreSyncHydrators {
             return Date()
         }()
 
-        let synced = SyncedMemoryDaily(id: dateKey, entriesJson: jsonStr, updatedAt: mtime)
+        let synced = SyncedMemoryDaily(id: recordId, entriesJson: jsonStr, updatedAt: mtime)
         return SyncableTypeRegistry.shared.metadata(for: "MemoryDailyV2")?.buildPortable(synced)
     }
 
@@ -1178,8 +1187,11 @@ enum ChatStoreSyncHydrators {
             return
         }
 
-        let url = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
-                    .appendingPathComponent("\(dateKey).md")
+        // [audit-E1] The dateKey field carries the full (possibly
+        // persona-scoped) record id; resolve the target dir from it.
+        let (pid, bareDate) = MemorySyncRecordID.parse(dateKey)
+        let url = PersonaStore.memoryDir(for: pid)
+                    .appendingPathComponent("\(bareDate).md")
         let fm = FileManager.default
 
         // Read existing local entries. [batch5 / W2B-03] An existing-but-

@@ -146,13 +146,16 @@ extension AIChatViewModel {
         // Date() call) so the dateKey matches what was actually written
         // even across a midnight boundary.
         //
-        // ［persona］只同步默认人设的日报：recordId 是日期单例，多个人设
-        // 共用会互相覆盖。其他人设的日报不同步（留尾巴）。
+        // [audit-E1] Every persona's daily log syncs now, under a
+        // persona-scoped record id ("<pid>/<date>"; the default persona keeps
+        // the historic bare date, so existing cloud records keep working).
+        // The old code only marked the default persona on purpose — a shared
+        // date-singleton id made personas overwrite each other.
         let dateStrForSync = (fileName as NSString).deletingPathExtension
-        if pid == PersonaStore.defaultPersonaID {
-            Task { @MainActor in
-                await ChatStore.shared.markDirty(recordType: "MemoryDailyV2", recordId: dateStrForSync)
-            }
+        Task { @MainActor in
+            await ChatStore.shared.markDirty(
+                recordType: "MemoryDailyV2",
+                recordId: MemorySyncRecordID.scoped(pid: pid, base: dateStrForSync))
         }
         NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
 

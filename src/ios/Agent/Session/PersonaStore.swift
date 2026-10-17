@@ -340,6 +340,18 @@ final class PersonaStore: ObservableObject {
             .appendingPathComponent("personas/\(personaID)", isDirectory: true)
     }
 
+    /// [audit-E1] Memory dirs that actually exist on disk (default first,
+    /// then stable order). Used by the OFF-main sync sweepers (dirty scanner,
+    /// force-sync) that cannot read the @MainActor `personas` list.
+    nonisolated static func memoryPersonaIDsOnDisk() -> [String] {
+        let root = AIChatViewModel.minisMemoryPersistentDir
+            .appendingPathComponent("personas", isDirectory: true)
+        let ids = ((try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? [])
+            .filter { !$0.hasPrefix(".") && $0 != defaultPersonaID }
+            .sorted()
+        return [defaultPersonaID] + ids
+    }
+
     /// [batch5 / W2B-01] Move leftover files from the legacy root memory dir
     /// into the default persona dir. Merge-only: a file that already exists
     /// per-persona is left alone (and logged), never overwritten. Runs once

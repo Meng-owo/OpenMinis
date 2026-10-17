@@ -251,8 +251,21 @@ final class SyncDirtyScanner {
     // MARK: - Memory Files
 
     private func scanMemoryFiles() async {
-        // ［persona］记忆同步只跟默认人设。
-        let memDir = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
+        // [audit-E1] Sweep EVERY persona dir now (scoped record ids; the
+        // default persona keeps the historic bare forms). Ids come from disk
+        // rather than the @MainActor persona list — this scan runs off the
+        // main thread.
+        for pid in PersonaStore.memoryPersonaIDsOnDisk() {
+            await scanMemoryFiles(forPersona: pid)
+        }
+        // Reaching here means every listing succeeded — this pass baselined
+        // every pre-existing file, so anything first seen from now on was
+        // created at runtime.
+        memoryBaselineEstablished = true
+    }
+
+    private func scanMemoryFiles(forPersona pid: String) async {
+        let memDir = PersonaStore.memoryDir(for: pid)
         guard fm.fileExists(atPath: memDir.path),
               let files = try? fm.contentsOfDirectory(at: memDir,
                                                        includingPropertiesForKeys: [.contentModificationDateKey],
@@ -268,7 +281,7 @@ final class SyncDirtyScanner {
 
             let modDate = (try? fileURL.resourceValues(forKeys: [.contentModificationDateKey])
                                 .contentModificationDate) ?? Date.distantPast
-            let cacheKey = "memory:\(name)"
+            let cacheKey = "memory:\(pid):\(name)"
 
             // [T-icloud-local-edit-clobber] Mirror the skills/config scans:
             // first scan records a baseline WITHOUT marking dirty (in-app
@@ -282,7 +295,7 @@ final class SyncDirtyScanner {
                     if modDate > known {
                         knownModDates[cacheKey] = modDate
                         await ChatStore.shared.markDirty(recordType: "MemoryGlobalV2",
-                                                         recordId: "memory-global")
+                                                         recordId: MemorySyncRecordID.scoped(pid: pid, base: MemorySyncRecordID.globalBase))
                         logger.info("[SyncDirtyScanner] GLOBAL.md changed, marked dirty")
                     } else if modDate != known {
                         // Backdated by an inbound apply — track, don't push.
@@ -298,7 +311,7 @@ final class SyncDirtyScanner {
                         // skills scan has the same backstop via
                         // reconcileOrphanSkill; this is the memory analog.
                         await ChatStore.shared.markDirty(recordType: "MemoryGlobalV2",
-                                                         recordId: "memory-global")
+                                                         recordId: MemorySyncRecordID.scoped(pid: pid, base: MemorySyncRecordID.globalBase))
                         logger.info("[SyncDirtyScanner] GLOBAL.md appeared at runtime, marked dirty")
                     }
                 }
@@ -310,7 +323,7 @@ final class SyncDirtyScanner {
                         if modDate > known {
                             knownModDates[cacheKey] = modDate
                             await ChatStore.shared.markDirty(recordType: "MemoryDailyV2",
-                                                             recordId: stem)
+                                                             recordId: MemorySyncRecordID.scoped(pid: pid, base: stem))
                             logger.info("[SyncDirtyScanner] \(name) changed, marked dirty")
                         } else if modDate != known {
                             knownModDates[cacheKey] = modDate
@@ -321,7 +334,7 @@ final class SyncDirtyScanner {
                             // Runtime-created daily log — same backstop as
                             // the GLOBAL.md branch above.
                             await ChatStore.shared.markDirty(recordType: "MemoryDailyV2",
-                                                             recordId: stem)
+                                                             recordId: MemorySyncRecordID.scoped(pid: pid, base: stem))
                             logger.info("[SyncDirtyScanner] \(name) appeared at runtime, marked dirty")
                         }
                     }
@@ -329,9 +342,5 @@ final class SyncDirtyScanner {
             }
         }
 
-        // Reaching here means the listing succeeded — this pass baselined
-        // every pre-existing file, so anything first seen from now on was
-        // created at runtime.
-        memoryBaselineEstablished = true
     }
 }

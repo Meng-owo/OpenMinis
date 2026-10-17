@@ -53,30 +53,35 @@ enum ForceSyncHelper {
     @discardableResult
     static func markMemoryDirty() async -> Int {
         let fm = FileManager.default
-        // ［persona］MemoryGlobalV2 / MemoryDailyV2 只同步默认人设的记忆文件。
-        let memDir = PersonaStore.memoryDir(for: PersonaStore.defaultPersonaID)
-        var count = 0
-        // GLOBAL.md
-        let globalURL = memDir.appendingPathComponent("GLOBAL.md")
-        if fm.fileExists(atPath: globalURL.path) {
-            await ChatStore.shared.markDirty(recordType: "MemoryGlobalV2",
-                                             recordId: "memory-global")
-            count += 1
-        }
-        // Daily logs within the 30-day window (same rule as
-        // SyncDirtyScanner.scanMemoryFiles).
+        // [audit-E1] EVERY persona's memory files are force-synced now, under
+        // persona-scoped record ids (default keeps the historic bare forms).
         let fmt = DateFormatter(); fmt.dateFormat = "yyyy-MM-dd"
         let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-        if let entries = try? fm.contentsOfDirectory(at: memDir,
-                                                     includingPropertiesForKeys: nil,
-                                                     options: [.skipsHiddenFiles]) {
-            for url in entries where url.pathExtension == "md"
-                && url.lastPathComponent != "GLOBAL.md" {
-                let stem = (url.lastPathComponent as NSString).deletingPathExtension
-                if let fileDate = fmt.date(from: stem), fileDate >= cutoff {
-                    await ChatStore.shared.markDirty(recordType: "MemoryDailyV2",
-                                                     recordId: stem)
-                    count += 1
+        var count = 0
+        for pid in PersonaStore.memoryPersonaIDsOnDisk() {
+            let memDir = PersonaStore.memoryDir(for: pid)
+            // GLOBAL.md
+            let globalURL = memDir.appendingPathComponent("GLOBAL.md")
+            if fm.fileExists(atPath: globalURL.path) {
+                await ChatStore.shared.markDirty(
+                    recordType: "MemoryGlobalV2",
+                    recordId: MemorySyncRecordID.scoped(pid: pid, base: MemorySyncRecordID.globalBase))
+                count += 1
+            }
+            // Daily logs within the 30-day window (same rule as
+            // SyncDirtyScanner.scanMemoryFiles).
+            if let entries = try? fm.contentsOfDirectory(at: memDir,
+                                                         includingPropertiesForKeys: nil,
+                                                         options: [.skipsHiddenFiles]) {
+                for url in entries where url.pathExtension == "md"
+                    && url.lastPathComponent != "GLOBAL.md" {
+                    let stem = (url.lastPathComponent as NSString).deletingPathExtension
+                    if let fileDate = fmt.date(from: stem), fileDate >= cutoff {
+                        await ChatStore.shared.markDirty(
+                            recordType: "MemoryDailyV2",
+                            recordId: MemorySyncRecordID.scoped(pid: pid, base: stem))
+                        count += 1
+                    }
                 }
             }
         }

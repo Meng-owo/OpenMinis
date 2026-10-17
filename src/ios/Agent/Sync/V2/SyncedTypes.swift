@@ -802,9 +802,11 @@ struct SyncedSoul: Syncable {
     }()
 }
 
-// MARK: - SyncedMemoryGlobal (GLOBAL.md singleton)
+// MARK: - SyncedMemoryGlobal (GLOBAL.md, one record PER PERSONA)
 //
-// One singleton record per iCloud account holding the full GLOBAL.md text.
+// [audit-E1] One record per persona holding that persona's full GLOBAL.md
+// text. The default persona keeps the historic id "memory-global"; every
+// other persona uses "<pid>/memory-global" (see MemorySyncRecordID).
 // LWW by updatedAt (file mtime). Empty file is never pushed (builder returns nil).
 // Lives alongside SoulV2 in minis-shared zone.
 struct SyncedMemoryGlobal: Syncable {
@@ -828,9 +830,11 @@ struct SyncedMemoryGlobal: Syncable {
     }()
 }
 
-// MARK: - SyncedMemoryDaily (per-day daily log)
+// MARK: - SyncedMemoryDaily (per-day daily log, PER PERSONA)
 //
-// One record per calendar day (id = "YYYY-MM-DD"). Payload is a JSON array
+// [audit-E1] One record per calendar day PER PERSONA. The default persona
+// keeps the historic id "YYYY-MM-DD"; every other persona uses
+// "<pid>/YYYY-MM-DD" (see MemorySyncRecordID). Payload is a JSON array
 // of MemoryEntry (timestamp + content). Merger does Set Union by timestamp key,
 // so entries from different devices accumulate rather than overwriting each other.
 // Only the most recent 30 days are pushed; older files are never enqueued.
@@ -854,6 +858,38 @@ struct SyncedMemoryDaily: Syncable {
             version: 1
         )
     }()
+}
+
+// MARK: - Memory record id scoping (persona)
+
+/// [audit-E1] Persona-scoped ids for the memory record types.
+///
+/// The default persona keeps the HISTORIC bare forms ("memory-global" /
+/// "YYYY-MM-DD") so records already in iCloud — and the id format every build
+/// has shipped — keep working untouched. Every other persona prefixes its id
+/// with "<pid>/". Writers (memory tools, settings editor, force-sync, dirty
+/// scanner) and the two hydrators all build/parse ids through here so the
+/// two sides cannot disagree about which persona a record belongs to.
+enum MemorySyncRecordID {
+    static let globalBase = "memory-global"
+
+    static func scoped(pid: String, base: String) -> String {
+        pid == PersonaStore.defaultPersonaID ? base : "\(pid)/\(base)"
+    }
+
+    /// "<pid>/<base>" → (pid, base); a bare id resolves to the default
+    /// persona. Dot-only persona components are refused (they would walk up
+    /// the memory directory) and fall back to the default persona instead.
+    static func parse(_ recordId: String) -> (pid: String, base: String) {
+        if let slash = recordId.firstIndex(of: "/") {
+            let pid = String(recordId[..<slash])
+            let base = String(recordId[recordId.index(after: slash)...])
+            if !pid.isEmpty, pid != ".", pid != "..", !base.isEmpty {
+                return (pid, base)
+            }
+        }
+        return (PersonaStore.defaultPersonaID, recordId)
+    }
 }
 
 // MARK: - SyncedFolder
