@@ -86,12 +86,13 @@ enum AIVoiceMessageComposer {
         return s.count < 200
     }
 
-    /// [batch9-voice/2] 统一语音卡片链接构造——send_voice 工具与 StreamEnd
-    /// 自动气泡共用一份字面（此前两处手写重复）。格式：
-    /// `![voice](<url>?voice_bubble=1&dur=<秒>&auto_play=true)`
+    /// [batch9-voice/2] 统一语音卡片链接构造——send_voice 工具的发声路径
+    ///（StreamEnd 自动气泡已拆）。格式：`![voice](<url>?voice_bubble=1&dur=<秒>)`
+    /// [batch1-A4] auto_play=true 参数已删：全仓没有消费方（triggerAutoPlayAudio
+    /// 只认 voice_bubble=1），旧消息里带的它同样不生效，删掉不影响历史消息。
     static func voiceBubbleLink(url: String, duration: Double) -> String {
         let durParam = duration > 0 ? Int(duration.rounded()) : 0
-        return "![voice](\(url)?voice_bubble=1&dur=\(durParam)&auto_play=true)"
+        return "![voice](\(url)?voice_bubble=1&dur=\(durParam))"
     }
 
     /// [voice-bubble-tool 2026-10-02] send_voice 专用：voice/group 点名版。
