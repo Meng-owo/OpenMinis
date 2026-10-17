@@ -1253,6 +1253,10 @@ enum SystemPromptBuilder {
         }()
         let style: String = (file?.metadata.style ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // [audit-D1] The `lang` field: stored and editable since forever, but
+        // it never reached the model — rendered below like `style`.
+        let lang: String = (file?.metadata.lang ?? "auto")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
 
         let identity = identityTemplate.replacingOccurrences(of: "{name}", with: name)
         let identityTrimmed = identity.trimmingCharacters(in: .whitespaces)
@@ -1284,12 +1288,22 @@ enum SystemPromptBuilder {
             return "\n\nResponse style (from SOUL.md `style` — apply to every reply unless the user explicitly asks otherwise; if it prescribes a reply language, it overrides the default match-the-user's-language rule):\n\(s)"
         }
 
+        // [audit-D1] Mirrors `styleBlock`: the user's explicit reply-language
+        // pick (Chinese / English; "auto" = the match-the-user default, no
+        // injection) as a hard constraint on every reply.
+        func langBlock(_ l: String) -> String {
+            let v = l.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !v.isEmpty, v != "auto" else { return "" }
+            let language = v.hasPrefix("zh") ? "Chinese" : (v.hasPrefix("en") ? "English" : l)
+            return "\n\nReply language (from SOUL.md `lang` — a hard constraint set by the user; reply in \(language) on every message regardless of the language they write in, unless they explicitly ask you to switch in the moment):"
+        }
+
         guard let body = file?.body else {
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            return identityTrimmed + styleBlock(style) + langBlock(lang) + "\n\n" + soulEditHint + "\n\n"
         }
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            return identityTrimmed + styleBlock(style) + langBlock(lang) + "\n\n" + soulEditHint + "\n\n"
         }
 
         // The over-limit fallback (identity-only prompt) was removed with
@@ -1303,6 +1317,7 @@ enum SystemPromptBuilder {
             + "\n\nPersonality (from SOUL.md — your character and voice; defer to the user's latest message when it conflicts with anything here):\n"
             + personality
             + styleBlock(style)
+            + langBlock(lang)
             + "\n\n"
             + soulEditHint
             + "\n\n"
