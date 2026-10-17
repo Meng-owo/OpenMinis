@@ -244,7 +244,12 @@ final class ScheduledPromptStore: ObservableObject {
     /// Called from the notification delegate for the scheduledPrompt category.
     /// Opens the target session (existing or new draft) and auto-sends the
     /// preset prompt — the AskMinisIntent pipeline shape, minus Siri.
-    static func handleTap(promptId: String, promptText: String, sessionId: String?) {
+    /// [audit-B6] `silent` = the "Run now" notification action: run the prompt
+    /// in the background WITHOUT navigating the UI to the session (that is what
+    /// makes the extra action meaningfully different from tapping the banner,
+    /// which opens it). Without the split the action behaved — and navigated —
+    /// exactly like a plain tap, i.e. it was pure noise.
+    static func handleTap(promptId: String, promptText: String, sessionId: String?, silent: Bool = false) {
         Task { @MainActor in
             let vm: AIChatViewModel
             if let sid = sessionId, !sid.isEmpty {
@@ -261,7 +266,10 @@ final class ScheduledPromptStore: ObservableObject {
             }
             vm.inputText = promptText
             vm.send()
-            if let sid = vm.sessionId, !sid.isEmpty {
+            // [audit-B6] A silent ("Run now") fire still runs, but must not
+            // yank the UI to the session — that IS the difference between the
+            // action and a plain tap.
+            if let sid = vm.sessionId, !sid.isEmpty, !silent {
                 NotificationNavigationStore.shared.setPending(sid)
                 NotificationCenter.default.post(
                     name: .openSessionFromIntent,

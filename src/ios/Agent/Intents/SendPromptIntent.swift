@@ -470,11 +470,17 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
            let promptId = userInfo["promptId"] as? String {
             let promptText = userInfo["prompt"] as? String ?? ""
             let boundSession = userInfo["sessionId"] as? String
+            // [audit-B6] Dispatch by action: "Run now" (RUN_NOW) runs the
+            // prompt without pulling the UI to the session; a plain tap keeps
+            // its open-and-send behaviour. Previously both were the same call,
+            // so the extra button did nothing distinct.
+            let silent = response.actionIdentifier == "RUN_NOW"
             DispatchQueue.main.async {
                 ScheduledPromptStore.handleTap(
                     promptId: promptId,
                     promptText: promptText,
-                    sessionId: boundSession.flatMap { $0.isEmpty ? nil : $0 }
+                    sessionId: boundSession.flatMap { $0.isEmpty ? nil : $0 },
+                    silent: silent
                 )
             }
             completionHandler()

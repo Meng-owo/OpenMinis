@@ -25,11 +25,18 @@ struct ScheduledPromptsView: View {
                             .font(.caption)
                             .foregroundStyle(MinisTheme.secondaryText)
                     }
+                    // [audit-B8] Row-level, not List-level: attached to the List
+                    // the modifier is a no-op, so the themed surface never
+                    // actually rendered.
+                    .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
                 }
             } else {
                 Section {
                     ForEach(store.prompts) { p in
+                        // [audit-B8] See the empty-state row above — the
+                        // modifier only works on rows.
                         row(p)
+                            .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
                     }
                     .onDelete { idx in
                         let ids = idx.map { store.prompts[$0].id }
@@ -65,7 +72,6 @@ struct ScheduledPromptsView: View {
                 ScheduledPromptEditor(prompt: p)
             }
         }
-        .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
     }
 
     private func row(_ p: ScheduledPrompt) -> some View {
