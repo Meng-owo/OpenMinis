@@ -70,10 +70,14 @@ struct ScheduledPromptsView: View {
 
     private func row(_ p: ScheduledPrompt) -> some View {
         let time = String(format: "%02d:%02d", p.hour, p.minute)
-        return Button {
-            editing = p
-        } label: {
-            HStack {
+        // [audit-B7] The Toggle used to live INSIDE the edit Button's label —
+        // one control nested in another control's hit area, so flipping the
+        // switch raced the row's tap handling. They are siblings now (the
+        // shape the scheduled-task list already uses).
+        return HStack {
+            Button {
+                editing = p
+            } label: {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(p.title.isEmpty ? time : p.title)
                         .foregroundStyle(MinisTheme.primaryText)
@@ -82,15 +86,17 @@ struct ScheduledPromptsView: View {
                         .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(1)
                 }
-                Spacer()
-                Toggle("", isOn: Binding(
-                    get: { p.enabled },
-                    set: { v in Task { await store.setEnabled(v, id: p.id) } }
-                ))
-                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+
+            Toggle("", isOn: Binding(
+                get: { p.enabled },
+                set: { v in Task { await store.setEnabled(v, id: p.id) } }
+            ))
+            .labelsHidden()
         }
-        .buttonStyle(.plain)
     }
 }
 
