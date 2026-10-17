@@ -8,19 +8,24 @@ import SwiftUI
 //
 //   Voice Services            [+]        ← add
 //   ┌────────────────────────────────┐
-//   │ ◉ System (Apple)          ▶ ⚙ ✓│    ← built-in, always present
+//   │ ◉ System (Apple)          ⚙ ✓ │    ← built-in, always present
 //   │ ◉ ElevenLabs              ▶ ⚙ ✓│    ← configured services
 //   │   eleven_multilingual_v2 · Rachel│
 //   └────────────────────────────────┘
 //   ┌────────────────────────────────┐
-//   │ Auto-read replies          [○] │    ← playback settings
-//   │ Cache audio for replay     [●] │
-//   │ Read: Full text ▸              │
+//   │ TTS 分组                    ›   │    ← default group & members
+//   └────────────────────────────────┘
+//   ┌────────────────────────────────┐
+//   │ Cache audio for replay     [●] │    ← playback settings
+//   │ Allow System voice         [○] │
 //   └────────────────────────────────┘
 //
 // The System row is NOT a TTSServiceOptions: it is the always-available offline
-// engine, and selecting it means "no service" (the read-aloud path then falls
-// back to the offline System voice). That keeps the new layer strictly additive.
+// engine, and selecting it means "no service" (synthesis then follows the
+// normal chain — default TTS group → model group; the System voice itself only
+// speaks when "Allow System voice" is on). That keeps the new layer additive.
+// [audit-A9] 示意图已对齐现状：Auto-read replies / Read 范围 两行控件已删，
+// 增补 TTS 分组一级。
 
 struct VoiceServicesView: View {
 
