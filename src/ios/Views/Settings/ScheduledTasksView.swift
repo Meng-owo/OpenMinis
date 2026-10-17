@@ -249,6 +249,11 @@ guard let id = pendingDeleteId else { return }
 
             Spacer()
 
+            // [audit-B2] The row used to show only a switch; a cancelled or
+            // timed-out task looked exactly like a live one. Same badge as the
+            // detail sheet (shared, cannot drift).
+            ScheduledJobStatusBadge(job: job)
+
             Toggle("", isOn: Binding<Bool>(
                 get: { job.isEnabled },
                 set: { v in

@@ -128,6 +128,60 @@ extension AgentJob {
     }
 }
 
+// MARK: - [audit-B2] 任务状态徽章（列表行与详情页共用）
+
+/// [audit-B2] ONE honest label per state — the list row and the detail sheet
+/// share it so the two cannot drift (the AUD-17 lesson). Before this the badge
+/// knew only paused/running/done/pending: a cancelled, failed or timed-out
+/// task all rendered "等待中", indistinguishable from a live schedule.
+@MainActor
+enum ScheduledJobStatusText {
+    static func label(for job: AgentJob) -> String {
+        switch job.state {
+        case .cancelled: return "已取消"
+        case .failed:    return "失败"
+        case .timeout:   return "已超时"
+        case .done:      return "已完成"
+        case .running:   return job.isEnabled ? "运行中" : "已暂停"
+        case .pending:   return job.isEnabled ? "等待中" : "已暂停"
+        }
+    }
+
+    static func style(for job: AgentJob, isDark: Bool) -> (label: String, color: Color) {
+        let color: Color
+        switch job.state {
+        case .failed:    color = CSSThemeVariables.danger(isDark: isDark)
+        case .timeout:   color = CSSThemeVariables.warning(isDark: isDark)
+        case .cancelled: color = CSSThemeVariables.textDim(isDark: isDark)
+        case .done:      color = CSSThemeVariables.accent(isDark: isDark)
+        case .running:   color = job.isEnabled ? CSSThemeVariables.success(isDark: isDark)
+                                               : CSSThemeVariables.warning(isDark: isDark)
+        case .pending:   color = job.isEnabled ? CSSThemeVariables.accent(isDark: isDark)
+                                               : CSSThemeVariables.warning(isDark: isDark)
+        }
+        return (label(for: job), color)
+    }
+}
+
+/// Shared capsule badge (list row + detail header).
+struct ScheduledJobStatusBadge: View {
+    let job: AgentJob
+
+    @Environment(\.colorScheme) private var colorScheme
+    @ObservedObject private var fontSettings = FontSettings.shared
+
+    var body: some View {
+        let styled = ScheduledJobStatusText.style(for: job, isDark: colorScheme == .dark)
+        Text(styled.label)
+            .font(.system(size: fontSettings.scaledApp(11), weight: .medium))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(styled.color.opacity(0.12))
+            .foregroundStyle(styled.color)
+            .clipShape(Capsule())
+    }
+}
+
 /// The full card for an ordinary scheduled task.
 ///
 /// [AUD-19] Currently unreferenced — and that is the consequence of a decision,

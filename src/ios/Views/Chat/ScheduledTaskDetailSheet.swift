@@ -315,30 +315,11 @@ struct ScheduledTaskDetailSheet: View {
         dismiss()
     }
 
+    /// [audit-B2] Was a four-state badge that rendered cancelled / failed /
+    /// timed-out tasks as "等待中". Now the shared badge covers every state
+    /// (and the list row draws the same one).
     private func statusBadge(for job: AgentJob) -> some View {
-        let text: String
-        let color: Color
-        if !job.isEnabled {
-            text = "已暂停"
-            color = CSSThemeVariables.warning(isDark: isDark)
-        } else if job.state == .running {
-            text = "运行中"
-            color = CSSThemeVariables.success(isDark: isDark)
-        } else if job.state == .done {
-            text = "已完成"
-            color = CSSThemeVariables.accent(isDark: isDark)
-        } else {
-            text = "等待中"
-            color = CSSThemeVariables.accent(isDark: isDark)
-        }
-
-        return Text(text)
-            .font(.system(size: fontSettings.scaledApp(11), weight: .medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.12))
-            .foregroundStyle(color)
-            .clipShape(Capsule())
+        ScheduledJobStatusBadge(job: job)
     }
 
     private func detailRow(label: String, value: String, icon: String) -> some View {
