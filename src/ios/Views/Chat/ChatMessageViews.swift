@@ -39,8 +39,38 @@ struct MessageContextMenuPreview: View {
 
     @State private var contentSize: CGSize = .zero
 
+    /// [audit-F4 / T-ios-ctxmenu-preview-watchdog] Hard cap on the characters
+    /// handed to the preview's `Text`.
+    ///
+    /// This platter is a lift-to-peek preview: it is capped to 55% of screen
+    /// height and scrolls, so only the first screenful is ever readable. But
+    /// the `Text` was given the WHOLE reply, and the `GeometryReader` below
+    /// forces SwiftUI to typeset all of it through CoreText — on the main
+    /// thread — just to produce `contentSize`. Cost is super-linear in length.
+    /// Measured at this exact font (16.5pt) and wrap width (360 - 2*16 = 328pt):
+    ///
+    ///      4,000 chars   0.25s
+    ///      8,000 chars   0.98s
+    ///     12,000 chars   1.63s
+    ///     20,000 chars   4.50s
+    ///     24,000 chars   6.48s     <- the reported 5591ms hang lands here
+    ///     30,000 chars  10.14s
+    ///     40,000 chars  17.96s
+    ///
+    /// which is the foreground SIGKILL a long reply once caused: a main-thread
+    /// hang in CTLineCreateWithAttributedString → ResolvedStyledText.draw,
+    /// watchdog kill, memory normal (not an OOM).
+    ///
+    /// Note the cost is driven by LENGTH, not by LaTeX: raw LaTeX source
+    /// measured FASTER than prose at equal length (40,000 chars of formula
+    /// source = 0.178s), because its long unspaced backslash runs produce far
+    /// fewer line-break opportunities than CJK, where nearly every character is
+    /// a break candidate. Capping the string keeps this flat at ~0.06s for any
+    /// input size.
+    private static let maxPreviewChars = 2000
+
     var body: some View {
-        let shown = text.isEmpty ? " " : text
+        let shown = text.isEmpty ? " " : String(text.prefix(Self.maxPreviewChars))
         ScrollView(.vertical, showsIndicators: true) {
             // No `.frame(maxWidth: .infinity)` here — the Text must report its
             // NATURAL width so short messages yield a narrow platter. The wrap
