@@ -446,26 +446,26 @@ struct UnifiedModelPicker: View {
 
     // MARK: - Search
 
-    private func fuzzyMatch(_ text: String) -> Bool {
-        guard !searchText.isEmpty else { return true }
-        let query = searchText.lowercased()
-        let target = text.lowercased()
-        if target.contains(query) { return true }
-        var idx = target.startIndex
-        for ch in query {
-            guard let found = target[idx...].firstIndex(of: ch) else { return false }
-            idx = target.index(after: found)
-        }
-        return true
-    }
-
     private var filteredEntriesByInstance: [(instance: ProviderInstance, entries: [ModelEntry])] {
-        guard !searchText.isEmpty else { return entriesByInstance }
+        let query = searchText.lowercased()
+        guard !query.isEmpty else { return entriesByInstance }
         return entriesByInstance.compactMap { item in
-            let filtered = item.entries.filter { entry in
-                fuzzyMatch(entry.model.displayName) || fuzzyMatch(entry.model.id)
+            // [audit-F2 / T-picker-search-relevance] Score once per entry, then
+            // sort by it (GH#272). Ties fall back to `releaseRankOrder`, the
+            // order the list already uses when nothing is being searched — so
+            // equal relevance keeps the familiar newest/most-capable-first
+            // ordering.
+            let scored: [(entry: ModelEntry, score: Int)] = item.entries.compactMap { entry in
+                let s = ModelSearchScorer.bestScore(
+                    of: [entry.model.displayName, entry.model.id], query: query)
+                return s > 0 ? (entry, s) : nil
             }
-            return filtered.isEmpty ? nil : (item.instance, filtered)
+            guard !scored.isEmpty else { return nil }
+            let ranked = scored.sorted { a, b in
+                if a.score != b.score { return a.score > b.score }
+                return ProviderConfigStore.releaseRankOrder(a.entry, b.entry)
+            }.map(\.entry)
+            return (item.instance, ranked)
         }
     }
 
@@ -475,14 +475,18 @@ struct UnifiedModelPicker: View {
         switch config.groupScope {
         case .all:
             let groups = store.modelGroups
-            guard !searchText.isEmpty else { return groups }
-            return groups.filter { fuzzyMatch($0.name) }
+            let query = searchText.lowercased()
+            guard !query.isEmpty else { return groups }
+            return groups.filter { ModelSearchScorer.score($0.name, query: query) > 0 }
         case .single(let groupId):
             guard let gid = groupId, let g = store.group(for: gid) else { return [] }
-            guard !searchText.isEmpty else { return [g] }
-            if fuzzyMatch(g.name) { return [g] }
+            let query = searchText.lowercased()
+            guard !query.isEmpty else { return [g] }
+            if ModelSearchScorer.score(g.name, query: query) > 0 { return [g] }
             let memberMatch = g.memberEntryIds.contains { id in
-                store.entry(for: id).map { fuzzyMatch($0.model.displayName) } ?? false
+                store.entry(for: id).map {
+                    ModelSearchScorer.bestScore(of: [$0.model.displayName, $0.model.id], query: query) > 0
+                } ?? false
             }
             return memberMatch ? [g] : []
         case .none:
