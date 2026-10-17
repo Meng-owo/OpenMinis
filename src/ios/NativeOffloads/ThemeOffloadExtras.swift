@@ -16,6 +16,7 @@
 //
 
 import Foundation
+import SwiftUI
 import UIKit
 
 @objc public class ThemeOffloadExtras: NSObject {
