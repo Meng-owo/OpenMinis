@@ -39,6 +39,14 @@ final class TombstoneManager {
         // anything happened — also lets idempotent re-applies stay quiet.
         let exists = await ChatStore.shared.sessionExists(id: sessionId)
         guard exists else { return false }
+        // [audit-E4] Inbound remote deletion previously only touched the DB row
+        // (`deleteSessionLocalOnly`), bypassing SessionTeardown — leaving VM
+        // caches, browser pools, scheduled jobs, subagents and session files
+        // orphaned on disk. Mirror the local delete paths: tear down the
+        // runtime work first, then drop the DB row.
+        await MainActor.run {
+            SessionTeardown.tearDownRuntime(sessionId: sessionId, reason: "remote sync deletion")
+        }
         await ChatStore.shared.deleteSessionLocalOnly(sessionId)
         logger.info("[SyncConflict] hard delete applied: type=SessionV2 id=\(sessionId.prefix(8)) source=remoteDeletion")
         return true
