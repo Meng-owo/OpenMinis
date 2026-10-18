@@ -56,6 +56,17 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         "productivity", "support", "other",
     ]
 
+    /// 行高倍数的安全取值。越界就夹回 0.9...2.2。
+    static func parseLineHeight(_ raw: Double) -> Double {
+        min(2.2, max(0.9, raw))
+    }
+
+    /// 字距的安全取值，单位 pt。
+    static func parseLetterSpacing(_ raw: Double) -> Double {
+        min(3, max(-1, raw))
+    }
+
+
     static let `default` = AppearanceThemePack(
         id: "warm-paper",
         name: "暖纸",
@@ -778,16 +789,6 @@ extension AppearanceStudio {
         var pack = currentThemePack()
         pack.rowBackgroundHex = hex.map { $0.uppercased() }
         persistPack(pack)
-    }
-
-    /// 行高倍数的安全取值。越界就夹回 0.9...2.2。
-    static func parseLineHeight(_ raw: Double) -> Double {
-        min(2.2, max(0.9, raw))
-    }
-
-    /// 字距的安全取值，单位 pt。
-    static func parseLetterSpacing(_ raw: Double) -> Double {
-        min(3, max(-1, raw))
     }
 
     /// 一次把 ST 主题包解析出来的东西全应用上。
