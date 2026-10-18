@@ -579,7 +579,10 @@ struct AppearanceStudioView: View {
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
 
                     Picker(AppLocalized("改哪一页"), selection: $paletteScope) {
-                        ForEach(AppearanceScope.allCases) { Text($0.title).tag($0) }
+                        // 底部栏只能挂壁纸，不能调色，所以配色页不列它。
+                        ForEach(AppearanceScope.allCases.filter { $0.supportsColour }) {
+                            Text($0.title).tag($0)
+                        }
                     }
                     .pickerStyle(.menu)
                     .tint(studio.color(.accent, variant: variant))

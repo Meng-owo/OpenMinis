@@ -5,7 +5,16 @@ import UIKit
 // MARK: - Semantic appearance system
 
 enum AppearanceScope: String, CaseIterable, Identifiable {
-    case global, home, chat, settings, browser, files, terminal, bottomBar
+    // [10-18 醒醒 第五轮] 删掉 `terminal`。
+    //
+    // 终端是 ANSI 16 色渲染，主题系统的 role 对它没有意义——那七个
+    // Terminal*.swift 文件里 `appearancePage` 和 `MinisTheme` 的出现次数
+    // 都是 0。留着它只会让她调了半天发现终端不变，是个假选项。
+    //
+    // `bottomBar` 保留，但它**只管壁纸不管颜色**：底部栏图标走
+    // `MinisThemeList.accent`，只有 `homeBottomBarBackground` 读
+    // `wallpaper(for: .bottomBar)`。
+    case global, home, chat, settings, browser, files, bottomBar
 
     var id: String { rawValue }
     var title: String {
@@ -17,9 +26,11 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
         case .settings: return "设置"
         case .browser: return "浏览器"
         case .files: return "文件"
-        case .terminal: return "终端"
         }
     }
+
+    /// 这个 scope 到底能不能调颜色。底部栏只能挂壁纸。
+    var supportsColour: Bool { self != .bottomBar }
 }
 
 enum AppearanceVariant: String, CaseIterable, Identifiable {
@@ -348,6 +359,9 @@ final class AppearanceStudio: ObservableObject {
 
     func setColor(_ color: Color, role: AppearanceColorRole,
                   scope: AppearanceScope, variant: AppearanceVariant) {
+        // 底部栏只挂壁纸，不收颜色。静默忽略，不报错——旧数据或 AI 传进来
+        // 也不会写出一个永远读不到的键。
+        guard scope.supportsColour else { return }
         customColors[key(role, scope: scope, variant: variant)] = UIColor(color).hexRGB
         persistColors()
         configureUIKitSurfaces()

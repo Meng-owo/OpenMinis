@@ -79,7 +79,7 @@ struct FileBrowserView: View {
                         }) {
                             Text(viewModel.pathComponents[index])
                                 .font(.caption)
-                                .foregroundColor(MinisTheme.accent)
+                                .foregroundColor(AppearanceStudio.shared.color(.accent, scope: .files))
                         }
                         if index < viewModel.pathComponents.count - 1 {
                             Image(systemName: "chevron.right")
@@ -135,7 +135,7 @@ struct FileBrowserView: View {
                             // highlight (downloads panel "Show in Files").
                             .listRowBackground(
                                 highlightActive && item.name == highlightFileName
-                                    ? MinisTheme.accent.opacity(0.18)
+                                    ? AppearanceStudio.shared.color(.accent, scope: .files).opacity(0.18)
                                     : nil
                             )
                         }
@@ -624,12 +624,12 @@ private struct FileLoadErrorView: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
-                .foregroundStyle(MinisTheme.secondaryText)
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .files))
             Text("Could not read file")
                 .font(.headline)
             Text(message)
                 .font(.caption)
-                .foregroundStyle(MinisTheme.secondaryText)
+                .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .files))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
         }
@@ -704,10 +704,10 @@ private struct FileInfoView: View {
                 VStack(spacing: 12) {
                     Image(systemName: item.iconName)
                         .font(.system(size: 48))
-                        .foregroundStyle(MinisTheme.secondaryText)
+                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .files))
                     Text("Preview not available")
                         .font(.subheadline)
-                        .foregroundStyle(MinisTheme.secondaryText)
+                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .files))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
@@ -717,7 +717,7 @@ private struct FileInfoView: View {
                 ForEach(fileAttributes, id: \.0) { key, value in
                     HStack(alignment: .top) {
                         Text(key)
-                            .foregroundStyle(MinisTheme.secondaryText)
+                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .files))
                             .frame(width: 80, alignment: .leading)
                         Text(value)
                             .textSelection(.enabled)
@@ -826,7 +826,7 @@ struct FileItemRow: View {
                 if item.isSymlink {
                     Image(systemName: "arrow.turn.right.down")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(MinisTheme.warning)
+                        .foregroundColor(AppearanceStudio.shared.color(.warning, scope: .files))
                         .offset(x: -4, y: 2)
                 }
             }
@@ -859,7 +859,7 @@ struct FileItemRow: View {
             if !item.isDirectory {
                 Button(action: onExport) {
                     Image(systemName: "square.and.arrow.up")
-                        .foregroundColor(MinisTheme.accent)
+                        .foregroundColor(AppearanceStudio.shared.color(.accent, scope: .files))
                 }
                 .buttonStyle(.borderless)
             }
@@ -1639,7 +1639,7 @@ private struct DirectoryPickerView: View {
                         Button { navigateTo(index: index) } label: {
                             Text(pathComponents[index])
                                 .font(.caption)
-                                .foregroundColor(MinisTheme.accent)
+                                .foregroundColor(AppearanceStudio.shared.color(.accent, scope: .files))
                         }
                         if index < pathComponents.count - 1 {
                             Image(systemName: "chevron.right")
@@ -1670,7 +1670,7 @@ private struct DirectoryPickerView: View {
                         HStack(spacing: 12) {
                             Image(systemName: "folder.fill")
                                 .font(.title2)
-                                .foregroundColor(MinisTheme.accent)
+                                .foregroundColor(AppearanceStudio.shared.color(.accent, scope: .files))
                             Text(item.name)
                                 .font(.body)
                                 .lineLimit(1)
