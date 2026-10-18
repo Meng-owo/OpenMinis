@@ -417,8 +417,8 @@ fileprivate final class MarkdownNSRenderer {
     /// 换算是 `(倍数 - 1) * baseFontSize + 0.25 * baseFontSize`，
     /// 化简就是 `baseFontSize * (0.25 + (倍数 - 1))`。
     private var bodyLineSpacing: CGFloat {
-        let multiplier = AppearanceThemePack.parseLineHeight(
-            AppearanceStudio.shared.currentThemePack().lineHeight)
+        // 这个类不是 MainActor，所以走 UserDefaults 直读，不碰 AppearanceStudio。
+        let multiplier = AppearanceThemePack.storedLineHeight()
         return theme.baseFontSize * CGFloat(0.25 + (multiplier - 1))
     }
     /// minisChat list item: .em(0.25) top margin

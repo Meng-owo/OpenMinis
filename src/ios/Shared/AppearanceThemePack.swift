@@ -61,6 +61,31 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         min(2.2, max(0.9, raw))
     }
 
+    /// 从 UserDefaults 直接读行高，**不经过 MainActor**。
+    ///
+    /// `SelectableMarkdownView` 的排版类不是 MainActor，调
+    /// `AppearanceStudio.shared.currentThemePack()` 会报
+    /// "main actor-isolated instance method in a synchronous nonisolated context"。
+    /// 主题包本来就是 JSON 存在 UserDefaults 里的，这里直接解一下就好。
+    nonisolated static func storedLineHeight() -> Double {
+        guard let data = UserDefaults.standard.data(forKey: currentKey),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = obj["lineHeight"] as? Double else {
+            return 1.0
+        }
+        return parseLineHeight(raw)
+    }
+
+    /// 同上，读字距。
+    nonisolated static func storedLetterSpacing() -> Double {
+        guard let data = UserDefaults.standard.data(forKey: currentKey),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = obj["letterSpacing"] as? Double else {
+            return 0
+        }
+        return parseLetterSpacing(raw)
+    }
+
     /// 字距的安全取值，单位 pt。
     static func parseLetterSpacing(_ raw: Double) -> Double {
         min(3, max(-1, raw))
