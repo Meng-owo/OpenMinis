@@ -42,6 +42,18 @@ struct BackupDestinationPicker: View {
                         Text(errorText)
                             .font(.footnote)
                             .foregroundStyle(MinisTheme.destructive)
+                        // [T-backup-mount-error-retry] The message alone left
+                        // the user with nowhere to go — the add button is
+                        // further up the form, and the failure was the last
+                        // thing they did. A retry right under the reason turns
+                        // "it didn't work" into one tap.
+                        Button {
+                            self.errorText = nil
+                            showFolderPicker = true
+                        } label: {
+                            Label("Pick the folder again", systemImage: "arrow.clockwise")
+                                .font(.footnote)
+                        }
                     }
                 }
             }

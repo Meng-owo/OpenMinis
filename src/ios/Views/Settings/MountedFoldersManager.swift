@@ -279,10 +279,26 @@ final class MountedFoldersManager {
 
         var errorDescription: String? {
             switch self {
-            case .invalidName: return AppLocalized("Mount name is invalid.")
-            case .nameTaken: return AppLocalized("A mount with this name already exists.")
-            case .scopeDenied: return AppLocalized("Could not access the selected folder.")
-            case .bookmarkFailed(let msg): return msg
+            case .invalidName:
+                // Says what a valid name looks like, not just that this one is
+                // wrong — the user has to edit a field they can see, and the
+                // rule was only ever enforced in code.
+                return AppLocalized("That name can't be used. Use letters, numbers, spaces, hyphens or underscores.")
+            case .nameTaken:
+                // The picker derives a de-duplicated name automatically, so
+                // reaching this means the same folder was added twice or the
+                // name was typed by hand. Either way the fix is the same.
+                return AppLocalized("A folder with this name is already added. Rename the existing one, or pick a different folder.")
+            case .scopeDenied:
+                return AppLocalized("This app wasn't given access to that folder. Try picking it again — if it keeps failing, move the folder somewhere outside iCloud Drive and retry.")
+            case .bookmarkFailed(let msg):
+                // [T-backup-mount-error-copy] This used to surface the raw
+                // NSError text, which is unreadable to anyone who isn't the
+                // person who wrote the bookmark call. Lead with what the user
+                // can do; keep the system text after it for bug reports.
+                return String(
+                    format: AppLocalized("That folder couldn't be saved for later use — it may still be downloading from iCloud, or the provider may have dropped access. Open it once in the Files app, then try again. (%@)"),
+                    msg)
             case .limitReached(let max):
                 return String(
                     format: AppLocalized("Mount limit reached (%d). Remove an existing mount before adding a new one."),
@@ -310,6 +326,15 @@ final class MountedFoldersManager {
 
         // The picker gives us a URL with scope already active, but for safety
         // re-start it; balanced stop in defer.
+        //
+        // [T-backup-mount-scope-denied] A `false` here is NOT a reliable
+        // refusal signal on its own: a URL handed over by the document picker
+        // is already inside an active scope, and re-starting a scope that is
+        // already open legitimately returns false while access still works.
+        // (`commitResolved` treats it as refusal because there the bookmark
+        // has just been resolved from scratch, outside any scope — different
+        // situation.) So the result is recorded and only used to sharpen the
+        // message if the bookmark step below actually fails.
         let startedHere = pickedURL.startAccessingSecurityScopedResource()
         defer { if startedHere { pickedURL.stopAccessingSecurityScopedResource() } }
 
@@ -322,7 +347,11 @@ final class MountedFoldersManager {
                 relativeTo: nil
             )
         } catch {
-            throw AddError.bookmarkFailed(error.localizedDescription)
+            // Bookmark failed. If the scope also refused, that is almost
+            // certainly why — say so instead of handing over a raw NSError.
+            throw startedHere
+                ? AddError.bookmarkFailed(error.localizedDescription)
+                : AddError.scopeDenied
         }
 
         // Probe writability by creating + deleting a tiny hidden file.
