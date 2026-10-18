@@ -1,5 +1,6 @@
 import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 import UIKit
 
 // MARK: - 外观
@@ -72,6 +73,9 @@ struct AppearanceStudioView: View {
     @State private var showResetConfirm = false
     @State private var shuffleName: String?
     @State private var showFullPreview = false
+    @State private var showSTImporter = false
+    @State private var stWarnings: [String] = []
+    @State private var showSTWarnings = false
 
     @MainActor private var aiName: String {
         let n = SoulStore.cachedMetadata.name
@@ -116,6 +120,21 @@ struct AppearanceStudioView: View {
             Text(AppLocalized("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。"))
         }
         .fullScreenCover(isPresented: $showFullPreview) { fullPreviewSheet }
+        .fileImporter(isPresented: $showSTImporter,
+                      allowedContentTypes: [.json, .plainText, .data],
+                      allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { importSillyTavern(url) }
+            case .failure(let error):
+                fail(error.localizedDescription)
+            }
+        }
+        .alert(AppLocalized("导入完成"), isPresented: $showSTWarnings) {
+            Button(AppLocalized("知道了"), role: .cancel) {}
+        } message: {
+            Text(stWarnings.joined(separator: "\n"))
+        }
         .onChange(of: appearanceMode) { _ in applyAppearanceMode() }
         .onChange(of: wallpaperItem) { item in
             guard let item else { return }
@@ -1033,6 +1052,32 @@ struct AppearanceStudioView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("导出导入"))
+
+                // [10-18 醒醒 第五轮] 吃 ST 小酒馆的主题包。
+                //
+                // 能吃的：39 个颜色字段、头像形状、消息形态、行高、字距、
+                // 圆角（从 custom_css 抽众数）。
+                // 吃不了的：CSS 里的伪元素、外链装饰图、按钮换图——那些是
+                // 网页的能力，原生视图接不住。
+                Button {
+                    showSTImporter = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.system(size: 12, weight: .medium))
+                        Text(AppLocalized("导入 ST 小酒馆主题包"))
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(studio.color(.accent, variant: variant))
+                }
+                .buttonStyle(.plain)
+                Text(AppLocalized("选一个 ST 的主题 JSON。颜色、头像形状、消息形态、行高、字距会一起换掉。CSS 里的装饰图接不了。"))
+                    .font(.system(size: 10.5))
+                    .lineSpacing(1.5)
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+
+                hairline.padding(.leading, 0).padding(.vertical, 4)
+
                 Button(AppLocalized("导出到剪贴板")) { exportPackToClipboard() }
                     .font(.system(size: 13))
                     .foregroundStyle(studio.color(.accent, variant: variant))
@@ -1448,6 +1493,34 @@ struct AppearanceStudioView: View {
         do {
             let pack = try AppearanceThemePack.decode(obj, merging: studio.currentThemePack())
             studio.applyThemePack(pack)
+        } catch {
+            fail(error.localizedDescription)
+        }
+    }
+
+    /// 吃 ST 小酒馆的主题包。
+    ///
+    /// 流程：读文件 → 解析 39 字段 + 从 custom_css 抽几何 → 应用 → 报告
+    /// 哪些东西没接住。**不静默吞警告**——她得知道装饰图没进来。
+    private func importSillyTavern(_ url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        guard let data = try? Data(contentsOf: url) else {
+            fail(AppLocalized("这个文件读不出来。"))
+            return
+        }
+        do {
+            let imported = try SillyTavernTheme.parse(data)
+            studio.applySillyTavern(imported)
+
+            var notes: [String] = [String(format: AppLocalized("已应用「%@」。"), imported.name)]
+            if !imported.warnings.isEmpty {
+                notes.append(contentsOf: imported.warnings)
+            }
+            notes.append(AppLocalized("CSS 里的装饰图、伪元素、按钮换图原生接不了，这些没有导入。"))
+            stWarnings = notes
+            showSTWarnings = true
         } catch {
             fail(error.localizedDescription)
         }

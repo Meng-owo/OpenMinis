@@ -833,11 +833,35 @@ extension AppearanceStudio {
         }
         persistPack(pack)
 
-        // 颜色单独走
-        var withColors = currentThemePack()
-        for (role, hex) in imported.light { withColors.colorsLight[role.rawValue] = hex }
-        for (role, hex) in imported.dark { withColors.colorsDark[role.rawValue] = hex }
-        persistPack(withColors)
+        // 颜色走 `setColor` —— 真正生效的是 `customColors`，不是 pack 里的
+        // `colorsLight`/`colorsDark` 那两张表（那两张是导出用的快照）。
+        // 上一版写错了地方，导入完颜色不变，这里修正。
+        //
+        // [10-18 醒醒 第五轮] 导入时**也过一遍对比度**。
+        // 实测她那六个真实包里，有三个的文字对比度不够：
+        //   小猫文件夹 4.12、给你的信 3.01、面包狗 3.22，都低于 WCAG 的 4.5。
+        // ST 是网页，作者用 CSS 调位置和装饰，文字偏淡是常态。我们不照抄
+        // 看不清的组合——推到达标为止，色相不变只动明度。
+        for (role, hex) in imported.light {
+            setColor(Color(hex: hex), role: role, scope: .global, variant: .light)
+        }
+        for (role, hex) in imported.dark {
+            setColor(Color(hex: hex), role: role, scope: .global, variant: .dark)
+        }
+
+        for variant in [AppearanceVariant.light, .dark] {
+            let bgRole = AppearanceColorRole.canvas
+            let bg = hex(bgRole, scope: .global, variant: variant)
+            let surface = hex(.surface, scope: .global, variant: variant)
+            for role in [AppearanceColorRole.primaryText, .secondaryText] {
+                var fg = hex(role, scope: .global, variant: variant)
+                fg = AppearanceContrast.enforce(fg, on: bg, level: .body)
+                fg = AppearanceContrast.enforce(fg, on: surface, level: .body)
+                if fg != hex(role, scope: .global, variant: variant) {
+                    setColor(Color(hex: fg), role: role, scope: .global, variant: variant)
+                }
+            }
+        }
     }
 
     func setThinkingFont(title: Double? = nil, body: Double? = nil) {
