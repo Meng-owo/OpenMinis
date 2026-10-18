@@ -250,14 +250,26 @@ enum AppearanceContrast {
     }
 
     /// 正文要求 4.5:1，大字 3:1。
-    enum Level: Double {
-        case body = 4.5
-        case large = 3.0
-        case ui = 3.0
+    ///
+    /// **故意不带 raw value**：Swift 的 `RawRepresentable` 不允许两个 case
+    /// 共用同一个 raw value，而 `large` 和 `ui` 都该是 3:1。CI 报过
+    /// `raw value for enum case is not unique`，就是这里。
+    enum Level {
+        case body
+        case large
+        case ui
+    }
+
+    static func threshold(_ level: Level) -> Double {
+        switch level {
+        case .body:  return 4.5
+        case .large: return 3.0
+        case .ui:    return 3.0
+        }
     }
 
     static func passes(_ fg: String, on bg: String, level: Level) -> Bool {
-        ratio(fg, on: bg) >= level.rawValue
+        ratio(fg, on: bg) >= threshold(level)
     }
 
     /// 把前景色往"更容易看清"的方向推，直到达标。
@@ -290,7 +302,7 @@ enum AppearanceContrast {
                 bestRatio = r
                 best = candidate
             }
-            if r >= level.rawValue { return candidate }
+            if r >= threshold(level) { return candidate }
         }
         return best
     }
@@ -321,9 +333,9 @@ enum AppearanceContrast {
         for (fg, bg, level) in pairs {
             guard let f = colors[fg], let b = colors[bg] else { continue }
             let r = ratio(f, on: b)
-            if r < level.rawValue {
+            if r < threshold(level) {
                 issues.append(String(format: "%@ 压在 %@ 上只有 %.2f:1，要 %.1f:1",
-                                     fg.title, bg.title, r, level.rawValue))
+                                     fg.title, bg.title, r, threshold(level)))
             }
         }
         return issues
