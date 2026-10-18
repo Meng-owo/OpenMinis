@@ -6026,6 +6026,12 @@
             "state": "translated",
             "value": "«%@» ya existe"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」已经存在"
+          }
         }
       }
     },
@@ -6296,7 +6302,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "「自动」使用系统图标，在 iOS 18+ 上自动适配深色模式。"
+            "value": "「自动」用系统图标，在 iOS 18+ 会自动适配深色模式。"
           }
         },
         "zh-Hant": {
@@ -7297,6 +7303,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: %lld archivo(s) no estaban en la copia de seguridad (límite de tamaño)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@：有 %lld 个文件因大小限制没进备份"
           }
         }
       }
@@ -9052,7 +9064,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "• 重置：删除所有内容\n• 备份：保存 /root 目录\n• 恢复：恢复已保存的数据"
+            "value": "• 重置：删除所有内容\n• 备份：保存 /root 目录\n• 恢复：找回已保存的数据"
           }
         },
         "zh-Hant": {
@@ -10014,6 +10026,12 @@
             "state": "translated",
             "value": "1. Abre la página de verificación\n2. Introduce este código para autorizar 嘟嘟"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 打开验证页面\n2. 输入这串码来授权嘟嘟"
+          }
         }
       }
     },
@@ -10478,6 +10496,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ya existe un grupo llamado “%@”. Elige otro nombre o mueve los chats de este grupo a ese grupo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经有一个叫「%@」的分组了。换个名字，或者把这个分组的对话挪进去。"
           }
         }
       }
@@ -13621,6 +13645,12 @@
             "state": "translated",
             "value": "Alibaba Bailian"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阿里百炼"
+          }
         }
       }
     },
@@ -14354,6 +14384,12 @@
             "state": "translated",
             "value": "Ya está actualizado"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经是最新的"
+          }
         }
       }
     },
@@ -14760,6 +14796,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Un Redirect URI http(s) debe usar localhost, por ejemplo %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "http(s) 回调地址必须用 localhost，例如 %@。"
           }
         }
       }
@@ -15354,6 +15396,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Claves de API restauradas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥已恢复"
           }
         }
       }
@@ -15992,6 +16040,12 @@
             "state": "translated",
             "value": "Los argumentos se truncaron en tránsito; el resultado puede estar incompleto"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数在传输中被截断，结果可能不完整"
+          }
         }
       }
     },
@@ -16350,6 +16404,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "audio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频"
           }
         }
       }
@@ -16872,6 +16932,12 @@
             "state": "translated",
             "value": "Autorización"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权"
+          }
         }
       }
     },
@@ -16881,6 +16947,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Endpoint de autorización (https://…/authorize)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权端点（https://…/authorize）"
           }
         }
       }
@@ -16892,6 +16964,12 @@
             "state": "translated",
             "value": "El endpoint de autorización debe ser una URL https válida."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权端点必须是有效的 https 地址。"
+          }
         }
       }
     },
@@ -16901,6 +16979,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Falló la autorización: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权失败：%@"
           }
         }
       }
@@ -16912,6 +16996,12 @@
             "state": "translated",
             "value": "Se canceló la autorización."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权已取消。"
+          }
         }
       }
     },
@@ -16921,6 +17011,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Autorizar…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "授权…"
           }
         }
       }
@@ -17792,6 +17888,12 @@
             "state": "translated",
             "value": "Se está trasladando el historial anterior a v2 a la zona compartida de v2. Los registros ya subidos permanecen en iCloud si cancelas.\n\nSi la migración se queda bloqueada y reintentar no ayuda, Restablecer el progreso de migración borra el progreso local para empezar de nuevo. Tus datos de iCloud no se eliminan."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在把 v2 之前的历史补进 v2 的共享区。取消的话，已经上传的记录会留在 iCloud。\n\n如果迁移卡住了、重试也没用，「重置迁移进度」会清掉本机的进度让它从头开始。你的 iCloud 数据不会被删。"
+          }
         }
       }
     },
@@ -18281,6 +18383,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Copia de seguridad lista"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份已就绪"
           }
         }
       }
@@ -18790,6 +18898,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bloqueado: los argumentos se truncaron durante el envío"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已拦截：参数在传输中被截断"
           }
         }
       }
@@ -21280,6 +21394,12 @@
             "state": "translated",
             "value": "Chats"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对话"
+          }
         }
       }
     },
@@ -21289,6 +21409,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chats incluye todos los archivos de cada conversación, no solo los mensajes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对话会包含每个会话里的所有文件，不只是消息本身。"
           }
         }
       }
@@ -21497,6 +21623,12 @@
             "state": "translated",
             "value": "Elegir otro archivo…"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换个文件…"
+          }
         }
       }
     },
@@ -21645,6 +21777,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Elegir archivo de copia de seguridad…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择备份文件…"
           }
         }
       }
@@ -22108,7 +22246,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择应用启动时显示的内容。\"自动\"会在上次会话超过 15 分钟时打开新对话。"
+            "value": "选择打开 App 时显示什么。「自动」会在上次会话超过 15 分钟时开一个新对话。"
           }
         },
         "zh-Hant": {
@@ -23410,6 +23548,12 @@
             "state": "translated",
             "value": "Borra el progreso de migración de este dispositivo para empezar de nuevo: la fase, el registro de elementos enviados y la posición del traslado del historial.\n\nTus datos de iCloud NO se eliminan y la zona v1 no se modifica. Es posible que se vuelvan a enviar registros ya subidos, algo que iCloud gestiona sin problemas. Úsalo cuando la migración se quede bloqueada y reintentar no ayude."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清掉本机的迁移进度让它从头开始——包括阶段、已推送记录台账和补齐位置。\n\n你的 iCloud 数据不会被删，v1 区也不会动。已经上传的记录可能会重发一次，iCloud 会无害地吸收掉。迁移卡住、重试也没用时再用这个。"
+          }
         }
       }
     },
@@ -23419,6 +23563,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Client ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "客户端 ID"
           }
         }
       }
@@ -23430,6 +23580,12 @@
             "state": "translated",
             "value": "El Client ID es obligatorio."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "客户端 ID 是必填的。"
+          }
         }
       }
     },
@@ -23439,6 +23595,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Client Secret (opcional)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "客户端密钥（可选）"
           }
         }
       }
@@ -25089,6 +25251,12 @@
             "state": "translated",
             "value": "Confirma la frase de contraseña"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认口令"
+          }
         }
       }
     },
@@ -25213,6 +25381,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contactando con Kimi…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在连接 Kimi…"
           }
         }
       }
@@ -27897,6 +28071,12 @@
             "state": "translated",
             "value": "Corregir la transcripción con IA"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 AI 校正转写"
+          }
         }
       }
     },
@@ -28024,6 +28204,12 @@
             "state": "translated",
             "value": "No se pudo construir la URL de autorización."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能拼出授权地址。"
+          }
         }
       }
     },
@@ -28149,6 +28335,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo mostrar la página de autorización."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没能打开授权页面。"
           }
         }
       }
@@ -28710,6 +28902,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Creado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已创建"
           }
         }
       }
@@ -33449,6 +33647,12 @@
             "state": "translated",
             "value": "Doubao (Volcano)"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "豆包（火山）"
+          }
         }
       }
     },
@@ -33580,6 +33784,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Descargas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载"
           }
         }
       }
@@ -35761,6 +35971,12 @@
             "state": "translated",
             "value": "Cifrado"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加密"
+          }
         }
       }
     },
@@ -37147,6 +37363,12 @@
             "state": "translated",
             "value": "Excluido (límite de tamaño)"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已排除（超出大小限制）"
+          }
         }
       }
     },
@@ -37156,6 +37378,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Excluido (demasiado grande)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已排除（文件太大）"
           }
         }
       }
@@ -41325,6 +41553,12 @@
             "state": "translated",
             "value": "Desde"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来自"
+          }
         }
       }
     },
@@ -44492,6 +44726,12 @@
             "state": "translated",
             "value": "iFlytek (Xunfei)"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讯飞"
+          }
         }
       }
     },
@@ -44543,7 +44783,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "讯飞需要 App ID 和 API Secret — 请在 API Key 字段中以“appId;apiKey;apiSecret”的形式填写。"
+            "value": "讯飞需要 App ID 和 API Secret，在 API 密钥栏里按「appId;apiKey;apiSecret」填。"
           }
         },
         "zh-Hant": {
@@ -44560,6 +44800,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "imagen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图像"
           }
         }
       }
@@ -46127,6 +46373,12 @@
             "state": "translated",
             "value": "Incluir"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含"
+          }
         }
       }
     },
@@ -47313,6 +47565,12 @@
             "state": "translated",
             "value": "Los elementos de la copia de seguridad se combinan con tus datos actuales. No se elimina nada y se conserva todo lo que hayas modificado más recientemente."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份里的内容会并进你现有的数据。什么都不删，你最近改过的会保留。"
+          }
         }
       }
     },
@@ -47555,6 +47813,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conservar el progreso actual"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留当前进度"
           }
         }
       }
@@ -47915,6 +48179,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicio de sesión de Kimi Code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kimi Code 登录"
           }
         }
       }
@@ -52486,6 +52756,12 @@
             "state": "translated",
             "value": "Servidores MCP"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP 服务器"
+          }
         }
       }
     },
@@ -52904,6 +53180,12 @@
             "state": "translated",
             "value": "Memoria y Soul"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记忆与人设"
+          }
         }
       }
     },
@@ -52971,6 +53253,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Combinar: los elementos se emparejan por id. Los elementos existentes solo se reemplazan cuando la copia de la copia de seguridad es más reciente. No se elimina nada."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合并：按 id 配对。只有当备份里的版本更新时才会替换现有的。不会删任何东西。"
           }
         }
       }
@@ -59266,6 +59554,12 @@
             "state": "translated",
             "value": "Sin descargas"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有下载"
+          }
         }
       }
     },
@@ -61813,6 +62107,12 @@
             "state": "translated",
             "value": "Sin autorización"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未授权"
+          }
         }
       }
     },
@@ -61881,6 +62181,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "no instalado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未安装"
           }
         }
       }
@@ -63683,6 +63989,12 @@
             "state": "translated",
             "value": "Abrir la página de verificación"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开验证页面"
+          }
         }
       }
     },
@@ -64792,7 +65104,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "自定义此 App 的显示语言。选择「系统」将跟随设备语言设置。"
+            "value": "覆盖这个 App 的显示语言。「跟随系统」就用设备语言。"
           }
         },
         "zh-Hant": {
@@ -65218,6 +65530,12 @@
             "state": "translated",
             "value": "Frase de contraseña"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "口令"
+          }
         }
       }
     },
@@ -65250,6 +65568,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contraseña"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码"
           }
         }
       }
@@ -65889,6 +66213,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "En pausa — vuelve a abrir 嘟嘟 para continuar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂停——重新打开嘟嘟继续"
           }
         }
       }
@@ -66745,6 +67075,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Elige un archivo .minisbak desde Archivos, iCloud Drive o cualquier almacenamiento conectado."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从「文件」、iCloud 云盘或任何已连接的存储里选一个 .minisbak 文件。"
           }
         }
       }
@@ -69482,6 +69818,12 @@
             "state": "translated",
             "value": "Volver a autorizar"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新授权"
+          }
         }
       }
     },
@@ -71111,6 +71453,12 @@
             "state": "translated",
             "value": "El URI de redirección no es válido."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回调地址无效。"
+          }
         }
       }
     },
@@ -71236,6 +71584,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Actualizar herramientas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新工具"
           }
         }
       }
@@ -73694,6 +74048,12 @@
             "state": "translated",
             "value": "Restablecer el progreso de migración"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置迁移进度"
+          }
         }
       }
     },
@@ -73703,6 +74063,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "¿Restablecer el progreso de migración?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置迁移进度？"
           }
         }
       }
@@ -73771,6 +74137,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Restablecer progreso"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置进度"
           }
         }
       }
@@ -74597,6 +74969,12 @@
             "state": "translated",
             "value": "Restauración completada"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复完成"
+          }
         }
       }
     },
@@ -74723,6 +75101,12 @@
             "state": "translated",
             "value": "Restaurar desde copia de seguridad…"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从备份恢复…"
+          }
         }
       }
     },
@@ -74755,6 +75139,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "¿Restaurar esta copia de seguridad?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要恢复这个备份吗？"
           }
         }
       }
@@ -74883,6 +75273,12 @@
             "state": "translated",
             "value": "Restaurado"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复"
+          }
         }
       }
     },
@@ -74951,6 +75347,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "La restauración fusiona una copia de seguridad con tus datos actuales. No se elimina nada."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复会把备份并进你现有的数据。不会删任何东西。"
           }
         }
       }
@@ -76784,6 +77186,12 @@
             "state": "translated",
             "value": "Ejecutar ${task} en 嘟嘟"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在嘟嘟里运行 ${task}"
+          }
         }
       }
     },
@@ -77501,6 +77909,12 @@
             "state": "translated",
             "value": "Guardar en Archivos…"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存到「文件」…"
+          }
         }
       }
     },
@@ -77614,6 +78028,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Guardado en 嘟嘟 ▸ Backups. Usa Guardar en Archivos para copiarlo a iCloud Drive, a un servidor conectado o a otro proveedor en la nube."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存到 嘟嘟 ▸ Backups。用「存到文件」可以复制到 iCloud 云盘、已连接的服务器或其他云。"
           }
         }
       }
@@ -77856,6 +78276,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ámbitos (separados por espacios)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "权限范围（空格分隔）"
           }
         }
       }
@@ -78857,6 +79283,12 @@
             "state": "translated",
             "value": "Enviar ${prompt} a ${session}"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 ${prompt} 发给 ${session}"
+          }
         }
       }
     },
@@ -78866,6 +79298,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar ${prompt} a 嘟嘟"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 ${prompt} 发给嘟嘟"
           }
         }
       }
@@ -80897,6 +81335,12 @@
             "state": "translated",
             "value": "Compartir…"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享…"
+          }
         }
       }
     },
@@ -81022,6 +81466,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Archivos compartidos"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享文件"
           }
         }
       }
@@ -81969,6 +82419,12 @@
             "state": "translated",
             "value": "Mostrar en Archivos"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「文件」中显示"
+          }
         }
       }
     },
@@ -82332,6 +82788,12 @@
             "state": "translated",
             "value": "Mostrando los modelos que pueden leer imágenes."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只显示能读图的模型。"
+          }
         }
       }
     },
@@ -82583,6 +83045,12 @@
             "state": "translated",
             "value": "Iniciar sesión con Kimi Code"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 Kimi Code 登录"
+          }
         }
       }
     },
@@ -82775,6 +83243,12 @@
             "state": "translated",
             "value": "Inicia sesión con tu suscripción a Kimi Code / Coding Plan"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用你的 Kimi Code / Coding Plan 订阅登录"
+          }
         }
       }
     },
@@ -82784,6 +83258,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicia sesión con tu suscripción a Kimi Code / Coding Plan."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用你的 Kimi Code / Coding Plan 订阅登录。"
           }
         }
       }
@@ -82896,6 +83376,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sesión iniciada en Kimi Code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已登录 Kimi Code"
           }
         }
       }
@@ -84957,6 +85443,12 @@
             "state": "translated",
             "value": "OAuth estándar de Authorization Code + PKCE con tus propias credenciales de app. Registra %@ como Redirect URI en tu cliente OAuth (en Google: crea un cliente de tipo \"Aplicación web\" o \"Escritorio\"; se aceptan redirecciones a localhost). El Client Secret y los tokens se guardan únicamente en el Keychain del dispositivo: nunca se sincronizan con iCloud, por lo que los demás dispositivos deben autorizarse por separado."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准 OAuth 授权码 + PKCE，用你自己的应用凭据。在你的 OAuth 客户端里把 %@ 注册为回调地址（Google：建「Web 应用」或「桌面」客户端，接受 localhost 回调）。客户端密钥和令牌只存在本机钥匙串，不会同步到 iCloud，所以其他设备要各自授权。"
+          }
         }
       }
     },
@@ -85416,6 +85908,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "El parámetro state no coincide en la respuesta de OAuth."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth 回调里的 state 对不上。"
           }
         }
       }
@@ -88251,6 +88749,12 @@
             "state": "translated",
             "value": "Toca para ver"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点一下查看"
+          }
         }
       }
     },
@@ -90647,6 +91151,12 @@
             "state": "translated",
             "value": "El motor del terminal aún no está en ejecución. Abre un chat o el terminal una vez y vuelve a intentarlo."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "终端引擎还没起来。先打开一次对话或终端，然后再试。"
+          }
         }
       }
     },
@@ -91363,6 +91873,12 @@
             "state": "translated",
             "value": "Esta copia de seguridad está cifrada. Sin su frase de contraseña no se puede abrir."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个备份是加密的。没有口令打不开。"
+          }
         }
       }
     },
@@ -91755,6 +92271,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este grupo describe imágenes para los modelos que no pueden verlas: solo se muestran los modelos que aceptan entrada de imagen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个分组用来给看不见图的模型描述图片，所以只列出能接受图像输入的模型。"
           }
         }
       }
@@ -94545,6 +95067,12 @@
             "state": "translated",
             "value": "Endpoint de token (https://…/token)"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌端点（https://…/token）"
+          }
         }
       }
     },
@@ -94554,6 +95082,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "El endpoint de token debe ser una URL https válida."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌端点必须是有效的 https 地址。"
           }
         }
       }
@@ -94565,6 +95099,12 @@
             "state": "translated",
             "value": "El endpoint de token no devolvió ningún access_token."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌端点没返回 access_token。"
+          }
         }
       }
     },
@@ -94574,6 +95114,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Falló el intercambio de token: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌交换失败：%@"
           }
         }
       }
@@ -94915,6 +95461,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Herramientas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具"
           }
         }
       }
@@ -95956,6 +96508,12 @@
             "state": "translated",
             "value": "Salida inesperada de la CLI (sin resultado JSON). Comprueba la conectividad del servidor."
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令行返回了意料之外的内容（没有 JSON 结果）。检查一下服务器的连通性。"
+          }
         }
       }
     },
@@ -96500,6 +97058,12 @@
             "state": "translated",
             "value": "Ilegible"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读不了"
+          }
         }
       }
     },
@@ -96925,6 +97489,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Actualizado"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已更新"
           }
         }
       }
@@ -99086,6 +99656,12 @@
             "state": "translated",
             "value": "video"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "视频"
+          }
         }
       }
     },
@@ -99737,6 +100313,12 @@
             "state": "translated",
             "value": "Correcciones de voz"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音校正"
+          }
         }
       }
     },
@@ -100294,6 +100876,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esperando la autorización…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待授权…"
           }
         }
       }
@@ -102263,6 +102851,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Xiaomi MiMo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小米 MiMo"
           }
         }
       }
@@ -108092,6 +108686,666 @@
           "stringUnit": {
             "state": "translated",
             "value": "處理中…"
+          }
+        }
+      }
+    },
+    "Rolled Back": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已回滚"
+          }
+        }
+      }
+    },
+    "Agent Tools": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 工具"
+          }
+        }
+      }
+    },
+    "Agent progress": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 进度"
+          }
+        }
+      }
+    },
+    "Agent result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent 结果"
+          }
+        }
+      }
+    },
+    "Allow System voice": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许系统语音"
+          }
+        }
+      }
+    },
+    "Auth failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "认证失败"
+          }
+        }
+      }
+    },
+    "Auto · default group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动 · 默认分组"
+          }
+        }
+      }
+    },
+    "Auto · light group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动 · 轻量分组"
+          }
+        }
+      }
+    },
+    "Auto · same as this conversation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动 · 与本会话相同"
+          }
+        }
+      }
+    },
+    "Automation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动化"
+          }
+        }
+      }
+    },
+    "Browser Use": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览器使用"
+          }
+        }
+      }
+    },
+    "Compact Style": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "紧凑样式"
+          }
+        }
+      }
+    },
+    "Context limit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文上限"
+          }
+        }
+      }
+    },
+    "Context window in tokens. Leave empty for default.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文窗口大小，单位 token。留空用默认值。"
+          }
+        }
+      }
+    },
+    "Copy result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制结果"
+          }
+        }
+      }
+    },
+    "Custom value": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义值"
+          }
+        }
+      }
+    },
+    "Exporting appearance…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导出装扮…"
+          }
+        }
+      }
+    },
+    "Exporting scheduled tasks…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导出定时任务…"
+          }
+        }
+      }
+    },
+    "Exporting stickers…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导出表情包…"
+          }
+        }
+      }
+    },
+    "Lost contact with the download — its status could not be read.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和下载断开了，读不到它的状态。"
+          }
+        }
+      }
+    },
+    "Model no longer exists": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型已不存在"
+          }
+        }
+      }
+    },
+    "Model unknown — the session record was deleted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "模型未知——会话记录已被删除"
+          }
+        }
+      }
+    },
+    "Network error": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络错误"
+          }
+        }
+      }
+    },
+    "No longer in your configured providers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已不在你配置的供应商里"
+          }
+        }
+      }
+    },
+    "Normal Style": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准样式"
+          }
+        }
+      }
+    },
+    "Off = provider default.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关 = 用供应商默认值。"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
+          }
+        }
+      }
+    },
+    "Original format (keep as-is)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始格式（原样保留）"
+          }
+        }
+      }
+    },
+    "Pick the folder again": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新选一次文件夹"
+          }
+        }
+      }
+    },
+    "Ping model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测一下这个模型"
+          }
+        }
+      }
+    },
+    "Pinned group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指定的分组"
+          }
+        }
+      }
+    },
+    "Prominent Style": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "醒目样式"
+          }
+        }
+      }
+    },
+    "Provider no longer exists": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "供应商已不存在"
+          }
+        }
+      }
+    },
+    "Provider overloaded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "供应商过载"
+          }
+        }
+      }
+    },
+    "Quota exhausted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "额度用尽"
+          }
+        }
+      }
+    },
+    "Rate limited": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求太频繁"
+          }
+        }
+      }
+    },
+    "Scheduled Tasks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定时任务"
+          }
+        }
+      }
+    },
+    "Scheduled task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定时任务"
+          }
+        }
+      }
+    },
+    "Stickers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表情包"
+          }
+        }
+      }
+    },
+    "System Management": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统管理"
+          }
+        }
+      }
+    },
+    "Task complete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务完成"
+          }
+        }
+      }
+    },
+    "Use a Kimi Coding API key.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 Kimi Coding 的 API 密钥。"
+          }
+        }
+      }
+    },
+    "Weekday": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作日"
+          }
+        }
+      }
+    },
+    "Workspace Commands": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作区命令"
+          }
+        }
+      }
+    },
+    "Voice playback failed — some content may not be read aloud.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音播放失败了，部分内容可能没念出来。"
+          }
+        }
+      }
+    },
+    "iCloud Sync isn't available in this build": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个版本用不了 iCloud 同步"
+          }
+        }
+      }
+    },
+    "thinking 标题字": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "thinking 标题字号"
+          }
+        }
+      }
+    },
+    "thinking 正文字": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "thinking 正文字号"
+          }
+        }
+      }
+    },
+    "A folder with this name is already added. Rename the existing one, or pick a different folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已经加过同名的文件夹了。给现有的改个名，或者换个文件夹。"
+          }
+        }
+      }
+    },
+    "Fetched live from the server just now. A tool never toggled here asks for approval by default.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刚从服务器实时拉取。从没在这里开关过的工具，默认需要批准。"
+          }
+        }
+      }
+    },
+    "Leave Context Window empty to use auto-detected value.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下文窗口留空就用自动检测到的值。"
+          }
+        }
+      }
+    },
+    "Left empty, a knob is simply not sent — the vendor uses its default.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "留空就不发这个参数，由供应商用自己的默认值。"
+          }
+        }
+      }
+    },
+    "OFF = only your configured voices speak; never the built-in Apple voice": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关 = 只用你配置的声音，绝不用系统内置的 Apple 语音"
+          }
+        }
+      }
+    },
+    "Plays through the CURRENT editor state — the key above, unsaved included.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按编辑器当前的状态播放——包括上面还没保存的密钥。"
+          }
+        }
+      }
+    },
+    "Plays with the CURRENT sliders — save with Done.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用当前的滑块设置播放——点「完成」保存。"
+          }
+        }
+      }
+    },
+    "Scheduled Tasks & Pulses": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定时任务与脉搏"
+          }
+        }
+      }
+    },
+    "Sounds right? Save it, then pick it in the list.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "听着对就保存，然后在列表里选它。"
+          }
+        }
+      }
+    },
+    "That name can't be used. Use letters, numbers, spaces, hyphens or underscores.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个名字不能用。只用字母、数字、空格、连字符或下划线。"
+          }
+        }
+      }
+    },
+    "The selected message doesn't belong to this session.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中的消息不属于这个会话。"
+          }
+        }
+      }
+    },
+    "The vendor of an existing service can't be changed — create a new service instead.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有服务的供应商不能改——新建一个服务。"
+          }
+        }
+      }
+    },
+    "iFlytek needs App ID + API Key + API Secret — enter them as \"appId;apiKey;apiSecret\" in the API Key field.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讯飞需要 App ID + API Key + API Secret，在 API 密钥栏里按「appId;apiKey;apiSecret」填。"
+          }
+        }
+      }
+    },
+    "Image Output": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片输出"
+          }
+        }
+      }
+    },
+    "Video Output": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "视频输出"
+          }
+        }
+      }
+    },
+    "Realtime Voice": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时语音"
+          }
+        }
+      }
+    },
+    "Embedding": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量模型"
+          }
+        }
+      }
+    },
+    "Judge": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打分模型"
           }
         }
       }
