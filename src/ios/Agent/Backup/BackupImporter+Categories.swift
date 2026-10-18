@@ -604,6 +604,8 @@ extension BackupImporter {
         // P1-2：人设记忆目录 data/memory/personas/<id>/*.md 原样写回。
         // 旧包没有它时照常跳过；单文件走与顶层同样的 hash 比对 + staged swap。
         var registryRestored = false
+        // [10-19 醒醒] 全局正则文件是否被换过，决定要不要刷内存。
+        var regexRestored = false
         let personasSrc = src.appendingPathComponent("personas", isDirectory: true)
         if fm.fileExists(atPath: personasSrc.path) {
             let personasDst = dst.appendingPathComponent("personas", isDirectory: true)
@@ -668,6 +670,34 @@ extension BackupImporter {
             }
         }
 
+        // [10-19 醒醒] 全局正则规则一起恢复。
+        let regexSrc = src.appendingPathComponent("regex-rules.json")
+        if fm.fileExists(atPath: regexSrc.path) {
+            let regexDst = AIChatViewModel.minisConfigRoot.appendingPathComponent("regex-rules.json")
+            try fm.createDirectory(at: regexDst.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if let localData = try? Data(contentsOf: regexDst),
+               let pkgData = try? Data(contentsOf: regexSrc),
+               localData == pkgData {
+                report.skipped += 1
+            } else {
+                let staged = regexDst.deletingLastPathComponent()
+                    .appendingPathComponent(".restore-\(UUID().uuidString).tmp")
+                do {
+                    try fm.copyItem(at: regexSrc, to: staged)
+                    if fm.fileExists(atPath: regexDst.path) {
+                        _ = try fm.replaceItemAt(regexDst, withItemAt: staged)
+                    } else {
+                        try fm.moveItem(at: staged, to: regexDst)
+                    }
+                    report.imported += 1
+                    regexRestored = true
+                } catch {
+                    try? fm.removeItem(at: staged)
+                    throw error
+                }
+            }
+        }
+
         // SOUL.md is cached in memory; a raw file write leaves that cache stale
         // until something else refreshes it.
         await MainActor.run { SoulStore.refreshCache() }
@@ -675,6 +705,10 @@ extension BackupImporter {
         // 否则恢复完人设列表不变——看起来像"恢复后人设全丢"没修好。
         if registryRestored {
             await MainActor.run { PersonaStore.shared.reloadFromDisk() }
+        }
+        // 正则同理：文件换了，内存里的规则还是旧的。
+        if regexRestored {
+            await MainActor.run { GlobalRegexStore.shared.reloadFromDisk() }
         }
         return report
     }

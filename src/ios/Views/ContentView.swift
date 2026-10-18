@@ -7230,6 +7230,18 @@ private struct SettingsSheet: View {
                             QuietAppIcon(id: QuietIconSlot.webSearch.id, systemName: QuietIconSlot.webSearch.systemName)
                         }
                     }
+                    // [10-19 醒醒] 正则从人设搬到全局。原来挂
+                    // `Persona.regexRules`，换角色就换规则，也没法单独导出。
+                    // 现在全局一份，这里和「人设 → 正则替换」都能进。
+                    NavigationLink {
+                        GlobalRegexRulesView()
+                    } label: {
+                        Label {
+                            Text("正则替换")
+                        } icon: {
+                            QuietAppIcon(id: "regex", systemName: "textformat")
+                        }
+                    }
                     NavigationLink {
                         EnvironmentVariablesView()
                     } label: {

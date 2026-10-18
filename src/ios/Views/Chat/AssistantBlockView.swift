@@ -52,12 +52,9 @@ struct AssistantBlockView: View {
         case .text:
             if !block.content.isEmpty {
                 // [Kelivo Alignment] 助手消息渲染前应用正则替换规则 (视觉展示)
+                // [10-19 醒醒] 全局正则。
                 let appliedContent: String = {
-                    let pId = sessionPersonaId ?? PersonaStore.currentID()
-                    if let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) {
-                        return p.applyRegexRules(to: block.content, role: "assistant", visual: true)
-                    }
-                    return block.content
+                    GlobalRegexStore.shared.apply(to: block.content, role: "assistant", visual: true)
                 }()
                 let (cleanAppliedContent, stickerMatch) = StickerParser.parseFirst(in: appliedContent)
                 let activeSticker = stickerMatch.flatMap { StickerStore.shared.sticker(for: $0.id) }
@@ -1129,11 +1126,8 @@ struct ThinkingBlockView: View {
                     }
                     // [10-18 醒醒 第五轮] thinking 也能被正则改。
                     // 上一版 `scopes` 里写 "reasoning" 的规则没有落点。
-                    let pId = PersonaStore.currentID()
-                    guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
-                        return windowed
-                    }
-                    return p.applyRegexRules(to: windowed, role: "reasoning", visual: true)
+                    // [10-19 醒醒] 全局正则。
+                    return GlobalRegexStore.shared.apply(to: windowed, role: "reasoning", visual: true)
                 }()
 
                 ScrollViewReader { proxy in

@@ -878,6 +878,24 @@ actor BackupExporter {
             }
         }
 
+        // [10-19 醒醒] 全局正则规则。从人设搬到全局后单独一个文件，
+        // 备份不带上它，恢复后规则就丢了。旧包没有这个文件，跳过即可。
+        let regexSrc = AIChatViewModel.minisConfigRoot.appendingPathComponent("regex-rules.json")
+        if fm.fileExists(atPath: regexSrc.path) {
+            let to = dst.appendingPathComponent("regex-rules.json")
+            if fm.fileExists(atPath: to.path) {
+                count += 1
+                bytes += (try? fm.attributesOfItem(atPath: to.path)[.size] as? Int64) ?? 0
+            } else {
+                let mtime = (try? regexSrc.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                if mtime.map({ $0 > snapshotAt }) != true {
+                    try fm.copyItem(at: regexSrc, to: to)
+                    count += 1
+                    bytes += (try? fm.attributesOfItem(atPath: regexSrc.path)[.size] as? Int64) ?? 0
+                }
+            }
+        }
+
         return BackupManifest.CategoryStat(entries: count, bytes: bytes, encrypted: false)
     }
 

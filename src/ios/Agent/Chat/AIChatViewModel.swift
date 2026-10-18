@@ -2428,14 +2428,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // 写了 "user" 的规则是空转的。这里补上：
         // - `visualOnly` 的规则改显示
         // - `replaceOnly` 的规则不该动这里，留给发给模型那一步
+        // [10-19 醒醒] 正则改读全局存储。原来挂在人设上，换个角色规则就没了。
         let displayText: String = {
             let raw = text.isEmpty && pendingAttachments.isEmpty ? "" : text
             guard !raw.isEmpty else { return raw }
-            let pId = sessionPersonaId ?? PersonaStore.currentID()
-            guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
-                return raw
-            }
-            return p.applyRegexRules(to: raw, role: "user", visual: true)
+            return GlobalRegexStore.shared.apply(to: raw, role: "user", visual: true)
         }()
         let userMsg = ChatMessage(role: .user, content: displayText)
         // [T-ios-user-attach-two-phase-birth] Attach the user's OWN selection before
@@ -2691,12 +2688,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 // 这里走 `visual: false`，所以只跑 `replaceOnly` 的规则
                 // （她勾了"只改发给模型的"那些），`visualOnly` 的跳过。
                 // 上一版这个字段完全空转。
+                // [10-19 醒醒] 全局正则。
                 let outgoing: String = {
-                    let pId = sessionPersonaId ?? PersonaStore.currentID()
-                    guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
-                        return text
-                    }
-                    return p.applyRegexRules(to: text, role: "user", visual: false)
+                    GlobalRegexStore.shared.apply(to: text, role: "user", visual: false)
                 }()
                 userParts.append(.text(outgoing))
             }

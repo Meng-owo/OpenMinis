@@ -781,6 +781,9 @@ struct MinisApp: App {
         // ［persona］首启：登记内置人设（default/steward）、迁移老 SOUL.md、
         // 建人设目录。必须在 SoulStore.ensureExists 之前跑。
         PersonaStore.shared.ensureDefaults()
+        // [10-19 醒醒] 人设级正则搬到全局。必须在 ensureDefaults 之后
+        // ——那时 personas 才从盘上读进来。只跑一次，搬完清空人设级。
+        GlobalRegexStore.shared.migrateFromPersonasIfNeeded()
         SoulStore.ensureExists()
         // [T-ios-soul-name-sidebar-stale] Refresh synchronously. This runs from
         // the app's .onAppear (main thread) and refreshCache() is @MainActor, so
