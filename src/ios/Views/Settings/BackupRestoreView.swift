@@ -125,6 +125,15 @@ struct BackupRestoreView: View {
         }
         .modifier(StandaloneTitle(title: AppLocalized("Restore"),
                                  active: !embedded))
+        // [T-theme-coverage] 备份页是甲-2 里唯一完全没接主题的一页：没有
+        // appearancePage，也没有 scrollContentBackground(.hidden)，所以它
+        // 的 Form 底、行底、导航条都还是系统分组色，色盘里「页面背景」
+        // 和「卡片」动它一点反应都没有。
+        //
+        // 只在独立呈现时接：内嵌进 BackupAndRestoreView 时，外层已经调过
+        // `.settingsPage()`（BackupAndRestoreView.swift:76），再套一层会叠
+        // 两层 backdrop，壁纸和 shade 都会被画两遍。
+        .modifier(RestoreThemeModifier(active: !embedded))
         .sheet(isPresented: $showPicker) {
             // [T-sideload-fileimport] open-in-place pickers need a security
             // scope that resigned builds don't get; asCopy sidesteps it.
@@ -221,7 +230,7 @@ struct BackupRestoreView: View {
                 Text(name)
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -288,13 +297,13 @@ struct BackupRestoreView: View {
                 ProgressView()
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Opening backup…")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     // Deliberately smaller and dimmer than the title: it is
                     // reassurance that work is happening, not information the
                     // user has to read.
                     Text(inspectStage)
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         .lineLimit(1)
                         // The stage text changes underneath a fixed layout, so
                         // the row must not resize as the wording changes.
@@ -333,7 +342,7 @@ struct BackupRestoreView: View {
                             .truncationMode(.middle)
                         Text(packageHeadline(m))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -482,7 +491,7 @@ struct BackupRestoreView: View {
                             if let stat = m.categories[category.rawValue] {
                                 Text(detailText(category, stat))
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -521,7 +530,7 @@ struct BackupRestoreView: View {
                         ProgressView()
                             .frame(width: 28, height: 28)
                         Text(statusText.isEmpty ? AppLocalized("Working…") : statusText)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     } else {
                         BackupActionIcon(systemName: "arrow.down.doc.fill", tint: .indigo)
                         Text("Start Restore")
@@ -557,7 +566,7 @@ struct BackupRestoreView: View {
                     if c.sizeSkippedInPackage > 0 {
                         Text("\(displayNameRaw(c.category)): \(c.sizeSkippedInPackage) file(s) weren't in the backup (size limit)")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     // [review S9] Different remedy from the size cap, so it gets
                     // its own line rather than being folded into "skipped":
@@ -874,7 +883,7 @@ struct FolderPackageListView: View {
             if loading {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text("Looking for backups…").foregroundStyle(.secondary)
+                    Text("Looking for backups…").foregroundStyle(MinisTheme.secondaryText)
                 }
             } else if packages.isEmpty {
                 // Distinguishes "nothing there" from "couldn't reach it" — an
@@ -885,12 +894,12 @@ struct FolderPackageListView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "externaldrive.badge.questionmark")
                         .font(.system(size: 40))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text("No .minisbak files in this folder.")
                         .font(.headline)
                     Text("If it's on a server, open it once in the Files app to reconnect, then pull down to refresh.")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -910,12 +919,12 @@ struct FolderPackageListView: View {
                         Text(pkg.url.lastPathComponent)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(MinisTheme.primaryText)
                         // 批七 P2-6：种类标注打头——自动快照/手动备份（含凭据·加密）
                         // /手动备份（不含凭据），恢复前先看清。
                         Text("\(restorePackageKind(fileName: pkg.url.lastPathComponent, isSnapshot: snapshotURLs.contains(pkg.url)).label) · \(ByteCountFormatter.string(fromByteCount: pkg.size, countStyle: .file)) · \(pkg.modified.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -985,7 +994,7 @@ struct ServerRestorePickerSheet: View {
                                     Text(r.name)
                                     Text("\(r.backend.uppercased()) · /\(r.path)")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -1109,10 +1118,10 @@ struct ServerPackageListView: View {
                     if loading {
                         HStack(spacing: 10) {
                             ProgressView()
-                            Text("Contacting server…").foregroundStyle(.secondary)
+                            Text("Contacting server…").foregroundStyle(MinisTheme.secondaryText)
                         }
                     } else if entries.isEmpty, errorText == nil {
-                        Text("Nothing here.").foregroundStyle(.secondary)
+                        Text("Nothing here.").foregroundStyle(MinisTheme.secondaryText)
                     }
 
                     entryRows
@@ -1189,7 +1198,7 @@ struct ServerPackageListView: View {
                             ForEach(Array(crumbs.enumerated()), id: \.offset) { i, c in
                                 Image(systemName: "chevron.compact.right")
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                 crumb(title: c.name, target: c.path,
                                       isLast: i == crumbs.count - 1)
                             }
@@ -1278,7 +1287,7 @@ struct ServerPackageListView: View {
                         HStack {
                             Label {
                                 Text(e.name).lineLimit(1).truncationMode(.middle)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(MinisTheme.primaryText)
                             } icon: {
                                 Image(systemName: "folder.fill")
                                     .foregroundStyle(.tint)
@@ -1289,7 +1298,7 @@ struct ServerPackageListView: View {
                             // a NavigationLink drawing this for us.
                             Image(systemName: "chevron.right")
                                 .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         }
                     }
                     .disabled(downloadingKey != nil || loading)
@@ -1306,10 +1315,10 @@ struct ServerPackageListView: View {
                             Text(e.name)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(MinisTheme.primaryText)
                             Text(subtitle(e.asPackage))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     .disabled(downloadingKey != nil)
@@ -1330,7 +1339,7 @@ struct ServerPackageListView: View {
                 .font(.headline)
             Text(downloadingName)
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
 
@@ -1340,7 +1349,7 @@ struct ServerPackageListView: View {
                 .progressViewStyle(.linear)
             Text(progressText)
                 .font(.callout.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             // [T-restore-download-speed] Rate and time left, on their own
             // line so the byte counts above stay easy to read. Empty until
             // there is a rate to show rather than displaying a placeholder
@@ -1348,7 +1357,7 @@ struct ServerPackageListView: View {
             if !speedText.isEmpty {
                 Text(speedText)
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
 
             Button(role: .cancel) {

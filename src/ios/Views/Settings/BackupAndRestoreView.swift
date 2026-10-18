@@ -136,3 +136,22 @@ struct StandaloneTitle: ViewModifier {
         }
     }
 }
+
+/// [T-theme-coverage] Palette wiring for `BackupRestoreView`, applied only
+/// when it is presented on its own.
+///
+/// Same reason as `StandaloneTitle`: embedded, the parent already themed the
+/// page, and a second `appearancePage` would stack a second backdrop (wallpaper
+/// and shade painted twice). Skipping it when `active == false` is what keeps
+/// the two presentations consistent.
+struct RestoreThemeModifier: ViewModifier {
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content.settingsPage()
+        } else {
+            content
+        }
+    }
+}
