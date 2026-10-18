@@ -2120,7 +2120,6 @@
 				XMSTYLE120 /* AppearanceThemeShuffle.swift */,
 				XMSTYLE121 /* AppearanceColorScale.swift */,
 				XMSTYLE122 /* SillyTavernTheme.swift */,
-				XMSTYLE123 /* SillyTavernRegex.swift */,
 				E5J000022 /* FileHandleSafeWrite.h */,
 				E5J000021 /* FileHandleSafeWrite.m */,
 				E5J000052 /* ObjCExceptionCatcher.h */,
@@ -2442,6 +2441,7 @@
 				F1MCPOAUTH /* MCPOAuthController.swift */,
 				E5SOUL101 /* SoulStore.swift */,
 				E5PERSONA101 /* PersonaStore.swift */,
+				XMSTYLE123 /* SillyTavernRegex.swift */,
 			);
 			path = Session;
 			sourceTree = "<group>";
