@@ -2421,7 +2421,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
 
         // Note: toolSnapshots are NOT cleared here so the floating toolbar shows the full session history
-        let displayText = text.isEmpty && pendingAttachments.isEmpty ? "" : text
+        //
+        // [10-18 醒醒 第五轮] 用户输入的正则规则在这里生效。
+        //
+        // 原来 `applyRegexRules` 全仓只有助手气泡一个调用点，`scopes` 里
+        // 写了 "user" 的规则是空转的。这里补上：
+        // - `visualOnly` 的规则改显示
+        // - `replaceOnly` 的规则不该动这里，留给发给模型那一步
+        let displayText: String = {
+            let raw = text.isEmpty && pendingAttachments.isEmpty ? "" : text
+            guard !raw.isEmpty else { return raw }
+            let pId = sessionPersonaId ?? PersonaStore.currentID()
+            guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
+                return raw
+            }
+            return p.applyRegexRules(to: raw, role: "user", visual: true)
+        }()
         let userMsg = ChatMessage(role: .user, content: displayText)
         // [T-ios-user-attach-two-phase-birth] Attach the user's OWN selection before
         // the row is inserted, so the cell is born with its final height.
@@ -2671,7 +2686,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
 
             if !text.isEmpty {
-                userParts.append(.text(text))
+                // [10-18 醒醒 第五轮] 发给模型的那份也要过正则。
+                //
+                // 这里走 `visual: false`，所以只跑 `replaceOnly` 的规则
+                // （她勾了"只改发给模型的"那些），`visualOnly` 的跳过。
+                // 上一版这个字段完全空转。
+                let outgoing: String = {
+                    let pId = sessionPersonaId ?? PersonaStore.currentID()
+                    guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
+                        return text
+                    }
+                    return p.applyRegexRules(to: text, role: "user", visual: false)
+                }()
+                userParts.append(.text(outgoing))
             }
             let userMessage = AgentMessage(role: .user, parts: userParts)
             let userIdx = self.agentHistory.count

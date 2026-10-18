@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		XMSTYLE023 /* SillyTavernRegex.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE123 /* SillyTavernRegex.swift */; };
 		XMSTYLE022 /* SillyTavernTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE122 /* SillyTavernTheme.swift */; };
 		XMSTYLE021 /* AppearanceColorScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE121 /* AppearanceColorScale.swift */; };
 		E5SCH0022 /* ScheduledTaskDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0021 /* ScheduledTaskDetailSheet.swift */; };
@@ -726,6 +727,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		XMSTYLE123 /* SillyTavernRegex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SillyTavernRegex.swift; sourceTree = "<group>"; };
 		XMSTYLE122 /* SillyTavernTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SillyTavernTheme.swift; sourceTree = "<group>"; };
 		XMSTYLE121 /* AppearanceColorScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceColorScale.swift; sourceTree = "<group>"; };
 		E5SCH0021 /* ScheduledTaskDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledTaskDetailSheet.swift"; path = "Views/Chat/ScheduledTaskDetailSheet.swift"; sourceTree = SOURCE_ROOT; };
@@ -2118,6 +2120,7 @@
 				XMSTYLE120 /* AppearanceThemeShuffle.swift */,
 				XMSTYLE121 /* AppearanceColorScale.swift */,
 				XMSTYLE122 /* SillyTavernTheme.swift */,
+				XMSTYLE123 /* SillyTavernRegex.swift */,
 				E5J000022 /* FileHandleSafeWrite.h */,
 				E5J000021 /* FileHandleSafeWrite.m */,
 				E5J000052 /* ObjCExceptionCatcher.h */,
@@ -3435,6 +3438,7 @@
 				XMSTYLE020 /* AppearanceThemeShuffle.swift in Sources */,
 				XMSTYLE021 /* AppearanceColorScale.swift in Sources */,
 				XMSTYLE022 /* SillyTavernTheme.swift in Sources */,
+				XMSTYLE023 /* SillyTavernRegex.swift in Sources */,
 				XMSTYLE004 /* ThemeOffload.m in Sources */,
 				XMSTYLE005 /* ThemeOffloadBridge.swift in Sources */,
 				XMSTYLE008 /* ThemeOffloadExtras.swift in Sources */,

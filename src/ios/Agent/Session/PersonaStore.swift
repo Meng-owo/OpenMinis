@@ -162,12 +162,21 @@ struct PersonaRegexRule: Codable, Identifiable, Hashable {
     var name: String
     var pattern: String
     var replacement: String
-    var scopes: [String] // ["assistant"], ["user"], or ["user", "assistant"]
+    var scopes: [String] // ["assistant"], ["user"], ["all"], 新增 ["reasoning"]
     var visualOnly: Bool
     var replaceOnly: Bool
     var enabled: Bool
+    /// [10-18 醒醒 第五轮] 只对最近 N 条生效。nil = 全部。
+    /// 对应 ST 的 `minDepth` / `maxDepth`：ST 的 depth 从最新往前数，
+    /// 0 是最后一条。这里同语义。
+    var maxDepth: Int?
+    /// 只对最旧的 N 条生效（很少用，但 ST 有这个字段，保持对等）。
+    var minDepth: Int?
 
-    init(id: String = UUID().uuidString, name: String = "", pattern: String = "", replacement: String = "", scopes: [String] = ["assistant"], visualOnly: Bool = false, replaceOnly: Bool = false, enabled: Bool = true) {
+    init(id: String = UUID().uuidString, name: String = "", pattern: String = "",
+         replacement: String = "", scopes: [String] = ["assistant"],
+         visualOnly: Bool = false, replaceOnly: Bool = false, enabled: Bool = true,
+         maxDepth: Int? = nil, minDepth: Int? = nil) {
         self.id = id
         self.name = name
         self.pattern = pattern
@@ -176,6 +185,46 @@ struct PersonaRegexRule: Codable, Identifiable, Hashable {
         self.visualOnly = visualOnly
         self.replaceOnly = replaceOnly
         self.enabled = enabled
+        self.maxDepth = maxDepth
+        self.minDepth = minDepth
+    }
+
+    // 老数据没有这两个字段，解码时给 nil。
+    private enum CodingKeys: String, CodingKey {
+        case id, name, pattern, replacement, scopes
+        case visualOnly, replaceOnly, enabled
+        case maxDepth, minDepth
+    }
+
+    /// 手写解码：老数据没有 `maxDepth` / `minDepth` 两个键。
+    /// 合成的 `Codable` 对 Optional 会走 `decodeIfPresent`，其实能扛住；
+    /// 但 `scopes` 等字段若将来改默认值，手写更稳。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        pattern = try c.decodeIfPresent(String.self, forKey: .pattern) ?? ""
+        replacement = try c.decodeIfPresent(String.self, forKey: .replacement) ?? ""
+        scopes = try c.decodeIfPresent([String].self, forKey: .scopes) ?? ["assistant"]
+        visualOnly = try c.decodeIfPresent(Bool.self, forKey: .visualOnly) ?? false
+        replaceOnly = try c.decodeIfPresent(Bool.self, forKey: .replaceOnly) ?? false
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        maxDepth = try c.decodeIfPresent(Int.self, forKey: .maxDepth)
+        minDepth = try c.decodeIfPresent(Int.self, forKey: .minDepth)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(pattern, forKey: .pattern)
+        try c.encode(replacement, forKey: .replacement)
+        try c.encode(scopes, forKey: .scopes)
+        try c.encode(visualOnly, forKey: .visualOnly)
+        try c.encode(replaceOnly, forKey: .replaceOnly)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encodeIfPresent(maxDepth, forKey: .maxDepth)
+        try c.encodeIfPresent(minDepth, forKey: .minDepth)
     }
 }
 
@@ -204,17 +253,42 @@ struct PersonaCustomBodyItem: Codable, Identifiable, Hashable {
 }
 
 extension Persona {
-    func applyRegexRules(to text: String, role: String, visual: Bool = false) -> String {
+    /// 跑一遍正则规则。
+    ///
+    /// - Parameters:
+    ///   - text: 原文
+    ///   - role: `user` / `assistant` / `reasoning`
+    ///   - visual: true = 只改显示；false = 改发给模型的内容
+    ///   - depth: 这条消息离最新有多远（0 = 最新）。规则带 `maxDepth` 时用它过滤。
+    ///
+    /// [10-18 醒醒 第五轮] 上一版这里只接了一个调用点（助手气泡的视觉替换），
+    /// `replaceOnly` 和 `scopes` 两个字段是空转的。现在补全三条路径：
+    /// 用户输入、发给模型的 prompt、thinking。
+    func applyRegexRules(to text: String, role: String, visual: Bool = false,
+                         depth: Int? = nil) -> String {
         guard !regexRules.isEmpty else { return text }
         var result = text
         for rule in regexRules where rule.enabled {
             let applies = rule.scopes.contains(role) || rule.scopes.contains("all")
             guard applies else { continue }
+            // visual = 只改显示 → 跳过"只改发给模型"的规则
             if visual && rule.replaceOnly { continue }
+            // 非 visual = 要发给模型 → 跳过"只改显示"的规则
             if !visual && rule.visualOnly { continue }
-            if let regex = try? NSRegularExpression(pattern: rule.pattern, options: [.dotMatchesLineSeparators]) {
+            // 深度过滤。depth 为 nil 表示调用方不关心，不做限制。
+            if let depth, let maxDepth = rule.maxDepth, depth > maxDepth { continue }
+            if let depth, let minDepth = rule.minDepth, depth < minDepth { continue }
+
+            if let regex = try? NSRegularExpression(pattern: rule.pattern,
+                                                    options: [.dotMatchesLineSeparators]) {
                 let range = NSRange(result.startIndex..., in: result)
-                result = regex.stringByReplacingMatches(in: result, options: [], range: range, withTemplate: rule.replacement)
+                // ST 用 `{{match}}` 表示整段匹配，`$0` 是 Cocoa 的写法。
+                // 两种都吃，先归一。
+                let template = rule.replacement
+                    .replacingOccurrences(of: "{{match}}", with: "$0",
+                                          options: .caseInsensitive)
+                result = regex.stringByReplacingMatches(in: result, options: [],
+                                                        range: range, withTemplate: template)
             }
         }
         return result

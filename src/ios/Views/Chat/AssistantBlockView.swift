@@ -1118,11 +1118,22 @@ struct ThinkingBlockView: View {
                     // The question it existed to answer — do body re-evals track
                     // per-token contentUpdateSeq rather than the flush? — was
                     // answered (they did) and fixed.
-                    guard isTruncated else { return block.content }
-                    let startIdx = block.content.index(block.content.endIndex, offsetBy: -windowSize)
-                    let cleanStart = block.content[startIdx...].firstIndex(of: "\n")
-                        .map { block.content.index(after: $0) } ?? startIdx
-                    return String(block.content[cleanStart...])
+                    let windowed: String
+                    if isTruncated {
+                        let startIdx = block.content.index(block.content.endIndex, offsetBy: -windowSize)
+                        let cleanStart = block.content[startIdx...].firstIndex(of: "\n")
+                            .map { block.content.index(after: $0) } ?? startIdx
+                        windowed = String(block.content[cleanStart...])
+                    } else {
+                        windowed = block.content
+                    }
+                    // [10-18 醒醒 第五轮] thinking 也能被正则改。
+                    // 上一版 `scopes` 里写 "reasoning" 的规则没有落点。
+                    let pId = PersonaStore.currentID()
+                    guard let p = PersonaStore.shared.personas.first(where: { $0.id == pId }) else {
+                        return windowed
+                    }
+                    return p.applyRegexRules(to: windowed, role: "reasoning", visual: true)
                 }()
 
                 ScrollViewReader { proxy in

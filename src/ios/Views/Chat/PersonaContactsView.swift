@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import UIKit
 import PhotosUI
 
@@ -925,6 +926,25 @@ struct PersonaPresetMessagesView: View {
                 .navigationTitle("快捷短语")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    // [10-18 醒醒 第五轮] 正则包导入导出。
+                    // ST 的正则可以导出成 JSON 分享，我们这边也能互通。
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Button {
+                                showRegexImporter = true
+                            } label: {
+                                Label("导入 ST 正则包", systemImage: "square.and.arrow.down")
+                            }
+                            Button {
+                                exportRegexPack(p)
+                            } label: {
+                                Label("导出到剪贴板", systemImage: "doc.on.clipboard")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             startCreate()
@@ -1239,6 +1259,12 @@ struct PersonaRegexRulesView: View {
     @State private var ruleScope = "assistant" // assistant, user, all
     @State private var ruleVisualOnly = false
     @State private var ruleReplaceOnly = false
+    // [10-18 醒醒 第五轮] 深度控制
+    @State private var ruleDepthLimited = false
+    @State private var ruleMaxDepth = 10
+    @State private var showRegexImporter = false
+    @State private var regexImportMessage: String?
+    @State private var showRegexImportAlert = false
 
     private var persona: Persona? {
         store.personas.first { $0.id == personaId }
@@ -1348,6 +1374,22 @@ struct PersonaRegexRulesView: View {
                 .listStyle(.insetGrouped)
                 .navigationTitle("正则替换")
                 .navigationBarTitleDisplayMode(.inline)
+                .fileImporter(isPresented: $showRegexImporter,
+                              allowedContentTypes: [.json, .plainText, .data],
+                              allowsMultipleSelection: false) { result in
+                    switch result {
+                    case .success(let urls):
+                        if let url = urls.first { importRegexPack(url, into: p) }
+                    case .failure(let error):
+                        regexImportMessage = error.localizedDescription
+                        showRegexImportAlert = true
+                    }
+                }
+                .alert("正则包", isPresented: $showRegexImportAlert) {
+                    Button("知道了", role: .cancel) {}
+                } message: {
+                    Text(regexImportMessage ?? "")
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
@@ -1383,9 +1425,23 @@ struct PersonaRegexRulesView: View {
                                 Picker("生效范围", selection: $ruleScope) {
                                     Text("仅助手消息").tag("assistant")
                                     Text("仅用户消息").tag("user")
+                                    Text("思考过程").tag("reasoning")
                                     Text("全部消息").tag("all")
                                 }
                                 .pickerStyle(.segmented)
+                            }
+
+                            // [10-18 醒醒 第五轮] 深度控制，对应 ST 的
+                            // minDepth / maxDepth。0 = 最新一条。
+                            Section {
+                                Toggle("只改最近几条", isOn: $ruleDepthLimited)
+                                if ruleDepthLimited {
+                                    Stepper("最近 \(ruleMaxDepth) 条", value: $ruleMaxDepth, in: 0...200)
+                                }
+                            } header: {
+                                Text("深度")
+                            } footer: {
+                                Text("开启后只对最近的 N 条消息生效，更早的不动。关掉就是全部。")
                             }
 
                             Section("高级选项") {
@@ -1445,6 +1501,8 @@ struct PersonaRegexRulesView: View {
         ruleScope = "assistant"
         ruleVisualOnly = false
         ruleReplaceOnly = false
+        ruleDepthLimited = false
+        ruleMaxDepth = 10
         showEditor = true
     }
 
@@ -1454,10 +1512,13 @@ struct PersonaRegexRulesView: View {
         rulePattern = rule.pattern
         ruleReplacement = rule.replacement
         if rule.scopes.contains("all") { ruleScope = "all" }
+        else if rule.scopes.contains("reasoning") { ruleScope = "reasoning" }
         else if rule.scopes.contains("user") { ruleScope = "user" }
         else { ruleScope = "assistant" }
         ruleVisualOnly = rule.visualOnly
         ruleReplaceOnly = rule.replaceOnly
+        ruleDepthLimited = rule.maxDepth != nil
+        ruleMaxDepth = rule.maxDepth ?? 10
         showEditor = true
     }
 
@@ -1474,7 +1535,9 @@ struct PersonaRegexRulesView: View {
             scopes: scopes,
             visualOnly: ruleVisualOnly,
             replaceOnly: ruleReplaceOnly,
-            enabled: true
+            enabled: true,
+            maxDepth: ruleDepthLimited ? ruleMaxDepth : nil,
+            minDepth: nil
         )
 
         if let targetId = editingRuleId, let idx = updated.regexRules.firstIndex(where: { $0.id == targetId }) {
@@ -1483,6 +1546,47 @@ struct PersonaRegexRulesView: View {
             updated.regexRules.append(item)
         }
         store.updatePersona(updated)
+    }
+
+    // MARK: - ST 正则包互通
+
+    /// 导入 ST 的正则包。追加到现有规则后面，不覆盖。
+    private func importRegexPack(_ url: URL, into p: Persona) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else {
+            regexImportMessage = "这个文件读不出来。"
+            showRegexImportAlert = true
+            return
+        }
+        do {
+            let rules = try SillyTavernRegex.parse(data)
+            var updated = p
+            updated.regexRules.append(contentsOf: rules)
+            store.updatePersona(updated)
+            regexImportMessage = "导入 \(rules.count) 条规则。"
+        } catch {
+            regexImportMessage = error.localizedDescription
+        }
+        showRegexImportAlert = true
+    }
+
+    /// 导出成 ST 能读的 JSON，放剪贴板。
+    private func exportRegexPack(_ p: Persona) {
+        guard !p.regexRules.isEmpty else {
+            regexImportMessage = "还没有规则可导出。"
+            showRegexImportAlert = true
+            return
+        }
+        guard let data = SillyTavernRegex.exportJSON(p.regexRules),
+              let text = String(data: data, encoding: .utf8) else {
+            regexImportMessage = "导出失败。"
+            showRegexImportAlert = true
+            return
+        }
+        UIPasteboard.general.string = text
+        regexImportMessage = "已复制 \(p.regexRules.count) 条规则到剪贴板。"
+        showRegexImportAlert = true
     }
 }
 
