@@ -94,12 +94,19 @@ struct PersonaSettingsView: View {
                     }
                 }
             }
-            // [T-theme-coverage] This page never read the palette: it was a
-            // bare Form on the system background, so changing 页面背景 or
-            // 卡片 left it untouched. Same two modifiers the other themed
-            // forms use.
-            .scrollContentBackground(.hidden)
-            .background(MinisTheme.canvas)
+            // [问题7b] 她原话：「这个界面与设置页面的UI尺寸距离也不符合，
+            // 显得很奇怪」。
+            //
+            // 根因不是颜色，是外壳：这页原先手写 .scrollContentBackground
+            // + .background(MinisTheme.canvas)，只把底色和色值跟上了，
+            // 而行背景、tint、壁纸 backdrop、透明导航栏这些设置面共有的
+            // 东西一件都没有。设置里每一页走的都是 .settingsPage()
+            // （appearancePage(.settings) + SettingsListRowBackground），
+            // 两套外壳并排看就是"尺寸距离不符合"。
+            //
+            // 直接换成同一个外壳，而不是在这里再手抄一遍——手抄就是当初
+            // 走偏的原因。
+            .settingsPage()
             .navigationTitle("编辑人设")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
