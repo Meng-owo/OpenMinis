@@ -181,7 +181,7 @@ struct RcloneAddServerView: View {
                             Text(b.title).foregroundStyle(.primary)
                             Text(b.subtitle)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         Spacer()
                         if backend?.type == b.type {
@@ -223,11 +223,11 @@ struct RcloneAddServerView: View {
                         HStack(spacing: 6) {
                             Text(f.label)
                                 .font(.footnote.weight(.medium))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             if f.isOptional {
                                 Text("Optional")
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
                         if f.isSecret {
@@ -244,7 +244,7 @@ struct RcloneAddServerView: View {
                         if !f.hint.isEmpty {
                             Text(f.hint)
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         }
                     }
                     .padding(.vertical, 2)
@@ -291,7 +291,7 @@ struct RcloneAddServerView: View {
             if !requiredFieldsFilled && !isConnecting {
                 Text("Fill in the required fields to continue.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
 
             // Shown only after the server's certificate was actually
@@ -305,7 +305,7 @@ struct RcloneAddServerView: View {
                         Text("Trust this certificate")
                         Text("The server's certificate isn't signed by a known authority — usual for a NAS using its own certificate.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 if allowInsecureTLS {
@@ -331,9 +331,9 @@ struct RcloneAddServerView: View {
                 }
             }
             if isListing {
-                HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
+                HStack { ProgressView(); Text("Loading…").foregroundStyle(MinisTheme.secondaryText) }
             } else if folderEntries.isEmpty {
-                Text("No folders here.").foregroundStyle(.secondary)
+                Text("No folders here.").foregroundStyle(MinisTheme.secondaryText)
             } else {
                 // Folders only. This step picks a DESTINATION, and the files
                 // already in a backups directory — often hundreds of them —
@@ -348,7 +348,7 @@ struct RcloneAddServerView: View {
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         }
                     }
                 }

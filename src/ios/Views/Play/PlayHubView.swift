@@ -670,7 +670,7 @@ struct PlayHubView: View {
             Spacer(minLength: 8)
             Image(systemName: "chevron.right")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

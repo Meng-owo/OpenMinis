@@ -63,7 +63,7 @@ struct MinisVideoPlayerView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 48))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(url.lastPathComponent)
                             .lineLimit(1)
                             .font(.caption)

@@ -129,7 +129,7 @@ private struct CommandPermissionRow: View {
                 Text(command.displayLabel)
                 Text(command.description)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             Spacer()
             Picker("", selection: levelBinding) {

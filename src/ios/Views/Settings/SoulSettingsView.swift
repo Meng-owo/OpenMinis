@@ -224,7 +224,7 @@ struct SoulSettingsView: View {
                 if !style.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(style)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
             Spacer(minLength: 0)
@@ -245,7 +245,7 @@ struct SoulSettingsView: View {
             if bodyText.isEmpty {
                 Text(AppLocalized("Describe the personality and voice you want for your agent"))
                     .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     .padding(.top, 8)
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
@@ -259,9 +259,9 @@ struct SoulSettingsView: View {
     private var bodyLengthFooter: some View {
         HStack(spacing: 6) {
             Image(systemName: "text.justify.left")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text(soulBodyCountText(bodyText))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
         .font(.footnote)
     }

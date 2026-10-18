@@ -794,10 +794,10 @@ struct QueuedAttachmentPreview: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text(fileName)
                 .font(.system(size: 8))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 .lineLimit(1)
         }
         .frame(width: tileSize, height: tileSize)

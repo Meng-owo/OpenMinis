@@ -46,12 +46,12 @@ struct WebAppAddToHomeSheet: View {
                        classification?.scope != .mount {
                         Section {
                             HStack {
-                                Image(systemName: "link").foregroundStyle(.secondary)
+                                Image(systemName: "link").foregroundStyle(MinisTheme.secondaryText)
                                 Text("Associated with session")
                                 Spacer()
                                 Text(sid.prefix(8))
                                     .font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -105,7 +105,7 @@ struct WebAppAddToHomeSheet: View {
                         .font(.subheadline.weight(.semibold))
                     Text("Only files inside a session, the shared folder, or a mounted folder can be added to the Home Screen.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             } icon: {
                 Image(systemName: "exclamationmark.triangle")

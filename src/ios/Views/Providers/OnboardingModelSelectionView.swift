@@ -25,7 +25,7 @@ struct OnboardingModelSelectionView: View {
                             ProgressView()
                             Text("Loading models...")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         Spacer()
                     }

@@ -80,11 +80,11 @@ struct ProviderInstancesView: View {
                         // Non-destructive hint: same MiMo service configured twice.
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "info.circle.fill")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             Text("A voice service is configured more than once. Voice is merged into a single row here; you can delete the extra provider above if you want.",
                                  comment: "Duplicate voice provider hint")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     ForEach(shadows) { shadow in
@@ -105,10 +105,10 @@ struct ProviderInstancesView: View {
                             .foregroundStyle(.quaternary)
                         Text("No providers configured")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("Add a provider to get started.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -437,7 +437,7 @@ private struct InstanceRow: View {
                 HStack(spacing: 6) {
                     Text(instance.credentialType == .apiKey ? "API Key" : "OAuth")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(.quaternary)
@@ -449,7 +449,7 @@ private struct InstanceRow: View {
                 if modelCount > 0 {
                     Text(AppLocalized("\(modelCount) models"))
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
 
@@ -458,7 +458,7 @@ private struct InstanceRow: View {
             if !instance.isEnabled {
                 Text("Disabled")
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(AppearanceStudio.shared.color(.mutedSurface).opacity(0.6))
@@ -485,7 +485,7 @@ private struct ShadowVoiceRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "waveform")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(shadow.displayName)
@@ -494,7 +494,7 @@ private struct ShadowVoiceRow: View {
                 let tts = shadow.outputModels.count
                 Text(voiceSummary(asr: asr, tts: tts))
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
             Spacer()
         }

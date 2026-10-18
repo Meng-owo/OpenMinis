@@ -119,12 +119,12 @@ struct MCPIntegrationsView: View {
         VStack(spacing: 12) {
             Image(systemName: "puzzlepiece.extension")
                 .font(.system(size: 44))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text("No MCP Servers")
                 .font(.headline)
             Text("Add an MCP server to give the agent extra tools. Tap + to add one manually or import a JSON config.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -144,10 +144,10 @@ struct MCPIntegrationsView: View {
                 HStack(spacing: 4) {
                     Text(server.isHTTP ? "HTTP" : (server.isSTDIO ? "STDIO" : "—"))
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text(server.transportSummary)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -155,7 +155,7 @@ struct MCPIntegrationsView: View {
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .contentShape(Rectangle())
     }
@@ -182,7 +182,7 @@ struct MCPToolsSheet: View {
                     HStack(spacing: 10) {
                         ProgressView()
                         Text("Reconnecting and fetching tools…")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 } else if let errorText {
                     Section {
@@ -196,7 +196,7 @@ struct MCPToolsSheet: View {
                     }
                 } else if tools.isEmpty {
                     Text("The server reported no tools.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 } else {
                     Section(footer: Text("Fetched live from the server just now. A tool never toggled here asks for approval by default.")) {
                         ForEach(tools) { tool in
@@ -206,7 +206,7 @@ struct MCPToolsSheet: View {
                                 if !tool.description.isEmpty {
                                     Text(tool.description)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                         .lineLimit(3)
                                 }
                                 // [s2-approve] 逐工具审批开关：打开则 AI 调用前先弹窗问你。
@@ -215,7 +215,7 @@ struct MCPToolsSheet: View {
                                     set: { approvalStore.setNeedsApproval($0, serverId: serverName, tool: tool.name) }
                                 ))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             }
                             .padding(.vertical, 4)
                         }

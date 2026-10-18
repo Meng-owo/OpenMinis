@@ -23,7 +23,7 @@ struct ShadowVoiceProviderDetailView: View {
             Section {
                 LabeledContent {
                     Text(instance?.label ?? "—")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 } label: {
                     Label {
                         Text("Credential from", comment: "Shadow voice credential label")
@@ -35,7 +35,7 @@ struct ShadowVoiceProviderDetailView: View {
                     LabeledContent {
                         Text(base)
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     } label: {

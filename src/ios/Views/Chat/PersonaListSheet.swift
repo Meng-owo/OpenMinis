@@ -33,13 +33,13 @@ struct PersonaListSheet: View {
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
                                             .background(Capsule().fill(Color.secondary.opacity(0.15)))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                     }
                                 }
                                 if persona.id == store.currentPersonaID {
                                     Text("当前使用中")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                             Spacer()

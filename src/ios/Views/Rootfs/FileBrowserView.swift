@@ -624,12 +624,12 @@ private struct FileLoadErrorView: View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 48))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text("Could not read file")
                 .font(.headline)
             Text(message)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
         }
@@ -704,10 +704,10 @@ private struct FileInfoView: View {
                 VStack(spacing: 12) {
                     Image(systemName: item.iconName)
                         .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text("Preview not available")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
@@ -717,7 +717,7 @@ private struct FileInfoView: View {
                 ForEach(fileAttributes, id: \.0) { key, value in
                     HStack(alignment: .top) {
                         Text(key)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .frame(width: 80, alignment: .leading)
                         Text(value)
                             .textSelection(.enabled)

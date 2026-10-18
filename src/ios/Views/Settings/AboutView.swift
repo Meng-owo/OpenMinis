@@ -47,15 +47,15 @@ struct AboutView: View {
                         .font(.title2.bold())
                     Text("Version \(appVersion)")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text("Built \(buildDate)")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         // Selectable so it can be copied into a bug report.
                         .textSelection(.enabled)
                     Text("嘟嘟 is Your Fully Local, Fully Private On-Device Agent.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
@@ -72,7 +72,7 @@ struct AboutView: View {
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } icon: {
                         Image(systemName: "link.circle.fill")
@@ -86,7 +86,7 @@ struct AboutView: View {
                             Spacer()
                             Image(systemName: "arrow.up.right.square")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } icon: {
                         Image(systemName: "exclamationmark.circle.fill")

@@ -240,9 +240,9 @@ struct BackupDestinationDetailView: View {
             } label: {
                 LabeledContent("Name") {
                     HStack(spacing: 6) {
-                        Text(current.name).foregroundStyle(.secondary)
+                        Text(current.name).foregroundStyle(MinisTheme.secondaryText)
                         Image(systemName: "chevron.right")
-                            .font(.caption2).foregroundStyle(.tertiary)
+                            .font(.caption2).foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
             }
@@ -254,11 +254,11 @@ struct BackupDestinationDetailView: View {
                 LabeledContent("Backup folder") {
                     HStack(spacing: 6) {
                         Text(current.path.isEmpty ? "/" : "/\(current.path)")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .lineLimit(1)
                             .truncationMode(.head)
                         Image(systemName: "chevron.right")
-                            .font(.caption2).foregroundStyle(.tertiary)
+                            .font(.caption2).foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
             }
@@ -371,9 +371,9 @@ struct BackupDestinationDetailView: View {
 
         Section {
             if isLoadingPackages {
-                HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
+                HStack { ProgressView(); Text("Loading…").foregroundStyle(MinisTheme.secondaryText) }
             } else if packages.isEmpty {
-                Text("No backups found here yet.").foregroundStyle(.secondary)
+                Text("No backups found here yet.").foregroundStyle(MinisTheme.secondaryText)
             } else {
                 ForEach(packages) { p in
                     VStack(alignment: .leading, spacing: 2) {
@@ -382,7 +382,7 @@ struct BackupDestinationDetailView: View {
                             .truncationMode(.middle)
                         Text(detail(for: p))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     // [T-backup-remote-delete] Swipe to delete the file ON THE
                     // SERVER. Confirmed rather than immediate: unlike deleting
@@ -459,7 +459,7 @@ struct BackupDestinationDetailView: View {
 
         Section {
             if folderPackages.isEmpty {
-                Text("No backups found here yet.").foregroundStyle(.secondary)
+                Text("No backups found here yet.").foregroundStyle(MinisTheme.secondaryText)
             } else {
                 ForEach(folderPackages) { p in
                     VStack(alignment: .leading, spacing: 2) {
@@ -468,7 +468,7 @@ struct BackupDestinationDetailView: View {
                             .truncationMode(.middle)
                         Text("\(ByteCountFormatter.string(fromByteCount: p.size, countStyle: .file)) · \(p.modified.formatted(date: .abbreviated, time: .shortened))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     // [T-backup-folder-delete] Swipe to delete the file in the
                     // folder, matching the server list above — a user who has
@@ -614,11 +614,11 @@ struct RcloneFolderBrowser: View {
                         }
                     }
                     if isListing {
-                        HStack { ProgressView(); Text("Loading…").foregroundStyle(.secondary) }
+                        HStack { ProgressView(); Text("Loading…").foregroundStyle(MinisTheme.secondaryText) }
                     } else if visibleEntries.isEmpty {
                         Text(showsFiles ? "This folder is empty."
                                         : "No folders here.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     } else {
                         ForEach(visibleEntries) { e in
                             if e.isDir {
@@ -629,12 +629,12 @@ struct RcloneFolderBrowser: View {
                                         Label(e.name, systemImage: "folder.fill")
                                         Spacer()
                                         Image(systemName: "chevron.right")
-                                            .font(.caption2).foregroundStyle(.tertiary)
+                                            .font(.caption2).foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                     }
                                 }
                             } else {
                                 Label(e.name, systemImage: "doc")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -789,11 +789,11 @@ struct RcloneConnectionEditor: View {
                                 HStack(spacing: 6) {
                                     Text(f.label)
                                         .font(.footnote.weight(.medium))
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                     if f.isOptional {
                                         Text("Optional")
                                             .font(.caption2)
-                                            .foregroundStyle(.tertiary)
+                                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                     }
                                 }
                                 TextField(f.placeholder.isEmpty ? f.label : f.placeholder,
@@ -804,7 +804,7 @@ struct RcloneConnectionEditor: View {
                                 if !f.hint.isEmpty {
                                     Text(f.hint)
                                         .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                 }
                             }
                             .padding(.vertical, 2)

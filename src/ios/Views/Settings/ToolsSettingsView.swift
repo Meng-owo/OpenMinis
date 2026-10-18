@@ -150,7 +150,7 @@ struct ToolsSettingsView: View {
                     .frame(width: 22)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                    Text(tool).font(.caption.monospaced()).foregroundStyle(.secondary)
+                    Text(tool).font(.caption.monospaced()).foregroundStyle(MinisTheme.secondaryText)
                 }
             }
         }

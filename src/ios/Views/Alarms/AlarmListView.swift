@@ -233,10 +233,10 @@ struct AlarmListView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "alarm.fill")
                             .font(.system(size: 48, weight: .thin))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("No Alarms")
                             .font(.title3)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -307,7 +307,7 @@ private struct AlarmRowView: View {
                 if !alarm.subtitle.isEmpty {
                     Text(alarm.subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
             Spacer()
@@ -316,7 +316,7 @@ private struct AlarmRowView: View {
                 if let day = alarm.weekdayLabel {
                     Text(day)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
         }

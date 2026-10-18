@@ -23,7 +23,7 @@ struct RootfsManagementView: View {
                     Text("Status")
                     Spacer()
                     Text(viewModel.isInstalled ? "Installed" : "Not Installed")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Image(systemName: viewModel.isInstalled ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundColor(viewModel.isInstalled ? .green : .red)
                 }

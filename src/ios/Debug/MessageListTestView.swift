@@ -610,7 +610,7 @@ struct MessageListTestView: View {
                 if !fpsMonitor.samples.isEmpty {
                     Text("avg=\(fpsMonitor.avgFPS) min=\(fpsMonitor.minFPS)")
                         .font(.system(.caption2, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
         }
@@ -634,7 +634,7 @@ struct MessageListTestView: View {
                     .frame(width: 8, height: 8)
                 Text(simulator.progress)
                     .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(1)
                 Spacer()
                 Text(simulator.state == .playing ? "PLAYING" :
@@ -649,7 +649,7 @@ struct MessageListTestView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Speed: \(simulator.charsPerTick) ch/tick")
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                     Slider(value: Binding(
                         get: { Double(simulator.charsPerTick) },
                         set: { simulator.charsPerTick = Int($0) }
@@ -658,7 +658,7 @@ struct MessageListTestView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Interval: \(String(format: "%.0f", simulator.tickInterval * 1000))ms")
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                     Slider(value: $simulator.tickInterval, in: 0.01...0.2, step: 0.01)
                 }
             }
@@ -769,7 +769,7 @@ struct MessageListTestView: View {
             VStack(spacing: 12) {
                 Text("Paste session JSON from \"Copy Session Data\"")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
 
                 TextEditor(text: $pastedJSON)
                     .font(.system(.caption, design: .monospaced))

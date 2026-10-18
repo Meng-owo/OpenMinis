@@ -89,13 +89,13 @@ struct SessionMCPsView: View {
                 if store.servers.isEmpty {
                     Section {
                         Text("No MCP servers configured. Add servers in Settings → MCP Integrations.")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .font(.subheadline)
                     }
                 } else if filteredServers.isEmpty {
                     Section {
                         Text(AppLocalized("No MCP servers match \"\(searchQuery)\"."))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .font(.subheadline)
                     }
                 } else {
@@ -107,7 +107,7 @@ struct SessionMCPsView: View {
                                     if let note = server.note, !note.isEmpty {
                                         Text(note)
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                             .lineLimit(2)
                                     }
                                 }

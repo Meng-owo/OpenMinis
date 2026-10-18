@@ -248,7 +248,7 @@ struct MCPFormSheet: View {
                             .font(.subheadline)
                     } else {
                         Label(AppLocalized("Not authorized"), systemImage: "xmark.seal")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .font(.subheadline)
                     }
                     Spacer()
@@ -443,7 +443,7 @@ struct MCPFormSheet: View {
             }
         } label: {
             Image(systemName: "curlybraces")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
         .accessibilityLabel(Text("Insert App environment variable reference"))
     }

@@ -591,7 +591,7 @@ private struct FolderPickerSheet: View {
                                         .font(.subheadline)
                                     Text("Rename to something else, or tap to use it")
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             } icon: {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -646,7 +646,7 @@ private struct FolderPickerSheet: View {
                                         .fill(AppearanceStudio.shared.color(.mutedSurface, scope: .home))
                                         .frame(width: 40, height: 40)
                                     Image(systemName: "folder.badge.minus")
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("No Group")
@@ -1773,11 +1773,11 @@ struct ContentView: View {
                         if let p = exportProgress, p.total > 0 {
                             Text(AppLocalized("Exporting… \(p.done) / \(p.total)"))
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         } else {
                             Text(AppLocalized("Exporting…"))
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     .padding(24)
@@ -2228,12 +2228,12 @@ struct ContentView: View {
             VStack(spacing: 12) {
                 Image(systemName: "bubble.left.and.bubble.right")
                     .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("No Conversation Selected")
                     .font(.title3.bold())
                 Text("Select a conversation or start a new one")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -3357,7 +3357,7 @@ struct ContentView: View {
         case .waiting:
             Image(systemName: "clock")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
     }
 
@@ -3368,24 +3368,24 @@ struct ContentView: View {
             case .paused:
                 Image(systemName: "pause.circle.fill")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("Sync paused")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             case .migrating(let pct, let byType):
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("\(pct)%")
                     .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 ForEach(byType.indices, id: \.self) { i in
                     syncTypeChip(label: byType[i].label, count: byType[i].count)
                 }
             case .syncing(let byType):
                 Image(systemName: "arrow.triangle.2.circlepath")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 ForEach(byType.indices, id: \.self) { i in
                     syncTypeChip(label: byType[i].label, count: byType[i].count)
                 }
@@ -3395,14 +3395,14 @@ struct ContentView: View {
                     .foregroundStyle(MinisTheme.success)
                 Text("Up to date")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             case .waiting:
                 Image(systemName: "clock")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("Waiting")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .lineLimit(1)
@@ -3416,10 +3416,10 @@ struct ContentView: View {
         HStack(spacing: 3) {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text(formatCompact(count))
                 .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
     }
 
@@ -4179,7 +4179,7 @@ struct ContentView: View {
                     .font(.title2.bold())
                 Text("Your first On-Device Agent is almost ready.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .multilineTextAlignment(.center)
             }
 
@@ -4277,7 +4277,7 @@ struct ContentView: View {
                         .foregroundStyle(isDone ? .secondary : .primary)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
 
                 Spacer()
@@ -4285,7 +4285,7 @@ struct ContentView: View {
                 if !isDone {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
             .padding(14)
@@ -4307,7 +4307,7 @@ struct ContentView: View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             TextField("Search chats...", text: $searchText)
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
@@ -4501,7 +4501,7 @@ struct ContentView: View {
             Button { dismissSearch() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     // [T-ios-search-bar-glass-hit-hole] The frame alone was not
                     // a tap target: with `.buttonStyle(.plain)` and no fill,
                     // hit-testing follows the DRAWN GLYPH, so only the ~13pt
@@ -4517,7 +4517,7 @@ struct ContentView: View {
         } else {
             Button { dismissSearch() } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .frame(width: 32, height: 44)
                     .contentShape(Rectangle())
             }
@@ -5654,16 +5654,16 @@ private struct DeleteConfirmSheet: View {
                                         HStack(spacing: 6) {
                                             Image(systemName: "doc")
                                                 .font(.caption)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(MinisTheme.secondaryText)
                                             Text(name)
                                                 .font(.subheadline)
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(MinisTheme.secondaryText)
                                         }
                                     }
                                     if info.totalFileCount > info.fileNames.count {
                                         Text("and \(info.totalFileCount - info.fileNames.count) more file\(info.totalFileCount - info.fileNames.count == 1 ? "" : "s")")
                                             .font(.caption)
-                                            .foregroundStyle(.tertiary)
+                                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                     }
                                 }
                             }
@@ -5716,7 +5716,7 @@ private struct DeleteConfirmSheet: View {
                 .foregroundStyle(.primary)
             Text(value)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
     }
 }
@@ -5775,7 +5775,7 @@ private struct ExportPreviewSheet: View {
                 if !fileSize.isEmpty {
                     Text(fileSize)
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         .padding(.top, 6)
                 }
 
@@ -5878,7 +5878,7 @@ private struct ExportPreviewSheet: View {
         HStack(alignment: .firstTextBaseline) {
             Text(key)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Spacer(minLength: 12)
             Text(value)
                 .font(.subheadline)
@@ -6966,7 +6966,7 @@ private struct FontScaleRow: View {
                 } label: {
                     Text("A")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
 
@@ -6985,7 +6985,7 @@ private struct FontScaleRow: View {
                 } label: {
                     Text("A")
                         .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
             }
@@ -7276,7 +7276,7 @@ private struct AppearanceSettingsView: View {
                                         .foregroundStyle(.primary)
                                     Text(LocalizedStringKey(option.subtitle))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 Spacer()
                                 if appIconMode == option.id {
@@ -7325,7 +7325,7 @@ private struct AppearanceSettingsView: View {
                             } else {
                                 Image(systemName: "globe")
                                     .font(.title3)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                     .frame(width: 28)
                             }
                             Text(lang.name)

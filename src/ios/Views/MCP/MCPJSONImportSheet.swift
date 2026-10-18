@@ -47,12 +47,12 @@ struct MCPJSONImportSheet: View {
                         ForEach(parsed) { server in
                             HStack(spacing: 8) {
                                 Image(systemName: server.isSTDIO ? "terminal" : "globe")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text(server.id)
                                 Spacer()
                                 Text(server.isSTDIO ? "STDIO" : "HTTP")
                                     .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }

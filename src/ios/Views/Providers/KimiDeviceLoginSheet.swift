@@ -36,7 +36,7 @@ struct KimiDeviceLoginSheet: View {
                 case .starting:
                     ProgressView()
                     Text(AppLocalized("Contacting Kimi…"))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
 
                 case let .awaitingUser(userCode, url):
                     awaitingBody(userCode: userCode, url: url)
@@ -54,7 +54,7 @@ struct KimiDeviceLoginSheet: View {
                         .foregroundStyle(MinisTheme.warning)
                     Text(message)
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .padding(.horizontal)
                     Button(AppLocalized("Try Again")) { start() }
                         .buttonStyle(.borderedProminent)
@@ -84,7 +84,7 @@ struct KimiDeviceLoginSheet: View {
     private func awaitingBody(userCode: String, url: String) -> some View {
         Text(AppLocalized("1. Open the verification page\n2. Enter this code to authorize 嘟嘟"))
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MinisTheme.secondaryText)
             .multilineTextAlignment(.center)
 
         // The user code — tap to copy.
@@ -97,7 +97,7 @@ struct KimiDeviceLoginSheet: View {
                     .font(.system(.title, design: .monospaced).weight(.semibold))
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
                     .font(.body)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 20)
@@ -116,7 +116,7 @@ struct KimiDeviceLoginSheet: View {
             ProgressView().controlSize(.small)
             Text(AppLocalized("Waiting for authorization…"))
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
         .padding(.top, 4)
     }

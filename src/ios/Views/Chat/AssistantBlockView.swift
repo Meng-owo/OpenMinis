@@ -1123,7 +1123,7 @@ struct ThinkingBlockView: View {
                             if isTruncated {
                                 Text("Showing last \(displayContent.count / 1000)K of \(total / 1000)K characters", comment: "Thinking window truncation hint")
                                     .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                     .padding(.horizontal, 12)
                                     .padding(.bottom, 4)
                             }

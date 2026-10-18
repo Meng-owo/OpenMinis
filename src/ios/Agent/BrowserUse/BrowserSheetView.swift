@@ -50,7 +50,7 @@ struct BrowserSheetView: View {
                             Button { manager?.webView.stopLoading() } label: {
                                 Image(systemName: "xmark")
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             .transition(.identity)
                         }
@@ -174,7 +174,7 @@ struct BrowserSheetView: View {
                     HStack(spacing: 5) {
                         Image(systemName: pool.userAgentProfile.icon)
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(navigationTitle)
                             .font(.headline)
                             .lineLimit(1)
@@ -267,7 +267,7 @@ struct BrowserSheetView: View {
                 // Tab count badge
                 Text("\(pool.tabs.count)/\(BrowserTabPool.maxTabs)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     .padding(.leading, 4)
             }
             .padding(.horizontal, 12)
@@ -293,7 +293,7 @@ struct BrowserSheetView: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -491,7 +491,7 @@ struct BrowserDownloadFloatingButton: View {
             Button(action: action) {
                 Image(systemName: "arrow.down.circle")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .modifier(DownloadPulseModifier(active: downloading, legacyPulse: $legacyPulse))
                     .frame(width: 36, height: 36)
                     .background {
@@ -565,9 +565,9 @@ struct BrowserDownloadPanelSheet: View {
                     VStack(spacing: 12) {
                         Image(systemName: "arrow.down.circle")
                             .font(.system(size: 42))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("No downloads", comment: "Empty downloads panel")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -653,14 +653,14 @@ private struct BrowserDownloadPanelRow: View {
                         ? " / \(ByteCountFormatter.string(fromByteCount: progress.total, countStyle: .file))" : ""
                     Text("\(pctText)\(done)\(totalText)")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     ProgressView(value: progress.fraction)
                         .progressViewStyle(.linear)
                         .tint(AppearanceStudio.shared.color(.accent))
                 case .completed(let sizeText):
                     Text("\(sizeText) · \(AppLocalized("Show in Files", comment: "Completed download row hint"))")
                         .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 case .failed(let reason):
                     Text(reason)
                         .font(.system(size: 12))
@@ -675,18 +675,18 @@ private struct BrowserDownloadPanelRow: View {
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
             case .completed:
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             case .failed:
                 Button(action: onClear) {
                     Image(systemName: "trash.fill")
                         .font(.system(size: 15))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
             }
@@ -763,7 +763,7 @@ struct BrowserDownloadCardRow: View {
                 Button(action: onDismiss) {
                     Image(systemName: "xmark")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .padding(6)
                 }
                 .buttonStyle(.plain)
@@ -801,11 +801,11 @@ struct BrowserDownloadCardRow: View {
                 ? " / \(ByteCountFormatter.string(fromByteCount: progress.total, countStyle: .file))" : ""
             Text("\(pctText)\(done)\(totalText)")
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         case .completed(let sizeText):
             Text("\(sizeText) · \(AppLocalized("Tap to view", comment: "Completed download card"))")
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         case .failed(let reason):
             Text(reason)
                 .font(.system(size: 11))

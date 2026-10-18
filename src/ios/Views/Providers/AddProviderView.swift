@@ -19,7 +19,7 @@ struct AIDataSharingConsentView: View {
                             .font(.title2.bold())
                         Text("Please review how your data is handled before adding an AI provider.")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
 
                     GroupBox {
@@ -28,10 +28,10 @@ struct AIDataSharingConsentView: View {
                                 .font(.headline)
                             Text("嘟嘟 does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device.")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             Text("However, when you add a third-party AI provider and use it for conversations, the following data may be sent directly from your device to that provider's servers:")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
 
                             VStack(alignment: .leading, spacing: 6) {
                                 dataItem("Your chat messages and conversation history")
@@ -47,7 +47,7 @@ struct AIDataSharingConsentView: View {
                                 .font(.headline)
                             Text("Depending on which provider you configure, your data will be sent directly to one or more of the following third-party services:")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
 
                             VStack(alignment: .leading, spacing: 8) {
                                 providerRow("Anthropic", description: "Claude models (anthropic.com)", color: .purple)
@@ -59,7 +59,7 @@ struct AIDataSharingConsentView: View {
 
                             Text("Each provider has its own privacy policy and terms of service that govern how they handle your data.")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
 
@@ -111,7 +111,7 @@ struct AIDataSharingConsentView: View {
     private func dataItem(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text(text)
                 .font(.subheadline)
         }
@@ -127,7 +127,7 @@ struct AIDataSharingConsentView: View {
                     .font(.subheadline.weight(.medium))
                 Text(description)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
     }
@@ -436,14 +436,14 @@ struct AddProviderView: View {
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Text(type.pickerSubtitle)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
 
                         Spacer()
 
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
             }
@@ -478,7 +478,7 @@ struct AddProviderView: View {
 
                     Image(systemName: "chevron.right")
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
         } footer: {
@@ -511,14 +511,14 @@ struct AddProviderView: View {
                                 .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                             Text(template.capability)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
 
                         Spacer()
 
                         Image(systemName: "chevron.right")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
             }
@@ -571,14 +571,14 @@ struct AddProviderView: View {
                                         .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                                     Text(credentialDescription(type: type, credential: cred))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
                     }
@@ -688,7 +688,7 @@ struct AddProviderView: View {
                             showApiKeyPlaintext.toggle()
                         } label: {
                             Image(systemName: showApiKeyPlaintext ? "eye.slash" : "eye")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         .buttonStyle(.plain)
                     }
@@ -752,10 +752,10 @@ struct AddProviderView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Token")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(masked)
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
 
@@ -763,14 +763,14 @@ struct AddProviderView: View {
                     HStack {
                         Text("Authorized")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Spacer()
                         Text(authTime, style: .date)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(authTime, style: .time)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             } else {
@@ -800,7 +800,7 @@ struct AddProviderView: View {
             Section {
                 TextField(defaultBaseURL, text: $customBaseURLInput)
                     .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
@@ -853,7 +853,7 @@ struct AddProviderView: View {
         Section {
             TextField(defaultBaseURL, text: $customBaseURLInput)
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)

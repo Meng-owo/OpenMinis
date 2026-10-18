@@ -71,7 +71,7 @@ struct AppearanceStudioView: View {
                         Text("气泡透明度")
                         Spacer()
                         Text("\(Int(studio.bubbleOpacity * 100))%")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: $studio.bubbleOpacity, in: 0.15...1, step: 0.01)
                 }
@@ -116,7 +116,15 @@ struct AppearanceStudioView: View {
                             paletteRow(role)
                         }
                     } header: {
-                        Text(group.title)
+                        // [问题5c] 分组名下面直接写这一组管什么——她说"归类很乱"，
+                        // 一半是组里的东西不对，另一半是看不出来这一组到底管哪。
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(group.title)
+                            Text(group.hint)
+                                .font(.caption2)
+                                .textCase(nil)
+                                .foregroundStyle(studio.color(.secondaryText, scope: .settings, variant: variant).opacity(0.75))
+                        }
                     }
                 }
             }
@@ -188,7 +196,7 @@ struct AppearanceStudioView: View {
                         Text("thinking 标题字")
                         Spacer()
                         Text("\(Int(pack.thinkingTitleSize))")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: thinkingTitleSizeBinding, in: 10...22, step: 1)
                 }
@@ -197,7 +205,7 @@ struct AppearanceStudioView: View {
                         Text("thinking 正文字")
                         Spacer()
                         Text("\(Int(pack.thinkingBodySize))")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: thinkingBodySizeBinding, in: 10...22, step: 1)
                 }
@@ -206,7 +214,7 @@ struct AppearanceStudioView: View {
                         Text("输入栏圆角")
                         Spacer()
                         Text("\(Int(pack.inputBarRadius))")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: inputBarRadiusBinding, in: 4...32, step: 1)
                 }
@@ -273,7 +281,7 @@ struct AppearanceStudioView: View {
                             Text("卡片图浓度")
                             Spacer()
                             Text("\(Int(pack.thinkingCardImageOpacity * 100))%")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         Slider(value: thinkingCardOpacityBinding, in: 0.05...1, step: 0.01)
                     }
@@ -292,7 +300,7 @@ struct AppearanceStudioView: View {
                             Text("输入栏图浓度")
                             Spacer()
                             Text("\(Int(pack.inputBarImageOpacity * 100))%")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         Slider(value: inputBarImageOpacityBinding, in: 0.05...1, step: 0.01)
                     }
@@ -399,7 +407,7 @@ struct AppearanceStudioView: View {
                         Text("壁纸压色")
                         Spacer()
                         Text("\(Int(studio.wallpaperShade * 100))%")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: $studio.wallpaperShade, in: 0...0.65, step: 0.01)
                 }
@@ -409,7 +417,7 @@ struct AppearanceStudioView: View {
                         Text("卡片透明度")
                         Spacer()
                         Text("\(Int(studio.surfaceOpacity * 100))%")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Slider(value: $studio.surfaceOpacity, in: 0.35...1, step: 0.01)
                 }

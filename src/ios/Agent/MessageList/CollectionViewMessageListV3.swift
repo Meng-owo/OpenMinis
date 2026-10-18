@@ -255,7 +255,9 @@ private struct BridgedAssistantHeaderV3: View {
             Text(displayedName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(ChatColors.primaryText)
-            WaggingCatIcon(isWorking: message.isThinkingOrToolWorking, size: 18)
+            // [醒醒 10-18] 名字旁边的小猫咪去掉了。她原话：「把对话框里，
+            // ai名字旁边的小猫咪去掉」。思考/工具运行状态本来就由
+            // TypingIndicator 和工具卡自己表达，这里那只猫是重复的装饰。
         }
         // [T-ios-assistant-header-open-soul] Hit area and tap, applied to the
         // icon+name HStack only — NOT to the full-width row below it.
@@ -607,7 +609,7 @@ private struct BridgedAssistantFooterV3: View {
             Spacer()
             if bridge.autoRetryAttempt > 0 {
                 Text("Retry in \(bridge.autoRetryCountdown)s (\(bridge.autoRetryAttempt)/\(AIChatViewModel.retryDelays.count))")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .font(.caption.weight(.semibold)).foregroundStyle(MinisTheme.secondaryText)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
             } else if let onRetry = bridge.onRetry {

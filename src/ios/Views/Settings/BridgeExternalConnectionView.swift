@@ -69,12 +69,12 @@ struct BridgeExternalConnectionView: View {
                 ))
                 LabeledContent(AppLocalized("运行状态")) {
                     Text(mcpStatusText)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 if BridgeRelayPreferences.externalMCPEnabled {
                     LabeledContent(AppLocalized("小管家")) {
                         Text(stewardStatusText)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     // 批七 P2-4：工具注册失败不再只记日志——这里明确提示，
                     // 不让"运行中"掩盖工具没挂上的事实。
@@ -147,7 +147,7 @@ struct BridgeExternalConnectionView: View {
                 if justCopiedExternalURL {
                     Text(AppLocalized("已复制，去外部 AI 的 MCP 设置里粘贴即可"))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 // 口令换新：一键生成强口令并换上（见 rotateToken）。
                 Button {
@@ -168,7 +168,7 @@ struct BridgeExternalConnectionView: View {
             Section {
                 LabeledContent(AppLocalized("报问题令牌")) {
                     Text(hasGitHubToken ? AppLocalized("已填") : AppLocalized("未填"))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 HStack(spacing: 8) {
                     SecureField(AppLocalized("粘贴令牌"), text: $githubTokenInput)
@@ -304,7 +304,7 @@ struct BridgeExternalConnectionView: View {
                     showTokenPlaintext.toggle()
                 } label: {
                     Image(systemName: showTokenPlaintext ? "eye.slash" : "eye")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
             }

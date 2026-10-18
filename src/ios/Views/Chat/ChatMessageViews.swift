@@ -378,7 +378,7 @@ struct ChatMessageRow: View {
                     .buttonStyle(.plain)
                 }
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MinisTheme.secondaryText)
             .lineLimit(1)
             .fixedSize()
             VStack { Divider() }
@@ -409,7 +409,7 @@ struct ChatMessageRow: View {
                     .font(.system(size: 12, weight: .medium))
                     .multilineTextAlignment(.center)
             }
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MinisTheme.secondaryText)
             // [T-browser-download-ux-v4] No .lineLimit(1).fixedSize() here:
             // fixedSize forced the text to its full ideal width, so a long
             // systemInfo line (e.g. pre-v3 "Downloaded … to /var/minis/… —
@@ -630,7 +630,7 @@ struct ChatMessageRow: View {
                 AssistantSoulName(personaId: sessionPersonaId)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(ChatColors.primaryText)
-                WaggingCatIcon(isWorking: message.isThinkingOrToolWorking, size: 18)
+                // [醒醒 10-18] 名字旁边的小猫咪去掉了（同 V3 header）。
             }
             .padding(.top, 2)
 
@@ -891,7 +891,7 @@ struct ChatMessageRow: View {
             if autoRetryAttempt > 0 {
                 Text("Retry in \(autoRetryCountdown)s (\(autoRetryAttempt)/\(AIChatViewModel.retryDelays.count))")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12))

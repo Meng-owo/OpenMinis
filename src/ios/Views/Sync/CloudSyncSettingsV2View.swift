@@ -45,7 +45,7 @@ struct CloudSyncSettingsV2View: View {
                             .font(.footnote.weight(.medium))
                         Text("This copy was re-signed, so it can't reach the app's iCloud container. Syncing works only in a build signed with the original iCloud entitlement. Everything else works normally, and your data stays on this device.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 } else {
                     Toggle(isOn: Binding(
@@ -74,14 +74,14 @@ struct CloudSyncSettingsV2View: View {
                 if !icloudBlockedNotice.isEmpty {
                     Text(icloudBlockedNotice)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 if !statusText.isEmpty {
                     NavigationLink {
                         SyncMigrationDetailView()
                     } label: {
                         LabeledContent("Status") {
-                            Text(statusText).foregroundStyle(.secondary)
+                            Text(statusText).foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 }
@@ -98,8 +98,8 @@ struct CloudSyncSettingsV2View: View {
                     } label: {
                         LabeledContent("Name") {
                             HStack(spacing: 6) {
-                                Text(deviceName).foregroundStyle(.secondary)
-                                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary)
+                                Text(deviceName).foregroundStyle(MinisTheme.secondaryText)
+                                Image(systemName: "chevron.right").font(.caption2).foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
                     }
@@ -164,7 +164,7 @@ struct CloudSyncSettingsV2View: View {
                     if remoteDevices.isEmpty {
                         Text("No other devices found yet. Devices appear here once they enable iCloud Sync.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .padding(.vertical, 4)
                     } else {
                         ForEach(remoteDevices, id: \.id) { d in
@@ -172,12 +172,12 @@ struct CloudSyncSettingsV2View: View {
                                 HStack {
                                     Text(d.deviceName).font(.body)
                                     Spacer()
-                                    Text(relativeDate(d.lastSeen)).font(.caption2).foregroundStyle(.secondary)
+                                    Text(relativeDate(d.lastSeen)).font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 if !d.uploadTypes.isEmpty {
                                     Text(uploadTypesSummary(d.uploadTypes))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                         .lineLimit(2)
                                 }
                             }

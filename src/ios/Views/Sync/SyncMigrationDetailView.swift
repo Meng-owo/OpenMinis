@@ -117,7 +117,7 @@ struct SyncMigrationDetailView: View {
                 Section {
                     HStack {
                         ProgressView().controlSize(.small)
-                        Text("Loading…").foregroundStyle(.secondary)
+                        Text("Loading…").foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -133,15 +133,15 @@ struct SyncMigrationDetailView: View {
                         Text("Engine")
                         Spacer()
                         if let until = vm.pausedUntil {
-                            Text(pauseRemaining(until: until)).foregroundStyle(.secondary)
+                            Text(pauseRemaining(until: until)).foregroundStyle(MinisTheme.secondaryText)
                         } else if let until = vm.bootDelayUntil, until > Date() {
-                            Text(bootDelayRemaining(until: until)).foregroundStyle(.secondary)
+                            Text(bootDelayRemaining(until: until)).foregroundStyle(MinisTheme.secondaryText)
                         } else if !vm.isRunning {
                             // boot deadline passed but SyncCore.start() is still
                             // mid-flight (CKDatabase ensureZonesExist + initial
                             // sendChanges take a few seconds after the delay
                             // expires). Show 'Starting…' until isRunning flips.
-                            Text("Starting…").foregroundStyle(.secondary)
+                            Text("Starting…").foregroundStyle(MinisTheme.secondaryText)
                         } else if let until = vm.throttledUntil, until > Date() {
                             Text(throttleRemaining(until: until)).foregroundStyle(MinisTheme.warning)
                         } else {
@@ -192,21 +192,21 @@ struct SyncMigrationDetailView: View {
                         LabeledContent(AppLocalized("Pending push"), value: "\(vm.pendingPush)")
                         if vm.pendingPushNew > 0 {
                             LabeledContent {
-                                Text("\(vm.pendingPushNew)").foregroundStyle(.secondary)
+                                Text("\(vm.pendingPushNew)").foregroundStyle(MinisTheme.secondaryText)
                             } label: {
-                                Text("· New writes").foregroundStyle(.secondary).font(.callout)
+                                Text("· New writes").foregroundStyle(MinisTheme.secondaryText).font(.callout)
                             }
                         }
                         if vm.pendingPushMigration > 0 {
                             LabeledContent {
-                                Text("\(vm.pendingPushMigration)").foregroundStyle(.secondary)
+                                Text("\(vm.pendingPushMigration)").foregroundStyle(MinisTheme.secondaryText)
                             } label: {
-                                Text("· Migration backlog").foregroundStyle(.secondary).font(.callout)
+                                Text("· Migration backlog").foregroundStyle(MinisTheme.secondaryText).font(.callout)
                             }
                         }
                     } else {
                         LabeledContent(AppLocalized("Pending push")) {
-                            Text("Up to date").foregroundStyle(.secondary)
+                            Text("Up to date").foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     LabeledContent(AppLocalized("Sent this session"), value: "\(vm.totalSent)")
@@ -230,10 +230,10 @@ struct SyncMigrationDetailView: View {
                                     .font(.caption.monospaced())
                                 Text(f.reason)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text(relative(f.at))
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
                     } label: {
@@ -267,7 +267,7 @@ struct SyncMigrationDetailView: View {
                 Section {
                     LabeledContent {
                         Text("\(vm.unmigratedHistoryCount)")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     } label: {
                         Text("Eligible records")
                     }
@@ -299,12 +299,12 @@ struct SyncMigrationDetailView: View {
                                 .foregroundStyle(MinisTheme.destructive)
                             Text(err)
                                 .font(.caption.monospaced())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } else if vm.isCanceledByUser {
                         Text("Migration canceled. Tap to resume backfilling local history.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Button {
                         showRequestMigrationConfirm = true
@@ -337,7 +337,7 @@ struct SyncMigrationDetailView: View {
                                 .foregroundStyle(MinisTheme.warning)
                             Text("Paused — reopen 嘟嘟 to continue")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } else {
                         LabeledContent(AppLocalized("Estimated time"), value: estimateETA(remaining: max(0, m.pushTotal - m.pushDone), rps: vm.ratePerSecond))
@@ -383,7 +383,7 @@ struct SyncMigrationDetailView: View {
                                     .foregroundStyle(.primary)
                                 Text(AppLocalized("Deleted \(deletedAtRelativeString())"))
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     } else {
@@ -610,12 +610,12 @@ struct SyncMigrationDetailView: View {
             if zonesLoading && zonesList.isEmpty {
                 HStack {
                     ProgressView().controlSize(.small)
-                    Text("Loading zones…").foregroundStyle(.secondary)
+                    Text("Loading zones…").foregroundStyle(MinisTheme.secondaryText)
                 }
             } else if let err = zonesLoadError {
                 Text(err).font(.caption).foregroundStyle(MinisTheme.destructive)
             } else if zonesList.isEmpty {
-                Text("No zones found.").foregroundStyle(.secondary)
+                Text("No zones found.").foregroundStyle(MinisTheme.secondaryText)
             } else {
                 ForEach(zonesList) { row in
                     zoneRowView(row)
@@ -669,7 +669,7 @@ struct SyncMigrationDetailView: View {
                 }
                 Text(zoneDescription(for: row))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(2)
             }
             Spacer(minLength: 8)
@@ -860,7 +860,7 @@ struct SyncMigrationDetailView: View {
                     .font(.caption.weight(.semibold))
                 Text("To improve sync experience and reduce iCloud storage, we've upgraded the sync engine. Historical data is being migrated automatically — this may consume some extra battery or cellular data. You can cancel migration any time below.")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -869,7 +869,7 @@ struct SyncMigrationDetailView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
@@ -909,9 +909,9 @@ struct SyncMigrationDetailView: View {
                 Spacer()
                 if total > 0 {
                     let pct = Int(Double(min(done, total)) * 100 / Double(total))
-                    Text("\(done) / \(total) (\(pct)%)").foregroundStyle(.secondary)
+                    Text("\(done) / \(total) (\(pct)%)").foregroundStyle(MinisTheme.secondaryText)
                 } else {
-                    Text("\(done)").foregroundStyle(.secondary)
+                    Text("\(done)").foregroundStyle(MinisTheme.secondaryText)
                 }
             }
             if total > 0 {
@@ -1089,7 +1089,7 @@ private struct PauseSyncSheet: View {
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
                     }

@@ -36,7 +36,7 @@ struct EvolutionLessonsView: View {
                 if items.isEmpty, let hint = emptyHint {
                     Text(hint)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 ForEach(items, id: \.id) { lesson in
                     lessonRow(lesson)
@@ -53,14 +53,14 @@ struct EvolutionLessonsView: View {
                 Spacer()
                 Text("v\(lesson.version)")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
             Text(lesson.recommendation.isEmpty ? lesson.conditions : lesson.recommendation)
                 .font(.footnote)
             if lesson.failureCount > 0 || lesson.successCount > 0 {
                 Text("见证：成功 \(lesson.successCount) · 失败 \(lesson.failureCount)")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             HStack(spacing: 10) {
                 if lesson.status != .verified {

@@ -111,7 +111,7 @@ struct BackupDestinationPicker: View {
                                 Text(r.name)
                                 Text("\(r.backend.uppercased()) · /\(r.path)")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -148,7 +148,7 @@ struct BackupDestinationPicker: View {
                                 Text(f.name)
                                 Text(f.sourceDisplayName)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -186,7 +186,7 @@ struct BackupDestinationPicker: View {
                         Text("Add Server…").foregroundStyle(.primary)
                         Text("SMB, WebDAV, SFTP, S3, FTP")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -202,7 +202,7 @@ struct BackupDestinationPicker: View {
                         // on-device only and hides the more useful half.
                         Text("On this iPhone, iCloud Drive, or a server connected in Files")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }

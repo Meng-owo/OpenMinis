@@ -41,7 +41,7 @@ private struct OffloadPermissionDialogContent: View {
 
                         Text("The agent wants to use **\(request.commandName)**")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .multilineTextAlignment(.center)
                     }
                     .padding(.top, 24)
@@ -51,7 +51,7 @@ private struct OffloadPermissionDialogContent: View {
                     if !request.description.isEmpty {
                         Text(request.description)
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 12)
@@ -65,7 +65,7 @@ private struct OffloadPermissionDialogContent: View {
                                 HStack {
                                     Text(arg.key)
                                         .font(.footnote.bold())
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                         .frame(width: 80, alignment: .trailing)
                                     Text(arg.value)
                                         .font(.footnote.monospaced())

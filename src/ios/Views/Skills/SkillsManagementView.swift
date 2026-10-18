@@ -59,13 +59,13 @@ struct SkillsManagementView: View {
             if store.skills.isEmpty {
                 Section {
                     Text(AppLocalized("No skills installed. Tap + to import a SKILL.md from GitHub or paste one manually."))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .font(.subheadline)
                 }
             } else if filteredSkills.isEmpty {
                 Section {
                     Text(AppLocalized("No skills match \"\(searchQuery)\"."))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .font(.subheadline)
                 }
             }
@@ -83,7 +83,7 @@ struct SkillsManagementView: View {
                             if !skill.description.isEmpty {
                                 Text(skill.description)
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                     .lineLimit(2)
                             }
                         }
@@ -514,7 +514,7 @@ private struct SkillDetailView: View {
                             } label: {
                                 Image(systemName: "pencil")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             .buttonStyle(.plain)
                         }
@@ -523,7 +523,7 @@ private struct SkillDetailView: View {
                     if let modDate = latestFileModDate {
                         LabeledContent("Last Modified") {
                             Text(Self.relativeTime(modDate))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     LabeledContent("Source") {
@@ -531,14 +531,14 @@ private struct SkillDetailView: View {
                         case .url(let url):
                             Text(url)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .lineLimit(1)
                         case .file:
-                            Text(AppLocalized("File import")).foregroundStyle(.secondary)
+                            Text(AppLocalized("File import")).foregroundStyle(MinisTheme.secondaryText)
                         case .bundled:
-                            Text(AppLocalized("Built-in")).foregroundStyle(.secondary)
+                            Text(AppLocalized("Built-in")).foregroundStyle(MinisTheme.secondaryText)
                         case .session:
-                            Text(AppLocalized("Session created")).foregroundStyle(.secondary)
+                            Text(AppLocalized("Session created")).foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     LabeledContent(AppLocalized("Usage")) {
@@ -559,7 +559,7 @@ private struct SkillDetailView: View {
                                     ProgressView()
                                 } else {
                                     Text(updatedAgoText)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                         .font(.caption)
                                 }
                             }
@@ -624,7 +624,7 @@ private struct SkillDetailView: View {
                     Section("Description") {
                         Text(bodyPreview)
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .lineLimit(nil)
                     }
                 }
@@ -640,7 +640,7 @@ private struct SkillDetailView: View {
                                     .font(.system(.subheadline, design: .monospaced))
                             } icon: {
                                 Image(systemName: fileIcon(for: relativePath))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -665,7 +665,7 @@ private struct SkillDetailView: View {
                     }
                 }
             } else {
-                Text(AppLocalized("Skill not found.")).foregroundStyle(.secondary)
+                Text(AppLocalized("Skill not found.")).foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .navigationTitle(skill?.name ?? "Skill")

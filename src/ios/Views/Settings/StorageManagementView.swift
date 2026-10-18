@@ -164,7 +164,7 @@ struct StorageManagementView: View {
                     }
                 } else if vm.sessions.isEmpty {
                     Text("No sessions")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 } else {
                     ForEach(vm.sessions) { session in
                         NavigationLink {
@@ -175,7 +175,7 @@ struct StorageManagementView: View {
                                     .lineLimit(1)
                                 Spacer()
                                 Text(vm.format(session.totalSize))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -210,7 +210,7 @@ struct StorageManagementView: View {
             Text(label)
             Spacer()
             Text(value)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
     }
 }
@@ -257,12 +257,12 @@ struct SessionStorageDetailView: View {
                             Label("Browse Files", systemImage: "folder.fill")
                             Spacer()
                             Text(formatter.string(fromByteCount: currentMinisSize))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 } else {
                     Text("No minis files")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
 
@@ -281,7 +281,7 @@ struct SessionStorageDetailView: View {
                         Spacer()
                         if !isClearing {
                             Text(formatter.string(fromByteCount: totalFileSize))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 }

@@ -126,7 +126,7 @@ struct BrowserBenchTestView: View {
                             HStack {
                                 Text(timeFormatter.string(from: entry.timestamp))
                                     .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Spacer()
                                 Text(String(format: "%.0fms", entry.duration * 1000))
                                     .font(.system(size: 12, weight: .medium, design: .monospaced))

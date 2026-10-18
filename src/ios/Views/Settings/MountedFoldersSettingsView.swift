@@ -42,12 +42,12 @@ struct MountedFoldersSettingsView: View {
                     VStack(spacing: 10) {
                         Image(systemName: "externaldrive.badge.plus")
                             .font(.system(size: 40))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("No mounted folders")
                             .font(.headline)
                         Text("Tap + to pick a folder from Files (e.g. an Obsidian vault in iCloud Drive).")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -260,7 +260,7 @@ private struct InfoBanner: View {
                 .font(.subheadline.weight(.semibold))
             Text("Picked folders are bind-mounted at /var/minis/mounts/<name>. You can browse them in Browse Files and read/write them directly from the iSH shell, just like /var/minis/shared. Up to 10 folders can be mounted at a time.")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -285,12 +285,12 @@ private struct MountedFolderRow: View {
             }
             Text("/var/minis/mounts/\(entry.name)")
                 .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Text(verbatim: "← \(sourceURL?.path ?? entry.sourceDisplayName)")
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -341,7 +341,7 @@ private struct AddMountSheet: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Source path")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             Text(url.path)
                                 .font(.caption2.monospaced())
                                 .foregroundStyle(.primary)
@@ -361,7 +361,7 @@ private struct AddMountSheet: View {
                         .autocorrectionDisabled()
                     Text("This will be the folder name under /var/minis/mounts/")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
 
                 Section {
@@ -372,7 +372,7 @@ private struct AddMountSheet: View {
                                 ? AppLocalized("AI, shell, and Files browser can modify files in this mount.")
                                 : AppLocalized("This mount will be exposed as read-only. Useful for reference vaults you don't want the AI to touch."))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 } header: {

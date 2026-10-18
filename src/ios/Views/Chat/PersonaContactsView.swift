@@ -70,7 +70,7 @@ struct PersonaContactsView: View {
                                             .padding(.horizontal, 6)
                                             .padding(.vertical, 2)
                                             .background(Capsule().fill(Color.secondary.opacity(0.12)))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                     }
 
                                     if persona.id == store.currentPersonaID {
@@ -221,7 +221,7 @@ struct PersonaDetailHomeView: View {
                                 } label: {
                                     Image(systemName: "pencil")
                                         .font(.system(size: 14))
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -253,7 +253,7 @@ struct PersonaDetailHomeView: View {
                                 if p.temperature != nil || p.topP != nil {
                                     Text("已调优")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -289,7 +289,7 @@ struct PersonaDetailHomeView: View {
                                 let enabledCount = p.localToolIds?.count ?? LocalToolRegistry.all.count
                                 Text("\(enabledCount)/\(LocalToolRegistry.all.count)")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
 
@@ -304,7 +304,7 @@ struct PersonaDetailHomeView: View {
                                 if let cnt = p.skillIds?.count {
                                     Text("\(cnt) 项可用")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -320,7 +320,7 @@ struct PersonaDetailHomeView: View {
                                 if let cnt = p.mcpServerIds?.count {
                                     Text("\(cnt) 个服务器")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -336,7 +336,7 @@ struct PersonaDetailHomeView: View {
                                 if !p.presetMessages.isEmpty {
                                     Text("\(p.presetMessages.count) 条")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -353,7 +353,7 @@ struct PersonaDetailHomeView: View {
                                 if total > 0 {
                                     Text("\(total) 个字段")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -369,7 +369,7 @@ struct PersonaDetailHomeView: View {
                                 if !p.regexRules.isEmpty {
                                     Text("\(p.regexRules.count) 条规则")
                                         .font(.subheadline)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                 }
                             }
                         }
@@ -474,7 +474,7 @@ struct PersonaDetailHomeView: View {
                 }
             } else {
                 Text("人设不存在或已被删除")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
     }
@@ -527,7 +527,7 @@ struct PersonaBasicSettingsView: View {
                                 Spacer()
                                 Text(tempEnabled ? String(format: "%.2f", tempValue) : "默认")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             Toggle("自定义 Temperature", isOn: $tempEnabled)
                                 .onChange(of: tempEnabled) { on in
@@ -539,9 +539,9 @@ struct PersonaBasicSettingsView: View {
                                 Slider(value: $tempValue, in: 0.0...2.0, step: 0.05) {
                                     Text("Temperature")
                                 } minimumValueLabel: {
-                                    Text("0.0").font(.caption2).foregroundStyle(.secondary)
+                                    Text("0.0").font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                                 } maximumValueLabel: {
-                                    Text("2.0").font(.caption2).foregroundStyle(.secondary)
+                                    Text("2.0").font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 .onChange(of: tempValue) { val in
                                     var updated = p
@@ -560,7 +560,7 @@ struct PersonaBasicSettingsView: View {
                                 Spacer()
                                 Text(topPEnabled ? String(format: "%.2f", topPValue) : "默认")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             Toggle("自定义 Top P", isOn: $topPEnabled)
                                 .onChange(of: topPEnabled) { on in
@@ -572,9 +572,9 @@ struct PersonaBasicSettingsView: View {
                                 Slider(value: $topPValue, in: 0.0...1.0, step: 0.05) {
                                     Text("Top P")
                                 } minimumValueLabel: {
-                                    Text("0.0").font(.caption2).foregroundStyle(.secondary)
+                                    Text("0.0").font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                                 } maximumValueLabel: {
-                                    Text("1.0").font(.caption2).foregroundStyle(.secondary)
+                                    Text("1.0").font(.caption2).foregroundStyle(MinisTheme.secondaryText)
                                 }
                                 .onChange(of: topPValue) { val in
                                     var updated = p
@@ -593,7 +593,7 @@ struct PersonaBasicSettingsView: View {
                                 Spacer()
                                 Text(maxTokensEnabled ? "\(maxTokensValue)" : "默认")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             Toggle("限制最大 Token", isOn: $maxTokensEnabled)
                                 .onChange(of: maxTokensEnabled) { on in
@@ -620,7 +620,7 @@ struct PersonaBasicSettingsView: View {
                                 Spacer()
                                 Text(thinkingBudgetEnabled ? "\(thinkingBudgetValue)" : "默认")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                             Toggle("自定义思考预算", isOn: $thinkingBudgetEnabled)
                                 .onChange(of: thinkingBudgetEnabled) { on in
@@ -706,10 +706,10 @@ struct PersonaBasicSettingsView: View {
                                 Spacer()
                                 Text(p.background != nil ? "已设置专属壁纸" : "未设置")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 13))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                         }
 
@@ -856,13 +856,13 @@ struct PersonaPresetMessagesView: View {
                             VStack(spacing: 8) {
                                 Image(systemName: "bolt.slash")
                                     .font(.system(size: 28))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text("暂无快捷短语")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text("点击右上角「+」可为该人设添加常用提问或预设对话轮次。")
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                     .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity)
@@ -885,7 +885,7 @@ struct PersonaPresetMessagesView: View {
                                             Spacer()
                                             Image(systemName: "chevron.right")
                                                 .font(.system(size: 12))
-                                                .foregroundStyle(.tertiary)
+                                                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                         }
 
                                         Text(msg.content)
@@ -1029,7 +1029,7 @@ struct PersonaCustomRequestView: View {
                         if p.customHeaders.isEmpty {
                             Text("暂无自定义请求头")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         } else {
                             ForEach(p.customHeaders) { h in
                                 Button {
@@ -1045,7 +1045,7 @@ struct PersonaCustomRequestView: View {
                                         Spacer()
                                         Text(h.value)
                                             .font(.system(.body, design: .monospaced))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                     }
@@ -1080,7 +1080,7 @@ struct PersonaCustomRequestView: View {
                         if p.customBody.isEmpty {
                             Text("暂无自定义请求体参数")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         } else {
                             ForEach(p.customBody) { b in
                                 Button {
@@ -1096,7 +1096,7 @@ struct PersonaCustomRequestView: View {
                                         Spacer()
                                         Text(b.value)
                                             .font(.system(.body, design: .monospaced))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                             .lineLimit(1)
                                             .truncationMode(.middle)
                                     }
@@ -1253,13 +1253,13 @@ struct PersonaRegexRulesView: View {
                             VStack(spacing: 8) {
                                 Image(systemName: "textformat")
                                     .font(.system(size: 28))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text("暂无正则替换规则")
                                     .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                 Text("点击右上角「+」可添加清洗思考标签、特定角色前缀或格式修正规则。")
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                     .multilineTextAlignment(.center)
                             }
                             .frame(maxWidth: .infinity)
@@ -1295,11 +1295,11 @@ struct PersonaRegexRulesView: View {
                                             HStack(spacing: 4) {
                                                 Text("/\(rule.pattern)/")
                                                     .font(.system(.caption, design: .monospaced))
-                                                    .foregroundStyle(.secondary)
+                                                    .foregroundStyle(MinisTheme.secondaryText)
                                                     .lineLimit(1)
                                                 Image(systemName: "arrow.right")
                                                     .font(.caption2)
-                                                    .foregroundStyle(.tertiary)
+                                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                                 Text("\"\(rule.replacement)\"")
                                                     .font(.system(.caption, design: .monospaced))
                                                     .foregroundStyle(MinisThemeList.accent)
@@ -1518,7 +1518,7 @@ struct PersonaPromptSettingsView: View {
                             Spacer()
                             Text("\(soulText.count) 字")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } footer: {
                         Text("定义助手的核心人设、口吻、底线与思考模式。保存后立即同步到大模型对话中。")
@@ -1660,7 +1660,7 @@ struct PersonaLocalToolsSettingsView: View {
                                             .foregroundStyle(ChatColors.primaryText)
                                         Text(tool.subtitle)
                                             .font(.system(size: 11))
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(MinisTheme.secondaryText)
                                             .lineLimit(2)
                                     }
                                 }
@@ -1725,7 +1725,7 @@ struct PersonaMemorySettingsView: View {
                             Spacer()
                             Text("\(globalMemoryText.count) 字")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     } footer: {
                         Text("该人设跨会话持久保存的核心记忆与背景知识。")

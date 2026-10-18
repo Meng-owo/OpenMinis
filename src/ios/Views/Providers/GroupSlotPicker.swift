@@ -114,10 +114,10 @@ struct GroupSlotPicker: View {
                     .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Spacer()
                 Text(selectedName)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
         }
         .onAppear { ttsRevision &+= 1 }

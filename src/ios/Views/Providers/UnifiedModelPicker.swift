@@ -509,10 +509,10 @@ struct UnifiedModelPicker: View {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "info.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(note)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -779,7 +779,7 @@ struct UnifiedModelPicker: View {
             } label: {
                 Image(systemName: expandedGroupIds.contains(group.id) ? "chevron.up" : "chevron.down")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .frame(width: 28, height: 28)
                     .background(AppearanceStudio.shared.color(.mutedSurface))
                     .clipShape(Circle())
@@ -810,20 +810,20 @@ struct UnifiedModelPicker: View {
         if group.memberEntryIds.isEmpty {
             Text(AppLocalized("No models"))
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         } else if isGroupSelected(group),
                   let eid = config.currentEntryId?(),
                   let entry = store.entry(for: eid) {
             Text("→ \(entry.model.displayName)")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         } else {
             let available = availableMemberEntryIds(group).count
             let total = group.memberEntryIds.count
             if available == total {
                 Text(AppLocalized("\(total) models"))
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             } else if available == 0 {
                 Text(AppLocalized("\(total) models · all unavailable"))
                     .font(.caption)
@@ -843,7 +843,7 @@ struct UnifiedModelPicker: View {
             Text(strategy == .fallback ? "FB" : "LB")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
         }
-        .foregroundStyle(.secondary)
+        .foregroundStyle(MinisTheme.secondaryText)
         .padding(.horizontal, 4)
         .padding(.vertical, 1)
         .background(AppearanceStudio.shared.color(.mutedSurface).opacity(0.6))
@@ -938,7 +938,7 @@ struct UnifiedModelPicker: View {
         if group.memberEntryIds.isEmpty {
             Text("No models in this group")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .padding(.leading, 30)
                 .padding(.vertical, 4)
         } else {
@@ -993,14 +993,14 @@ struct UnifiedModelPicker: View {
                     if let instanceLabel = store.instance(for: entry.providerInstanceId)?.label {
                         Text(instanceLabel)
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("·")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                     Text(entry.model.id)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
 
@@ -1058,7 +1058,7 @@ struct UnifiedModelPicker: View {
                         if let instanceLabel = store.instance(for: entry.providerInstanceId)?.label {
                             Text(instanceLabel)
                                 .font(.caption2.weight(.medium))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         }
                         Text("·")
                             .font(.caption2)
@@ -1125,7 +1125,7 @@ struct UnifiedModelPicker: View {
                 if !hasKey {
                     Text("no key")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 } else if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.tint)
@@ -1190,7 +1190,7 @@ struct UnifiedModelPicker: View {
                     } label: {
                         Image(systemName: collapsed ? "chevron.down" : "chevron.up")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .frame(width: 28, height: 28)
                             .background(AppearanceStudio.shared.color(.mutedSurface))
                             .clipShape(Circle())
@@ -1242,7 +1242,7 @@ struct UnifiedModelPicker: View {
                         // for built-ins; the raw model id for cloud models.
                         Text(traits.subtitle ?? entry.model.id)
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                         let badges = traits.subtitle == nil ? modalityBadges(entry.model) : []
                         if !badges.isEmpty {
                             Text("·")
@@ -1251,7 +1251,7 @@ struct UnifiedModelPicker: View {
                             ForEach(badges, id: \.self) { badge in
                                 Text(badge)
                                     .font(.system(size: 9, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                                     .padding(.horizontal, 4)
                                     .padding(.vertical, 1)
                                     .background(AppearanceStudio.shared.color(.mutedSurface))
@@ -1312,12 +1312,12 @@ struct UnifiedModelPicker: View {
                     .foregroundStyle(.quaternary)
                 Text(searchText.isEmpty ? "No models available" : "No results")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text(searchText.isEmpty
                      ? "Configure providers in Settings to see models here."
                      : "Try a different search term.")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     .multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)

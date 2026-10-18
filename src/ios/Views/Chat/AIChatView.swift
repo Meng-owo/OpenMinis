@@ -3018,7 +3018,7 @@ struct AIChatView: View {
     private func scrollFloatingButtonLabel(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(MinisTheme.secondaryText)
             .frame(width: 36, height: 36)
             .background { ScrollToBottomBackground().clipShape(Circle()) }
             // Border + shadow give the near-opaque disc its edge on a white
@@ -3064,10 +3064,10 @@ struct AIChatView: View {
             Divider()
             HStack {
                 Image(systemName: "eye")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("Read-only session from another device")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Spacer()
                 Button {
                     guard let sid = sessionId, let devId = remoteDeviceId else { return }
@@ -3961,7 +3961,7 @@ struct AIChatView: View {
                         .tint(ChatColors.warning)
                     Text("Waiting for other tasks to complete...")
                         .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
@@ -5129,7 +5129,7 @@ private struct ProviderImportSheet: View {
                     .multilineTextAlignment(.center)
                 Text(AppLocalized("This JSON file looks like an exported provider configuration. Import it as a new provider, or add it to the chat as a file attachment?"))
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -6085,7 +6085,7 @@ private struct SessionLockGateOverlay: View {
             VStack(spacing: 18) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 56, weight: .light))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
 
                 Text("This session is locked")
                     .font(.system(size: 18, weight: .semibold))
@@ -6094,7 +6094,7 @@ private struct SessionLockGateOverlay: View {
                      ? "Authentication failed. Tap to try again."
                      : "Tap to unlock with \(BiometricAuth.biometryDisplayName)")
                     .font(.system(size: 14))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .multilineTextAlignment(.center)
 
                 Button {
@@ -6307,7 +6307,7 @@ private struct SpeechLanguagePickerSheet: View {
                         .foregroundStyle(.primary)
                     Text(loc.identifier)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 Spacer()
                 if loc.identifier == speechManager.locale.identifier {
@@ -6361,7 +6361,7 @@ struct CompactSummarySheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
@@ -6513,7 +6513,7 @@ private struct StatRow: View {
             }
             Spacer()
             Text(value)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .monospacedDigit()
         }
     }

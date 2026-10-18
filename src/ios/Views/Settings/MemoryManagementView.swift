@@ -37,17 +37,17 @@ struct MemoryManagementView: View {
                             if !file.fileSize.isEmpty {
                                 Text(file.fileSize)
                                     .font(.caption2)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             }
                             Spacer()
                             Text(file.modifiedDate)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         if !file.preview.isEmpty {
                             Text(file.preview)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .lineLimit(1)
                         }
                     }
@@ -219,7 +219,7 @@ private struct MemoryFileEditView: View {
             if isGlobal {
                 Text("Persistent instructions and preferences visible to the agent in every session. You can edit it here, or just ask the agent to help organize and update this memory.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)

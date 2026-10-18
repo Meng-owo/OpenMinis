@@ -75,7 +75,7 @@ struct ModelGroupDetailView: View {
                 groupContent(group)
             } else {
                 Text("Group not found")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .navigationTitle(group?.name ?? "Group")
@@ -195,7 +195,7 @@ struct ModelGroupDetailView: View {
                 if group.memberEntryIds.isEmpty {
                     Text("No models in this group")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 } else {
                     ForEach(group.memberEntryIds, id: \.self) { entryId in
                         // System engine member ids ("__builtin_system_speech__/…")
@@ -417,7 +417,7 @@ struct ModelGroupDetailView: View {
                         }
                     }
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
 
@@ -436,7 +436,7 @@ struct ModelGroupDetailView: View {
                 return entry.model.provider
             }())
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .opacity(providerDisabled ? 0.5 : 1)
         }
     }
@@ -460,14 +460,14 @@ struct ModelGroupDetailView: View {
                     .foregroundStyle(AppearanceStudio.shared.color(.primaryText))
                 Text("iOS built-in, works offline")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
 
             Spacer()
 
             Text("System")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
     }
 
@@ -482,10 +482,10 @@ struct ModelGroupDetailView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Model no longer available")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text(entryId)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -643,11 +643,11 @@ private struct ContextLimitSlider: View {
             HStack {
                 Text(steps.first?.label ?? "32K")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 Spacer()
                 Text("Unlimited")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
         }
         .padding(.vertical, 4)

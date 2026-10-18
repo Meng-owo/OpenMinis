@@ -84,10 +84,10 @@ struct ThinkingRulesSection: View {
         Section {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: "info.circle.fill")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text("This provider uses an official protocol, so its thinking parameters are maintained by 嘟嘟. Custom rules apply to OpenAI-compatible providers on the Chat Completions API.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         } header: {
             Text("Thinking Rules")
@@ -122,14 +122,14 @@ struct ThinkingRulesSection: View {
                 HStack(spacing: 6) {
                     Image(systemName: "lock.fill")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Text("Default rules")
                     Text("\(builtInRules.count)")
                         .font(.caption)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(Color.secondary.opacity(0.15), in: Capsule())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
 
@@ -157,7 +157,7 @@ struct ThinkingRulesSection: View {
                         .foregroundStyle(MinisTheme.accent)
                 }
                 Text("Default rules are built in and cannot be deleted. Add a rule above them to override one.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             .font(.caption)
         }
@@ -188,22 +188,22 @@ struct ThinkingRulesSection: View {
                     if isBuiltIn {
                         Image(systemName: "lock.fill")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
                 Text(rule.scope.displayText)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 if let fmt = rule.wireFormat {
                     Text(fmt.displaySummary)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .contentShape(Rectangle())
     }

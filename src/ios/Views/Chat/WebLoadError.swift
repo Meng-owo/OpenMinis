@@ -111,13 +111,13 @@ struct WebLoadErrorOverlay: View {
         VStack(spacing: 14) {
             Image(systemName: error.systemImage)
                 .font(.system(size: 44, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text(error.title)
                 .font(.headline)
                 .multilineTextAlignment(.center)
             Text(error.message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action: onRetry) {

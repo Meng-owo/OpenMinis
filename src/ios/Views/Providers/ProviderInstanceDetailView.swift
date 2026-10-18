@@ -46,7 +46,7 @@ struct ProviderInstanceDetailView: View {
                 instanceContent(instance)
             } else {
                 Text("Instance not found")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .navigationTitle(instance?.label ?? "Provider")
@@ -352,7 +352,7 @@ struct ProviderInstanceDetailView: View {
                             .textSelection(.enabled)
                         Text(AppLocalized("You may need to add the model ID manually."))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
@@ -376,7 +376,7 @@ struct ProviderInstanceDetailView: View {
                             if store.isVoiceShadowDisabled(instance.id) {
                                 Text("Hidden", comment: "Voice shadow disabled badge")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -402,7 +402,7 @@ struct ProviderInstanceDetailView: View {
                     .presentationDetents([.medium])
             } else {
                 Text("Failed to export provider configuration.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .presentationDetents([.medium])
             }
         }
@@ -470,7 +470,7 @@ struct ProviderInstanceDetailView: View {
                 showKeyRevealed.toggle()
             } label: {
                 Image(systemName: showKeyRevealed ? "eye.slash" : "eye")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             .buttonStyle(.plain)
         }
@@ -504,7 +504,7 @@ struct ProviderInstanceDetailView: View {
                         .font(.body)
                     Text(detail)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     if needsReauth {
                         Text(AppLocalized("Sign-in expired. Sign in again to keep using this provider."))
                             .font(.caption)
@@ -676,7 +676,7 @@ struct ProviderInstanceDetailView: View {
                         .font(.system(.body, design: .monospaced))
                     Spacer()
                     Text(instance.customHeaders[key] ?? "")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .font(.system(.body, design: .monospaced))
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -809,7 +809,7 @@ struct ProviderInstanceDetailView: View {
                             .font(.body)
                         Text("Configured")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                     Spacer()
                     Circle()
@@ -856,7 +856,7 @@ struct ProviderInstanceDetailView: View {
             VStack(spacing: 8) {
                 Text("No models")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Button {
                     showAddCustomModel = true
                 } label: {
@@ -885,7 +885,7 @@ struct ProviderInstanceDetailView: View {
                 HStack(spacing: 4) {
                     Text(entry.model.id)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     if entry.isCustom {
                         Text("Custom")
                             .font(.caption2.weight(.medium))
@@ -898,7 +898,7 @@ struct ProviderInstanceDetailView: View {
             if let ms = store.modelLatencyMs[entry.compositeKey] {
                 Text("\(Int(ms)) ms")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     .monospacedDigit()
             }
             Button {
@@ -914,7 +914,7 @@ struct ProviderInstanceDetailView: View {
                 } else {
                     Image(systemName: "bolt")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
             .buttonStyle(.plain)
@@ -944,7 +944,7 @@ struct ProviderInstanceDetailView: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -974,25 +974,25 @@ struct ProviderInstanceDetailView: View {
             if modality.contains(.imageInput) {
                 Image(systemName: "photo.fill")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .accessibilityLabel(AppLocalized("Image input"))
             }
             if modality.contains(.pdfInput) {
                 Image(systemName: "doc")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .accessibilityLabel(AppLocalized("PDF input"))
             }
             if modality.contains(.audioInput) {
                 Image(systemName: "waveform")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .accessibilityLabel(AppLocalized("Audio input"))
             }
             if modality.contains(.videoInput) {
                 Image(systemName: "video")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .accessibilityLabel(AppLocalized("Video input"))
             }
             // Output modalities (tinted, generate-style glyphs).
@@ -1459,7 +1459,7 @@ struct ModelEntryDetailSheet: View {
                 Section("Identity") {
                     HStack {
                         Text("Model ID")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Spacer()
                         if entry.isCustom {
                             // axis: .vertical lets long IDs wrap so the cursor
@@ -1475,7 +1475,7 @@ struct ModelEntryDetailSheet: View {
                         } else {
                             Text(entry.model.id)
                                 .font(.system(.body, design: .monospaced))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .textSelection(.enabled)
                         }
                     }
@@ -1488,7 +1488,7 @@ struct ModelEntryDetailSheet: View {
 
                     HStack {
                         Text("Display Name")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Spacer()
                         TextField("Display name", text: $displayName)
                             .multilineTextAlignment(.trailing)
@@ -1498,16 +1498,16 @@ struct ModelEntryDetailSheet: View {
 
                     HStack {
                         Text("Provider")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Spacer()
                         Text(providerDisplayName)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
 
                     if entry.isCustom {
                         HStack {
                             Text("Type")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             Spacer()
                             Text("Custom")
                                 .font(.caption.weight(.medium))
@@ -1548,7 +1548,7 @@ struct ModelEntryDetailSheet: View {
 
                         HStack {
                             Text(AppLocalized("Thinking"))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                             Spacer()
                             if supportsThinking {
                                 Label(AppLocalized("Supported"), systemImage: "checkmark.circle.fill")
@@ -1556,10 +1556,10 @@ struct ModelEntryDetailSheet: View {
                                     .labelStyle(.titleAndIcon)
                             } else if entry.baseModel.supportsReasoning == false {
                                 Text(AppLocalized("Not Supported"))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             } else {
                                 Text(AppLocalized("Unknown"))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                                 Button(AppLocalized("Force Enable")) {
                                     showForceThinkingAlert = true
                                 }
@@ -1989,11 +1989,11 @@ fileprivate struct SamplingParamRow: View {
                 Text(spec.title)
                 Spacer()
                 Text(current.map(spec.format) ?? AppLocalized("Default"))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .monospacedDigit()
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
             .contentShape(Rectangle())
         }
@@ -2029,7 +2029,7 @@ fileprivate struct SamplingParamSheet: View {
                             Text(spec.title)
                             Spacer()
                             Text(spec.format(value))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .monospacedDigit()
                         }
                         Slider(value: $value, in: spec.range, step: spec.step)

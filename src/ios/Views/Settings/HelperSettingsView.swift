@@ -36,7 +36,7 @@ struct HelperSettingsView: View {
                         Text(AppLocalized("Sub Agents"))
                         Text(SubAgentDefinition.toolName)
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             } footer: {
@@ -76,7 +76,7 @@ struct HelperSettingsView: View {
                     Text(AppLocalized("The assistant picks a sub agent by its description, so write the description as “when to use this”. Order is the order it sees them in."))
                     if !store.canAddSubAgent {
                         Text(String(format: AppLocalized("You can define up to %d sub agents."), SubAgentLimits.maxCount))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 .font(.caption)
@@ -105,23 +105,23 @@ struct HelperSettingsView: View {
                             .font(.caption2)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Color.secondary.opacity(0.15), in: Capsule())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 if !def.displayDescription.isEmpty {
                     Text(def.displayDescription)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(1)
                 }
                 Text(modelLabel(def))
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             }
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .contentShape(Rectangle())
     }
@@ -197,7 +197,7 @@ struct SubAgentEditorView: View {
                 // editable: those are genuinely the user's call.
                 Section {
                     if isBuiltIn {
-                        Text(existing?.displayName ?? name).foregroundStyle(.secondary)
+                        Text(existing?.displayName ?? name).foregroundStyle(MinisTheme.secondaryText)
                     } else {
                         TextField(AppLocalized("Name"), text: $name)
                             .autocorrectionDisabled()
@@ -214,7 +214,7 @@ struct SubAgentEditorView: View {
 
                 Section {
                     if isBuiltIn {
-                        Text(existing?.displayDescription ?? descriptionText).foregroundStyle(.secondary)
+                        Text(existing?.displayDescription ?? descriptionText).foregroundStyle(MinisTheme.secondaryText)
                     } else {
                         TextField(AppLocalized("Description"), text: $descriptionText, axis: .vertical)
                             .lineLimit(2...4)

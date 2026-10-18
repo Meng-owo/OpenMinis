@@ -539,7 +539,7 @@ struct MirrorsSectionView: View {
                            let selected = vm.selectedMirror(for: category) {
                             Text(selected.name)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                         if let fastest = vm.fastestResult(for: category) {
                             latencyBadge(fastest.latencyMs)
@@ -588,12 +588,12 @@ struct MirrorCategoryDetailView: View {
                         Text(mirror.name).font(.body.weight(.medium))
                         Text(mirror.baseURL)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .lineLimit(1)
                     }
                 } else {
                     Text(AppLocalized("Official (default)"))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
 
@@ -658,7 +658,7 @@ struct MirrorCategoryDetailView: View {
                     if mirror.isOfficial {
                         Text(AppLocalized("Official"))
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Color.secondary.opacity(0.12))
@@ -666,11 +666,11 @@ struct MirrorCategoryDetailView: View {
                     }
                     Text(mirror.region)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
                 Text(mirror.baseURL)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(1)
             }
 
@@ -692,7 +692,7 @@ struct MirrorCategoryDetailView: View {
                     if result.mirror.isOfficial {
                         Text(AppLocalized("Official"))
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(Color.secondary.opacity(0.12))
@@ -700,11 +700,11 @@ struct MirrorCategoryDetailView: View {
                     }
                     Text(result.mirror.region)
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
                 Text(result.mirror.baseURL)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(1)
             }
 
@@ -717,7 +717,7 @@ struct MirrorCategoryDetailView: View {
             } else {
                 Text(AppLocalized("Timeout"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .contentShape(Rectangle())

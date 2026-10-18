@@ -141,7 +141,7 @@ struct ThinkingRuleEditorView: View {
                     }
                     Text(choice.explanation)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     formatFields
                 } header: {
                     Text("What to send")
@@ -186,7 +186,7 @@ struct ThinkingRuleEditorView: View {
                 // backend killed whole requests on MiMo (c5efeb1e).
                 Text("The field is omitted entirely when thinking is off.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         case .booleanToggle:
             TextField("Field path", text: $togglePath)

@@ -60,7 +60,7 @@ struct EvolutionCenterView: View {
                 Section {
                     if injections.isEmpty {
                         Text("还没有注入记账。开「影子」用一会儿，这里会记下每次「本来会参考」的条目。")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .font(.footnote)
                     } else {
                         ForEach(injections, id: \.id) { inj in
@@ -89,7 +89,7 @@ struct EvolutionCenterView: View {
                     if let note = maintenanceNote {
                         Text(note)
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 } header: {
                     Text("维护")
@@ -100,7 +100,7 @@ struct EvolutionCenterView: View {
                 Section {
                     if runs.isEmpty {
                         Text("还没有轨迹。用一会儿，任务收尾后这里就有账了。")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .font(.footnote)
                     } else {
                         ForEach(runs, id: \.id) { run in
@@ -180,7 +180,7 @@ struct EvolutionCenterView: View {
                 .monospacedDigit()
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -196,7 +196,7 @@ struct EvolutionCenterView: View {
                     .font(.callout)
                 Text(detailLine(run))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .padding(.vertical, 1)
@@ -213,7 +213,7 @@ struct EvolutionCenterView: View {
                     .font(.callout)
                 Text("经验 \(inj.lessonId.prefix(8)) · \(inj.tokenCost) token\(inj.sessionId.map { " · 会话 \($0.prefix(6))" } ?? "")")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .padding(.vertical, 1)

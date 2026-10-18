@@ -94,7 +94,7 @@ struct LogManagementView: View {
             Section("Log Files") {
                 if vm.runningFiles.isEmpty {
                     Text("No log files")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 } else {
                     ForEach(vm.runningFiles) { file in
                         NavigationLink {
@@ -105,7 +105,7 @@ struct LogManagementView: View {
                                     .lineLimit(1)
                                 Spacer()
                                 Text(vm.format(file.size))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -130,7 +130,7 @@ struct LogManagementView: View {
                                     .lineLimit(1)
                                 Spacer()
                                 Text(vm.format(file.size))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(MinisTheme.secondaryText)
                             }
                         }
                     }
@@ -153,7 +153,7 @@ struct LogManagementView: View {
                             Label("iCloud Sync Logs", systemImage: "icloud.fill")
                             Spacer()
                             Text("\(SyncLogStore.shared.entries.count)")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 }
@@ -168,7 +168,7 @@ struct LogManagementView: View {
                             Label("Delete All Logs", systemImage: "trash")
                             Spacer()
                             Text(vm.format(vm.totalSize))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                 } footer: {

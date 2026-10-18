@@ -25,10 +25,10 @@ struct TTSGroupsView: View {
                             .foregroundStyle(.quaternary)
                         Text("还没有 TTS 分组")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text(VoiceServicesCopy.routingNote)
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)

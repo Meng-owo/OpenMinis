@@ -60,7 +60,7 @@ struct EvolutionSettingsView: View {
                 if let note = passResultNote {
                     Text(note)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             } footer: {
                 Text("平时任务收尾会自动低频整理一次；这里可以手动催它跑一趟。")

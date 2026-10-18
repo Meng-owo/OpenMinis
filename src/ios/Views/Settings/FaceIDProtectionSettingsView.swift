@@ -28,7 +28,7 @@ struct FaceIDProtectionSettingsView: View {
                         Text("Lock App")
                         Text("Require \(BiometricAuth.biometryDisplayName) to open 嘟嘟.")
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 .onChange(of: appLockEnabled) { newValue in
@@ -75,7 +75,7 @@ struct FaceIDProtectionSettingsView: View {
                         Text("Lock Sessions")
                         Text("Long-press a session in the list to lock it.")
                             .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
                 .onChange(of: enabled) { newValue in
@@ -113,7 +113,7 @@ struct FaceIDProtectionSettingsView: View {
                         Text("Locked sessions")
                         Spacer()
                         Text("\(store.lockedSessionIds.count)")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .monospacedDigit()
                     }
                     if !store.lockedSessionIds.isEmpty {

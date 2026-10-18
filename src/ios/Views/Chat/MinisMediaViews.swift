@@ -522,7 +522,7 @@ private func attachmentPlaceholderTile(icon: String, size: CGFloat) -> some View
     VStack(spacing: 4) {
         Image(systemName: icon)
             .font(.system(size: 22))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
     }
     .frame(width: size, height: size)
     .background(Color(AppearanceStudio.uiColorSnapshot(.mutedSurface, scope: .chat)))

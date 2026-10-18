@@ -56,7 +56,7 @@ struct WebSearchSettingsView: View {
                 Text(count > 0
                      ? AppLocalized("已配置（\(count) 把）")
                      : AppLocalized("未填"))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             SecureField(AppLocalized("粘贴 key（可一次粘多把）"), text: binding(for: pid))
                 .textInputAutocapitalization(.never)
@@ -93,7 +93,7 @@ struct WebSearchSettingsView: View {
                         .foregroundStyle(testOk ? .green : .red)
                 }
                 Text(AppLocalized("申请 key：\(provider.keySignupURL)"))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
     }

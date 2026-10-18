@@ -188,19 +188,19 @@ struct MountDetailView: View {
                         .font(.headline)
                     Text(context.linuxPath)
                         .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if let source = context.sourceDisplayName {
                         Text(verbatim: "← \(source)")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             .lineLimit(1)
                     }
                     if let subtitle = context.subtitle {
                         Text(subtitle)
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                     }
                 }
                 Spacer()
@@ -235,7 +235,7 @@ struct MountDetailView: View {
                          ? AppLocalized("AI, shell, and Files browser can modify files in this mount.")
                          : AppLocalized("This mount is exposed as read-only to protect it from accidental edits."))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
         } header: {
@@ -254,13 +254,13 @@ struct MountDetailView: View {
                          ? AppLocalized("This folder appears in Files → On My iPhone → 嘟嘟.")
                          : AppLocalized("This folder is hidden from the iOS Files app."))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
             }
             if context.isReadOnlyFromFiles {
                 Text("Read-only from the Files app. The app itself can always read and write.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         } header: {
             Text("Files app")

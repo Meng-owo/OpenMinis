@@ -26,7 +26,7 @@ struct PersonaAvatarView: View {
             } else {
                 Image(systemName: "person.circle.fill")
                     .resizable()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
         }
         .frame(width: size, height: size)
@@ -53,7 +53,7 @@ struct PersonaSwitcherRow: View {
                 Spacer()
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

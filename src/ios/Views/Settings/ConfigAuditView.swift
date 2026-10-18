@@ -22,7 +22,7 @@ struct ConfigAuditView: View {
                 HStack {
                     Text("\(usage.count) / \(usage.capacity) used")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Spacer()
                     if !entries.isEmpty {
                         Button("Clear All", role: .destructive) {
@@ -36,7 +36,7 @@ struct ConfigAuditView: View {
 
             if entries.isEmpty {
                 Text("No config changes recorded yet.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             } else {
                 ForEach(entries) { entry in
                     auditRow(entry)
@@ -80,21 +80,21 @@ struct ConfigAuditView: View {
                 statusBadge(entry.status)
                 Text(entry.actor.rawValue)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Spacer()
                 Text(coarseRelativeTime(entry.at))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
             Text(entry.key)
                 .font(.system(.subheadline, design: .monospaced))
             HStack(alignment: .top, spacing: 6) {
                 Text(displayJSON(entry.oldValueJSON))
                     .lineLimit(1)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Image(systemName: "arrow.right")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 Text(displayJSON(entry.newValueJSON))
                     .lineLimit(1)
                     .foregroundStyle(entry.status == .applied ? .primary : .secondary)
@@ -105,12 +105,12 @@ struct ConfigAuditView: View {
                 Label {
                     Text(caption)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(3)
                 } icon: {
                     Image(systemName: "text.quote")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
             }
 

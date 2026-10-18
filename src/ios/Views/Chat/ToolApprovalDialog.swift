@@ -53,7 +53,7 @@ private struct ToolApprovalDialogContent: View {
                         if let payload {
                             Text(payload.title)
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -64,7 +64,7 @@ private struct ToolApprovalDialogContent: View {
                     if let payload, !payload.description.isEmpty {
                         Text(payload.description)
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 12)
@@ -77,7 +77,7 @@ private struct ToolApprovalDialogContent: View {
                                 HStack(alignment: .top) {
                                     Text(row.key)
                                         .font(.footnote.bold())
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(MinisTheme.secondaryText)
                                         .frame(width: 64, alignment: .trailing)
                                     Text(row.value)
                                         .font(.footnote.monospaced())

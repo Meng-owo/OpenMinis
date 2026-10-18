@@ -25,10 +25,10 @@ struct ModelGroupsView: View {
                             .foregroundStyle(.quaternary)
                         Text("No model groups")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("Groups let you combine models for fallback or load balancing.")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -377,23 +377,23 @@ private struct GroupRow: View {
                 .accessibilityLabel(AppLocalized("Speech output"))
         case .audioInput:
             Image(systemName: "waveform.badge.mic")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(MinisTheme.secondaryText)
                 .accessibilityLabel(AppLocalized("Speech transcription"))
         case .videoInput:
             Image(systemName: "video")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(MinisTheme.secondaryText)
                 .accessibilityLabel(AppLocalized("Video input"))
         case .imageInput:
             Image(systemName: "photo.fill")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(MinisTheme.secondaryText)
                 .accessibilityLabel(AppLocalized("Image input"))
         case .pdfInput:
             Image(systemName: "doc")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(MinisTheme.secondaryText)
                 .accessibilityLabel(AppLocalized("PDF input"))
         case .textOutput:
             Image(systemName: "text.alignleft")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.caption).foregroundStyle(MinisTheme.secondaryText)
                 .accessibilityLabel(AppLocalized("Text generation"))
         default:
             EmptyView()
@@ -423,10 +423,10 @@ private struct GroupRow: View {
             HStack(spacing: 6) {
                 Image(systemName: group.strategy == .fallback ? "arrow.down.circle" : "arrow.triangle.branch")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 Text(group.strategy == .fallback ? "Fallback" : "Load Balance")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 if group.strategy == .fallback {
                     Text("·")
                         .font(.caption)
@@ -440,12 +440,12 @@ private struct GroupRow: View {
                     .foregroundStyle(.quaternary)
                 Text(AppLocalized("\(group.memberEntryIds.count) models"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
             }
 
             Text(memberSummary)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 .lineLimit(1)
         }
         .padding(.vertical, 2)

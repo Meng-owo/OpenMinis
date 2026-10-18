@@ -88,24 +88,46 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
 /// structure was the order they happened to be declared in, and every row
 /// wrote to the same global scope. Grouping makes the shape of the palette
 /// legible before you touch anything.
+/// [问题5c] 色盘分组按"这个东西是什么"来分，不按"它在哪个页面"分。
+///
+/// 她原话：「我想字管字的颜色，卡片管卡片的颜色，按钮管按键的。
+/// 好不好就是简单一点，然后统一化，我这边换什么颜色对应的东西就全部变色。」
+///
+/// 改之前的分组是三组混着的：「文字」里塞了 accent（按钮/选中/开关），
+/// 所以一改那个"文字色"，按钮跟着变——她说"归类很乱"指的就是这个。
+/// 现在按她说的三种分开，聊天单独一组（气泡不属于上面任何一类）。
 enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
-    case surfaces, text, chat, status
+    case text, cards, buttons, chat, status
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .surfaces: return "底与卡片"
         case .text: return "文字"
+        case .cards: return "卡片与底"
+        case .buttons: return "按钮与选中"
         case .chat: return "聊天"
         case .status: return "状态"
         }
     }
 
+    /// 这一组管什么，写在分组标题下面，省得再猜。
+    var hint: String {
+        switch self {
+        case .text: return "标题、正文、说明、时间戳——所有字"
+        case .cards: return "页面底衬、卡片、浮层、边线"
+        case .buttons: return "按钮、开关、选中态、强调"
+        case .chat: return "聊天气泡、输入框、搜索栏、工具卡"
+        case .status: return "成功、警告、危险"
+        }
+    }
+
     var roles: [AppearanceColorRole] {
         switch self {
-        case .surfaces: return [.canvas, .surface, .raised, .mutedSurface, .border]
-        case .text: return [.primaryText, .secondaryText, .accent]
+        case .text: return [.primaryText, .secondaryText]
+        // accent 从「文字」挪到「按钮」——它画的是按钮和选中态，不是字。
+        case .cards: return [.canvas, .surface, .raised, .mutedSurface, .border]
+        case .buttons: return [.accent]
         case .chat: return [.userBubble, .assistantBubble, .input, .searchField, .toolCard]
         case .status: return [.success, .warning, .destructive]
         }

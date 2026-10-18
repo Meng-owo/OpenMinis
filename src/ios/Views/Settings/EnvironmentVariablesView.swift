@@ -42,12 +42,12 @@ struct EnvironmentVariablesView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "terminal.fill")
                             .font(.largeTitle)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                         Text("No Environment Variables")
                             .font(.headline)
                         Text("Add variables like API keys or tokens that will be available in the shell environment.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity)
@@ -150,11 +150,11 @@ struct EnvironmentVariablesView: View {
                     .fontWeight(.medium)
                 Text(isRevealed ? currentValue : String(repeating: "\u{2022}", count: min(currentValue.count, 20)))
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 if !entry.note.isEmpty {
                     Text(entry.note)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -171,7 +171,7 @@ struct EnvironmentVariablesView: View {
                 } label: {
                     Image(systemName: isRevealed ? "eye.slash" : "eye")
                         .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .buttonStyle(.plain)
 
@@ -264,7 +264,7 @@ private struct EnvVarFormSheet: View {
                     ZStack(alignment: .topLeading) {
                         if note.isEmpty {
                             Text("Describe what this variable is for (optional)")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                                 .padding(.horizontal, 4)
                                 .padding(.vertical, 8)
                                 .allowsHitTesting(false)

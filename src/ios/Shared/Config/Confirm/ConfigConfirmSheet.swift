@@ -42,7 +42,7 @@ struct ConfigConfirmSheet: View {
                 if let caption = change.caption, !caption.isEmpty {
                     Text(caption)
                         .font(.system(.footnote, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
                         .padding(.top, 8)
@@ -105,16 +105,16 @@ private struct ConfigConfirmRow: View {
             }
             Text(item.path)
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             HStack(alignment: .top, spacing: 6) {
                 if !item.oldDisplay.isEmpty {
                     Text(item.oldDisplay)
                         .lineLimit(2)
                         .truncationMode(.middle)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     Image(systemName: "arrow.right")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 }
                 if !item.newDisplay.isEmpty {
                     Text(item.newDisplay)

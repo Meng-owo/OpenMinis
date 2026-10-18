@@ -158,13 +158,13 @@ struct BrowserHistoryView: View {
         VStack(spacing: 12) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.system(size: 40))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
             Text("No History")
                 .font(.headline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
             Text("Pages you visit will appear here for 7 days.")
                 .font(.subheadline)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -194,7 +194,7 @@ struct BrowserHistoryView: View {
         HStack(spacing: 10) {
             Image(systemName: "globe")
                 .font(.system(size: 14))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(MinisTheme.secondaryText)
                 .frame(width: 24)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -205,7 +205,7 @@ struct BrowserHistoryView: View {
 
                 Text(entry.url)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(MinisTheme.secondaryText)
                     .lineLimit(1)
             }
 
@@ -213,7 +213,7 @@ struct BrowserHistoryView: View {
 
             Text(timeLabel(entry.timestamp))
                 .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
         }
         .contentShape(Rectangle())
     }
