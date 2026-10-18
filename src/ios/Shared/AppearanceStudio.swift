@@ -431,10 +431,12 @@ final class AppearanceStudio: ObservableObject {
     /// [10-18 醒醒] 摇一套配色。只写全局键，不碰页级覆盖——
     /// 她单独调过的某一页不该被一次"摇骰子"冲掉。
     ///
+    /// `mood` 传 nil 就随机挑一个风格（连点几次每次调子都不同）。
     /// 返回这套的默认名字，页面上可以拿它当"存这套"的默认值。
     @discardableResult
-    func shuffleTheme(seed: UInt64? = nil) -> String {
-        let rolled = AppearanceThemeShuffle.shuffle(seed: seed)
+    func shuffleTheme(seed: UInt64? = nil,
+                      mood: AppearanceThemeShuffle.Mood? = nil) -> String {
+        let rolled = AppearanceThemeShuffle.shuffle(seed: seed, mood: mood)
         for variant in AppearanceVariant.allCases {
             let values = variant == .light ? rolled.light : rolled.dark
             for (role, hex) in values {
@@ -831,24 +833,26 @@ struct AppearancePalette {
 }
 
 private enum AppearancePaletteBook {
+    // [10-18 醒醒] 「现在的配色有点 low」。内置这套原来主色 D4778B 饱和度
+    // 到 0.44，配纯白卡片就发甜。按莫兰迪收一档：饱和度压到 0.20-0.32，
+    // 底色从纯白改成带一丝暖的米白，文字用深灰而不是近黑。
     static let light: [AppearanceColorRole: String] = [
-        .canvas: "FFF8F4", .surface: "FFFDFC", .raised: "FFFFFF",
-        .mutedSurface: "F8ECE8", .primaryText: "3E312B", .secondaryText: "8D786F",
-        .accent: "D4778B", .userBubble: "F6DDE3", .assistantBubble: "FFFDFC",
-        .border: "EADAD3",
-        // 输入类跟卡片同底但略暖，图标底比输入框深一档，胶囊底最浅。
-        .field: "FFFBF8", .iconTile: "F8ECE8", .chip: "F2E3DD",
-        .success: "6E987A",
-        .warning: "C9956A", .destructive: "C75D5D"
+        .canvas: "F7F4F1", .surface: "FDFCFA", .raised: "FFFFFF",
+        .mutedSurface: "F1EBE6", .primaryText: "3A322E", .secondaryText: "8A7B74",
+        .accent: "B98591", .userBubble: "EFE0DE", .assistantBubble: "FDFCFA",
+        .border: "E3DAD4",
+        .field: "FCFAF7", .iconTile: "F2EAE4", .chip: "EDE2DC",
+        .success: "7C9A83",
+        .warning: "C0A176", .destructive: "B87C7C"
     ]
     static let dark: [AppearanceColorRole: String] = [
-        .canvas: "1B1716", .surface: "25201E", .raised: "302925",
-        .mutedSurface: "332824", .primaryText: "F5ECE7", .secondaryText: "BCAAA1",
-        .accent: "E09AAA", .userBubble: "573C43", .assistantBubble: "25201E",
-        .border: "493C37",
-        .field: "2B2522", .iconTile: "332824", .chip: "3B2E2A",
-        .success: "8EB69A",
-        .warning: "D4B07A", .destructive: "E18484"
+        .canvas: "1A1716", .surface: "242020", .raised: "2C2725",
+        .mutedSurface: "2F2A28", .primaryText: "F2EDE9", .secondaryText: "B5A8A1",
+        .accent: "C99BA6", .userBubble: "4A3A3B", .assistantBubble: "242020",
+        .border: "403836",
+        .field: "262221", .iconTile: "2F2A28", .chip: "362F2C",
+        .success: "93B09A",
+        .warning: "CDB183", .destructive: "CB9292"
     ]
 }
 

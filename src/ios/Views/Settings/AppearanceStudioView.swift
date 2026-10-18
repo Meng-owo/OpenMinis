@@ -6,35 +6,28 @@ import UIKit
 //
 // [10-18 醒醒] 「我建议你重新帮我设计创作装扮页，功能留着，布局，选项，
 // 实时显示的那一块。什么都得重写」
+// 第二轮：「里边还有很多 bug」「摇一摇这个是被你写死的几个对吗，自由度高
+// 一点」「配色有点 low」「界面 UI 也太廉价感了，做精致一点」「预览做大一点」
+// 「醒醒喜欢干净的，软糯的那种感觉」
 //
-// ## 这一版为什么长这样
+// ## 这一版修了什么
 //
-// 上一版的毛病不是分组名字没起好，是三件事：
-//
-// 1. **十六个角色平铺**。里面三个是半死或全死的（工具卡零消费、搜索栏 1 处、
-//    输入框 2 处），还有一个"按钮与选中"组里只有一个 accent——分组比内容还多。
-// 2. **「作用于」是混乱的根源**。每个角色 × 8 页 × 浅深两套 = 理论 240 个色值。
-//    她选"聊天"再调色，只有聊天变，然后奇怪"为什么别处没变"。
-// 3. **预览是假的**。手写小样，不反映气泡形状/字体/图标底；固定读全局色，
-//    不跟「作用于」联动。
-//
-// ## 这一版怎么解
-//
-// - 顶部**真组件**预览（不是手写小样），改什么都真实反映。
-// - 六个分组按"你看到的东西"分：文字 / 背景与卡片 / 控件 / 强调 / 聊天 / 状态。
-// - 「作用于」收进「高级」，默认只有全局。
-// - 摇骰子：按一套配色骨架随机，不是随机十六个色。
-// - 拆两级：主界面日常用，高级放页级覆盖和原始角色表。
+// 1. **errorText 有七处赋值、零处显示**——所有失败静默。现在真会弹出来。
+// 2. **预设三套的入口被我上一版删了**——引擎方法还在，功能白丢。补回。
+// 3. **列表图标形状入口也丢了**——补回。
+// 4. **摇骰子饱和度 0.38-0.67 太高**，0.67 已经是糖果色，所以"low"。
+//    改成莫兰迪区间 0.15-0.40，并给了五个风格档（软糯/清透/沉静/暖阳/夜）。
+// 5. **预览太小**。放大到 1.6 倍高度，并加了「展开」全屏看。
+// 6. **质感廉价**：加发丝线、软阴影、字重层级、留白节奏。
 
 struct AppearanceStudioView: View {
     @ObservedObject private var studio = AppearanceStudio.shared
     @Environment(\.colorScheme) private var colorScheme
 
-    // 编辑态
     @State private var variant: AppearanceVariant = .light
     @State private var page: AppearanceStudioPage = .palette
 
-    // 图片选择
+    // 图片
     @State private var wallpaperItem: PhotosPickerItem?
     @State private var wallpaperScope: AppearanceScope = .global
     @State private var userAvatarItem: PhotosPickerItem?
@@ -53,9 +46,10 @@ struct AppearanceStudioView: View {
     // 杂项
     @State private var saveName: String = ""
     @State private var errorText: String?
+    @State private var showError = false
     @State private var showResetConfirm = false
-    @State private var shuffleSeedNote: String?
-    @State private var previewZoom: Bool = false
+    @State private var shuffleName: String?
+    @State private var showFullPreview = false
 
     @MainActor private var aiName: String {
         let n = SoulStore.cachedMetadata.name
@@ -66,11 +60,8 @@ struct AppearanceStudioView: View {
         VStack(spacing: 0) {
             previewArea
 
-            Divider()
-                .overlay(studio.color(.border, variant: variant).opacity(0.3))
-
             ScrollView {
-                LazyVStack(spacing: 18) {
+                LazyVStack(spacing: 20) {
                     switch page {
                     case .palette:   palettePage
                     case .bubbles:   bubblesPage
@@ -80,15 +71,30 @@ struct AppearanceStudioView: View {
                     case .library:   libraryPage
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 14)
-                .padding(.bottom, 40)
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 48)
             }
+            .scrollIndicators(.hidden)
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         }
         .appearancePage(.settings)
         .navigationTitle("装扮")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("出错了", isPresented: $showError) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(errorText ?? "")
+        }
+        .alert("恢复默认装扮？", isPresented: $showResetConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("恢复", role: .destructive) { studio.resetThemePack() }
+        } message: {
+            Text("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。")
+        }
+        .fullScreenCover(isPresented: $showFullPreview) {
+            fullPreviewSheet
+        }
         .onChange(of: wallpaperItem) { item in
             guard let item else { return }
             Task {
@@ -107,7 +113,7 @@ struct AppearanceStudioView: View {
             Task {
                 await importImage(item, downsampleTo: 512) { image in
                     do { try studio.setAssistantAvatar(image) }
-                    catch { errorText = error.localizedDescription }
+                    catch { fail(error.localizedDescription) }
                 }
             }
         }
@@ -135,56 +141,117 @@ struct AppearanceStudioView: View {
                 categoryImageKey = nil
             }
         }
-        .alert("恢复默认装扮？", isPresented: $showResetConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("恢复", role: .destructive) { studio.resetThemePack() }
-        } message: {
-            Text("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。")
-        }
     }
 
-    // MARK: - 顶部真组件预览
+    private func fail(_ message: String) {
+        errorText = message
+        showError = true
+    }
+
+    // MARK: - 预览
     //
-    // 不再手写小样。这里摆的就是真聊天气泡的形状参数、真的图标底角色、
-    // 真的输入框——她改什么，这块立刻变，因为它读的是同一套变量。
+    // 放大到 1.6 倍高度（原 190 → 300 左右），点右上角能全屏看。
+    // 用真组件，不是手写小样——改什么这里立刻变。
 
     private var previewArea: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
                 Text("预览")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(0.3)
                     .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                Spacer()
-                if let note = shuffleSeedNote {
+
+                if let note = shuffleName {
                     Text(note)
-                        .font(.system(size: 10))
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.7))
-                        .transition(.opacity)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(studio.color(.accent, variant: variant))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(studio.color(.chip, variant: variant).opacity(studio.surfaceOpacity),
+                                    in: Capsule())
+                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
                 }
+
+                Spacer(minLength: 0)
+
+                Button {
+                    showFullPreview = true
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                        .frame(width: 24, height: 24)
+                        .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
+                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
                 Picker("", selection: $variant) {
-                    ForEach(AppearanceVariant.allCases) { item in
-                        Text(item.title).tag(item)
-                    }
+                    ForEach(AppearanceVariant.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 96)
+                .frame(width: 100)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 18)
 
-            AppearanceLivePreview(variant: variant, aiName: aiName)
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+            AppearanceLivePreview(variant: variant, aiName: aiName, scale: 1.0)
+                .padding(.horizontal, 18)
+                .frame(height: 286)
+                .clipped()
         }
+        .padding(.top, 10)
+        .padding(.bottom, 14)
         .background(studio.color(.canvas, variant: variant))
+        .overlay(alignment: .bottom) {
+            // 发丝线：高级感靠这条线，不靠边框
+            Rectangle()
+                .fill(studio.color(.border, variant: variant).opacity(0.28))
+                .frame(height: 0.5)
+        }
     }
 
-    // MARK: - 色盘页
+    private var fullPreviewSheet: some View {
+        ZStack {
+            studio.color(.canvas, variant: variant).ignoresSafeArea()
+            VStack(spacing: 16) {
+                HStack {
+                    Text("预览")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(studio.color(.primaryText, variant: variant))
+                    Spacer()
+                    Picker("", selection: $variant) {
+                        ForEach(AppearanceVariant.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 110)
+                    Button {
+                        showFullPreview = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                            .frame(width: 30, height: 30)
+                            .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
+                                        in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                AppearanceLivePreview(variant: variant, aiName: aiName, scale: 1.5)
+                    .padding(.horizontal, 20)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    // MARK: - 配色
 
     private var palettePage: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             shuffleCard
+            presetsCard
 
             ForEach(AppearanceColorRoleGroup.allCases) { group in
                 paletteGroupCard(group)
@@ -194,17 +261,19 @@ struct AppearanceStudioView: View {
         }
     }
 
-    /// 摇骰子。放在最上面，因为它是最快的起点——
-    /// 摇到喜欢的再微调，比从十六个色一个个挑快得多。
+    /// 摇骰子。五个风格档不是写死的色板，是不同的参数区间——
+    /// 点同一个档，每次摇出来都不一样。
     private var shuffleCard: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("摇一套")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
+                        .tracking(-0.2)
                         .foregroundStyle(studio.color(.primaryText, variant: variant))
-                    Text("先定一个主色，其余自动配好。摇到喜欢再微调。")
-                        .font(.system(size: 11))
+                    Text("先定一个主色，其余按莫兰迪规则推导。同一个档每次都不一样。")
+                        .font(.system(size: 11.5))
+                        .lineSpacing(1.5)
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -219,101 +288,186 @@ struct AppearanceStudioView: View {
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundStyle(studio.color(.accent, variant: variant))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(
-                        studio.color(.chip, variant: variant),
-                        in: Capsule()
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 9)
+                    .background(studio.color(.chip, variant: variant).opacity(studio.surfaceOpacity),
+                                in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.5)
                     )
                 }
                 .buttonStyle(.plain)
             }
 
-            // 摇出来的色带：一眼看出这套是什么调子
+            // 色带：一眼看出这套的调子
             HStack(spacing: 0) {
-                ForEach([AppearanceColorRole.canvas, .surface, .iconTile,
+                ForEach([AppearanceColorRole.canvas, .surface, .iconTile, .chip,
                          .userBubble, .accent, .primaryText], id: \.self) { role in
                     Rectangle()
                         .fill(studio.color(role, variant: variant))
-                        .frame(height: 26)
-                        .overlay(
-                            Rectangle()
-                                .stroke(studio.color(.border, variant: variant).opacity(0.25), lineWidth: 0.5)
-                        )
+                        .frame(height: 30)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
             )
+
+            // 五个风格档
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(AppearanceThemeShuffle.Mood.allCases) { mood in
+                        Button {
+                            roll(mood: mood)
+                        } label: {
+                            Text(mood.title)
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
+                                            in: Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .stroke(studio.color(.border, variant: variant).opacity(0.32), lineWidth: 0.5)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
         }
-        .padding(14)
+        .padding(16)
         .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
+                radius: 10, x: 0, y: 3)
     }
 
-    private func roll() {
-        let name = studio.shuffleTheme()
-        withAnimation(.easeOut(duration: 0.2)) { shuffleSeedNote = "「\(name)」" }
-        // 提示两秒后淡掉，不要一直占着位置
+    private func roll(mood: AppearanceThemeShuffle.Mood? = nil) {
+        let name = studio.shuffleTheme(mood: mood)
+        withAnimation(.easeOut(duration: 0.18)) { shuffleName = name }
         Task {
-            try? await Task.sleep(nanoseconds: 2_200_000_000)
-            withAnimation(.easeIn(duration: 0.3)) { shuffleSeedNote = nil }
+            try? await Task.sleep(nanoseconds: 2_600_000_000)
+            withAnimation(.easeIn(duration: 0.3)) { shuffleName = nil }
         }
+    }
+
+    /// 三套预设。上一版我把这个入口删了，引擎方法还在——补回来。
+    private var presetsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("预设")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(studio.color(.primaryText, variant: variant))
+
+            HStack(spacing: 8) {
+                ForEach(AppearancePreset.allCases) { preset in
+                    Button {
+                        studio.applyPreset(preset)
+                    } label: {
+                        VStack(spacing: 7) {
+                            HStack(spacing: 0) {
+                                ForEach(Array(presetSwatchColors(preset).enumerated()), id: \.offset) { _, hex in
+                                    Rectangle().fill(Color(hex: hex))
+                                }
+                            }
+                            .frame(height: 24)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
+                            )
+                            Text(preset.title)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(9)
+                        .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
+                                    in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                                .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(16)
+        .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
+                radius: 10, x: 0, y: 3)
+    }
+
+    private func presetSwatchColors(_ preset: AppearancePreset) -> [String] {
+        let pal = preset.colors
+        let map = variant == .light ? pal.light : pal.dark
+        return [AppearanceColorRole.canvas, .surface, .accent, .primaryText]
+            .compactMap { map[$0] }
     }
 
     private func paletteGroupCard(_ group: AppearanceColorRoleGroup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(group.title)
                     .font(.system(size: 13, weight: .semibold))
+                    .tracking(0.2)
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Text(group.hint)
-                    .font(.system(size: 10))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.85))
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 16)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
             ForEach(Array(group.roles.enumerated()), id: \.element) { index, role in
                 if index > 0 {
                     Rectangle()
-                        .fill(studio.color(.border, variant: variant).opacity(0.3))
+                        .fill(studio.color(.border, variant: variant).opacity(0.22))
                         .frame(height: 0.5)
-                        .padding(.leading, 14)
+                        .padding(.leading, 16)
                 }
                 paletteRow(role)
             }
         }
         .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
+                radius: 10, x: 0, y: 3)
     }
 
     private func paletteRow(_ role: AppearanceColorRole) -> some View {
-        HStack(spacing: 12) {
-            // 色块。点它开系统取色器——比一行文字 + 一个色轮好点。
+        HStack(spacing: 13) {
+            // 色块外面套一层描边，低饱和色在浅底上才看得出边界
             ColorPicker("", selection: studio.colorBinding(role, scope: .global, variant: variant),
                         supportsOpacity: false)
                 .labelsHidden()
-                .frame(width: 30, height: 30)
+                .frame(width: 32, height: 32)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(role.title)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13.5, weight: .medium))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Text(role.hint)
                     .font(.system(size: 10))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.72))
                     .lineLimit(1)
             }
 
@@ -321,67 +475,68 @@ struct AppearanceStudioView: View {
 
             Text("#\(studio.hex(role, scope: .global, variant: variant))")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.6))
+                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.55))
 
             if studio.hasOverride(role, scope: .global, variant: variant) {
                 Button {
                     studio.clearOverride(role, scope: .global, variant: variant)
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                        .frame(width: 20, height: 20)
+                        .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
+                                    in: Circle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
     }
 
-    /// 高级：页级覆盖。默认折叠，因为它是"为什么别处没变"的最大来源。
     private var advancedCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { showAdvanced.toggle() }
+                withAnimation(.easeInOut(duration: 0.22)) { showAdvanced.toggle() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 9) {
                     Image(systemName: "slider.horizontal.3")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11, weight: .medium))
                     Text("高级")
                         .font(.system(size: 13, weight: .medium))
                     Spacer()
-                    Image(systemName: showAdvanced ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .rotationEffect(.degrees(showAdvanced ? 180 : 0))
                 }
                 .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if showAdvanced {
                 Rectangle()
-                    .fill(studio.color(.border, variant: variant).opacity(0.3))
+                    .fill(studio.color(.border, variant: variant).opacity(0.22))
                     .frame(height: 0.5)
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("给单独某一页换色。没单独调过的页跟随「全部页面」。")
                         .font(.system(size: 11))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
 
                     Picker("改哪一页", selection: $paletteScope) {
-                        ForEach(AppearanceScope.allCases) { scope in
-                            Text(scope.title).tag(scope)
-                        }
+                        ForEach(AppearanceScope.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.menu)
                     .tint(studio.color(.accent, variant: variant))
 
                     if paletteScope != .global {
                         let count = studio.overrideCount(scope: paletteScope, variant: variant)
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Text(count == 0
                                  ? "这一页还没有单独调过任何颜色。"
                                  : "这一页有 \(count) 项和全局不一样。")
@@ -400,10 +555,10 @@ struct AppearanceStudioView: View {
                         ForEach(AppearanceColorRoleGroup.allCases) { group in
                             VStack(alignment: .leading, spacing: 0) {
                                 Text(group.title)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                                    .padding(.top, 6)
-                                    .padding(.bottom, 2)
+                                    .font(.system(size: 10.5, weight: .semibold))
+                                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 3)
                                 ForEach(group.roles, id: \.self) { role in
                                     scopedRow(role)
                                 }
@@ -411,7 +566,10 @@ struct AppearanceStudioView: View {
                         }
                     }
 
-                    Divider().opacity(0.3)
+                    Rectangle()
+                        .fill(studio.color(.border, variant: variant).opacity(0.22))
+                        .frame(height: 0.5)
+                        .padding(.vertical, 4)
 
                     Button {
                         studio.resetColors()
@@ -422,20 +580,22 @@ struct AppearanceStudioView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(14)
+                .padding(16)
             }
         }
         .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
+                radius: 10, x: 0, y: 3)
     }
 
     private func scopedRow(_ role: AppearanceColorRole) -> some View {
         let overridden = studio.hasOverride(role, scope: paletteScope, variant: variant)
-        return HStack(spacing: 10) {
+        return HStack(spacing: 11) {
             ColorPicker("", selection: studio.colorBinding(role, scope: paletteScope, variant: variant),
                         supportsOpacity: false)
                 .labelsHidden()
@@ -446,45 +606,45 @@ struct AppearanceStudioView: View {
             Spacer()
             if overridden {
                 Text("已单独调")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(studio.color(.accent, variant: variant))
                 Button {
                     studio.clearOverride(role, scope: paletteScope, variant: variant)
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 }
                 .buttonStyle(.plain)
             } else {
                 Text("#\(studio.hex(role, scope: .global, variant: variant))")
                     .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.45))
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 
-    // MARK: - 气泡页
+    // MARK: - 气泡
 
     private var bubblesPage: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             card("气泡颜色") {
                 ForEach([AppearanceColorRole.userBubble, .assistantBubble], id: \.self) { role in
-                    HStack(spacing: 12) {
+                    HStack(spacing: 13) {
                         ColorPicker("", selection: studio.colorBinding(role, scope: .global, variant: variant),
                                     supportsOpacity: false)
                             .labelsHidden()
-                            .frame(width: 30, height: 30)
+                            .frame(width: 32, height: 32)
                         Text(role.title)
-                            .font(.system(size: 13))
+                            .font(.system(size: 13.5, weight: .medium))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
                         Spacer()
                         Text("#\(studio.hex(role, scope: .global, variant: variant))")
                             .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.6))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.55))
                     }
-                    .padding(.vertical, 5)
+                    .padding(.vertical, 6)
                 }
                 sliderRow("气泡透明度", value: $studio.bubbleOpacity, range: 0.15...1)
             }
@@ -502,6 +662,10 @@ struct AppearanceStudioView: View {
                     ForEach(AppearanceBubbleStyle.allCases) { Text($0.title).tag($0) }
                 }
                 .tint(studio.color(.accent, variant: variant))
+                Picker("列表图标", selection: listIconShapeBinding) {
+                    ForEach(AppearanceListIconShape.allCases) { Text($0.title).tag($0) }
+                }
+                .tint(studio.color(.accent, variant: variant))
                 sliderRow("输入栏圆角", value: inputBarRadiusBinding, range: 4...32, unit: "")
             }
 
@@ -511,16 +675,16 @@ struct AppearanceStudioView: View {
                 }
                 .tint(studio.color(.accent, variant: variant))
                 Text("字体只作用于聊天正文、输入框和 thinking 卡片。")
-                    .font(.system(size: 10))
+                    .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
             }
         }
     }
 
-    // MARK: - 背景页
+    // MARK: - 背景
 
     private var backdropPage: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             card("壁纸") {
                 Picker("用于", selection: $wallpaperScope) {
                     ForEach(AppearanceScope.allCases) { Text($0.title).tag($0) }
@@ -532,22 +696,22 @@ struct AppearanceStudioView: View {
                     Text(studio.hasWallpaper(wallpaperScope) ? "壁纸预览" : "纯色背景")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(studio.color(.primaryText, scope: wallpaperScope))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
                         .background(studio.color(.raised, scope: wallpaperScope).opacity(0.85),
                                     in: Capsule())
-                        .padding(8)
+                        .padding(10)
                 }
-                .frame(height: 140)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .frame(height: 150)
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(studio.color(.border, scope: wallpaperScope), lineWidth: 0.6)
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(studio.color(.border, scope: wallpaperScope).opacity(0.4), lineWidth: 0.5)
                 )
 
                 PhotosPicker(selection: $wallpaperItem, matching: .images) {
                     Label(studio.hasOwnWallpaper(wallpaperScope) ? "换这张" : "选一张",
-                          systemImage: "photo.fill")
+                          systemImage: "photo")
                         .font(.system(size: 13))
                 }
 
@@ -570,28 +734,30 @@ struct AppearanceStudioView: View {
         }
     }
 
-    // MARK: - 情头页
+    // MARK: - 情头
 
     private var avatarsPage: some View {
         card("情头") {
-            HStack(spacing: 12) {
+            HStack(spacing: 14) {
                 Spacer()
-                VStack(spacing: 6) {
-                    PersonAvatarView(kind: .assistant, size: 56)
-                    Text(aiName).font(.system(size: 11))
+                VStack(spacing: 7) {
+                    PersonAvatarView(kind: .assistant, size: 60)
+                    Text(aiName)
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 }
                 Image(systemName: "link")
-                    .font(.system(size: 12))
-                    .foregroundStyle(studio.color(.accent, variant: variant))
-                VStack(spacing: 6) {
-                    PersonAvatarView(kind: .user, size: 56)
-                    Text("你").font(.system(size: 11))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(studio.color(.accent, variant: variant).opacity(0.7))
+                VStack(spacing: 7) {
+                    PersonAvatarView(kind: .user, size: 60)
+                    Text("你")
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 }
                 Spacer()
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, 8)
 
             PhotosPicker(selection: $userAvatarItem, matching: .images) {
                 Label("选我的头像", systemImage: "person.crop.square").font(.system(size: 13))
@@ -608,26 +774,27 @@ struct AppearanceStudioView: View {
             if !SoulStore.cachedMetadata.icon.isEmpty {
                 Button("去掉\(aiName)的头像") {
                     do { try studio.removeAssistantAvatar() }
-                    catch { errorText = error.localizedDescription }
+                    catch { fail(error.localizedDescription) }
                 }
                 .font(.system(size: 12))
                 .foregroundStyle(studio.color(.destructive, variant: variant))
             }
 
             Text("两张都会裁成方的，存在这台手机上。\(aiName)的头像同时就是 Soul 图标。")
-                .font(.system(size: 10))
-                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                .font(.system(size: 10.5))
+                .lineSpacing(1.5)
+                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
         }
     }
 
-    // MARK: - 图标页
+    // MARK: - 图标
 
     private var iconsPage: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             card("设置行图标") {
                 ForEach(QuietIconSlot.allCases) { slot in
-                    HStack(spacing: 12) {
-                        QuietAppIcon(id: slot.id, systemName: slot.systemName, size: 26)
+                    HStack(spacing: 13) {
+                        QuietAppIcon(id: slot.id, systemName: slot.systemName, size: 27)
                         Text(slot.title)
                             .font(.system(size: 13))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
@@ -638,6 +805,7 @@ struct AppearanceStudioView: View {
                         ), matching: .images) {
                             Text(studio.customIcon(for: slot.id) == nil ? "上传" : "更换")
                                 .font(.system(size: 12))
+                                .foregroundStyle(studio.color(.accent, variant: variant))
                         }
                         if studio.customIcon(for: slot.id) != nil {
                             Button("还原") { studio.removeIcon(for: slot.id) }
@@ -645,7 +813,7 @@ struct AppearanceStudioView: View {
                                 .foregroundStyle(studio.color(.destructive, variant: variant))
                         }
                     }
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
                 }
             }
 
@@ -688,16 +856,19 @@ struct AppearanceStudioView: View {
 
     private func categoryRow(_ key: String) -> some View {
         let themedSymbol = MinisThemeList.categoryIcon(for: key).systemName
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 10) {
-                // 白底黑实心——和全 App 图标同一个规范
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 11) {
                 Image(systemName: QuietAppIcon.filledSymbolName(themedSymbol))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.black)
-                    .frame(width: 22, height: 22)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .frame(width: 23, height: 23)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6.5, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
+                    )
                 Text(key)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Spacer()
                 PhotosPicker(selection: Binding(
@@ -706,6 +877,7 @@ struct AppearanceStudioView: View {
                 ), matching: .images) {
                     Text(studio.categoryImage(for: key) == nil ? "贴图" : "换图")
                         .font(.system(size: 11))
+                        .foregroundStyle(studio.color(.accent, variant: variant))
                 }
                 if studio.categoryImage(for: key) != nil {
                     Button("还原") { studio.removeCategoryImage(for: key) }
@@ -713,8 +885,7 @@ struct AppearanceStudioView: View {
                         .foregroundStyle(studio.color(.destructive, variant: variant))
                 }
             }
-            // 自定义 SF 符号名。空着就用默认那个。
-            HStack(spacing: 8) {
+            HStack(spacing: 9) {
                 TextField("SF 名，空着就是默认", text: categorySymbolBinding(key))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -724,16 +895,16 @@ struct AppearanceStudioView: View {
                     .labelsHidden()
                     .frame(width: 18, height: 18)
                     .disabled(true)
-                    .opacity(0.35)
+                    .opacity(0.3)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
     }
 
-    // MARK: - 主题库页
+    // MARK: - 主题库
 
     private var libraryPage: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 20) {
             card("存这一套") {
                 TextField("给它起个名字", text: $saveName)
                     .textInputAutocapitalization(.never)
@@ -748,8 +919,8 @@ struct AppearanceStudioView: View {
                 }
                 .buttonStyle(.plain)
                 Text("另存一份，不会冲掉正在用的。最多四十套。")
-                    .font(.system(size: 10))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
             }
 
             card("主题库") {
@@ -760,24 +931,24 @@ struct AppearanceStudioView: View {
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 } else {
                     ForEach(saved) { item in
-                        HStack(spacing: 10) {
+                        HStack(spacing: 11) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                    .font(.system(size: 13))
+                                    .font(.system(size: 13, weight: .medium))
                                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                                 Text(item.userStyleTitle + " · " + item.assistantStyleTitle)
                                     .font(.system(size: 10))
-                                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
                             }
                             Spacer()
                             Button("应用") { _ = studio.applySavedTheme(id: item.id) }
-                                .font(.system(size: 12))
+                                .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(studio.color(.accent, variant: variant))
                             Button("删") { _ = studio.deleteSavedTheme(id: item.id) }
                                 .font(.system(size: 11))
                                 .foregroundStyle(studio.color(.destructive, variant: variant))
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 5)
                     }
                 }
             }
@@ -809,63 +980,65 @@ struct AppearanceStudioView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.16)) { page = item }
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: 4) {
                         Image(systemName: item.symbol)
                             .font(.system(size: 15, weight: page == item ? .semibold : .regular))
+                            .symbolRenderingMode(.hierarchical)
                         Text(item.title)
-                            .font(.system(size: 9))
+                            .font(.system(size: 9, weight: page == item ? .medium : .regular))
                     }
                     .foregroundStyle(page == item
                                      ? studio.color(.accent, variant: variant)
-                                     : studio.color(.secondaryText, variant: variant).opacity(0.8))
+                                     : studio.color(.secondaryText, variant: variant).opacity(0.7))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 7)
+                    .padding(.vertical, 8)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.top, 2)
-        .padding(.bottom, 2)
+        .padding(.horizontal, 6)
         .background(.regularMaterial)
         .overlay(alignment: .top) {
             Rectangle()
-                .fill(studio.color(.border, variant: variant).opacity(0.35))
+                .fill(studio.color(.border, variant: variant).opacity(0.25))
                 .frame(height: 0.5)
         }
     }
 
-    // MARK: - 小零件
+    // MARK: - 零件
 
     private func card<Content: View>(_ title: String,
                                      @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
+                .tracking(0.2)
                 .foregroundStyle(studio.color(.primaryText, variant: variant))
             content()
         }
-        .padding(14)
+        .padding(16)
         .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
+                radius: 10, x: 0, y: 3)
     }
 
     private func sliderRow(_ title: String, value: Binding<Double>,
                            range: ClosedRange<Double>, unit: String = "%") -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(title)
-                    .font(.system(size: 12))
+                    .font(.system(size: 12.5))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Spacer()
                 Text(unit == "%" ? "\(Int(value.wrappedValue * 100))%" : "\(Int(value.wrappedValue))")
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
             }
             Slider(value: value, in: range)
                 .tint(studio.color(.accent, variant: variant))
@@ -889,6 +1062,10 @@ struct AppearanceStudioView: View {
     private var fontFamilyBinding: Binding<AppearanceFontFamily> {
         Binding(get: { AppearanceFontFamily.parse(studio.currentThemePack().fontFamily) },
                 set: { studio.setFontFamily($0) })
+    }
+    private var listIconShapeBinding: Binding<AppearanceListIconShape> {
+        Binding(get: { AppearanceListIconShape.parse(studio.currentThemePack().listIconShape) },
+                set: { studio.setListIconShape($0) })
     }
     private var inputBarRadiusBinding: Binding<Double> {
         Binding(get: { studio.currentThemePack().inputBarRadius },
@@ -916,9 +1093,6 @@ struct AppearanceStudioView: View {
             set: { studio.setCategorySymbol($0, for: key) }
         )
     }
-    /// 分类图标色。全 App 图标已经统一成白底黑实心，这个控件留着是为了
-    /// 不让老主题包里的值变成"读得到、改不了"的死数据——改得动，只是
-    /// 当前渲染不吃它。
     private func categoryColorBinding(_ key: String) -> Binding<Color> {
         Binding(
             get: {
@@ -936,7 +1110,7 @@ struct AppearanceStudioView: View {
         guard let data = try? JSONSerialization.data(withJSONObject: pack.asJSONObject(),
                                                     options: [.prettyPrinted, .sortedKeys]),
               let text = String(data: data, encoding: .utf8) else {
-            errorText = "主题包写不出来。"
+            fail("主题包写不出来。")
             return
         }
         UIPasteboard.general.string = text
@@ -946,14 +1120,14 @@ struct AppearanceStudioView: View {
         guard let text = UIPasteboard.general.string,
               let data = text.data(using: .utf8),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            errorText = "剪贴板里没有能用的主题包。"
+            fail("剪贴板里没有能用的主题包。")
             return
         }
         do {
             let pack = try AppearanceThemePack.decode(obj, merging: studio.currentThemePack())
             studio.applyThemePack(pack)
         } catch {
-            errorText = error.localizedDescription
+            fail(error.localizedDescription)
         }
     }
 
@@ -971,7 +1145,7 @@ struct AppearanceStudioView: View {
         }
         guard let data = try? await item.loadTransferable(type: Data.self),
               let image = ThumbnailCache.downsampledImage(from: data, maxEdge: maxEdge) else {
-            errorText = "选中的图读不出来。"
+            fail("选中的图读不出来。")
             return
         }
         apply(image)
@@ -1007,159 +1181,164 @@ enum AppearanceStudioPage: String, CaseIterable, Identifiable {
 
 // MARK: - 真组件预览
 //
-// 用真的形状参数（MinisThemeShape）、真的角色、真的图标底，
-// 缩到小尺寸摆一屏。她改什么这里立刻变，因为它读的是同一套变量。
+// 真的 MinisBubbleShape、真的 iconTile 角色、真的输入框圆角。
+// `scale` 控制放大倍数——顶部预览 1.0，全屏预览 1.5。
 
 private struct AppearanceLivePreview: View {
     let variant: AppearanceVariant
     let aiName: String
+    var scale: CGFloat = 1.0
 
     @ObservedObject private var studio = AppearanceStudio.shared
 
     private var pack: AppearanceThemePack { studio.currentThemePack() }
 
+    private var base: CGFloat { 12 * scale }
+    private var small: CGFloat { 9.5 * scale }
+
     var body: some View {
-        VStack(spacing: 7) {
-            // AI 气泡（真形状）
-            HStack(alignment: .top, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10 * scale) {
+            // AI 气泡
+            HStack(alignment: .top, spacing: 7 * scale) {
                 Circle()
                     .fill(studio.color(.accent, variant: variant))
-                    .frame(width: 20, height: 20)
+                    .frame(width: 22 * scale, height: 22 * scale)
                     .overlay(
                         Text(String(aiName.prefix(1)))
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.system(size: 10 * scale, weight: .semibold))
                             .foregroundStyle(.white)
                     )
                 Text("今天想聊点什么？")
-                    .font(.system(size: 11.5))
+                    .font(.system(size: base))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 11 * scale)
+                    .padding(.vertical, 7 * scale)
                     .background(
-                        studio.color(.assistantBubble, variant: variant)
-                            .opacity(studio.bubbleOpacity),
+                        studio.color(.assistantBubble, variant: variant).opacity(studio.bubbleOpacity),
                         in: MinisBubbleShape(style: pack.assistantStyle,
-                                             radius: min(pack.assistantBubbleRadius, 14),
+                                             radius: min(pack.assistantBubbleRadius, 16 * scale),
                                              tailOnTrailing: false)
                     )
                     .overlay(
                         MinisBubbleShape(style: pack.assistantStyle,
-                                         radius: min(pack.assistantBubbleRadius, 14),
+                                         radius: min(pack.assistantBubbleRadius, 16 * scale),
                                          tailOnTrailing: false)
                             .stroke(studio.color(.border, variant: variant).opacity(0.3), lineWidth: 0.5)
                     )
                 Spacer(minLength: 0)
             }
 
-            // 我的气泡（真形状，靠右）
-            HStack(alignment: .top, spacing: 6) {
+            // 我的气泡
+            HStack(alignment: .top, spacing: 7 * scale) {
                 Spacer(minLength: 0)
                 Text("把界面做得漂亮一点~")
-                    .font(.system(size: 11.5))
+                    .font(.system(size: base))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
+                    .padding(.horizontal, 11 * scale)
+                    .padding(.vertical, 7 * scale)
                     .background(
-                        studio.color(.userBubble, variant: variant)
-                            .opacity(studio.bubbleOpacity),
+                        studio.color(.userBubble, variant: variant).opacity(studio.bubbleOpacity),
                         in: MinisBubbleShape(style: pack.userStyle,
-                                             radius: min(pack.userBubbleRadius, 14),
+                                             radius: min(pack.userBubbleRadius, 16 * scale),
                                              tailOnTrailing: true)
                     )
                 Circle()
-                    .fill(studio.color(.secondaryText, variant: variant).opacity(0.22))
-                    .frame(width: 20, height: 20)
+                    .fill(studio.color(.secondaryText, variant: variant).opacity(0.20))
+                    .frame(width: 22 * scale, height: 22 * scale)
                     .overlay(
                         Text("你")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(.system(size: 9 * scale, weight: .semibold))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
                     )
             }
 
-            // 消息操作栏那排图标底（就是她说"不该跟着卡片变"的东西）
-            HStack(spacing: 6) {
+            // 消息操作栏那排图标底 —— 就是她说"不该跟着卡片变"的东西
+            HStack(spacing: 7 * scale) {
                 ForEach(["speaker.wave.2.fill", "arrow.clockwise", "doc.on.doc.fill", "trash.fill"],
                         id: \.self) { symbol in
                     Image(systemName: symbol)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 9.5 * scale, weight: .medium))
                         .foregroundStyle(studio.color(.primaryText, variant: variant))
-                        .frame(width: 20, height: 20)
+                        .frame(width: 22 * scale, height: 22 * scale)
                         .background(
                             studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            in: RoundedRectangle(cornerRadius: 6.5 * scale, style: .continuous)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            RoundedRectangle(cornerRadius: 6.5 * scale, style: .continuous)
                                 .stroke(studio.color(.border, variant: variant).opacity(0.4), lineWidth: 0.5)
                         )
                 }
                 Spacer(minLength: 0)
+                // 胶囊底
+                Text("1.2k tok")
+                    .font(.system(size: 8 * scale, design: .monospaced))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                    .padding(.horizontal, 7 * scale)
+                    .padding(.vertical, 3.5 * scale)
+                    .background(studio.color(.chip, variant: variant).opacity(studio.surfaceOpacity),
+                                in: Capsule())
             }
 
-            // 输入框 + 发送按钮
-            HStack(spacing: 6) {
-                HStack(spacing: 5) {
+            // 输入框 + 发送
+            HStack(spacing: 7 * scale) {
+                HStack(spacing: 6 * scale) {
                     Image(systemName: "plus")
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 10 * scale, weight: .medium))
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                     Text("发消息…")
-                        .font(.system(size: 11))
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
+                        .font(.system(size: base))
+                        .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.7))
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 8)
-                .frame(height: 26)
+                .padding(.horizontal, 10 * scale)
+                .frame(height: 30 * scale)
                 .background(
                     studio.color(.field, variant: variant).opacity(studio.surfaceOpacity),
-                    in: RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 13), style: .continuous)
+                    in: RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 15 * scale), style: .continuous)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 13), style: .continuous)
-                        .stroke(studio.color(.border, variant: variant).opacity(0.5), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 15 * scale), style: .continuous)
+                        .stroke(studio.color(.border, variant: variant).opacity(0.45), lineWidth: 0.5)
                 )
 
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 11 * scale, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 26, height: 26)
+                    .frame(width: 30 * scale, height: 30 * scale)
                     .background(
                         studio.color(.accent, variant: variant),
-                        in: RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 13), style: .continuous)
+                        in: RoundedRectangle(cornerRadius: min(pack.inputBarRadius, 15 * scale), style: .continuous)
                     )
             }
 
-            // 状态三色 + 胶囊底
-            HStack(spacing: 5) {
+            // 状态三色
+            HStack(spacing: 6 * scale) {
                 chipSwatch(.success, "成功")
                 chipSwatch(.warning, "警告")
                 chipSwatch(.destructive, "危险")
                 Spacer(minLength: 0)
-                Text("1.2k tok")
-                    .font(.system(size: 8, design: .monospaced))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background(studio.color(.chip, variant: variant).opacity(studio.surfaceOpacity),
-                                in: Capsule())
             }
         }
-        .padding(10)
+        .padding(13 * scale)
         .background(
             studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(studio.color(.border, variant: variant).opacity(0.5), lineWidth: 0.6)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(studio.color(.border, variant: variant).opacity(0.45), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(variant == .light ? 0.05 : 0.3),
+                radius: 12, x: 0, y: 4)
     }
 
     private func chipSwatch(_ role: AppearanceColorRole, _ label: String) -> some View {
         Text(label)
-            .font(.system(size: 8, weight: .medium))
+            .font(.system(size: 8.5 * scale, weight: .medium))
             .foregroundStyle(studio.color(role, variant: variant))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(studio.color(role, variant: variant).opacity(0.14), in: Capsule())
+            .padding(.horizontal, 7 * scale)
+            .padding(.vertical, 3.5 * scale)
+            .background(studio.color(role, variant: variant).opacity(0.13), in: Capsule())
     }
 }

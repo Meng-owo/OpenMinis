@@ -3,109 +3,187 @@ import SwiftUI
 
 // MARK: - 摇一套配色
 //
-// [10-18 醒醒] 「他那个调色盘随机摇骰子也不错啊。他的构思可以学。」
+// [10-18 醒醒] 「这个摇一摇换主题，这个是被你写死的几个对吗。自由度高一点，
+// 或者你把配色写的高级感一点你选，现在的配色有点 low。」
 //
-// 参考的是 LiveTheme 那个思路：不给你十六个色去自己配，而是**按一套配色
-// 骨架摇**——先定一个主色（色相 + 饱和度 + 明度），其余角色全部由它推导
-// 出来，保证摇出来一定是协调的，不会出现粉底配荧光绿。
+// ## 上一版为什么 low
 //
-// 关键不是"随机十六个色"，是"随机一个色，其余按规则算"。所以：
-// - 摇一百次也不会出丑的
-// - 但也不是只有一种风格（色相、冷暖、深浅都在摇）
+// 上一版主色饱和度摇在 0.38-0.67。0.67 已经是"艳"了——那一段摇出来的
+// 是糖果色，不是高级感。她说的"low"就是这一段。
 //
-// 推导规则（浅色为例，深色另算）：
-//   主色 accent         ← 摇
-//   canvas              ← 主色同色相，明度拉到接近白
-//   surface             ← 比 canvas 再亮一点（或纯白）
-//   raised              ← 比 surface 再亮（浮层要"浮起来"）
-//   mutedSurface        ← 比 canvas 暗一档
-//   iconTile            ← 介于 mutedSurface 和 surface 之间
-//   chip                ← 比 iconTile 再深一点点
-//   field               ← 跟 surface 同档，略偏主色
-//   border              ← 比 canvas 暗两档
-//   primaryText         ← 主色同色相，明度压到很低（不用纯黑）
-//   secondaryText       ← 主色同色相，明度中等
-//   userBubble          ← 主色，明度很高（淡）
-//   assistantBubble     ← 跟 surface 一样
-//   success/warning/destructive ← 固定语义色，只微调明度贴合整体
+// ## 现在按莫兰迪来
+//
+// 查到的莫兰迪色系定义：**饱和度 15%-40%，明度 55%-80%，灰调柔和**。
+// 这才是"软糯干净"的数值区间。所以：
+//
+// - 主色饱和度 **0.15 - 0.40**，不再往 0.67 跑
+// - 所有色的明度往 0.55 - 0.80 靠
+// - 底色不追纯白，追米白/灰白（纯白配低饱和主色会发脏）
+//
+// ## 自由度
+//
+// 不是"写死几个预设"，是真的连续可摇：
+// - 色相 0-360 全圈
+// - 饱和度在莫兰迪区间内连续
+// - 明度档位可选（更浅 / 标准 / 更深）
+// - 冷暖偏向可切
+//
+// 另外给「按感觉摇」——软糯 / 清透 / 沉静 / 暖阳 / 夜。这几个不是写死的
+// 色值，是**不同的参数区间**，摇出来每次都不一样。
 
 enum AppearanceThemeShuffle {
 
+    /// 摇骰子的风格档。不是写死的色板，是参数区间。
+    enum Mood: String, CaseIterable, Identifiable {
+        case soft, airy, calm, warm, night
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .soft: return "软糯"
+            case .airy: return "清透"
+            case .calm: return "沉静"
+            case .warm: return "暖阳"
+            case .night: return "夜"
+            }
+        }
+
+        /// 色相区间（度）。nil = 全圈。
+        var hueRange: ClosedRange<Double>? {
+            switch self {
+            case .soft: return 320...360   // 粉、樱、藕
+            case .airy: return 170...230   // 雾蓝、水青
+            case .calm: return 100...170   // 苔、灰绿
+            case .warm: return 15...50     // 杏、陶土
+            case .night: return nil
+            }
+        }
+
+        /// 饱和度区间。全部落在莫兰迪范围里，只是宽窄不同。
+        var saturation: ClosedRange<Double> {
+            switch self {
+            case .soft: return 0.18...0.34
+            case .airy: return 0.15...0.30
+            case .calm: return 0.16...0.32
+            case .warm: return 0.22...0.38
+            case .night: return 0.16...0.30
+            }
+        }
+
+        /// 底色明度：越靠夜越深。
+        var canvasLightness: Double {
+            switch self {
+            case .soft, .airy: return 0.972
+            case .calm: return 0.968
+            case .warm: return 0.970
+            case .night: return 0.955
+            }
+        }
+
+        var prefersDark: Bool { self == .night }
+    }
+
     /// 摇一套。`seed` 传 nil 就是真随机；传固定值可以复现同一套。
-    static func shuffle(seed: UInt64? = nil) -> (light: [AppearanceColorRole: String],
-                                                 dark: [AppearanceColorRole: String],
-                                                 name: String) {
+    static func shuffle(seed: UInt64? = nil,
+                        mood: Mood? = nil) -> (light: [AppearanceColorRole: String],
+                                               dark: [AppearanceColorRole: String],
+                                               name: String) {
         var rng = SplitMix64(seed: seed ?? UInt64.random(in: 0...UInt64.max))
 
-        // 1. 摇主色：色相全圈，饱和度收在中段（太艳会俗），明度按浅/深分别定
-        let hue = Double(rng.next() % 3600) / 10.0
-        let sat = Double(38 + rng.next() % 30) / 100.0   // 0.38 ... 0.67
-        let accentLight = hsl(hue, sat, 0.52)
-        let accentDark = hsl(hue, sat * 0.78, 0.66)
+        // 不指定风格就随机挑一个——这样连点几次每次调子都不同。
+        let picked = mood ?? Mood.allCases[Int(rng.next() % UInt64(Mood.allCases.count))]
 
-        // 2. 冷暖微调：整体底色往主色偏一点点，不要偏成另一种颜色
-        let canvasLight = hsl(hue, min(0.16, sat * 0.26), 0.975)
-        let canvasDark = hsl(hue, min(0.14, sat * 0.22), 0.095)
+        // 1. 主色：色相在风格区间内连续摇，饱和度在莫兰迪区间内连续摇
+        let hue: Double
+        if let range = picked.hueRange {
+            let span = range.upperBound - range.lowerBound
+            hue = range.lowerBound + Double(rng.next() % 10_000) / 10_000 * span
+        } else {
+            hue = Double(rng.next() % 3600) / 10.0
+        }
+        let satSpan = picked.saturation.upperBound - picked.saturation.lowerBound
+        let sat = picked.saturation.lowerBound
+            + Double(rng.next() % 10_000) / 10_000 * satSpan
 
+        // 2. 色相微偏移：让它不是一个死板的单色系。
+        //    偏移控制在 ±12 度内，过了就不像一套了。
+        let drift = (Double(rng.next() % 2400) / 100.0) - 12.0
+
+        // 3. 推导。明度全部落在莫兰迪的 0.55-0.80 区间附近，
+        //    底色和文字例外（它们本来就该更浅/更深）。
+        let accentLight = hsl(hue, sat, 0.615)
+        let accentDark = hsl(hue, sat * 0.85, 0.680)
+
+        let canvasL = picked.canvasLightness
         let light: [AppearanceColorRole: String] = [
-            .canvas: canvasLight,
-            .surface: hsl(hue, min(0.12, sat * 0.20), 0.992),
-            .raised: hsl(hue, min(0.10, sat * 0.17), 1.0),
-            .mutedSurface: hsl(hue, min(0.18, sat * 0.30), 0.945),
-            .iconTile: hsl(hue, min(0.16, sat * 0.27), 0.958),
-            .chip: hsl(hue, min(0.20, sat * 0.33), 0.925),
-            .field: hsl(hue, min(0.14, sat * 0.23), 0.988),
-            .border: hsl(hue, min(0.14, sat * 0.24), 0.885),
-            .primaryText: hsl(hue, min(0.22, sat * 0.36), 0.145),
-            .secondaryText: hsl(hue, min(0.18, sat * 0.30), 0.475),
+            // 底：比纯白低一点点，带主色的极淡染色——纯白配低饱和主色会发脏
+            .canvas: hsl(hue + drift, min(0.10, sat * 0.30), canvasL),
+            .surface: hsl(hue + drift, min(0.07, sat * 0.21), min(1, canvasL + 0.018)),
+            .raised: hsl(hue + drift, min(0.05, sat * 0.16), min(1, canvasL + 0.026)),
+            .mutedSurface: hsl(hue + drift, min(0.12, sat * 0.36), canvasL - 0.040),
+            .iconTile: hsl(hue + drift, min(0.11, sat * 0.33), canvasL - 0.026),
+            .chip: hsl(hue + drift, min(0.14, sat * 0.42), canvasL - 0.055),
+            .field: hsl(hue + drift, min(0.09, sat * 0.27), min(1, canvasL + 0.012)),
+            .border: hsl(hue + drift, min(0.10, sat * 0.30), canvasL - 0.100),
+            // 文字：不用纯黑，用主色的深灰调——这是"干净"的关键
+            .primaryText: hsl(hue + drift, min(0.14, sat * 0.42), 0.215),
+            .secondaryText: hsl(hue + drift, min(0.11, sat * 0.33), 0.505),
             .accent: accentLight,
-            .userBubble: hsl(hue, min(0.46, sat * 0.76), 0.905),
-            .assistantBubble: hsl(hue, min(0.12, sat * 0.20), 0.992),
-            .success: hsl(148, 0.26, 0.475),
-            .warning: hsl(34, 0.52, 0.545),
-            .destructive: hsl(2, 0.48, 0.545),
+            // 气泡：很淡的一层主色，不抢
+            .userBubble: hsl(hue + drift, min(0.30, sat * 0.90), 0.905),
+            .assistantBubble: hsl(hue + drift, min(0.07, sat * 0.21), min(1, canvasL + 0.018)),
+            .success: hsl(150, 0.19, 0.520),
+            .warning: hsl(36, 0.32, 0.590),
+            .destructive: hsl(4, 0.34, 0.575),
         ]
 
         let dark: [AppearanceColorRole: String] = [
-            .canvas: canvasDark,
-            .surface: hsl(hue, min(0.14, sat * 0.23), 0.155),
-            .raised: hsl(hue, min(0.14, sat * 0.23), 0.205),
-            .mutedSurface: hsl(hue, min(0.16, sat * 0.26), 0.225),
-            .iconTile: hsl(hue, min(0.16, sat * 0.26), 0.238),
-            .chip: hsl(hue, min(0.18, sat * 0.29), 0.262),
-            .field: hsl(hue, min(0.14, sat * 0.23), 0.180),
-            .border: hsl(hue, min(0.16, sat * 0.26), 0.300),
-            .primaryText: hsl(hue, min(0.14, sat * 0.22), 0.935),
-            .secondaryText: hsl(hue, min(0.14, sat * 0.23), 0.705),
+            .canvas: hsl(hue + drift, min(0.12, sat * 0.36), 0.115),
+            .surface: hsl(hue + drift, min(0.11, sat * 0.33), 0.168),
+            .raised: hsl(hue + drift, min(0.11, sat * 0.33), 0.212),
+            .mutedSurface: hsl(hue + drift, min(0.12, sat * 0.36), 0.228),
+            .iconTile: hsl(hue + drift, min(0.12, sat * 0.36), 0.240),
+            .chip: hsl(hue + drift, min(0.14, sat * 0.42), 0.268),
+            .field: hsl(hue + drift, min(0.11, sat * 0.33), 0.190),
+            .border: hsl(hue + drift, min(0.12, sat * 0.36), 0.305),
+            .primaryText: hsl(hue + drift, min(0.08, sat * 0.24), 0.930),
+            .secondaryText: hsl(hue + drift, min(0.09, sat * 0.27), 0.690),
             .accent: accentDark,
-            .userBubble: hsl(hue, min(0.34, sat * 0.56), 0.300),
-            .assistantBubble: hsl(hue, min(0.14, sat * 0.23), 0.155),
-            .success: hsl(148, 0.24, 0.665),
-            .warning: hsl(34, 0.46, 0.685),
-            .destructive: hsl(2, 0.50, 0.700),
+            .userBubble: hsl(hue + drift, min(0.26, sat * 0.78), 0.320),
+            .assistantBubble: hsl(hue + drift, min(0.11, sat * 0.33), 0.168),
+            .success: hsl(150, 0.20, 0.660),
+            .warning: hsl(36, 0.30, 0.690),
+            .destructive: hsl(4, 0.36, 0.700),
         ]
 
-        return (light, dark, name(for: hue, sat: sat))
+        return (light, dark, name(hue: hue, sat: sat, mood: picked))
     }
 
-    /// 摇出来的名字。不为了起名而起名，只在她点「存这套」时给个默认值。
-    private static func name(for hue: Double, sat: Double) -> String {
-        let hueName: String
-        switch hue {
-        case ..<18, 340...: hueName = "石榴"
-        case ..<45: hueName = "橘"
-        case ..<70: hueName = "杏"
-        case ..<105: hueName = "苔"
-        case ..<150: hueName = "薄荷"
-        case ..<185: hueName = "湖"
-        case ..<215: hueName = "海"
-        case ..<255: hueName = "夜"
-        case ..<285: hueName = "薰衣草"
-        case ..<315: hueName = "紫"
-        default: hueName = "樱"
+    /// 摇出来的名字。只在"存这套"时当默认值。
+    private static func name(hue: Double, sat: Double, mood: Mood) -> String {
+        let h = hue.truncatingRemainder(dividingBy: 360)
+        let base: String
+        switch h {
+        case ..<15, 345...: base = "藕"
+        case ..<38: base = "杏"
+        case ..<62: base = "砂"
+        case ..<95: base = "苔"
+        case ..<140: base = "青"
+        case ..<175: base = "湖"
+        case ..<205: base = "雾蓝"
+        case ..<240: base = "黛"
+        case ..<280: base = "藤"
+        case ..<315: base = "紫"
+        default: base = "樱"
         }
-        let tone = sat > 0.55 ? "浓" : (sat > 0.46 ? "中" : "淡")
-        return hueName + tone
+        // 名字跟着浓度走，不跟风格走——风格已经体现在色本身了
+        let tone: String
+        switch sat {
+        case ..<0.20: tone = "淡"
+        case ..<0.28: tone = "柔"
+        case ..<0.34: tone = "沉"
+        default: tone = "浓"
+        }
+        return base + tone
     }
 
     // MARK: - HSL → HEX
