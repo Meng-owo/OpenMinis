@@ -5,16 +5,15 @@ import UIKit
 // MARK: - Semantic appearance system
 
 enum AppearanceScope: String, CaseIterable, Identifiable {
-    // [10-18 醒醒 第五轮] 删掉 `terminal`。
+    // [10-18 醒醒 第五轮] `terminal` 保留。
     //
-    // 终端是 ANSI 16 色渲染，主题系统的 role 对它没有意义——那七个
-    // Terminal*.swift 文件里 `appearancePage` 和 `MinisTheme` 的出现次数
-    // 都是 0。留着它只会让她调了半天发现终端不变，是个假选项。
+    // 我一度以为它是死的，因为七个 `Terminal*.swift` 里没有主题引用——
+    // 但 `ISHTerminalView.swift:95` 确实挂了
+    // `AppearanceBackdrop(scope: .terminal)`。所以它能改**壁纸**，
+    // 只是终端文字是 ANSI 16 色，role 对它无效。
     //
-    // `bottomBar` 保留，但它**只管壁纸不管颜色**：底部栏图标走
-    // `MinisThemeList.accent`，只有 `homeBottomBarBackground` 读
-    // `wallpaper(for: .bottomBar)`。
-    case global, home, chat, settings, browser, files, bottomBar
+    // 结论：`terminal` 能挂壁纸、不能调色，跟 `bottomBar` 同一类。
+    case global, home, chat, settings, browser, files, terminal, bottomBar
 
     var id: String { rawValue }
     var title: String {
@@ -26,11 +25,18 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
         case .settings: return "设置"
         case .browser: return "浏览器"
         case .files: return "文件"
+        case .terminal: return "终端"
         }
     }
 
-    /// 这个 scope 到底能不能调颜色。底部栏只能挂壁纸。
-    var supportsColour: Bool { self != .bottomBar }
+    /// 这个 scope 能不能调颜色。
+    ///
+    /// `bottomBar` 和 `terminal` 只承载壁纸：底部栏图标走
+    /// `MinisThemeList.accent`，终端是 ANSI 16 色渲染，role 对它们没意义。
+    var supportsColour: Bool { self != .bottomBar && self != .terminal }
+
+    /// 能挂壁纸的 scope（全部都能）。
+    var supportsWallpaper: Bool { true }
 }
 
 enum AppearanceVariant: String, CaseIterable, Identifiable {
