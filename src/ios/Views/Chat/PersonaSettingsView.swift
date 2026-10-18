@@ -38,7 +38,7 @@ struct PersonaSettingsView: View {
                         if avatarURI != nil {
                             Button("去掉") { avatarURI = nil; saveAvatar() }
                                 .font(.callout)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(MinisTheme.secondaryText)
                         }
                     }
                     TextField("名字", text: $name)
@@ -48,7 +48,7 @@ struct PersonaSettingsView: View {
                 Section("人设提示词") {
                     Text("这就是 SOUL.md 的正文，决定它说话的性格和身份。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     TextEditor(text: $soulBody)
                         .frame(minHeight: 220)
                         .font(.body)
@@ -57,7 +57,7 @@ struct PersonaSettingsView: View {
                 Section("Skill") {
                     Text("关掉的不再进它的 system prompt。注意：这个开关只管「要不要展示」，不是安全隔离——被关掉的仍可能被直接读取或调用。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     ForEach(SkillStore.shared.skills) { skill in
                         Toggle(skill.name, isOn: Binding(
                             get: { enabledSkillIds.contains(skill.id) },
@@ -73,7 +73,7 @@ struct PersonaSettingsView: View {
                 Section("MCP") {
                     Text("关掉的不再进它的 system prompt。注意：这个开关只管「要不要展示」，不是安全隔离——被关掉的仍可能被直接读取或调用。")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MinisTheme.secondaryText)
                     ForEach(MCPStore.shared.servers) { server in
                         Toggle(server.id, isOn: Binding(
                             get: { enabledMcpIds.contains(server.id) },
@@ -90,10 +90,16 @@ struct PersonaSettingsView: View {
                     Section {
                         Text("这是内置人设，删不掉。提示词可以改，但改了之后它的 MCP 管家身份可能会变味。")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(MinisTheme.secondaryText)
                     }
                 }
             }
+            // [T-theme-coverage] This page never read the palette: it was a
+            // bare Form on the system background, so changing 页面背景 or
+            // 卡片 left it untouched. Same two modifiers the other themed
+            // forms use.
+            .scrollContentBackground(.hidden)
+            .background(MinisTheme.canvas)
             .navigationTitle("编辑人设")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
