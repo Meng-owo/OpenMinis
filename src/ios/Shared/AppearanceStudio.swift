@@ -324,6 +324,16 @@ final class AppearanceStudio: ObservableObject {
         return Color(hex: hex(role, scope: scope, variant: resolved))
     }
 
+    /// 一整页所有角色的当前值。对比度体检用。
+    func allColors(scope: AppearanceScope = .global,
+                   variant: AppearanceVariant) -> [AppearanceColorRole: String] {
+        var out: [AppearanceColorRole: String] = [:]
+        for role in AppearanceColorRole.allCases {
+            out[role] = hex(role, scope: scope, variant: variant)
+        }
+        return out
+    }
+
     func uiColor(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
                  variant: AppearanceVariant? = nil) -> UIColor {
         UIColor(hex: hex(role, scope: scope, variant: variant ?? activeVariant))

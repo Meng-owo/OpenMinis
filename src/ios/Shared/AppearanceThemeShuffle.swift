@@ -83,6 +83,16 @@ enum AppearanceThemeShuffle {
     }
 
     /// 摇一套。`seed` 传 nil 就是真随机；传固定值可以复现同一套。
+    ///
+    /// [10-18 醒醒 第三轮] 改成**先摇一个主色，再走 12 步色阶推导**，
+    /// 不再手写 17 个角色的公式。
+    ///
+    /// 为什么换：原来 17 个角色各写一条 HSL 公式，加一个角色就要多写一条，
+    /// 而且互相之间没有关系——上一轮"卡片换色带动图标底"就是这么来的。
+    /// 现在主色定第 9 步，其余 11 步按 Radix 的规则推，角色只是色阶的视图。
+    ///
+    /// 另外**生成后强制过一遍对比度**：正文 4.5:1、UI 3:1。摇出来的东西
+    /// 一定看得清，不会出现灰字压浅底。
     static func shuffle(seed: UInt64? = nil,
                         mood: Mood? = nil) -> (light: [AppearanceColorRole: String],
                                                dark: [AppearanceColorRole: String],
@@ -104,56 +114,40 @@ enum AppearanceThemeShuffle {
         let sat = picked.saturation.lowerBound
             + Double(rng.next() % 10_000) / 10_000 * satSpan
 
-        // 2. 色相微偏移：让它不是一个死板的单色系。
-        //    偏移控制在 ±12 度内，过了就不像一套了。
-        let drift = (Double(rng.next() % 2400) / 100.0) - 12.0
+        // 2. 主色落在第 9 步（Radix 里最纯的那一步）
+        let seedHex = HSL(h: hue, s: sat, l: 0.615).hex
 
-        // 3. 推导。明度全部落在莫兰迪的 0.55-0.80 区间附近，
-        //    底色和文字例外（它们本来就该更浅/更深）。
-        let accentLight = hsl(hue, sat, 0.615)
-        let accentDark = hsl(hue, sat * 0.85, 0.680)
+        // 3. 推导两条色阶
+        var light = AppearanceScale.roles(
+            from: AppearanceScale.derive(seed: seedHex, dark: false), dark: false)
+        var dark = AppearanceScale.roles(
+            from: AppearanceScale.derive(seed: seedHex, dark: true), dark: true)
 
-        let canvasL = picked.canvasLightness
-        let light: [AppearanceColorRole: String] = [
-            // 底：比纯白低一点点，带主色的极淡染色——纯白配低饱和主色会发脏
-            .canvas: hsl(hue + drift, min(0.10, sat * 0.30), canvasL),
-            .surface: hsl(hue + drift, min(0.07, sat * 0.21), min(1, canvasL + 0.018)),
-            .raised: hsl(hue + drift, min(0.05, sat * 0.16), min(1, canvasL + 0.026)),
-            .mutedSurface: hsl(hue + drift, min(0.12, sat * 0.36), canvasL - 0.040),
-            .iconTile: hsl(hue + drift, min(0.11, sat * 0.33), canvasL - 0.026),
-            .chip: hsl(hue + drift, min(0.14, sat * 0.42), canvasL - 0.055),
-            .field: hsl(hue + drift, min(0.09, sat * 0.27), min(1, canvasL + 0.012)),
-            .border: hsl(hue + drift, min(0.10, sat * 0.30), canvasL - 0.100),
-            // 文字：不用纯黑，用主色的深灰调——这是"干净"的关键
-            .primaryText: hsl(hue + drift, min(0.14, sat * 0.42), 0.215),
-            .secondaryText: hsl(hue + drift, min(0.11, sat * 0.33), 0.505),
-            .accent: accentLight,
-            // 气泡：很淡的一层主色，不抢
-            .userBubble: hsl(hue + drift, min(0.30, sat * 0.90), 0.905),
-            .assistantBubble: hsl(hue + drift, min(0.07, sat * 0.21), min(1, canvasL + 0.018)),
-            .success: hsl(150, 0.19, 0.520),
-            .warning: hsl(36, 0.32, 0.590),
-            .destructive: hsl(4, 0.34, 0.575),
-        ]
-
-        let dark: [AppearanceColorRole: String] = [
-            .canvas: hsl(hue + drift, min(0.12, sat * 0.36), 0.115),
-            .surface: hsl(hue + drift, min(0.11, sat * 0.33), 0.168),
-            .raised: hsl(hue + drift, min(0.11, sat * 0.33), 0.212),
-            .mutedSurface: hsl(hue + drift, min(0.12, sat * 0.36), 0.228),
-            .iconTile: hsl(hue + drift, min(0.12, sat * 0.36), 0.240),
-            .chip: hsl(hue + drift, min(0.14, sat * 0.42), 0.268),
-            .field: hsl(hue + drift, min(0.11, sat * 0.33), 0.190),
-            .border: hsl(hue + drift, min(0.12, sat * 0.36), 0.305),
-            .primaryText: hsl(hue + drift, min(0.08, sat * 0.24), 0.930),
-            .secondaryText: hsl(hue + drift, min(0.09, sat * 0.27), 0.690),
-            .accent: accentDark,
-            .userBubble: hsl(hue + drift, min(0.26, sat * 0.78), 0.320),
-            .assistantBubble: hsl(hue + drift, min(0.11, sat * 0.33), 0.168),
-            .success: hsl(150, 0.20, 0.660),
-            .warning: hsl(36, 0.30, 0.690),
-            .destructive: hsl(4, 0.36, 0.700),
-        ]
+        // 4. 对比度兜底：文字压底色不达标就推到达标
+        for (role, level) in [(AppearanceColorRole.primaryText, AppearanceContrast.Level.body),
+                              (.secondaryText, .body)] {
+            if let fg = light[role], let bg = light[.canvas] {
+                light[role] = AppearanceContrast.enforce(fg, on: bg, level: level)
+            }
+            if let fg = light[role], let bg = light[.surface] {
+                light[role] = AppearanceContrast.enforce(fg, on: bg, level: level)
+            }
+            if let fg = dark[role], let bg = dark[.canvas] {
+                dark[role] = AppearanceContrast.enforce(fg, on: bg, level: level)
+            }
+            if let fg = dark[role], let bg = dark[.surface] {
+                dark[role] = AppearanceContrast.enforce(fg, on: bg, level: level)
+            }
+        }
+        // 气泡里的字也要看得清
+        for bubble in [AppearanceColorRole.userBubble, .assistantBubble] {
+            if let fg = light[.primaryText], let bg = light[bubble] {
+                light[.primaryText] = AppearanceContrast.enforce(fg, on: bg, level: .body)
+            }
+            if let fg = dark[.primaryText], let bg = dark[bubble] {
+                dark[.primaryText] = AppearanceContrast.enforce(fg, on: bg, level: .body)
+            }
+        }
 
         return (light, dark, name(hue: hue, sat: sat, mood: picked))
     }

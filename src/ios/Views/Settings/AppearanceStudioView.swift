@@ -283,6 +283,7 @@ struct AppearanceStudioView: View {
         VStack(spacing: 20) {
             shuffleCard
             presetsCard
+            contrastCard
             ForEach(AppearanceColorRoleGroup.allCases) { group in
                 paletteGroupCard(group)
             }
@@ -488,6 +489,45 @@ struct AppearanceStudioView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+    }
+
+    /// 对比度体检。摇骰子生成的一定过，但手动调完可能不过——
+    /// 这里列出来让她自己判断，不硬改她的选择。
+    private var contrastCard: some View {
+        let colors = studio.allColors(variant: variant)
+        let issues = AppearanceContrast.audit(colors)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: issues.isEmpty ? "checkmark.seal" : "exclamationmark.triangle")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(issues.isEmpty
+                                     ? studio.color(.success, variant: variant)
+                                     : studio.color(.warning, variant: variant))
+                sectionTitle(AppLocalized("对比度"))
+                Spacer()
+                if !issues.isEmpty {
+                    Text("\(issues.count)")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(studio.color(.warning, variant: variant), in: Capsule())
+                }
+            }
+            if issues.isEmpty {
+                Text(AppLocalized("文字和底都看得清。正文 4.5:1 以上，其余 3:1 以上。"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+            } else {
+                ForEach(issues, id: \.self) { issue in
+                    Text(issue)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .modifier(StudioCard(variant: variant))
     }
 
     private var advancedCard: some View {
