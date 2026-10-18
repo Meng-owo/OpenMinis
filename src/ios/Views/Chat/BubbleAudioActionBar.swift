@@ -137,7 +137,11 @@ struct BubbleAudioActionBar: View {
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(ChatColors.primaryText)
             .frame(width: 28, height: 28)
-            .background(ChatColors.secondaryBg,
+            // [10-18 醒醒] 这里是"小方块图标底"，不是卡片。
+            // 原先是 ChatColors.secondaryBg（= 卡片 surface），所以一调卡片
+            // 颜色，AI 消息下面这排图标就跟着变——她说"那个图标不应该在卡片
+            // 的类别里"。改走 iconTile，和聊天输入栏那排图标同一个角色。
+            .background(ChatColors.inputIconBg,
                         in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)

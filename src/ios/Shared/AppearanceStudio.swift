@@ -29,10 +29,29 @@ enum AppearanceVariant: String, CaseIterable, Identifiable {
 }
 
 enum AppearanceColorRole: String, CaseIterable, Identifiable {
+    // [10-18 醒醒] 「卡片换颜色，AI 消息下面的图标也换颜色了」。
+    //
+    // 根因不是分组名字起错，是**同一个控件用了两个角色**：消息操作栏的
+    // 小图标底走 surface（卡片），聊天输入栏的图标底走 mutedSurface（浅底）。
+    // 两个都是"小方块图标底"，却挂在不同的角色上，所以无论怎么调都只能
+    // 对一半。
+    //
+    // 为什么会有这种事：老的十六个角色是按"它是什么层"分的（底 / 卡 /
+    // 浮层 / 浅底），不是按"它是什么控件"分的。于是"一个图标底到底算卡片
+    // 还是浅底"没有答案，全看当初谁写的。Apple HIG 原话就禁止这个：
+    // "Avoid using the same color to mean different things."
+    //
+    // 补三个控件级角色（iconTile / chip / field），并把 searchField 并进
+    // field、把死角色 toolCard 删掉。见下方 legacy 映射。
     case canvas, surface, raised, mutedSurface
     case primaryText, secondaryText
-    case accent, userBubble, assistantBubble, input, border
-    case searchField, toolCard
+    case accent, userBubble, assistantBubble, border
+    /// 输入类底：输入框、搜索栏、任何单行输入面
+    case field
+    /// 小方块图标底：消息操作栏、输入栏图标、工具条按钮
+    case iconTile
+    /// 胶囊/徽章底：用量、状态、标签
+    case chip
     case success, warning, destructive
 
     var id: String { rawValue }
@@ -47,10 +66,10 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
         case .accent: return "强调色"
         case .userBubble: return "我的气泡"
         case .assistantBubble: return "AI 气泡"
-        case .input: return "输入框"
         case .border: return "边线"
-        case .searchField: return "搜索栏"
-        case .toolCard: return "工具卡"
+        case .field: return "输入框"
+        case .iconTile: return "图标底"
+        case .chip: return "胶囊底"
         case .success: return "成功"
         case .warning: return "警告"
         case .destructive: return "危险"
@@ -62,18 +81,18 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .canvas: return "每页底衬，卡片间隙和空区透出"
-        case .surface: return "卡片背景：设置卡片、会话列表、浮层卡片"
+        case .surface: return "大块卡片：设置卡片、会话列表、工具卡"
         case .raised: return "浮层：弹窗、菜单、悬浮面板"
-        case .mutedSurface: return "浅底小组件：输入框图标等"
+        case .mutedSurface: return "浅底小组件：图片占位、次要底块"
         case .primaryText: return "主文字：标题、正文"
         case .secondaryText: return "次文字：说明、时间戳"
         case .accent: return "强调色：按钮、选中、开关"
         case .userBubble: return "你的聊天气泡"
         case .assistantBubble: return "AI 聊天气泡"
-        case .input: return "聊天输入框"
         case .border: return "分隔线、卡片描边"
-        case .searchField: return "首页顶部搜索栏"
-        case .toolCard: return "聊天工具卡：终端、浏览器、工具调用"
+        case .field: return "输入框、搜索栏"
+        case .iconTile: return "小方块图标底：消息操作栏、输入栏图标"
+        case .chip: return "胶囊底：用量、状态、标签"
         case .success: return "成功状态（绿）"
         case .warning: return "警告状态（黄）"
         case .destructive: return "危险操作（红）"
@@ -93,19 +112,21 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
 /// 她原话：「我想字管字的颜色，卡片管卡片的颜色，按钮管按键的。
 /// 好不好就是简单一点，然后统一化，我这边换什么颜色对应的东西就全部变色。」
 ///
-/// 改之前的分组是三组混着的：「文字」里塞了 accent（按钮/选中/开关），
-/// 所以一改那个"文字色"，按钮跟着变——她说"归类很乱"指的就是这个。
-/// 现在按她说的三种分开，聊天单独一组（气泡不属于上面任何一类）。
+/// 10-18 再改：上一版五组里「按钮与选中」只有一个 accent，分组比内容还多；
+/// 而真正的问题是角色本身缺「控件」这一层（图标底/胶囊底/输入类没有自己的
+/// 位置，只好去蹭卡片和浅底）。现在按"你看到的东西"分六组，每组里装的是
+/// 同一种东西。
 enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
-    case text, cards, buttons, chat, status
+    case text, backgrounds, controls, accentGroup, chat, status
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .text: return "文字"
-        case .cards: return "卡片与底"
-        case .buttons: return "按钮与选中"
+        case .backgrounds: return "背景与卡片"
+        case .controls: return "控件"
+        case .accentGroup: return "强调"
         case .chat: return "聊天"
         case .status: return "状态"
         }
@@ -115,9 +136,10 @@ enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
     var hint: String {
         switch self {
         case .text: return "标题、正文、说明、时间戳——所有字"
-        case .cards: return "页面底衬、卡片、浮层、边线"
-        case .buttons: return "按钮、开关、选中态、强调"
-        case .chat: return "聊天气泡、输入框、搜索栏、工具卡"
+        case .backgrounds: return "页面底衬、大块卡片、弹窗浮层、次要底块"
+        case .controls: return "图标底、胶囊底、输入框、边线——小零件"
+        case .accentGroup: return "按钮、开关、选中态"
+        case .chat: return "聊天气泡、工具卡"
         case .status: return "成功、警告、危险"
         }
     }
@@ -125,13 +147,38 @@ enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
     var roles: [AppearanceColorRole] {
         switch self {
         case .text: return [.primaryText, .secondaryText]
-        // accent 从「文字」挪到「按钮」——它画的是按钮和选中态，不是字。
-        case .cards: return [.canvas, .surface, .raised, .mutedSurface, .border]
-        case .buttons: return [.accent]
-        case .chat: return [.userBubble, .assistantBubble, .input, .searchField, .toolCard]
+        case .backgrounds: return [.canvas, .surface, .raised, .mutedSurface]
+        case .controls: return [.iconTile, .chip, .field, .border]
+        case .accentGroup: return [.accent]
+        case .chat: return [.userBubble, .assistantBubble]
         case .status: return [.success, .warning, .destructive]
         }
     }
+}
+
+// MARK: - 旧角色兼容
+
+extension AppearanceColorRole {
+    /// 老版本存下来的角色名 → 现在该落到哪个角色。
+    ///
+    /// 角色是按字符串持久化的（UserDefaults 的 `colors.v1`、主题包 JSON 的
+    /// `colorsLight`/`colorsDark`、云同步、备份），所以删掉的 `input` /
+    /// `searchField` / `toolCard` 必须继续认，否则老主题包和老备份里这三项
+    /// 的颜色会被静默丢掉。
+    ///
+    /// 合并方向：
+    /// - `input` / `searchField` → `field`（本来就是同一类）
+    /// - `toolCard` → `surface`（上一轮已经把工具卡改成走卡片了，角色是空壳）
+    static func resolvingLegacy(_ raw: String) -> AppearanceColorRole? {
+        switch raw {
+        case "input", "searchField": return .field
+        case "toolCard": return .surface
+        default: return AppearanceColorRole(rawValue: raw)
+        }
+    }
+
+    /// 老角色名是否还需要在读取时重定向。
+    static var legacyRawValues: [String] { ["input", "searchField", "toolCard"] }
 }
 
 @MainActor
@@ -229,19 +276,46 @@ final class AppearanceStudio: ObservableObject {
         "\(scope.rawValue).\(variant.rawValue).\(role.rawValue)"
     }
 
+    /// 老角色名的键。删掉的 `input` / `searchField` / `toolCard` 只用来读，
+    /// 不再写——写的时候一律落到新角色上。
+    private func keyString(_ legacyRole: String, scope: AppearanceScope,
+                           variant: AppearanceVariant) -> String {
+        "\(scope.rawValue).\(variant.rawValue).\(legacyRole)"
+    }
+
     func hex(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
              variant: AppearanceVariant) -> String {
-        // [10-15 1-4 醒醒] 工具卡归入卡片体系：保留旧 toolCard 键兼容读取，无自定义时回退至卡片 surface
-        if role == .toolCard {
-            if let value = customColors[key(.toolCard, scope: scope, variant: variant)] { return value }
-            if scope != .global,
-               let value = customColors[key(.toolCard, scope: .global, variant: variant)] { return value }
-            return hex(.surface, scope: scope, variant: variant)
-        }
+        // 新角色先读自己的键，再读它继承的旧键。
+        //
+        // 角色是按字符串存进 UserDefaults 的（"<scope>.<variant>.<role>"），
+        // 所以 `field` 必须能接住老用户存过的 `input` / `searchField`；
+        // `surface` 必须能接住 `toolCard`（上一轮把工具卡并进卡片时留的壳）。
+        // 顺序：自己的 → 旧键 → 全局 → 内置。
         if let value = customColors[key(role, scope: scope, variant: variant)] { return value }
-        if scope != .global,
-           let value = customColors[key(role, scope: .global, variant: variant)] { return value }
+        if let legacy = legacyKey(for: role, scope: scope, variant: variant),
+           let value = customColors[legacy] { return value }
+        if scope != .global {
+            if let value = customColors[key(role, scope: .global, variant: variant)] { return value }
+            if let legacy = legacyKey(for: role, scope: .global, variant: variant),
+               let value = customColors[legacy] { return value }
+        }
         return (variant == .light ? Self.lightDefaults : Self.darkDefaults)[role] ?? "808080"
+    }
+
+    /// 老键名，按"新角色 → 它继承的旧角色"查。
+    private func legacyKey(for role: AppearanceColorRole, scope: AppearanceScope,
+                           variant: AppearanceVariant) -> String? {
+        switch role {
+        case .field:
+            // 两个旧角色都是输入类，谁有值用谁——input 更常见，先问它。
+            return customColors[keyString("input", scope: scope, variant: variant)] != nil
+                ? keyString("input", scope: scope, variant: variant)
+                : keyString("searchField", scope: scope, variant: variant)
+        case .surface:
+            return keyString("toolCard", scope: scope, variant: variant)
+        default:
+            return nil
+        }
     }
 
     func color(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
@@ -280,6 +354,25 @@ final class AppearanceStudio: ObservableObject {
     func hasOverride(_ role: AppearanceColorRole, scope: AppearanceScope,
                      variant: AppearanceVariant) -> Bool {
         customColors[key(role, scope: scope, variant: variant)] != nil
+    }
+
+    /// 这一页有几项和全局不一样。给「高级」里的页级覆盖显示用——
+    /// 不显示这个数，她永远不知道自己改过哪一层。
+    func overrideCount(scope: AppearanceScope, variant: AppearanceVariant) -> Int {
+        guard scope != .global else { return 0 }
+        let prefix = "\(scope.rawValue).\(variant.rawValue)."
+        return customColors.keys.filter { $0.hasPrefix(prefix) }.count
+    }
+
+    /// 把这一页的覆盖全部清掉，回到跟随全局。
+    func clearOverrides(scope: AppearanceScope, variant: AppearanceVariant) {
+        guard scope != .global else { return }
+        let prefix = "\(scope.rawValue).\(variant.rawValue)."
+        for key in customColors.keys where key.hasPrefix(prefix) {
+            customColors.removeValue(forKey: key)
+        }
+        persistColors()
+        configureUIKitSurfaces()
     }
 
     func clearOverride(_ role: AppearanceColorRole, scope: AppearanceScope,
@@ -335,6 +428,24 @@ final class AppearanceStudio: ObservableObject {
         configureUIKitSurfaces()
     }
 
+    /// [10-18 醒醒] 摇一套配色。只写全局键，不碰页级覆盖——
+    /// 她单独调过的某一页不该被一次"摇骰子"冲掉。
+    ///
+    /// 返回这套的默认名字，页面上可以拿它当"存这套"的默认值。
+    @discardableResult
+    func shuffleTheme(seed: UInt64? = nil) -> String {
+        let rolled = AppearanceThemeShuffle.shuffle(seed: seed)
+        for variant in AppearanceVariant.allCases {
+            let values = variant == .light ? rolled.light : rolled.dark
+            for (role, hex) in values {
+                customColors[key(role, scope: .global, variant: variant)] = hex
+            }
+        }
+        persistColors()
+        configureUIKitSurfaces()
+        return rolled.name
+    }
+
     func resetColors() {
         customColors.removeAll()
         surfaceOpacity = 0.88
@@ -362,15 +473,24 @@ final class AppearanceStudio: ObservableObject {
             return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
         }()
         let snap = colorSnapshot
-        if role == .toolCard {
-            let scoped = "\(scope.rawValue).\(variant.rawValue).toolCard"
-            let global = "\(AppearanceScope.global.rawValue).\(variant.rawValue).toolCard"
-            if let val = snap[scoped] ?? snap[global] { return UIColor(hex: val) }
-            return uiColorSnapshot(.surface, scope: scope)
-        }
         let scoped = "\(scope.rawValue).\(variant.rawValue).\(role.rawValue)"
         let global = "\(AppearanceScope.global.rawValue).\(variant.rawValue).\(role.rawValue)"
-        let hex = snap[scoped] ?? snap[global]
+        // 老键回退：field 接 input/searchField，surface 接 toolCard。
+        // 快照是给 UIKit / 非主线程读的，必须和主解析路径保持同一套兼容规则，
+        // 否则同一块颜色在主线程和快照路径会不一样。
+        func legacy(_ raw: String) -> String? {
+            let s = "\(scope.rawValue).\(variant.rawValue).\(raw)"
+            let g = "\(AppearanceScope.global.rawValue).\(variant.rawValue).\(raw)"
+            return snap[s] ?? snap[g]
+        }
+        let legacyValue: String? = {
+            switch role {
+            case .field: return legacy("input") ?? legacy("searchField")
+            case .surface: return legacy("toolCard")
+            default: return nil
+            }
+        }()
+        let hex = snap[scoped] ?? snap[global] ?? legacyValue
             ?? (variant == .light ? AppearancePaletteBook.light : AppearancePaletteBook.dark)[role]
             ?? "808080"
         return UIColor(hex: hex)
@@ -715,8 +835,9 @@ private enum AppearancePaletteBook {
         .canvas: "FFF8F4", .surface: "FFFDFC", .raised: "FFFFFF",
         .mutedSurface: "F8ECE8", .primaryText: "3E312B", .secondaryText: "8D786F",
         .accent: "D4778B", .userBubble: "F6DDE3", .assistantBubble: "FFFDFC",
-        .input: "FFFBF8", .border: "EADAD3",
-        .searchField: "FFFDFC", .toolCard: "F8ECE8",
+        .border: "EADAD3",
+        // 输入类跟卡片同底但略暖，图标底比输入框深一档，胶囊底最浅。
+        .field: "FFFBF8", .iconTile: "F8ECE8", .chip: "F2E3DD",
         .success: "6E987A",
         .warning: "C9956A", .destructive: "C75D5D"
     ]
@@ -724,8 +845,8 @@ private enum AppearancePaletteBook {
         .canvas: "1B1716", .surface: "25201E", .raised: "302925",
         .mutedSurface: "332824", .primaryText: "F5ECE7", .secondaryText: "BCAAA1",
         .accent: "E09AAA", .userBubble: "573C43", .assistantBubble: "25201E",
-        .input: "2B2522", .border: "493C37",
-        .searchField: "25201E", .toolCard: "332824",
+        .border: "493C37",
+        .field: "2B2522", .iconTile: "332824", .chip: "3B2E2A",
         .success: "8EB69A",
         .warning: "D4B07A", .destructive: "E18484"
     ]
@@ -747,12 +868,12 @@ enum AppearancePreset: String, CaseIterable, Identifiable {
             return AppearancePalette(light: AppearancePaletteBook.light, dark: AppearancePaletteBook.dark)
         case .cleanAir:
             return AppearancePalette(
-                light: [.canvas:"F6F8FA",.surface:"FFFFFF",.raised:"FFFFFF",.mutedSurface:"EDF2F5",.primaryText:"26323A",.secondaryText:"6F7E87",.accent:"6F93A8",.userBubble:"DDEAF0",.assistantBubble:"FFFFFF",.input:"FFFFFF",.border:"DCE5E9",.searchField:"FFFFFF",.toolCard:"EDF2F5",.success:"638F76",.warning:"C9A36A",.destructive:"BC6262"],
-                dark: [.canvas:"151A1D",.surface:"20272B",.raised:"273035",.mutedSurface:"2B353A",.primaryText:"EDF3F5",.secondaryText:"AAB8BE",.accent:"8CB2C5",.userBubble:"334B57",.assistantBubble:"20272B",.input:"252D31",.border:"3B484E",.searchField:"20272B",.toolCard:"2B353A",.success:"82AF91",.warning:"D4B07A",.destructive:"DA8181"])
+                light: [.canvas:"F6F8FA",.surface:"FFFFFF",.raised:"FFFFFF",.mutedSurface:"EDF2F5",.primaryText:"26323A",.secondaryText:"6F7E87",.accent:"6F93A8",.userBubble:"DDEAF0",.assistantBubble:"FFFFFF",.field:"FFFFFF",.border:"DCE5E9",.iconTile:"FFFFFF",.chip:"EDF2F5",.success:"638F76",.warning:"C9A36A",.destructive:"BC6262"],
+                dark: [.canvas:"151A1D",.surface:"20272B",.raised:"273035",.mutedSurface:"2B353A",.primaryText:"EDF3F5",.secondaryText:"AAB8BE",.accent:"8CB2C5",.userBubble:"334B57",.assistantBubble:"20272B",.field:"252D31",.border:"3B484E",.iconTile:"20272B",.chip:"2B353A",.success:"82AF91",.warning:"D4B07A",.destructive:"DA8181"])
         case .nightCocoa:
             return AppearancePalette(
-                light: [.canvas:"FBF6EF",.surface:"FFFDF8",.raised:"FFFFFF",.mutedSurface:"F2E7DA",.primaryText:"44362E",.secondaryText:"8D7868",.accent:"A77965",.userBubble:"EAD8CE",.assistantBubble:"FFFDF8",.input:"FFFBF5",.border:"E5D7C9",.searchField:"FFFDF8",.toolCard:"F2E7DA",.success:"728E70",.warning:"C9A36A",.destructive:"B86565"],
-                dark: [.canvas:"171311",.surface:"241E1A",.raised:"2E2621",.mutedSurface:"362B25",.primaryText:"F2E9E1",.secondaryText:"B9A79B",.accent:"C99B84",.userBubble:"513B31",.assistantBubble:"241E1A",.input:"2A231F",.border:"493B33",.searchField:"241E1A",.toolCard:"362B25",.success:"91AE8B",.warning:"D4B07A",.destructive:"D17A7A"])
+                light: [.canvas:"FBF6EF",.surface:"FFFDF8",.raised:"FFFFFF",.mutedSurface:"F2E7DA",.primaryText:"44362E",.secondaryText:"8D7868",.accent:"A77965",.userBubble:"EAD8CE",.assistantBubble:"FFFDF8",.field:"FFFBF5",.border:"E5D7C9",.iconTile:"FFFDF8",.chip:"F2E7DA",.success:"728E70",.warning:"C9A36A",.destructive:"B86565"],
+                dark: [.canvas:"171311",.surface:"241E1A",.raised:"2E2621",.mutedSurface:"362B25",.primaryText:"F2E9E1",.secondaryText:"B9A79B",.accent:"C99B84",.userBubble:"513B31",.assistantBubble:"241E1A",.field:"2A231F",.border:"493B33",.iconTile:"241E1A",.chip:"362B25",.success:"91AE8B",.warning:"D4B07A",.destructive:"D17A7A"])
         }
     }
 }
@@ -817,6 +938,11 @@ enum MinisTheme {
     static var surface: Color { color(.surface).opacity(AppearanceStudio.shared.surfaceOpacity) }
     static var raised: Color { color(.raised).opacity(AppearanceStudio.shared.surfaceOpacity) }
     static var mutedSurface: Color { color(.mutedSurface).opacity(AppearanceStudio.shared.surfaceOpacity) }
+    /// 小方块图标底 / 胶囊底 / 输入类底。设置页与首页也走这套，
+    /// 免得"卡片"一个角色被拿去画图标底。
+    static var iconTile: Color { color(.iconTile).opacity(AppearanceStudio.shared.surfaceOpacity) }
+    static var chip: Color { color(.chip).opacity(AppearanceStudio.shared.surfaceOpacity) }
+    static var field: Color { color(.field).opacity(AppearanceStudio.shared.surfaceOpacity) }
     static var primaryText: Color { color(.primaryText) }
     static var secondaryText: Color { color(.secondaryText) }
     static var accent: Color { color(.accent) }

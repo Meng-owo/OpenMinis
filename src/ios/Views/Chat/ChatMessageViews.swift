@@ -819,7 +819,7 @@ struct ChatMessageRow: View {
         .foregroundStyle(ChatColors.tertiaryText)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(ChatColors.userBubble.opacity(0.6))
+        .background(ChatColors.chipBg)
         .clipShape(Capsule())
         .transition(.opacity.combined(with: .scale(scale: 0.8)))
     }

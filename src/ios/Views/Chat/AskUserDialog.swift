@@ -73,7 +73,7 @@ enum CSSThemeVariables {
     /// --color-option-bg (输入框/未选中胶囊底色)
     /// [10-15 1-3 醒醒] 输入框与选项底色接入全局 input 角色（同族统一，不再硬编码 hex）
     static func optionBg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.input, scope: scope, variant: isDark ? .dark : .light)
+        studio.color(.field, scope: scope, variant: isDark ? .dark : .light)
     }
 
     /// --color-option-border (输入框/未选中胶囊边框)

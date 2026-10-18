@@ -427,6 +427,25 @@ description: 设计并贴上 嘟嘟 分身的 AI 主题包。当用户说做主�
 工具跑完的勾走 success，排队/中断走 warning，失败的叉走 destructive。
 不要 `.green` / `.orange` / `.red`。报错不能并进强调色，粉主题里也要分得出错。
 
+### 角色清单（10-18 起）
+
+颜色角色按「它是什么东西」分，不按「它在哪一层」分：
+
+| 组 | 角色 | 管什么 |
+|---|---|---|
+| 文字 | `primaryText` `secondaryText` | 所有字 |
+| 背景与卡片 | `canvas` `surface` `raised` `mutedSurface` | 页面底、大块卡片、弹窗浮层、次要底块 |
+| 控件 | `iconTile` `chip` `field` `border` | 小方块图标底、胶囊底、输入框搜索栏、边线 |
+| 强调 | `accent` | 按钮、选中、开关 |
+| 聊天 | `userBubble` `assistantBubble` | 两侧气泡 |
+| 状态 | `success` `warning` `destructive` | 三色反馈 |
+
+**写主题包时别把 `iconTile` 当成 `surface`。** 图标底（消息操作栏、输入栏那排小方块）
+和卡片是两回事——以前混用，调卡片颜色会连图标一起变。现在分开了。
+
+老角色名 `input` / `searchField` / `toolCard` 已合并进 `field` / `surface`。
+旧包里写这三个还能读，但新包请用新名字。
+
 ## 怎么贴
 
 1. 写一份 JSON 主题包。
@@ -454,7 +473,9 @@ description: 设计并贴上 嘟嘟 分身的 AI 主题包。当用户说做主�
     "accent": "D4778B",
     "userBubble": "F6DDE3",
     "assistantBubble": "FFFDFC",
-    "input": "FFFBF8",
+    "field": "FFFBF8",
+    "iconTile": "F8ECE8",
+    "chip": "F2E3DD",
     "border": "EADAD3",
     "success": "6E987A",
     "destructive": "C75D5D"

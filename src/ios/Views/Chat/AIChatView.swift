@@ -77,12 +77,18 @@ enum ChatColors {
     static var secondaryBg: Color {
         studio.color(.surface, scope: .chat).opacity(studio.surfaceOpacity)
     }
+    /// 小方块图标底。原先输入栏走 mutedSurface、消息操作栏走 surface，
+    /// 两处同一种控件挂两个角色，怎么调都只能对一半。现在统一走 iconTile。
     static var inputIconBg: Color {
-        studio.color(.mutedSurface, scope: .chat).opacity(studio.surfaceOpacity)
+        studio.color(.iconTile, scope: .chat).opacity(studio.surfaceOpacity)
+    }
+    /// 胶囊/徽章底。
+    static var chipBg: Color {
+        studio.color(.chip, scope: .chat).opacity(studio.surfaceOpacity)
     }
     static var inputIconBorder: Color { studio.color(.border, scope: .chat) }
     static var inputBg: Color {
-        studio.color(.input, scope: .chat).opacity(studio.surfaceOpacity)
+        studio.color(.field, scope: .chat).opacity(studio.surfaceOpacity)
     }
     static var inputBorder: Color { studio.color(.border, scope: .chat) }
     static var primaryText: Color { studio.color(.primaryText, scope: .chat) }
