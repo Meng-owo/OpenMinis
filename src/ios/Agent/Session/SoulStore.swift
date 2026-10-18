@@ -1073,6 +1073,24 @@ enum SoulStore {
         return resolved
     }
 
+    /// [问题12] 指定人设的头像引用（SOUL.md frontmatter 的 `icon`）。
+    /// 空 → nil，调用方回落到默认图标。
+    ///
+    /// 加这个是因为聊天页原来直接读 `cachedMetadata.icon`——那是**当前
+    /// 人设**的缓存，跟这个会话绑的是谁无关。于是人设列表里换了头像，
+    /// 对话框里还是旧的那个，看起来就是"两套"。
+    @MainActor
+    private static var displayIconCache: [String: String] = [:]
+
+    @MainActor
+    static func displayIcon(for personaID: String) -> String? {
+        if let hit = displayIconCache[personaID] { return hit.isEmpty ? nil : hit }
+        let icon = (load(for: personaID)?.metadata.icon ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        displayIconCache[personaID] = icon
+        return icon.isEmpty ? nil : icon
+    }
+
     /// Re-read SOUL.md into `cachedMetadata` and post a notification so
     /// observers (chat bubble header, prompt builder, etc.) can refresh.
     @MainActor
@@ -1083,6 +1101,7 @@ enum SoulStore {
             cachedMetadata = .default
         }
         displayNameCache.removeAll()
+        displayIconCache.removeAll()
         NotificationCenter.default.post(name: .soulMdChanged, object: nil)
     }
 
@@ -1100,11 +1119,25 @@ enum SoulStore {
         let url = fileURL(for: personaID)
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)
+        // [问题12] 先读旧值再落盘——落盘之后 `load` 读到的就是新值，
+        // 比较永远相等，回写就成了空转。
+        let previous = load(for: personaID)?.metadata
         let text = SoulMDParser.serialize(file)
         try text.data(using: .utf8)?.write(to: url, options: .atomic)
         // [batch9d / W1C-08] 显示名缓存失效是无条件的——非当前人设改名
         // 也要让界面立刻取到新名。
         displayNameCache.removeValue(forKey: personaID)
+        displayIconCache.removeValue(forKey: personaID)
+        // [问题12] 身份字段变了就回写人设列表——SOUL.md 是正本，列表是投影。
+        // 只在这一层回写：PersonaStore.syncIdentityFromSoul 不再回调 save，
+        // 所以不会成环。
+        if previous?.name != file.metadata.name
+            || previous?.icon != file.metadata.icon {
+            PersonaStore.shared.syncIdentityFromSoul(
+                personaID: personaID,
+                name: file.metadata.name,
+                icon: file.metadata.icon)
+        }
         if personaID == PersonaStore.currentID() {
             cachedMetadata = file.metadata
             NotificationCenter.default.post(name: .soulMdChanged, object: nil)
@@ -1354,13 +1387,29 @@ enum SystemPromptBuilder {
 /// any place that previously hard-coded "Minis" as a label.
 @MainActor
 struct AssistantSoulName: View {
+    /// [问题12] 会话绑定的人设 id。给了就按它取名字，跟人设列表同源；
+    /// 不给则沿用全局当前人设的缓存（老调用点行为不变）。
+    var personaId: String? = nil
     @State private var name: String = SoulStore.cachedMetadata.name.isEmpty
         ? "嘟嘟" : SoulStore.cachedMetadata.name
+
+    private func refresh() {
+        if let pid = personaId {
+            name = SoulStore.displayName(for: SoulStore.displayPersonaId(pid))
+        } else {
+            let n = SoulStore.cachedMetadata.name
+            name = n.isEmpty ? "嘟嘟" : n
+        }
+    }
+
     var body: some View {
         Text(name)
             .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
-                let n = SoulStore.cachedMetadata.name
-                name = n.isEmpty ? "嘟嘟" : n
+                refresh()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .personaDidChange)) { _ in
+                refresh()
+            }
+            .onAppear { refresh() }
     }
 }

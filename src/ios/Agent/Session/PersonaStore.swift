@@ -691,6 +691,34 @@ final class PersonaStore: ObservableObject {
         SoulStore.refreshCache()
     }
 
+    /// [问题12] SOUL.md 改了身份字段 → 回写 PersonaStore，让列表跟着变。
+    ///
+    /// 只写内存与 personas.json，**不再回头调 SoulStore.save**——那会绕成
+    /// 一个环（save → 回写 → save）。这里的语义是"SOUL 是身份的正本，
+    /// 列表是它的投影"，所以只做投影这一半。
+    @MainActor
+    func syncIdentityFromSoul(personaID: String, name: String?, icon: String?) {
+        guard let idx = personas.firstIndex(where: { $0.id == personaID }) else { return }
+        var changed = false
+        if let name {
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, personas[idx].name != trimmed {
+                personas[idx].name = trimmed
+                changed = true
+            }
+        }
+        if let icon {
+            let newAvatar = icon.isEmpty ? nil : icon
+            if personas[idx].avatar != newAvatar {
+                personas[idx].avatar = newAvatar
+                changed = true
+            }
+        }
+        guard changed else { return }
+        persist()
+        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+    }
+
     /// 更新某人设的白名单 / 模型绑定；名字或头像有变化时同步到对话侧显示源。
     func updatePersona(_ persona: Persona) {
         guard let idx = personas.firstIndex(where: { $0.id == persona.id }) else { return }

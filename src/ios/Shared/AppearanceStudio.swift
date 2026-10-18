@@ -918,12 +918,25 @@ struct PersonAvatarView: View {
     enum Kind { case user, assistant }
     let kind: Kind
     let size: CGFloat
+    /// [问题12] 这个头像属于哪个人设。nil → 回落到全局当前人设。
+    ///
+    /// 聊天页原来固定读 `SoulStore.cachedMetadata.icon`，那是**当前人设**
+    /// 的缓存——会话绑的是别人时，对话框就显示错的人，看着就是"两套"。
+    /// 传进来之后按会话绑定的人设取，跟列表同源。
+    var personaID: String?
     @ObservedObject private var studio = AppearanceStudio.shared
     @State private var soulIcon = SoulStore.cachedMetadata.icon
 
+    private var resolvedIcon: String? {
+        guard let pid = personaID else {
+            return soulIcon.isEmpty ? nil : soulIcon
+        }
+        return SoulStore.displayIcon(for: pid)
+    }
+
     var body: some View {
         Group {
-            let icon = kind == .user ? studio.userAvatar : soulIcon
+            let icon = kind == .user ? studio.userAvatar : (resolvedIcon ?? "")
             // [avatar] Only an image counts as an avatar. A legacy
             // non-image value (an emoji stored by an older build) is
             // treated as unset and falls through to the default tile.

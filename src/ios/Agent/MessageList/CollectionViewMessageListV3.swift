@@ -231,10 +231,28 @@ private struct BridgedAssistantHeaderV3: View {
     /// navigation happened, and no deep-link log line appeared.) So the handler
     /// is threaded down the same way every other cell callback already is.
     var onOpenSoulSettings: (() -> Void)?
+    /// [问题12] 这个会话绑的人设。头像和名字都按它取，跟人设列表同源。
+    var sessionPersonaId: String?
+    /// [问题12] 每次人设变动 +1，把 SwiftUI 从缓存里拽出来重算。
+    @State private var personaRevision: Int = 0
+    /// [问题12] 会话绑定的人设 id，没绑就回落到全局当前人设。
+    private var resolvedPersonaID: String {
+        SoulStore.displayPersonaId(sessionPersonaId)
+    }
+
+    /// [问题12] 名字从人设本身取，不再读"当前人设"的缓存。
+    private var displayedName: String {
+        guard sessionPersonaId != nil else {
+            return soulMeta.name.isEmpty ? "嘟嘟" : soulMeta.name
+        }
+        return SoulStore.displayName(for: resolvedPersonaID)
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            PersonAvatarView(kind: .assistant, size: 38)
-            Text(soulMeta.name.isEmpty ? "嘟嘟" : soulMeta.name)
+            PersonAvatarView(kind: .assistant, size: 38,
+                             personaID: resolvedPersonaID)
+            Text(displayedName)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(ChatColors.primaryText)
             WaggingCatIcon(isWorking: message.isThinkingOrToolWorking, size: 18)
@@ -267,6 +285,13 @@ private struct BridgedAssistantHeaderV3: View {
         .accessibilityHint(AppLocalized("Change the assistant's name, icon and personality"))
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
             soulMeta = SoulStore.cachedMetadata
+        }
+        // [问题12] 人设列表里改名/换头像走的是 PersonaStore.updatePersona →
+        // .personaDidChange（不是 .soulMdChanged），header 得跟着重画，
+        // 否则列表变了、对话框还挂着旧的。
+        .onReceive(NotificationCenter.default.publisher(for: .personaDidChange)) { _ in
+            soulMeta = SoulStore.cachedMetadata
+            personaRevision &+= 1
         }
         .padding(.top, 4)
         .padding(.bottom, 0)
@@ -1254,7 +1279,8 @@ extension CollectionViewMessageListV3 {
                 cell.backgroundColor = .clear
                 let config = UIHostingConfiguration {
                     BridgedAssistantHeaderV3(message: message, maxWidth: width,
-                                            onOpenSoulSettings: onOpenSoulSettings)
+                                            onOpenSoulSettings: onOpenSoulSettings,
+                                            sessionPersonaId: vm.sessionPersonaId)
                         .transaction { $0.disablesAnimations = true }
                         .environmentObject(vm)
                 }.minSize(width: 0, height: 0).margins(.all, 0)

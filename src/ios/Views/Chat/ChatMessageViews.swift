@@ -624,8 +624,10 @@ struct ChatMessageRow: View {
         VStack(alignment: .leading, spacing: 8) {
             // Assistant label
             HStack(spacing: 8) {
-                PersonAvatarView(kind: .assistant, size: 38)
-                AssistantSoulName()
+                // [问题12] 头像和名字都跟会话绑定的人设走，与人设列表同源。
+                PersonAvatarView(kind: .assistant, size: 38,
+                                 personaID: SoulStore.displayPersonaId(sessionPersonaId))
+                AssistantSoulName(personaId: sessionPersonaId)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(ChatColors.primaryText)
                 WaggingCatIcon(isWorking: message.isThinkingOrToolWorking, size: 18)
