@@ -32,27 +32,44 @@ struct CloudSyncSettingsV2View: View {
     var body: some View {
         Form {
             Section {
-                Toggle(isOn: Binding(
-                    get: { v2Enabled },
-                    set: { newValue in
-                        if #available(iOS 17.0, *) {
-                            // [T-icloud-resign-entitlement-crash] Re-signed
-                            // builds may lack the iCloud container entitlement;
-                            // enabling sync would NSException on the first
-                            // CKContainer and then again on every launch.
-                            // Refuse up front instead of probing-and-crashing.
-                            if newValue, !ICloudSharedZoneTransport.hasCloneICloudEntitlement() {
-                                v2Enabled = false
-                                icloudBlockedNotice = "iCloud sync is unavailable on this re-signed build — its signature has no CloudKit container entitlement."
-                                return
-                            }
-                            icloudBlockedNotice = ""
-                            SyncV2Bootstrap.setEnabled(newValue)
-                        }
-                        v2Enabled = newValue
+                if !ICloudSharedZoneTransport.hasCloneICloudEntitlement() {
+                    // [T-icloud-resign-silent-toggle] The guard inside the
+                    // setter below only fires after the user tries the switch,
+                    // so the first thing they saw was a switch that refused to
+                    // move and a note that appeared out of nowhere. Say it
+                    // before they touch anything: there is no build of this
+                    // app on this device that can sync.
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("iCloud Sync isn't available in this build",
+                              systemImage: "exclamationmark.icloud")
+                            .font(.footnote.weight(.medium))
+                        Text("This copy was re-signed, so it can't reach the app's iCloud container. Syncing works only in a build signed with the original iCloud entitlement. Everything else works normally, and your data stays on this device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                )) {
-                    Text("Enable iCloud Sync")
+                } else {
+                    Toggle(isOn: Binding(
+                        get: { v2Enabled },
+                        set: { newValue in
+                            if #available(iOS 17.0, *) {
+                                // [T-icloud-resign-entitlement-crash] Re-signed
+                                // builds may lack the iCloud container entitlement;
+                                // enabling sync would NSException on the first
+                                // CKContainer and then again on every launch.
+                                // Refuse up front instead of probing-and-crashing.
+                                if newValue, !ICloudSharedZoneTransport.hasCloneICloudEntitlement() {
+                                    v2Enabled = false
+                                    icloudBlockedNotice = "iCloud sync is unavailable on this re-signed build — its signature has no CloudKit container entitlement."
+                                    return
+                                }
+                                icloudBlockedNotice = ""
+                                SyncV2Bootstrap.setEnabled(newValue)
+                            }
+                            v2Enabled = newValue
+                        }
+                    )) {
+                        Text("Enable iCloud Sync")
+                    }
                 }
                 if !icloudBlockedNotice.isEmpty {
                     Text(icloudBlockedNotice)

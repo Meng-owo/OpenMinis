@@ -69,7 +69,26 @@ struct CloudSyncSettingsView: View {
 
     private var syncToggleSection: some View {
         Section {
-            Toggle("Enable iCloud Sync", isOn: $engine.isEnabled)
+            // [T-icloud-resign-silent-toggle] A re-signed build has no iCloud
+            // container entitlement, and `CloudSyncEngine.start()` handles
+            // that by disabling itself and flipping `isEnabled` back to false
+            // (CloudSyncEngine.swift:516-522). The user saw exactly that: tap
+            // the switch, it springs back, nothing explains why.
+            //
+            // The engine's behaviour is right — constructing a CKContainer
+            // without the entitlement NSExceptions. What was missing is the
+            // explanation, so the switch is replaced by one.
+            if !ICloudSharedZoneTransport.hasCloneICloudEntitlement() {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("iCloud Sync isn't available in this build", systemImage: "exclamationmark.icloud")
+                        .font(.footnote.weight(.medium))
+                    Text("This copy was re-signed, so it can't reach the app's iCloud container. Syncing works only in a build signed with the original iCloud entitlement. Everything else in the app works normally, and your data stays on this device.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Toggle("Enable iCloud Sync", isOn: $engine.isEnabled)
+            }
 
             HStack {
                 Text("Status")
