@@ -42,7 +42,7 @@ struct GlobalRegexRulesView: View {
                         }
                     }
                     .onMove { indices, newOffset in
-                        store.move(from: indices, to: destination: newOffset)
+                        store.move(from: indices, to: newOffset)
                     }
                 }
             } header: {
