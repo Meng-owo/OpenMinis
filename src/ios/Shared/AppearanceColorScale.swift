@@ -243,7 +243,7 @@ enum AppearanceContrast {
     /// 两个颜色的对比度。1.0 到 21.0。
     ///
     /// WCAG 明确要求不四舍五入（4.499 不算过 4.5），所以这里不做 round。
-    static func ratio(_ a: String, _ b: String) -> Double {
+    static func ratio(_ a: String, on b: String) -> Double {
         let la = luminance(a), lb = luminance(b)
         let hi = max(la, lb), lo = min(la, lb)
         return (hi + 0.05) / (lo + 0.05)
