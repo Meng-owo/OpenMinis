@@ -33,7 +33,7 @@ import UIKit
         var result: [String: Any] = [:]
         Task { @MainActor in
             guard let data = json.data(using: .utf8),
-                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                  let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 result = [
                     "ok": false,
                     "error": "invalid_pack",
@@ -41,6 +41,21 @@ import UIKit
                 ]
                 sem.signal()
                 return
+            }
+            // [T-theme-export-roundtrip] `export` writes the tool envelope
+            // (`{ok,tool,action,data,timestamp}`, NativeOffloadUtils.m:135)
+            // while `apply` only ever accepted a bare pack — so the two
+            // subcommands of the same CLI disagreed about what a pack looks
+            // like, and `export > a.json; apply --file a.json` failed with
+            // "invalid_pack". Unwrap the envelope here so anything this tool
+            // emits can be fed straight back into it. A bare pack still works:
+            // it has no "data" key, so the unwrap is skipped.
+            let obj: [String: Any]
+            if let wrapped = parsed["data"] as? [String: Any],
+               parsed["tool"] != nil || parsed["action"] != nil {
+                obj = wrapped
+            } else {
+                obj = parsed
             }
             // Merge onto the live pack: an AI call that only names colors must
             // not reset radii, fonts, images, or anything else it left out.

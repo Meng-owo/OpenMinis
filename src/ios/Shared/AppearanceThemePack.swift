@@ -506,31 +506,65 @@ extension AppearanceStudio {
         pack.thinkingAccentHex = accentHex
         pack.thinkingFillHex = accentHex
         pack.thinkingStrokeHex = accentHex
-        if includeWallpaper, let image = wallpaper(for: .global),
-           let data = image.jpegData(compressionQuality: 0.82) {
+        // [T-theme-reexport-inflate] Export used to re-encode every image from
+        // its decoded UIImage at a fixed quality. A pack that went
+        // export → apply → export came back ~3x larger (340B → 1005B, and
+        // 964B → 2156B for the wallpaper) and lost detail on every pass, even
+        // though apply had stored the bytes verbatim.
+        //
+        // The file on disk IS the original bytes — `writeEncodedImage` writes
+        // them untouched when no downscale is needed — so read those instead
+        // of round-tripping through UIImage. The UIImage path stays as the
+        // fallback for anything not backed by a file.
+        if includeWallpaper, let data = originalImageData(fileName: "wallpaper-\(AppearanceScope.global.rawValue).jpg") {
+            pack.wallpaperJPEGBase64 = data.base64EncodedString()
+        } else if includeWallpaper, let image = wallpaper(for: .global),
+                  let data = image.jpegData(compressionQuality: 0.82) {
             pack.wallpaperJPEGBase64 = data.base64EncodedString()
         } else {
             pack.wallpaperJPEGBase64 = nil
         }
-        if includeWallpaper, let image = thinkingCardImage(),
-           let data = image.jpegData(compressionQuality: 0.82) {
-            pack.thinkingCardJPEGBase64 = data.base64EncodedString()
+        if includeWallpaper {
+            if let data = originalImageData(fileName: "thinking-card.jpg") {
+                pack.thinkingCardJPEGBase64 = data.base64EncodedString()
+            } else if let image = thinkingCardImage(),
+                      let data = image.jpegData(compressionQuality: 0.82) {
+                pack.thinkingCardJPEGBase64 = data.base64EncodedString()
+            }
         }
-        if includeWallpaper, let image = inputBarImage(),
-           let data = image.jpegData(compressionQuality: 0.82) {
-            pack.inputBarJPEGBase64 = data.base64EncodedString()
+        if includeWallpaper {
+            if let data = originalImageData(fileName: "input-bar.jpg") {
+                pack.inputBarJPEGBase64 = data.base64EncodedString()
+            } else if let image = inputBarImage(),
+                      let data = image.jpegData(compressionQuality: 0.82) {
+                pack.inputBarJPEGBase64 = data.base64EncodedString()
+            }
         }
         if includeWallpaper {
             var images: [String: String] = [:]
             for key in AppearanceThemePack.categoryKeys {
-                if let image = categoryImage(for: key),
-                   let data = image.jpegData(compressionQuality: 0.86) {
+                // Category icons are rendered tiles, not user files, so the
+                // original-bytes path only applies to a real file on disk.
+                if let data = originalImageData(fileName: "category-\(key).jpg") {
+                    images[key] = data.base64EncodedString()
+                } else if let image = categoryImage(for: key),
+                          let data = image.jpegData(compressionQuality: 0.86) {
                     images[key] = data.base64EncodedString()
                 }
             }
             pack.categoryImages = images
         }
         return pack
+    }
+
+    /// Bytes of an image file exactly as stored, or nil when there is no file.
+    ///
+    /// Deliberately not `UIImage(contentsOfFile:)`: decoding and re-encoding is
+    /// what inflated exported packs.
+    private func originalImageData(fileName: String) -> Data? {
+        let url = appearanceDirectory.appendingPathComponent(fileName)
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+        return data
     }
 
     /// Snapshot directory for the most recent destructive theme operation.
