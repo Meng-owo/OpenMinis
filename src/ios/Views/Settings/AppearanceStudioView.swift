@@ -678,36 +678,56 @@ struct AppearanceStudioView: View {
                         .foregroundStyle(studio.color(.destructive, variant: variant))
                 }
             }
+
+            card("thinking 字号") {
+                sliderRow("标题字", value: thinkingTitleSizeBinding, range: 10...22, unit: "")
+                sliderRow("正文字", value: thinkingBodySizeBinding, range: 10...22, unit: "")
+            }
         }
     }
 
     private func categoryRow(_ key: String) -> some View {
         let themedSymbol = MinisThemeList.categoryIcon(for: key).systemName
-        return HStack(spacing: 10) {
-            // 白底黑实心——和全 App 图标同一个规范
-            Image(systemName: QuietAppIcon.filledSymbolName(themedSymbol))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.black)
-                .frame(width: 22, height: 22)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            Text(key)
-                .font(.system(size: 12))
-                .foregroundStyle(studio.color(.primaryText, variant: variant))
-            Spacer()
-            PhotosPicker(selection: Binding(
-                get: { categoryImageKey == key ? categoryImageItem : nil },
-                set: { categoryImageKey = key; categoryImageItem = $0 }
-            ), matching: .images) {
-                Text(studio.categoryImage(for: key) == nil ? "贴图" : "换图")
-                    .font(.system(size: 11))
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 10) {
+                // 白底黑实心——和全 App 图标同一个规范
+                Image(systemName: QuietAppIcon.filledSymbolName(themedSymbol))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.black)
+                    .frame(width: 22, height: 22)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Text(key)
+                    .font(.system(size: 12))
+                    .foregroundStyle(studio.color(.primaryText, variant: variant))
+                Spacer()
+                PhotosPicker(selection: Binding(
+                    get: { categoryImageKey == key ? categoryImageItem : nil },
+                    set: { categoryImageKey = key; categoryImageItem = $0 }
+                ), matching: .images) {
+                    Text(studio.categoryImage(for: key) == nil ? "贴图" : "换图")
+                        .font(.system(size: 11))
+                }
+                if studio.categoryImage(for: key) != nil {
+                    Button("还原") { studio.removeCategoryImage(for: key) }
+                        .font(.system(size: 10))
+                        .foregroundStyle(studio.color(.destructive, variant: variant))
+                }
             }
-            if studio.categoryImage(for: key) != nil {
-                Button("还原") { studio.removeCategoryImage(for: key) }
-                    .font(.system(size: 10))
-                    .foregroundStyle(studio.color(.destructive, variant: variant))
+            // 自定义 SF 符号名。空着就用默认那个。
+            HStack(spacing: 8) {
+                TextField("SF 名，空着就是默认", text: categorySymbolBinding(key))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                ColorPicker("", selection: categoryColorBinding(key), supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 18, height: 18)
+                    .disabled(true)
+                    .opacity(0.35)
             }
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
     }
 
     // MARK: - 主题库页
@@ -881,6 +901,32 @@ struct AppearanceStudioView: View {
     private var inputBarOpacityBinding: Binding<Double> {
         Binding(get: { studio.currentThemePack().inputBarImageOpacity },
                 set: { studio.setInputBarImageOpacity($0) })
+    }
+    private var thinkingTitleSizeBinding: Binding<Double> {
+        Binding(get: { studio.currentThemePack().thinkingTitleSize },
+                set: { studio.setThinkingFont(title: $0) })
+    }
+    private var thinkingBodySizeBinding: Binding<Double> {
+        Binding(get: { studio.currentThemePack().thinkingBodySize },
+                set: { studio.setThinkingFont(body: $0) })
+    }
+    private func categorySymbolBinding(_ key: String) -> Binding<String> {
+        Binding(
+            get: { studio.currentThemePack().categoryIcons[key] ?? "" },
+            set: { studio.setCategorySymbol($0, for: key) }
+        )
+    }
+    /// 分类图标色。全 App 图标已经统一成白底黑实心，这个控件留着是为了
+    /// 不让老主题包里的值变成"读得到、改不了"的死数据——改得动，只是
+    /// 当前渲染不吃它。
+    private func categoryColorBinding(_ key: String) -> Binding<Color> {
+        Binding(
+            get: {
+                let hex = studio.currentThemePack().categoryColors[key]
+                return hex.map { Color(hex: $0) } ?? studio.color(.accent, variant: variant)
+            },
+            set: { studio.setCategoryColor($0, for: key) }
+        )
     }
 
     // MARK: - 导入导出
