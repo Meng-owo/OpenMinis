@@ -181,16 +181,24 @@ struct AssistantBlockView: View {
 
     @ViewBuilder
     private func singleTextBubble(_ content: String) -> some View {
-        textBlockView(markdown: content)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                MinisThemeShape.assistantBubble.fill(ChatColors.assistantBubble)
-            )
-            .overlay(
-                MinisThemeShape.assistantBubble.fill(ChatColors.accent.opacity(isHighlighted ? 0.10 : 0))
-            )
-            .clipShape(MinisThemeShape.assistantBubble)
+        // [10-18 醒醒 第五轮] 平铺 / 文稿形态不要气泡底色。
+        let display = AppearanceChatDisplay.parse(
+            AppearanceStudio.shared.currentThemePack().chatDisplay)
+        if display == .flat || display == .document {
+            textBlockView(markdown: content)
+                .padding(.vertical, 4)
+        } else {
+            textBlockView(markdown: content)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    MinisThemeShape.assistantBubble.fill(ChatColors.assistantBubble)
+                )
+                .overlay(
+                    MinisThemeShape.assistantBubble.fill(ChatColors.accent.opacity(isHighlighted ? 0.10 : 0))
+                )
+                .clipShape(MinisThemeShape.assistantBubble)
+        }
     }
 
     // MARK: - [T-message-action-bar 09-11] kelivo-style bubble actions

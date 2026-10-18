@@ -164,6 +164,14 @@ private struct UserBubbleSurface: ViewModifier {
     private var shape: MinisBubbleShape { MinisThemeShape.userBubble }
 
     func body(content: Content) -> some View {
+        // [10-18 醒醒 第五轮] 消息形态：平铺 / 气泡 / 文稿。
+        //
+        // - `.flat`    不要底色，像聊天记录一样平铺，靠留白分开
+        // - `.document` 跟 flat 一样没有底色，但外层还会去掉头像和缩进
+        // - `.bubbles` 保持原样
+        let display = AppearanceChatDisplay.parse(
+            AppearanceStudio.shared.currentThemePack().chatDisplay)
+
         if isQueued {
             // Provisional look, identical on every OS version.
             content
@@ -173,6 +181,8 @@ private struct UserBubbleSurface: ViewModifier {
                         .stroke(ChatColors.secondaryText.opacity(0.5),
                                 style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                 )
+        } else if display == .flat || display == .document {
+            content
         } else if #available(iOS 26.0, *) {
             // [T-bubble-opacity-slider][v3 09-10] The slider STILL didn't read
             // on this bubble: `Glass.tint` alpha modulates the material's

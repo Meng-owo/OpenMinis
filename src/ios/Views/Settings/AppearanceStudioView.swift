@@ -691,6 +691,32 @@ struct AppearanceStudioView: View {
                 }
                 .tint(studio.color(.accent, variant: variant))
                 sliderRow(AppLocalized("输入栏圆角"), value: inputBarRadiusBinding, range: 4...32, unit: "")
+                Picker(AppLocalized("头像形状"), selection: avatarShapeBinding) {
+                    ForEach(AppearanceAvatarShape.allCases) { Text($0.title).tag($0) }
+                }
+                .tint(studio.color(.accent, variant: variant))
+                Text(AppLocalized("头像形状同时作用于聊天、列表和情头预览。"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+            }
+            .modifier(StudioCard(variant: variant))
+
+            // 消息形态 + 行高 + 字距。这三个是 ST 主题包里能接住的部分。
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(AppLocalized("消息形态"))
+                Picker("", selection: chatDisplayBinding) {
+                    ForEach(AppearanceChatDisplay.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(AppearanceChatDisplay.parse(studio.currentThemePack().chatDisplay).hint)
+                    .font(.system(size: 10.5))
+                    .lineSpacing(1.5)
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+
+                hairline.padding(.leading, 0).padding(.vertical, 4)
+
+                sliderRow(AppLocalized("行高"), value: lineHeightBinding, range: 0.9...2.2, unit: "x")
+                sliderRow(AppLocalized("字距"), value: letterSpacingBinding, range: -1...3, unit: "pt")
             }
             .modifier(StudioCard(variant: variant))
 
@@ -1135,6 +1161,31 @@ struct AppearanceStudioView: View {
             .modifier(StudioCard(variant: variant))
 
             VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(AppLocalized("选项背景"))
+                HStack(spacing: 13) {
+                    ColorPicker("", selection: rowBackgroundBinding, supportsOpacity: false)
+                        .labelsHidden()
+                        .frame(width: 32, height: 32)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(studio.currentThemePack().rowBackgroundHex == nil
+                             ? AppLocalized("跟随卡片色") : AppLocalized("自定义"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        Text(AppLocalized("设置页每一行的底色。不选就跟卡片走。"))
+                            .font(.system(size: 10))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
+                    }
+                    Spacer()
+                    if studio.currentThemePack().rowBackgroundHex != nil {
+                        Button(AppLocalized("还原")) { studio.setRowBackground(nil) }
+                            .font(.system(size: 11))
+                            .foregroundStyle(studio.color(.destructive, variant: variant))
+                    }
+                }
+            }
+            .modifier(StudioCard(variant: variant))
+
+            VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("App 图标"))
                 if UIApplication.shared.supportsAlternateIcons {
                     ForEach(studioIconOptions) { option in
@@ -1332,6 +1383,31 @@ struct AppearanceStudioView: View {
     private var thinkingBodySizeBinding: Binding<Double> {
         Binding(get: { studio.currentThemePack().thinkingBodySize },
                 set: { studio.setThinkingFont(body: $0) })
+    }
+    private var avatarShapeBinding: Binding<AppearanceAvatarShape> {
+        Binding(get: { AppearanceAvatarShape.parse(studio.currentThemePack().avatarShape) },
+                set: { studio.setAvatarShape($0) })
+    }
+    private var chatDisplayBinding: Binding<AppearanceChatDisplay> {
+        Binding(get: { AppearanceChatDisplay.parse(studio.currentThemePack().chatDisplay) },
+                set: { studio.setChatDisplay($0) })
+    }
+    private var lineHeightBinding: Binding<Double> {
+        Binding(get: { studio.currentThemePack().lineHeight },
+                set: { studio.setLineHeight($0) })
+    }
+    private var letterSpacingBinding: Binding<Double> {
+        Binding(get: { studio.currentThemePack().letterSpacing },
+                set: { studio.setLetterSpacing($0) })
+    }
+    private var rowBackgroundBinding: Binding<Color> {
+        Binding(
+            get: {
+                let hex = studio.currentThemePack().rowBackgroundHex
+                return hex.map { Color(hex: $0) } ?? studio.color(.surface, scope: .settings)
+            },
+            set: { studio.setRowBackground($0.hexString) }
+        )
     }
     private func categorySymbolBinding(_ key: String) -> Binding<String> {
         Binding(

@@ -35,6 +35,18 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
     var colorsLight: [String: String]
     var colorsDark: [String: String]
     var wallpaperJPEGBase64: String?
+    // [10-18 醒醒 第五轮] 五个新的可调维度，补的是"结构"自由度，
+    // 之前只有颜色和圆角。
+    /// 头像形状：圆 / 方 / 圆角方 / 竖矩形
+    var avatarShape: String
+    /// 消息形态：平铺 / 气泡 / 文稿
+    var chatDisplay: String
+    /// 正文行高倍数。1.0 = 系统默认。
+    var lineHeight: Double
+    /// 正文字距，单位 pt。可以是负数。
+    var letterSpacing: Double
+    /// 选项行背景。nil = 跟随 surface。
+    var rowBackgroundHex: String?
 
     static let currentKey = "appearanceStudio.themePack.v1"
     static let schemaVersion = 5
@@ -73,7 +85,12 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         surfaceOpacity: 0.88,
         colorsLight: [:],
         colorsDark: [:],
-        wallpaperJPEGBase64: nil
+        wallpaperJPEGBase64: nil,
+        avatarShape: AppearanceAvatarShape.circle.rawValue,
+        chatDisplay: AppearanceChatDisplay.bubbles.rawValue,
+        lineHeight: 1.0,
+        letterSpacing: 0,
+        rowBackgroundHex: nil
     )
 
     var userStyle: AppearanceBubbleStyle { AppearanceBubbleStyle.parse(userBubbleStyle) }
@@ -120,7 +137,12 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             "fontFamily": AppearanceFontFamily.parse(fontFamily).rawValue,
             "colorsLight": colorsLight,
             "colorsDark": colorsDark,
+            "avatarShape": AppearanceAvatarShape.parse(avatarShape).rawValue,
+            "chatDisplay": AppearanceChatDisplay.parse(chatDisplay).rawValue,
+            "lineHeight": lineHeight,
+            "letterSpacing": letterSpacing,
         ]
+        if let rowBackgroundHex { obj["rowBackgroundHex"] = rowBackgroundHex }
         if let listRowFillHex { obj["listRowFillHex"] = listRowFillHex }
         if let wallpaperShade { obj["wallpaperShade"] = wallpaperShade }
         if let surfaceOpacity { obj["surfaceOpacity"] = surfaceOpacity }
@@ -143,6 +165,7 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         "thinkingTitleSize", "thinkingBodySize", "fontFamily",
         "wallpaperShade", "surfaceOpacity",
         "colorsLight", "colorsDark", "wallpaperJPEGBase64",
+        "avatarShape", "chatDisplay", "lineHeight", "letterSpacing", "rowBackgroundHex",
     ]
 
     /// True when `raw` carries at least one known theme-pack field.
@@ -211,7 +234,12 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             surfaceOpacity: raw["surfaceOpacity"] == nil ? nil : min(1, max(0.35, num("surfaceOpacity", fallback: 0.88))),
             colorsLight: normalizeHexMap(map("colorsLight", fallback: base.colorsLight)),
             colorsDark: normalizeHexMap(map("colorsDark", fallback: base.colorsDark)),
-            wallpaperJPEGBase64: raw["wallpaperJPEGBase64"] as? String
+            wallpaperJPEGBase64: raw["wallpaperJPEGBase64"] as? String,
+            avatarShape: AppearanceAvatarShape.parse(str("avatarShape", fallback: base.avatarShape)).rawValue,
+            chatDisplay: AppearanceChatDisplay.parse(str("chatDisplay", fallback: base.chatDisplay)).rawValue,
+            lineHeight: min(2.2, max(0.9, num("lineHeight", fallback: base.lineHeight))),
+            letterSpacing: min(3, max(-1, num("letterSpacing", fallback: base.letterSpacing))),
+            rowBackgroundHex: (raw["rowBackgroundHex"] as? String).map(normalizeHex)
         )
         if pack.id.isEmpty { pack.id = base.id }
         if pack.name.isEmpty { pack.name = pack.id }
@@ -718,6 +746,72 @@ extension AppearanceStudio {
         var pack = currentThemePack()
         pack.fontFamily = family.rawValue
         persistPack(pack)
+    }
+
+    // MARK: - 第五轮新增的维度
+
+    func setAvatarShape(_ shape: AppearanceAvatarShape) {
+        var pack = currentThemePack()
+        pack.avatarShape = shape.rawValue
+        persistPack(pack)
+    }
+
+    func setChatDisplay(_ display: AppearanceChatDisplay) {
+        var pack = currentThemePack()
+        pack.chatDisplay = display.rawValue
+        persistPack(pack)
+    }
+
+    func setLineHeight(_ value: Double) {
+        var pack = currentThemePack()
+        pack.lineHeight = min(2.2, max(0.9, value))
+        persistPack(pack)
+    }
+
+    func setLetterSpacing(_ value: Double) {
+        var pack = currentThemePack()
+        pack.letterSpacing = min(3, max(-1, value))
+        persistPack(pack)
+    }
+
+    func setRowBackground(_ hex: String?) {
+        var pack = currentThemePack()
+        pack.rowBackgroundHex = hex.map { $0.uppercased() }
+        persistPack(pack)
+    }
+
+    /// 行高倍数的安全取值。越界就夹回 0.9...2.2。
+    static func parseLineHeight(_ raw: Double) -> Double {
+        min(2.2, max(0.9, raw))
+    }
+
+    /// 字距的安全取值，单位 pt。
+    static func parseLetterSpacing(_ raw: Double) -> Double {
+        min(3, max(-1, raw))
+    }
+
+    /// 一次把 ST 主题包解析出来的东西全应用上。
+    /// 颜色走 `applyThemePack`，几何走这里。
+    func applySillyTavern(_ imported: SillyTavernTheme.Imported) {
+        var pack = currentThemePack()
+        pack.name = imported.name
+        pack.avatarShape = imported.avatarShape.rawValue
+        pack.chatDisplay = imported.chatDisplay.rawValue
+        if let lh = imported.lineHeight { pack.lineHeight = min(2.2, max(0.9, lh)) }
+        if let ls = imported.letterSpacing { pack.letterSpacing = min(3, max(-1, ls)) }
+        if let r = imported.bubbleRadius {
+            // ST 的 border-radius 是 px，我们的圆角是 pt，比例大致 1:1
+            pack.userBubbleRadius = min(32, max(0, r))
+            pack.assistantBubbleRadius = min(32, max(0, r))
+            pack.inputBarRadius = min(32, max(4, r))
+        }
+        persistPack(pack)
+
+        // 颜色单独走
+        var withColors = currentThemePack()
+        for (role, hex) in imported.light { withColors.colorsLight[role.rawValue] = hex }
+        for (role, hex) in imported.dark { withColors.colorsDark[role.rawValue] = hex }
+        persistPack(withColors)
     }
 
     func setThinkingFont(title: Double? = nil, body: Double? = nil) {

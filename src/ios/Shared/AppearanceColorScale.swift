@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 // MARK: - 色阶层
 //
@@ -400,5 +401,110 @@ struct RGB {
         self.r = Double((v >> 16) & 0xFF)
         self.g = Double((v >> 8) & 0xFF)
         self.b = Double(v & 0xFF)
+    }
+}
+
+extension Color {
+    /// 转成六位十六进制。`ColorPicker` 选完要存成字符串，用它。
+    ///
+    /// 走 `UIColor` 取分量，跟 `AppearanceStudio.hex()` 的存储格式一致。
+    var hexString: String {
+        let ui = UIColor(self)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        func byte(_ v: CGFloat) -> Int { Int((min(1, max(0, v)) * 255).rounded()) }
+        return String(format: "%02X%02X%02X", byte(r), byte(g), byte(b))
+    }
+}
+
+// MARK: - 新增的可调维度
+//
+// [10-18 醒醒] 「连选项的背景都可以改颜色或者图片，而不是一直纯白色的那种。」
+//
+// 这四样是从 ST 主题包里能抽出来、原生视图也接得住的部分：
+// 行高、字距、头像形状、消息形态。ST 那套 CSS 伪元素和外链装饰图接不了。
+
+/// 头像形状。对应 ST 的 `avatar_style`：0 圆 / 1 矩形 / 2 方 / 3 圆角方。
+enum AppearanceAvatarShape: String, CaseIterable, Identifiable, Codable {
+    case circle, square, roundedSquare, rectangle
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .circle: return "圆"
+        case .square: return "方"
+        case .roundedSquare: return "圆角方"
+        case .rectangle: return "竖矩形"
+        }
+    }
+
+    /// 圆角占边长的比例。0.5 = 正圆。
+    var cornerFraction: Double {
+        switch self {
+        case .circle: return 0.5
+        case .square: return 0
+        case .roundedSquare: return 0.22
+        case .rectangle: return 0.12
+        }
+    }
+
+    /// 宽高比。竖矩形窄一点。
+    var aspect: Double {
+        self == .rectangle ? 0.78 : 1.0
+    }
+
+    static func parse(_ raw: String) -> AppearanceAvatarShape {
+        AppearanceAvatarShape(rawValue: raw) ?? .circle
+    }
+
+    /// ST 的 `avatar_style` 整数映射。
+    static func fromSillyTavern(_ raw: Int) -> AppearanceAvatarShape {
+        switch raw {
+        case 1: return .rectangle
+        case 2: return .square
+        case 3: return .roundedSquare
+        default: return .circle
+        }
+    }
+}
+
+/// 消息形态。对应 ST 的 `chat_display`：0 平铺 / 1 气泡 / 2 文稿。
+enum AppearanceChatDisplay: String, CaseIterable, Identifiable, Codable {
+    /// 不要气泡底色，像聊天记录一样平铺，靠留白分隔。
+    case flat
+    /// 左右两边的气泡。
+    case bubbles
+    /// 文稿：不要气泡、不要头像，正文铺满。
+    case document
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .flat: return "平铺"
+        case .bubbles: return "气泡"
+        case .document: return "文稿"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .flat: return "不要气泡底色，靠留白分开，像聊天记录"
+        case .bubbles: return "左右两边的气泡"
+        case .document: return "不要头像和气泡，正文铺满，像读信"
+        }
+    }
+
+    static func parse(_ raw: String) -> AppearanceChatDisplay {
+        AppearanceChatDisplay(rawValue: raw) ?? .bubbles
+    }
+
+    static func fromSillyTavern(_ raw: Int) -> AppearanceChatDisplay {
+        switch raw {
+        case 1: return .bubbles
+        case 2: return .document
+        default: return .flat
+        }
     }
 }

@@ -1025,8 +1025,17 @@ private struct SettingsListRowBackgroundModifier: ViewModifier {
     @ObservedObject private var studio = AppearanceStudio.shared
 
     func body(content: Content) -> some View {
-        content
-            .listRowBackground(studio.color(.surface, scope: .settings))
+        // [10-18 醒醒 第五轮] 「连选项的背景都可以改颜色或者图片，
+        // 而不是一直纯白色的那种。」
+        //
+        // 有自定义行背景色就用它，没有就跟随 surface——旧主题包不带这个
+        // 字段，会自动走 surface，不会突然变白。
+        let pack = studio.currentThemePack()
+        if let hex = pack.rowBackgroundHex, !hex.isEmpty {
+            content.listRowBackground(Color(hex: hex))
+        } else {
+            content.listRowBackground(studio.color(.surface, scope: .settings))
+        }
     }
 }
 
@@ -1089,6 +1098,11 @@ struct PersonAvatarView: View {
     @ObservedObject private var studio = AppearanceStudio.shared
     @State private var soulIcon = SoulStore.cachedMetadata.icon
 
+    /// [10-18 醒醒 第五轮] 头像形状跟着主题包走。
+    private var avatarShape: AppearanceAvatarShape {
+        AppearanceAvatarShape.parse(studio.currentThemePack().avatarShape)
+    }
+
     private var resolvedIcon: String? {
         guard let pid = personaID else {
             return soulIcon.isEmpty ? nil : soulIcon
@@ -1103,10 +1117,10 @@ struct PersonAvatarView: View {
             // non-image value (an emoji stored by an older build) is
             // treated as unset and falls through to the default tile.
             if SoulIconImage.isImageReference(icon) {
-                SoulIconView(icon: icon, size: size)
+                SoulIconView(icon: icon, size: size, shape: avatarShape)
             } else {
                 ZStack {
-                    RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
+                    RoundedRectangle(cornerRadius: size * avatarShape.cornerFraction, style: .continuous)
                         .fill(kind == .user
                               ? studio.color(.userBubble, scope: .chat)
                               : studio.color(.assistantBubble, scope: .chat))
@@ -1119,7 +1133,7 @@ struct PersonAvatarView: View {
         }
         .frame(width: size, height: size)
         .overlay(
-            RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
+            RoundedRectangle(cornerRadius: size * avatarShape.cornerFraction, style: .continuous)
                 .stroke(studio.color(.border, scope: .chat), lineWidth: 0.7)
         )
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in

@@ -410,7 +410,17 @@ fileprivate final class MarkdownNSRenderer {
     func updateFontSize(_ size: CGFloat) {
         theme = SelectableMarkdownTheme(baseFontSize: size)
     }
-    private var bodyLineSpacing: CGFloat { theme.baseFontSize * 0.25 }
+    /// [10-18 醒醒 第五轮] 行高跟主题包走。
+    ///
+    /// 原来是写死的 `baseFontSize * 0.25`。现在 `lineHeight` 是倍数：
+    /// 1.0 = 系统默认（也就是原来的 0.25），1.5 = 明显松，0.9 = 收紧。
+    /// 换算是 `(倍数 - 1) * baseFontSize + 0.25 * baseFontSize`，
+    /// 化简就是 `baseFontSize * (0.25 + (倍数 - 1))`。
+    private var bodyLineSpacing: CGFloat {
+        let multiplier = AppearanceThemePack.parseLineHeight(
+            AppearanceStudio.shared.currentThemePack().lineHeight)
+        return theme.baseFontSize * CGFloat(0.25 + (multiplier - 1))
+    }
     /// minisChat list item: .em(0.25) top margin
     private var listItemTopMargin: CGFloat { theme.baseFontSize * 0.25 }
     /// minisChat headings: .em(1) top and bottom

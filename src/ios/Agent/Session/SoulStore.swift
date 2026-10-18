@@ -630,9 +630,18 @@ struct SoulIconView: View {
     /// the same SF Symbol in the default foreground style.
     var sparkleGradient: LinearGradient? = nil
 
+    /// [10-18 醒醒 第五轮] 形状可调。nil = 原来的圆角方（22% 边长）。
+    var shape: AppearanceAvatarShape? = nil
+
     /// ~22% of the edge: iOS's own app-icon "squircle" proportion, which
     /// reads as rounded at 18pt without rounding away image content.
     static func cornerRadius(for size: CGFloat) -> CGFloat { size * 0.22 }
+
+    /// 按当前形状算圆角。
+    private var resolvedRadius: CGFloat {
+        guard let shape else { return Self.cornerRadius(for: size) }
+        return size * shape.cornerFraction
+    }
 
     var body: some View {
         if let image = SoulIconImage.decode(icon) {
@@ -640,7 +649,7 @@ struct SoulIconView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius(for: size),
+                .clipShape(RoundedRectangle(cornerRadius: resolvedRadius,
                                             style: .continuous))
         } else if let gradient = sparkleGradient {
             // No image set: the SF Symbol sparkle, keeping the chat
