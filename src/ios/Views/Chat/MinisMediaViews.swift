@@ -522,7 +522,10 @@ private func attachmentPlaceholderTile(icon: String, size: CGFloat) -> some View
     VStack(spacing: 4) {
         Image(systemName: icon)
             .font(.system(size: 22))
-            .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
+            // 顶层函数是 nonisolated，MinisTheme.secondaryText 是 @MainActor，
+            // 直接引用编不过。走快照版——颜色等价，只是取值路径不要求隔离。
+            // 同文件下面几行早就用的是 uiColorSnapshot。
+            .foregroundStyle(Color(AppearanceStudio.uiColorSnapshot(.secondaryText, scope: .chat)).opacity(0.7))
     }
     .frame(width: size, height: size)
     .background(Color(AppearanceStudio.uiColorSnapshot(.mutedSurface, scope: .chat)))

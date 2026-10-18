@@ -183,7 +183,9 @@ func attributedShellLine(_ text: String) -> AttributedString {
         mutable.addAttributes([
             .link: url,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
-            .foregroundColor: UIColor(ChatColors.accent),
+            // 这个函数是文件作用域的，nonisolated；ChatColors.accent 读的是
+            // @MainActor 的 AppearanceStudio。走快照版取同一个色。
+            .foregroundColor: AppearanceStudio.uiColorSnapshot(.accent, scope: .chat),
         ], range: m.range)
     }
     return AttributedString(mutable)
