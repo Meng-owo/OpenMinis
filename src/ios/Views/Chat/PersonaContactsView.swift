@@ -880,9 +880,9 @@ struct PersonaPresetMessagesView: View {
                                                 .padding(.horizontal, 8)
                                                 .padding(.vertical, 2)
                                                 .background(
-                                                    Capsule().fill(msg.role == "assistant" ? Color.green.opacity(0.15) : Color.blue.opacity(0.15))
+                                                    Capsule().fill(presetRoleTint(msg.role, alpha: 0.15))
                                                 )
-                                                .foregroundStyle(msg.role == "assistant" ? Color.green : Color.blue)
+                                                .foregroundStyle(presetRoleTint(msg.role, alpha: 1))
                                             Spacer()
                                             Image(systemName: "chevron.right")
                                                 .font(.system(size: 12))
@@ -926,25 +926,6 @@ struct PersonaPresetMessagesView: View {
                 .navigationTitle("快捷短语")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    // [10-18 醒醒 第五轮] 正则包导入导出。
-                    // ST 的正则可以导出成 JSON 分享，我们这边也能互通。
-                    ToolbarItem(placement: .topBarLeading) {
-                        Menu {
-                            Button {
-                                showRegexImporter = true
-                            } label: {
-                                Label("导入 ST 正则包", systemImage: "square.and.arrow.down")
-                            }
-                            Button {
-                                exportRegexPack(p)
-                            } label: {
-                                Label("导出到剪贴板", systemImage: "doc.on.clipboard")
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(.system(size: 16, weight: .medium))
-                        }
-                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             startCreate()
@@ -997,6 +978,11 @@ struct PersonaPresetMessagesView: View {
         editorRole = "user"
         editorContent = ""
         showEditor = true
+    }
+
+    /// 三目嵌套会拖垮类型推断（加几个 @State 之后编译就超时了），抽出来。
+    private func presetRoleTint(_ role: String, alpha: Double) -> Color {
+        role == "assistant" ? Color.green.opacity(alpha) : Color.blue.opacity(alpha)
     }
 
     private func startEdit(_ msg: PresetMessage) {
@@ -1391,6 +1377,24 @@ struct PersonaRegexRulesView: View {
                     Text(regexImportMessage ?? "")
                 }
                 .toolbar {
+                    // [10-18 醒醒 第五轮] 正则包导入导出。
+                    ToolbarItem(placement: .topBarLeading) {
+                        Menu {
+                            Button {
+                                showRegexImporter = true
+                            } label: {
+                                Label("导入 ST 正则包", systemImage: "square.and.arrow.down")
+                            }
+                            Button {
+                                exportRegexPack(p)
+                            } label: {
+                                Label("导出到剪贴板", systemImage: "doc.on.clipboard")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.system(size: 16, weight: .medium))
+                        }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button {
                             startCreate()
