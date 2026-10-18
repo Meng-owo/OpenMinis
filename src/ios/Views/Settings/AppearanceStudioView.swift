@@ -212,12 +212,22 @@ struct AppearanceStudioView: View {
                 }
 
                 ForEach(AppearanceThemePack.categoryKeys, id: \.self) { key in
-                    let themed = MinisThemeList.categoryIcon(for: key)
+                    // 只取图标名，颜色按统一规范固定（见下方预览行）。
+                    let themedSymbol = MinisThemeList.categoryIcon(for: key).systemName
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Image(systemName: themed.systemName)
-                                .foregroundStyle(themed.color)
-                                .frame(width: 22)
+                            // [问题6] 她原话：「svg图标的样式也不是统一风格。花花
+                            // 绿绿的很丑怪里怪气的。我想要变成全部 白底+黑色图标，
+                            // 图标全部变成实体的稍微偏圆润感一点的」。
+                            //
+                            // 这一行原先是 accent 色的线框图标——正是她说的"花花
+                            // 绿绿"。改成和全 App 图标同一个规范：白底、黑、实心、
+                            // 圆角，让这一页的预览和实际渲染看到的是同一个东西。
+                            Image(systemName: QuietAppIcon.filledSymbolName(themedSymbol))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.black)
+                                .frame(width: 22, height: 22)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                             Text(key)
                                 .font(.caption)
                             Spacer()

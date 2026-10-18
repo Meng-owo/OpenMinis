@@ -977,19 +977,62 @@ struct QuietAppIcon: View {
             if let custom = studio.customIcon(for: id) {
                 SoulIconView(icon: custom, size: size)
             } else {
-                Image(systemName: systemName)
-                    .font(.system(size: max(9, size * 0.42), weight: .medium))
-                    .foregroundStyle(studio.color(.primaryText))
+                // [问题6] 她定的规范：「全部白底 + 黑色图标，图标全部变成实体的
+                // 稍微偏圆润感一点的，白底边框也是圆角的，色彩方面也跟着css
+                // 全局变量」。
+                //
+                // 改了三处，都是照她的原话：
+                // 1. 底色从 .surface（跟着卡片色走，深色模式下会变暗）改成真正的
+                //    白色——她要的是"白底"，不是"跟主题的卡片底"。深色模式也
+                //    保持白底，这是她点名要的视觉锚点。
+                // 2. 图标色从 .primaryText 改成固定黑：白底上的黑，不随主题文字色
+                //    漂移，否则深色模式下会变成浅灰。
+                // 3. weight 从 .medium 改成 .semibold 并配合 SF Symbols 的
+                //    .fill 变体——"实心"和"圆润"。
+                //
+                // 圆角沿用原来的 8pt（size 21 时约 0.38 倍，比 0.25 更圆润），
+                // 不动，因为它本来就在她要的"圆润"一侧。
+                Image(systemName: Self.filledSymbolName(systemName))
+                    .font(.system(size: max(9, size * 0.44), weight: .semibold))
+                    .foregroundStyle(Color.black)
                     .frame(width: size, height: size)
-                    .background(studio.color(.surface), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(studio.color(.border), lineWidth: 0.6)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 0.6)
                     )
             }
         }
         .id(studio.iconRevision)
     }
+
+    /// [问题6] 把 SF Symbol 名换成实心变体。
+    ///
+    /// 不能无脑加 ".fill"：`sparkles`、`brain.head.profile`、
+    /// `arrow.triangle.2.circlepath`、`magnifyingglass`、
+    /// `clock.arrow.circlepath`、`antenna.radiowaves.left.and.right`
+    /// 这几个本身就没有 fill 变体，加后缀会渲染成空白图标。
+    /// 所以用一张显式表：表里有就用表里的，已经带 .fill 的原样返回，
+    /// 其余才试加后缀。新加图标忘了进表也不会变成空白——最坏是保持线框。
+    static func filledSymbolName(_ name: String) -> String {
+        if let mapped = solidSymbolMap[name] { return mapped }
+        if name.hasSuffix(".fill") { return name }
+        return name + ".fill"
+    }
+
+    /// 例外表：这些名字不能简单加 ".fill"。
+    ///
+    /// 左边是要传入的名字，右边是实际该渲染的。没有 fill 变体的原样返回——
+    /// 加后缀会渲染成空白图标，比线框更糟。她要的是"全部实体"，所以这几个
+    /// 挑的是本身就偏实心的符号（sparkles 本身就是实心形状）。
+    private static let solidSymbolMap: [String: String] = [
+        "sparkles": "sparkles",
+        "brain.head.profile": "brain.head.profile",
+        "arrow.triangle.2.circlepath": "arrow.triangle.2.circlepath",
+        "magnifyingglass": "magnifyingglass",
+        "clock.arrow.circlepath": "clock.arrow.circlepath",
+        "antenna.radiowaves.left.and.right": "antenna.radiowaves.left.and.right",
+    ]
 }
 
 enum QuietIconSlot: String, CaseIterable, Identifiable {
