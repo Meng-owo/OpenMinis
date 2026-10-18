@@ -124,10 +124,52 @@ struct ModelGroupsView: View {
                         ),
                         isVision: true
                     )
+                    // [问题3 / G2] 她点名的五个用途槽位。逻辑与上面五行一致：
+                    // 选一个组，按用途取用；不配就是没开。建组时的模态过滤
+                    // 走 preferModality，Embedding 没有对应模态位（ModelModality
+                    // 只描述输入输出，不描述用途），所以它不过滤。
+                    GroupSlotPicker(
+                        label: "Image Output",
+                        selection: Binding(
+                            get: { store.imageOutputGroupId },
+                            set: { store.imageOutputGroupId = $0 }
+                        ),
+                        preferModality: .imageOutput
+                    )
+                    GroupSlotPicker(
+                        label: "Video Output",
+                        selection: Binding(
+                            get: { store.videoOutputGroupId },
+                            set: { store.videoOutputGroupId = $0 }
+                        ),
+                        preferModality: .videoOutput
+                    )
+                    GroupSlotPicker(
+                        label: "Realtime Voice",
+                        selection: Binding(
+                            get: { store.realtimeVoiceGroupId },
+                            set: { store.realtimeVoiceGroupId = $0 }
+                        ),
+                        preferModality: .audioOutput
+                    )
+                    GroupSlotPicker(
+                        label: "Embedding",
+                        selection: Binding(
+                            get: { store.embeddingGroupId },
+                            set: { store.embeddingGroupId = $0 }
+                        )
+                    )
+                    GroupSlotPicker(
+                        label: "Judge",
+                        selection: Binding(
+                            get: { store.judgeGroupId },
+                            set: { store.judgeGroupId = $0 }
+                        )
+                    )
                 } header: {
                     Text("Defaults")
                 } footer: {
-                    Text("Primary is used for main agent tasks. Sub is used for lightweight tasks like title generation. Voice Input/Output pick a group whose audio-capable models drive speech-to-text and text-to-speech; if none is set, the offline System voice is used. Vision Input picks a group whose image-capable models describe images when the chat model cannot see them itself; if none is set, models without vision cannot read images at all.")
+                    Text("Primary is used for main agent tasks. Sub is used for lightweight tasks like title generation. Voice Input/Output pick a group whose audio-capable models drive speech-to-text and text-to-speech; if none is set, the offline System voice is used. Vision Input picks a group whose image-capable models describe images when the chat model cannot see them itself; if none is set, models without vision cannot read images at all. Image/Video Output, Realtime Voice, Embedding and Judge name the group to use for those jobs; leave one empty and that job simply has no model.")
                 }
             }
 

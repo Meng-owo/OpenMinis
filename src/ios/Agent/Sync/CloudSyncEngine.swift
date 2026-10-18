@@ -2376,6 +2376,24 @@ final class CloudSyncEngine: ObservableObject {
             if let v = local.visionGroupId, let replacement = groupIdRewrites[v] {
                 local.visionGroupId = replacement
             }
+            // [问题3 / G2] 新增的五个用途槽位指向同一批组，必须一起改写。
+            // 漏掉它们的话，组被合并后这几个槽位会指向一个已经不存在的 id，
+            // 表现为"明明配了却永远取不到模型"。
+            if let v = local.imageOutputGroupId, let replacement = groupIdRewrites[v] {
+                local.imageOutputGroupId = replacement
+            }
+            if let v = local.videoOutputGroupId, let replacement = groupIdRewrites[v] {
+                local.videoOutputGroupId = replacement
+            }
+            if let v = local.realtimeVoiceGroupId, let replacement = groupIdRewrites[v] {
+                local.realtimeVoiceGroupId = replacement
+            }
+            if let v = local.embeddingGroupId, let replacement = groupIdRewrites[v] {
+                local.embeddingGroupId = replacement
+            }
+            if let v = local.judgeGroupId, let replacement = groupIdRewrites[v] {
+                local.judgeGroupId = replacement
+            }
             for (sid, var binding) in local.sessionBindings {
                 func rewrite(_ source: SessionModelSource) -> SessionModelSource {
                     if case .group(let gid, let resolved) = source,

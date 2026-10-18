@@ -169,6 +169,12 @@ struct ModelPickerConfig {
         // image-capable models first — a text-only member there would be dead
         // weight the resolver silently filters out.
         if gid == store.visionGroupId      { return [.imageInput] }
+        // [问题3 / G2] 新增用途槽位绑定的组，加模型时同样收窄候选——
+        // 否则往"图片输出"组里加个纯文本模型，解析时会被静默过滤掉，
+        // 看起来像是加了没生效。
+        if gid == store.imageOutputGroupId { return [.imageOutput] }
+        if gid == store.videoOutputGroupId { return [.videoOutput] }
+        if gid == store.realtimeVoiceGroupId { return [.audioOutput] }
         return nil
     }
 

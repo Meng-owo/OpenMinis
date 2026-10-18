@@ -44,6 +44,25 @@ struct ProviderConfig: Codable, Equatable {
     /// and `ModelGroup` needs no purpose/kind field. nil = feature off (a
     /// non-vision model simply doesn't get the `read_image` tool, as before).
     var visionGroupId: String?
+    // MARK: - [问题3 / G2] 用途槽位扩展
+    //
+    // 她原话：「图片输出，视频输出，语音输出，实时语音，向量模型，还有 jev
+    // 那种专门打分的模型之类的。逻辑和其他分组一样。AI 直接调用里面的模型
+    // 进行就行了。」
+    //
+    // 语义与上面五个槽位完全一致：一个指向普通 ModelGroup 的指针，
+    // 按用途取用，nil = 没配。每台设备各自持有，不参与同步——理由同
+    // voiceInput/vision：这是"这台机器上我想用谁"，不是模型配置本身。
+    /// 图片输出（文生图）。
+    var imageOutputGroupId: String?
+    /// 视频输出（文生视频）。
+    var videoOutputGroupId: String?
+    /// 实时语音（双向流式对话）。
+    var realtimeVoiceGroupId: String?
+    /// 向量模型（embedding）。
+    var embeddingGroupId: String?
+    /// 打分/评判模型（如 Jev 这类）。
+    var judgeGroupId: String?
     /// Per-session inference settings (thinking toggle, etc.).
     var sessionInferenceConfigs: [String: SessionInferenceConfig]
     /// Soft-delete tombstones. Required to make deletes survive
@@ -60,6 +79,9 @@ struct ProviderConfig: Codable, Equatable {
          agentLoopModelEntryIds: [String] = [], agentLoopGroupIds: [String] = [],
          voiceInputGroupId: String? = nil, voiceOutputGroupId: String? = nil,
          visionGroupId: String? = nil,
+         imageOutputGroupId: String? = nil, videoOutputGroupId: String? = nil,
+         realtimeVoiceGroupId: String? = nil, embeddingGroupId: String? = nil,
+         judgeGroupId: String? = nil,
          sessionInferenceConfigs: [String: SessionInferenceConfig] = [:],
          deletedInstances: [ProviderConfigTombstone] = [],
          deletedModelEntries: [ProviderConfigTombstone] = [],
@@ -75,6 +97,11 @@ struct ProviderConfig: Codable, Equatable {
         self.voiceInputGroupId = voiceInputGroupId
         self.voiceOutputGroupId = voiceOutputGroupId
         self.visionGroupId = visionGroupId
+        self.imageOutputGroupId = imageOutputGroupId
+        self.videoOutputGroupId = videoOutputGroupId
+        self.realtimeVoiceGroupId = realtimeVoiceGroupId
+        self.embeddingGroupId = embeddingGroupId
+        self.judgeGroupId = judgeGroupId
         self.sessionInferenceConfigs = sessionInferenceConfigs
         self.deletedInstances = deletedInstances
         self.deletedModelEntries = deletedModelEntries
@@ -99,6 +126,12 @@ struct ProviderConfig: Codable, Equatable {
         voiceInputGroupId = try container.decodeIfPresent(String.self, forKey: .voiceInputGroupId)
         voiceOutputGroupId = try container.decodeIfPresent(String.self, forKey: .voiceOutputGroupId)
         visionGroupId = try container.decodeIfPresent(String.self, forKey: .visionGroupId)
+        // [问题3 / G2] 新槽位宽容解码：旧配置没有这些键，一律回退 nil。
+        imageOutputGroupId = try container.decodeIfPresent(String.self, forKey: .imageOutputGroupId)
+        videoOutputGroupId = try container.decodeIfPresent(String.self, forKey: .videoOutputGroupId)
+        realtimeVoiceGroupId = try container.decodeIfPresent(String.self, forKey: .realtimeVoiceGroupId)
+        embeddingGroupId = try container.decodeIfPresent(String.self, forKey: .embeddingGroupId)
+        judgeGroupId = try container.decodeIfPresent(String.self, forKey: .judgeGroupId)
         sessionInferenceConfigs = try container.decodeIfPresent([String: SessionInferenceConfig].self, forKey: .sessionInferenceConfigs) ?? [:]
         deletedInstances = try container.decodeIfPresent([ProviderConfigTombstone].self, forKey: .deletedInstances) ?? []
         deletedModelEntries = try container.decodeIfPresent([ProviderConfigTombstone].self, forKey: .deletedModelEntries) ?? []
@@ -109,6 +142,8 @@ struct ProviderConfig: Codable, Equatable {
         case instances, modelEntries, modelGroups, defaultPrimaryGroupId, defaultSubGroupId
         case sessionBindings, agentLoopModelEntryIds, agentLoopGroupIds, sessionInferenceConfigs
         case voiceInputGroupId, voiceOutputGroupId, visionGroupId
+        case imageOutputGroupId, videoOutputGroupId, realtimeVoiceGroupId
+        case embeddingGroupId, judgeGroupId
         case deletedInstances, deletedModelEntries, deletedModelGroups
     }
 
@@ -1974,6 +2009,36 @@ final class ProviderConfigStore: ObservableObject {
     var visionGroupId: String? {
         get { config.visionGroupId }
         set { config.visionGroupId = newValue; save() }
+    }
+
+    // MARK: - [问题3 / G2] 用途槽位访问器
+    //
+    // 形状与上面五个完全一致：读 config、写回后 save()。不加额外逻辑，
+    // 免得这套槽位跟原有五个行为分叉。
+
+    var imageOutputGroupId: String? {
+        get { config.imageOutputGroupId }
+        set { config.imageOutputGroupId = newValue; save() }
+    }
+
+    var videoOutputGroupId: String? {
+        get { config.videoOutputGroupId }
+        set { config.videoOutputGroupId = newValue; save() }
+    }
+
+    var realtimeVoiceGroupId: String? {
+        get { config.realtimeVoiceGroupId }
+        set { config.realtimeVoiceGroupId = newValue; save() }
+    }
+
+    var embeddingGroupId: String? {
+        get { config.embeddingGroupId }
+        set { config.embeddingGroupId = newValue; save() }
+    }
+
+    var judgeGroupId: String? {
+        get { config.judgeGroupId }
+        set { config.judgeGroupId = newValue; save() }
     }
 
     /// Ensure a default Voice INPUT group exists and is bound when the user hasn't
