@@ -686,38 +686,6 @@ private struct BridgedAssistantFooterV3: View {
         if u.cacheCreationTokens > 0 { parts.append("+cache:\(fmtTok(u.cacheCreationTokens))") }
         return parts.joined(separator: " ")
     }
-    // [10-20 醒醒] 时间胶囊的插入判断与文案。
-    //
-    // 规则（照她说的）：跟上一段隔 ≥5 分钟才插；12 小时内说「几分钟前 /
-    // 几小时前」；超过 12 小时换成「M月d日 HH:mm」，跨年补年份。
-    static func shouldShowTimeDivider(previous: ChatMessage?, current: ChatMessage) -> Bool {
-        // 列表最开头不插——第一屏就一个「3天前」很怪。
-        guard let previous else { return false }
-        // [10-20 醒醒] 跟模型那边同一个门槛：3 分钟。
-        return current.createdAt.timeIntervalSince(previous.createdAt) >= 3 * 60
-    }
-
-    /// 胶囊文案。滚动时现算，复用即刷新，不起定时器。
-    /// [10-20 醒醒] 要精确：11 分钟就是 11 分钟，不取整成「10 分钟」。
-    static func timeDividerText(for date: Date, now: Date = Date()) -> String {
-        let elapsed = now.timeIntervalSince(date)
-        // 12 小时内说「多久之前」，精确到分钟。
-        if elapsed < 12 * 3600 {
-            let totalMinutes = Int(elapsed / 60)
-            if totalMinutes < 1 { return "刚刚" }
-            if totalMinutes < 60 { return "\(totalMinutes) 分钟前" }
-            let hours = totalMinutes / 60
-            let minutes = totalMinutes % 60
-            return minutes > 0 ? "\(hours) 小时 \(minutes) 分钟前" : "\(hours) 小时前"
-        }
-        let cal = Calendar.current
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "zh_Hans_CN")
-        // 跨年才带年份，同年只显示月日。
-        let sameYear = cal.component(.year, from: date) == cal.component(.year, from: now)
-        df.dateFormat = sameYear ? "M月d日 HH:mm" : "yyyy年M月d日 HH:mm"
-        return df.string(from: date)
-    }
 
     private func fmtTok(_ c: Int) -> String {
         c >= 1000 ? (c >= 10000 ? "\(c/1000)k" : String(format: "%.1fk", Double(c)/1000)) : "\(c)"
@@ -5910,3 +5878,39 @@ private struct SheetOverlayView: View {
     }
 }
 
+// MARK: - 时间胶囊判断
+
+/// [10-20 醒醒] 时间胶囊的插入判断与文案。
+///
+/// 原来是挂在 `BridgedAssistantFooterV3` 里的 static，写的时候以为是挂在
+/// `CollectionViewMessageListV3` 上，CI 直接报「has no member」。挪成独立
+/// 扩展，任何类型都能调，也不受嵌套影响。
+extension CollectionViewMessageListV3 {
+    /// 跟上一段隔 ≥3 分钟才插一条。列表最开头不插——第一屏就一个「3天前」很怪。
+    static func shouldShowTimeDivider(previous: ChatMessage?, current: ChatMessage) -> Bool {
+        guard let previous else { return false }
+        return current.createdAt.timeIntervalSince(previous.createdAt) >= 3 * 60
+    }
+
+    /// 胶囊文案。滚动时现算，复用即刷新，不起定时器。
+    /// [10-20 醒醒] 要精确：11 分钟就是 11 分钟，不取整成「10 分钟」。
+    static func timeDividerText(for date: Date, now: Date = Date()) -> String {
+        let elapsed = now.timeIntervalSince(date)
+        // 12 小时内说「多久之前」，精确到分钟。
+        if elapsed < 12 * 3600 {
+            let totalMinutes = Int(elapsed / 60)
+            if totalMinutes < 1 { return "刚刚" }
+            if totalMinutes < 60 { return "\(totalMinutes) 分钟前" }
+            let hours = totalMinutes / 60
+            let minutes = totalMinutes % 60
+            return minutes > 0 ? "\(hours) 小时 \(minutes) 分钟前" : "\(hours) 小时前"
+        }
+        let cal = Calendar.current
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "zh_Hans_CN")
+        // 跨年才带年份，同年只显示月日。
+        let sameYear = cal.component(.year, from: date) == cal.component(.year, from: now)
+        df.dateFormat = sameYear ? "M月d日 HH:mm" : "yyyy年M月d日 HH:mm"
+        return df.string(from: date)
+    }
+}
