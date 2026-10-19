@@ -76,6 +76,8 @@ struct AppearanceStudioView: View {
     @State private var showResetConfirm = false
     @State private var shuffleName: String?
     @State private var showFullPreview = false
+    // [10-19 醒醒] 预览默认收起，别一进来就吃掉半屏
+    @State private var showPreviewExpanded = false
     @State private var showSTImporter = false
     @State private var stWarnings: [String] = []
     @State private var showSTWarnings = false
@@ -86,31 +88,46 @@ struct AppearanceStudioView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            previewArea
+        // [10-19 醒醒] 改成 iOS 原生结构：根页是 `List`，每个分区用
+        // `NavigationLink` 进子页。原来底部挤七个 tab、内容用
+        // `ScrollView` + 自绘卡片堆，那是安卓的做法。
+        List {
+            previewSection
 
-            ScrollView {
-                LazyVStack(spacing: 20) {
-                    switch page {
-                    case .palette:   palettePage
-                    case .bubbles:   bubblesPage
-                    case .backdrop:  backdropPage
-                    case .avatars:   avatarsPage
-                    case .icons:     iconsPage
-                    case .library:   libraryPage
-                    case .behaviour: behaviourPage
+            Section {
+                ForEach([AppearanceStudioPage.palette, .bubbles, .backdrop, .avatars, .icons]) { item in
+                    NavigationLink {
+                        pageContent(item)
+                            .navigationTitle(item.title)
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        studioRow(item)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.top, 18)
-                .padding(.bottom, 48)
+            } header: {
+                Text(AppLocalized("外观"))
+            } footer: {
+                Text(AppLocalized("改完立刻生效，聊天页、列表、设置页都跟着变。"))
             }
-            .scrollIndicators(.hidden)
-            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+
+            Section {
+                ForEach([AppearanceStudioPage.library, .behaviour]) { item in
+                    NavigationLink {
+                        pageContent(item)
+                            .navigationTitle(item.title)
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        studioRow(item)
+                    }
+                }
+            } header: {
+                Text(AppLocalized("主题与行为"))
+            }
         }
+        .listStyle(.insetGrouped)
         .appearancePage(.settings)
         .navigationTitle(AppLocalized("外观"))
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .alert(AppLocalized("出错了"), isPresented: $showError) {
             Button(AppLocalized("知道了"), role: .cancel) {}
         } message: {
@@ -123,16 +140,6 @@ struct AppearanceStudioView: View {
             Text(AppLocalized("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。"))
         }
         .fullScreenCover(isPresented: $showFullPreview) { fullPreviewSheet }
-        .fileImporter(isPresented: $showSTImporter,
-                      allowedContentTypes: [.json, .plainText, .data],
-                      allowsMultipleSelection: false) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first { importSillyTavern(url) }
-            case .failure(let error):
-                fail(error.localizedDescription)
-            }
-        }
         .alert(AppLocalized("导入完成"), isPresented: $showSTWarnings) {
             Button(AppLocalized("知道了"), role: .cancel) {}
         } message: {
@@ -206,62 +213,107 @@ struct AppearanceStudioView: View {
     // 用真组件：真头像（PersonAvatarView）、真壁纸（AppearanceBackdrop）、
     // 真气泡（MinisBubbleShape）。上一版是重画的一套简化 UI，所以换了头像
     // 和壁纸这里不动——现在跟着动。
+    //
+    // [10-19 醒醒] 改成可折叠，默认收起。原来整块常驻 372pt，占掉半屏，
+    // 她要看设置得往下滚很久。
 
-    private var previewArea: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Text(AppLocalized("预览"))
-                    .font(.system(size: 12, weight: .semibold))
-                    .tracking(0.3)
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant))
+    /// 根页的分区行。
+    private func studioRow(_ item: AppearanceStudioPage) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                Text(item.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(MinisTheme.secondaryText)
+            }
+        } icon: {
+            Image(systemName: item.symbol)
+                .foregroundStyle(studio.color(.accent, variant: variant))
+        }
+    }
 
-                if let note = shuffleName {
-                    Text(note)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(studio.color(.accent, variant: variant))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(studio.color(.chip, variant: variant).opacity(studio.surfaceOpacity),
-                                    in: Capsule())
-                        .transition(.opacity.combined(with: .scale(scale: 0.92)))
+    /// 子页内容分发。七个页原来是 tab 直接切，现在按 `NavigationLink` 渲染。
+    @ViewBuilder
+    private func pageContent(_ item: AppearanceStudioPage) -> some View {
+        // [10-19 醒醒] 子页内容原来是纯 VStack，塞进 NavigationLink 后
+        // 没有滚动容器会挤成一坨。统一包一层 ScrollView，卡片视觉保留。
+        ScrollView {
+            VStack(spacing: 16) {
+                switch item {
+                case .palette:   palettePage
+                case .bubbles:   bubblesPage
+                case .backdrop:  backdropPage
+                case .avatars:   avatarsPage
+                case .icons:     iconsPage
+                case .library:   libraryPage
+                case .behaviour: behaviourPage
                 }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 32)
+        }
+        .scrollIndicators(.hidden)
+        .background(MinisTheme.color(.canvas, scope: .settings))
+    }
 
-                Spacer(minLength: 0)
+    /// 可折叠的预览。收起时只有一行标题 + 展开按钮。
+    @ViewBuilder
+    private var previewSection: some View {
+        Section {
+            if showPreviewExpanded {
+                AppearanceLivePreview(variant: variant, aiName: aiName, scale: 1.0)
+                    .frame(height: 340)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                    .listRowBackground(Color.clear)
+            }
 
+            HStack(spacing: 12) {
                 Button {
-                    showFullPreview = true
+                    withAnimation(.easeInOut(duration: 0.22)) {
+                        showPreviewExpanded.toggle()
+                    }
                 } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                        .frame(width: 24, height: 24)
-                        .background(studio.color(.iconTile, variant: variant).opacity(studio.surfaceOpacity),
-                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    HStack(spacing: 6) {
+                        Image(systemName: showPreviewExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text(showPreviewExpanded ? AppLocalized("收起预览") : AppLocalized("展开预览"))
+                            .font(.system(size: 14))
+                    }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+
+                Spacer()
 
                 Picker("", selection: $variant) {
                     ForEach(AppearanceVariant.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 100)
-            }
-            .padding(.horizontal, 18)
+                .frame(width: 110)
 
-            AppearanceLivePreview(variant: variant, aiName: aiName, scale: 1.0)
-                .padding(.horizontal, 18)
-                .frame(height: 372)
-                .clipped()
-        }
-        .padding(.top, 10)
-        .padding(.bottom, 14)
-        .background(studio.color(.canvas, variant: variant))
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(studio.color(.border, variant: variant).opacity(0.28))
-                .frame(height: 0.5)
+                Button {
+                    showFullPreview = true
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .disabled(!showPreviewExpanded)
+            }
+
+            if let note = shuffleName {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(studio.color(.accent, variant: variant))
+            }
+        } header: {
+            Text(AppLocalized("预览"))
+        } footer: {
+            Text(AppLocalized("展开可以看到真实的聊天气泡、头像和壁纸。改任何设置这里立刻跟着变。"))
         }
     }
+
+    /// 旧的内嵌预览块，保留给全屏预览页复用。
 
     private var fullPreviewSheet: some View {
         ZStack {
@@ -1105,6 +1157,19 @@ struct AppearanceStudioView: View {
             }
             .modifier(StudioCard(variant: variant))
         }
+        // [10-19 醒醒] fileImporter 原来挂在最外层 List 上，而按钮在
+        // NavigationLink 的子页里 —— iOS 上跨层 fileImporter 经常弹不出来，
+        // 或者弹出后文件是灰的（她报的"选不了"）。挪到触发它的这一层。
+        .fileImporter(isPresented: $showSTImporter,
+                      allowedContentTypes: [.json, .plainText, .data, .item],
+                      allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { importSillyTavern(url) }
+            case .failure(let error):
+                fail(error.localizedDescription)
+            }
+        }
     }
 
     // MARK: - 行为
@@ -1339,37 +1404,6 @@ struct AppearanceStudioView: View {
 
     // MARK: - 底部导航
 
-    private var bottomBar: some View {
-        HStack(spacing: 0) {
-            ForEach(AppearanceStudioPage.allCases) { item in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.16)) { page = item }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: item.symbol)
-                            .font(.system(size: 15, weight: page == item ? .semibold : .regular))
-                            .symbolRenderingMode(.hierarchical)
-                        Text(item.title)
-                            .font(.system(size: 9, weight: page == item ? .medium : .regular))
-                    }
-                    .foregroundStyle(page == item
-                                     ? studio.color(.accent, variant: variant)
-                                     : studio.color(.secondaryText, variant: variant).opacity(0.7))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 6)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(studio.color(.border, variant: variant).opacity(0.25))
-                .frame(height: 0.5)
-        }
-    }
 
     // MARK: - 零件
 
@@ -1658,13 +1692,18 @@ struct AppearanceStudioView: View {
 
 // MARK: - 底部导航项
 
+// MARK: - 页面
+//
+// [10-19 醒醒] 原来底部挤了七个 tab（截图里 9pt 字挤成一排），页内容又是
+// `ScrollView` + 自绘卡片堆出来的，看着像安卓。改成 iOS 设置页的做法：
+// 根页是一个 `List`，每个分区用 `NavigationLink` 进子页。
 enum AppearanceStudioPage: String, CaseIterable, Identifiable {
     case palette, bubbles, backdrop, avatars, icons, library, behaviour
     var id: String { rawValue }
     var title: String {
         switch self {
         case .palette: return AppLocalized("配色")
-        case .bubbles: return AppLocalized("气泡")
+        case .bubbles: return AppLocalized("气泡与文字")
         case .backdrop: return AppLocalized("背景")
         case .avatars: return AppLocalized("情头")
         case .icons: return AppLocalized("图标")
@@ -1674,13 +1713,25 @@ enum AppearanceStudioPage: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
-        case .palette: return "paintpalette"
-        case .bubbles: return "bubble.left.and.bubble.right"
-        case .backdrop: return "photo"
-        case .avatars: return "person.2"
-        case .icons: return "square.grid.2x2"
-        case .library: return "books.vertical"
+        case .palette: return "paintpalette.fill"
+        case .bubbles: return "bubble.left.and.bubble.right.fill"
+        case .backdrop: return "photo.fill"
+        case .avatars: return "person.2.fill"
+        case .icons: return "square.grid.2x2.fill"
+        case .library: return "books.vertical.fill"
         case .behaviour: return "switch.2"
+        }
+    }
+    /// 子页标题下的一句话说明，跟系统设置里那些 footer 一个用法。
+    var subtitle: String {
+        switch self {
+        case .palette: return "颜色、对比度、摇一套"
+        case .bubbles: return "气泡形状、消息形态、视觉小说"
+        case .backdrop: return "壁纸与遮罩"
+        case .avatars: return "你和 AI 的头像"
+        case .icons: return "App 图标与列表图标"
+        case .library: return "保存、导入、导出主题"
+        case .behaviour: return "语言、字号、输入"
         }
     }
 }
@@ -1695,16 +1746,19 @@ private struct StudioCard: ViewModifier {
     @ObservedObject private var studio = AppearanceStudio.shared
 
     func body(content: Content) -> some View {
+        // [10-19 醒醒] 她说"像安卓"。两个原因：
+        // 1. 圆角 18pt + 软阴影 —— iOS 的分组卡片是 10-12pt 圆角、**没有**
+        //    投影，靠底色和留白分层。
+        // 2. 卡片之间 20pt 间距 —— iOS 的分组内是 0 间距、组与组之间才留白。
+        //    这里保持卡片独立，但把圆角和阴影收成系统样子。
         content
-            .padding(16)
+            .padding(14)
             .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                        in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(studio.color(.border, variant: variant).opacity(0.35), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(studio.color(.border, variant: variant).opacity(0.28), lineWidth: 0.5)
             )
-            .shadow(color: .black.opacity(variant == .light ? 0.045 : 0.28),
-                    radius: 10, x: 0, y: 3)
     }
 }
 
@@ -1897,6 +1951,11 @@ private struct AppearanceLivePreview: View {
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
             VStack(alignment: .leading, spacing: 10 * scale) {
+                // [10-19 醒醒] 她说预览里输入栏"位置太高"——根因是 VStack
+                // 默认垂直居中，所有内容挤在中间。真机上消息是从上往下、
+                // 输入栏贴底。这里加 Spacer 把内容推到顶部和底部。
+                Spacer(minLength: 0)
+
                 // AI 气泡 —— 真头像
                 HStack(alignment: .top, spacing: 7 * scale) {
                     PersonAvatarView(kind: .assistant, size: 24 * scale)
@@ -2008,6 +2067,7 @@ private struct AppearanceLivePreview: View {
                 }
             }
             .padding(13 * scale)
+            .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
