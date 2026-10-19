@@ -3753,7 +3753,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // No id link (never persisted, or a placeholder). The sort window
             // alone can't name history entries — AgentMessage carries no
             // sort_order. Refuse rather than guess and delete the wrong turn.
-            logger.warning("[SingleDelete] no dbRowId for role=\(target.role.rawValue) range=\(rangeStart.map(String.init) ?? "nil")...\(rangeEnd.map(String.init) ?? "nil") — refusing")
+            logger.warning("[SingleDelete] no dbRowId for role=\(String(describing: target.role)) range=\(rangeStart.map(String.init) ?? "nil")...\(rangeEnd.map(String.init) ?? "nil") — refusing")
             errorMessage = AppLocalized("This message hasn't finished saving yet, so it can't be deleted on its own. Try again in a moment.")
             return
         }
@@ -3784,20 +3784,20 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             if let s = rangeStart, let e = rangeEnd {
                 // Awaited, not fire-and-forget: the UI must not show the message
                 // gone while the row survives a reload.
-                Task { @MainActor [weak self] in
+                Task { @MainActor in
                     let n = await ChatStore.shared.deleteMessagesInSortRange(sessionId: sid, fromSortOrder: s, throughSortOrder: e)
-                    self?.logger.info("[SingleDelete] role=\(target.role.rawValue) rows=\(n) range=\(s)...\(e)")
+                    logger.info("[SingleDelete] role=\(String(describing: target.role)) rows=\(n) range=\(s)...\(e)")
                 }
             } else if let dbId = target.dbRowId {
-                Task { @MainActor [weak self] in
+                Task { @MainActor in
                     await ChatStore.shared.deleteMessagesByIds(sessionId: sid, ids: [dbId])
-                    self?.logger.info("[SingleDelete] role=\(target.role.rawValue) by id=\(dbId.prefix(8))")
+                    logger.info("[SingleDelete] role=\(String(describing: target.role)) by id=\(dbId.prefix(8))")
                 }
             }
         }
 
         rebuildToolSnapshotsFromMessages()
-        logger.info("[SingleDelete] role=\(target.role.rawValue) idx=\(idx) historyRemoved=\(removedIdxs.count) messagesLeft=\(self.messages.count)")
+        logger.info("[SingleDelete] role=\(String(describing: target.role)) idx=\(idx) historyRemoved=\(removedIdxs.count) messagesLeft=\(self.messages.count)")
     }
 
     /// True when every `toolResult` has a matching `toolUse` and vice versa.
