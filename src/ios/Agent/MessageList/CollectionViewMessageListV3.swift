@@ -608,7 +608,7 @@ private struct BridgedAssistantFooterV3: View {
             }
             Spacer()
             if bridge.autoRetryAttempt > 0 {
-                Text("Retry in \(bridge.autoRetryCountdown)s (\(bridge.autoRetryAttempt)/\(AIChatViewModel.retryDelays.count))")
+                Text("Retry in \(bridge.autoRetryCountdown)s (\(bridge.autoRetryAttempt)/\(bridge.autoRetryBudget > 0 ? bridge.autoRetryBudget : AIChatViewModel.retryDelays.count))")
                     .font(.caption.weight(.semibold)).foregroundStyle(MinisTheme.secondaryText)
                     .padding(.horizontal, 12).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.12)).clipShape(Capsule())
@@ -1624,6 +1624,7 @@ extension CollectionViewMessageListV3 {
             bridge.onTakeoverDone = { [weak vm] in vm?.resumeFromBrowserTakeover() }
             bridge.autoRetryAttempt = isLast ? vm.autoRetryAttempt : 0
             bridge.autoRetryCountdown = isLast ? vm.autoRetryCountdown : 0
+            bridge.autoRetryBudget = isLast ? vm.autoRetryBudget : 0
             // [T-ios-session-status-mismatch] Defense-in-depth: even if vm.canResume
             // is somehow stale-true and vm.isProcessing hasn't flipped yet, do NOT
             // show the "Interrupted — tap Resume" banner while SessionActivityTracker

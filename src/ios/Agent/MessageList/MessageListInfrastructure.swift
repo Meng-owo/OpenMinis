@@ -1189,6 +1189,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onWithdraw: (() -> Void)?
     @Published var autoRetryAttempt: Int = 0
     @Published var autoRetryCountdown: Int = 0
+    /// Attempts allowed by the current ladder (5, or 10 while throttled).
+    @Published var autoRetryBudget: Int = 0
     @Published var canResume: Bool = false
     @Published var onResume: (() -> Void)?
     @Published var onCompact: (() -> Void)?

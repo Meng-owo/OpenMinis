@@ -10,13 +10,29 @@ extension AIChatViewModel {
 
     static let retryDelays = [3, 5, 10, 15, 30]
 
+    /// Throttle ladder ([T-throttle-retry 10-19]). Upstream account pools
+    /// (WorkBuddy via our own gateway) cool a rate-limited account for
+    /// minutes, and the whole pool can be mid-cooldown at once — the old
+    /// 63-second budget expired right in the middle of that window, so every
+    /// throttle became a 重试 she had to tap. Ten steps ≈ 4.5 minutes covers
+    /// a full cooldown cycle; the countdown UI and the stop button stay the
+    /// escape hatches.
+    static let throttleRetryDelays = [3, 5, 10, 15, 30, 30, 45, 45, 60, 60]
+
+    /// Which ladder a given failure runs on. Evaluated per failure, so an
+    /// error that starts as a network blip and turns into a 429 upgrades
+    /// itself to the long budget.
+    static func retryLadder(for error: Error?) -> [Int] {
+        (error as? LLMError)?.isThrottle == true ? throttleRetryDelays : retryDelays
+    }
+
     /// [T-kelivo-retry 09-10] Exponential backoff with ±20% jitter, capped —
     /// kelivo's retry_policy thinking: fixed ladders make concurrent clients
     /// retry in lockstep and hammer the provider again; jitter spreads them.
-    static func backoffDelay(attemptIndex: Int, retryAfterHint: Double?) -> Int {
+    static func backoffDelay(attemptIndex: Int, retryAfterHint: Double?, ladder: [Int] = retryDelays) -> Int {
         // Honour the server's Retry-After for the FIRST retry when present.
         if attemptIndex == 0, let hint = retryAfterHint { return Int(max(1, min(60, hint))) }
-        let base: Double = [3, 5, 10, 15, 30][min(attemptIndex, 4)]
+        let base: Double = Double(ladder[min(attemptIndex, ladder.count - 1)])
         let jitter = 0.8 + Double.random(in: 0...0.4)  // ±20%
         return Int(max(1, base * jitter))
     }
@@ -44,13 +60,19 @@ extension AIChatViewModel {
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         var lastError: Error?
         var currentProvider = initialProvider
-        for attempt in 0...Self.retryDelays.count {
+        // Ladder is re-read after every failure (see `retryLadder`), so the
+        // loop bound is a while, not a fixed range.
+        var ladder = Self.retryDelays
+        var attempt = 0
+        while attempt <= ladder.count {
             if attempt > 0 {
                 let delay = Self.backoffDelay(
                     attemptIndex: attempt - 1,
-                    retryAfterHint: (lastError as? LLMError)?.retryAfterHint
+                    retryAfterHint: (lastError as? LLMError)?.retryAfterHint,
+                    ladder: ladder
                 )
                 self.autoRetryAttempt = attempt
+                self.autoRetryBudget = ladder.count
                 // Show the network error on the message during countdown
                 if let lastError {
                     let desc = (lastError as? LocalizedError)?.errorDescription ?? String(describing: lastError)
@@ -92,16 +114,21 @@ extension AIChatViewModel {
                     thinkingLevel: thinkLvl
                 )
                 self.autoRetryAttempt = 0
+                self.autoRetryBudget = 0
                 return stream
             } catch let error as LLMError where error.isRetryable && !Self.isStopKeywordError(error) {
                 lastError = error
+                ladder = Self.retryLadder(for: error)
+                attempt += 1
                 continue
             } catch {
                 self.autoRetryAttempt = 0
+                self.autoRetryBudget = 0
                 throw error
             }
         }
         self.autoRetryAttempt = 0
+        self.autoRetryBudget = 0
         throw lastError!
     }
 

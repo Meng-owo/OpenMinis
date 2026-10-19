@@ -57,6 +57,20 @@ enum LLMError: LocalizedError {
         }
     }
 
+    /// Throttle-class failures: the provider is *temporarily* refusing us
+    /// (429 / 5xx overload) rather than rejecting the request. These get the
+    /// LONG retry ladder — the user can put the phone down and come back,
+    /// instead of having to tap 重试 every minute while an upstream pool
+    /// rotates through its accounts.
+    var isThrottle: Bool {
+        switch self {
+        case .rateLimited, .transientError:
+            return true
+        case .networkError, .invalidAPIKey, .providerError, .decodingError, .cancelled, .unknown:
+            return false
+        }
+    }
+
     /// Server's Retry-After hint for rate limits (seconds), when the provider
     /// sent one. The retry loop uses this as the FIRST delay instead of the
     /// exponential guess.
