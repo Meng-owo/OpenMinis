@@ -4704,7 +4704,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @discardableResult
     private func appendQueuedPromptsAsOwnTurns(
         _ queued: [QueuedPrompt],
-        uploadsDir: String,
+        uploadsDir: URL,
         nowStr: String
     ) async -> [String?] {
         var rowIds: [String?] = []
