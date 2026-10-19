@@ -901,6 +901,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var slashMenuSelectedIndex = -1
     /// Whether a compaction is in progress.
     @Published var isCompacting = false
+    /// [10-20 醒醒] 本轮的时间感知片段缓存。每轮 runAgentLoop 开始时清空，
+    /// 这样 fallback 重试不会重算出一个「隔了 0 分钟」。
+    var cachedTimeAwarenessFragment: String?
     /// When true, shows a prompt asking user to compact before sending.
     @Published var showCompactBeforeSendPrompt = false
     /// [T-chat-auto-compact-opt-in] Global (cross-session) opt-in: when the
@@ -1890,11 +1893,82 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).
         p += memoryStatusFragment
+        // [10-20 醒醒] 时间感知片段。每轮只在**开局**算一次并缓存：fallback
+        // 重试会再走一遍 buildTurnSystemPrompt，那时模型已经开工了，重算会把
+        // 「隔了多久」算成 0，同一个 turn 里 prompt 还会前后不一致。
+        if let cached = cachedTimeAwarenessFragment {
+            p += "\n\n" + cached
+        } else if let fresh = timeAwarenessFragment() {
+            cachedTimeAwarenessFragment = fresh
+            p += "\n\n" + fresh
+        }
         // [S3-2][evolution] Injector hook — off/shadow return "" (prompt stays
         // byte-identical to baseline); shadow records what WOULD be injected;
         // active appends the cached, budgeted fragment.
         p += EvolutionInjector.shared.turnFragment(sessionId: sessionId)
         return p
+    }
+
+    /// [10-20 醒醒] 时间感知片段。
+    ///
+    /// 两个信息：现在几点，以及距上一轮对话过了多久。
+    /// 「多久」分档给不同粒度，因为模型需要的精度不一样：
+    ///   - 10 分钟内：不提，不然每句话都挂个时间很啰嗦
+    ///   - 10 分钟 ~ 12 小时：分钟/小时
+    ///   - 12 小时以上：天，30 天以上说月
+    func timeAwarenessFragment() -> String? {
+        let now = Date()
+        let cal = Calendar.current
+
+        // 星期 + 日期 + 时刻，模型能据此判断是不是深夜。
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "zh_Hans_CN")
+        df.dateFormat = "yyyy年M月d日 EEEE HH:mm"
+        var out = "## 当前时间\n现在是 \(df.string(from: now))。"
+
+        // 上一轮对话的时刻。agentHistory 没有时间戳，走 UI 层的 messages。
+        guard let last = lastConversationDate() else { return out }
+        let gap = now.timeIntervalSince(last)
+        // 10 分钟内不提，免得每句都挂个「刚刚」。
+        if gap < 10 * 60 { return out }
+
+        let minutes = Int(gap / 60)
+        let hours = Int(gap / 3600)
+        let days = cal.dateComponents([.day], from: last, to: now).day ?? 0
+
+        let rel: String
+        if hours < 1 {
+            rel = "\(minutes) 分钟"
+        } else if days < 1 {
+            rel = "\(hours) 小时"
+        } else if days < 30 {
+            rel = "\(days) 天"
+        } else {
+            rel = "\(days / 30) 个月"
+        }
+        out += "\n距离上一轮对话已经过去 \(rel)（上一条消息在 \(df.string(from: last))）。"
+        return out
+    }
+
+    /// 上一轮对话的时刻。agentHistory 没有时间戳，走 UI 层的 messages。
+    ///
+    /// 跳过三类，否则算出来的间隔永远是 0：
+    ///   - 系统提示行 / 压缩分隔行（不是真对话）
+    ///   - 排队中的消息（还没发出去）
+    ///   - **最后一条用户消息**——它就是要发的这条，createdAt 是刚刚
+    func lastConversationDate() -> Date? {
+        var skippedTrailingUser = false
+        for msg in messages.reversed() {
+            if msg.role == .systemInfo || msg.role == .compactDivider { continue }
+            if msg.isQueued { continue }
+            // 倒着走，第一条遇到的 user 就是这轮要发的，跳过它。
+            if msg.role == .user && !skippedTrailingUser {
+                skippedTrailingUser = true
+                continue
+            }
+            return msg.createdAt
+        }
+        return nil
     }
 
     /// Session ID for persistence integration. Set by the view on appear.
@@ -5239,6 +5313,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         // [T-ios-empty-after-toolresult-reminder] Fresh turn → allow one reminder retry.
         didInjectEmptyToolReminderThisRun = false
+
+        // [10-20 醒醒] 新一轮开始，时间感知重新算。放在这里而不是 build 里，
+        // 是因为 build 每次 fallback 都会再走一遍。
+        cachedTimeAwarenessFragment = nil
 
         // Resolve provider from ProviderConfigStore
         guard let entry = resolveCurrentEntry() else {
