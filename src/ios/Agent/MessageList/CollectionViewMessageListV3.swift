@@ -693,17 +693,22 @@ private struct BridgedAssistantFooterV3: View {
     static func shouldShowTimeDivider(previous: ChatMessage?, current: ChatMessage) -> Bool {
         // 列表最开头不插——第一屏就一个「3天前」很怪。
         guard let previous else { return false }
-        return current.createdAt.timeIntervalSince(previous.createdAt) >= 5 * 60
+        // [10-20 醒醒] 跟模型那边同一个门槛：3 分钟。
+        return current.createdAt.timeIntervalSince(previous.createdAt) >= 3 * 60
     }
 
     /// 胶囊文案。滚动时现算，复用即刷新，不起定时器。
+    /// [10-20 醒醒] 要精确：11 分钟就是 11 分钟，不取整成「10 分钟」。
     static func timeDividerText(for date: Date, now: Date = Date()) -> String {
         let elapsed = now.timeIntervalSince(date)
+        // 12 小时内说「多久之前」，精确到分钟。
         if elapsed < 12 * 3600 {
-            let formatter = RelativeDateTimeFormatter()
-            formatter.unitsStyle = .short
-            formatter.locale = Locale(identifier: "zh_Hans_CN")
-            return formatter.localizedString(for: date, relativeTo: now)
+            let totalMinutes = Int(elapsed / 60)
+            if totalMinutes < 1 { return "刚刚" }
+            if totalMinutes < 60 { return "\(totalMinutes) 分钟前" }
+            let hours = totalMinutes / 60
+            let minutes = totalMinutes % 60
+            return minutes > 0 ? "\(hours) 小时 \(minutes) 分钟前" : "\(hours) 小时前"
         }
         let cal = Calendar.current
         let df = DateFormatter()

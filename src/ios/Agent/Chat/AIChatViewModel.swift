@@ -1911,14 +1911,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// [10-20 醒醒] 时间感知片段。
     ///
-    /// 两个信息：现在几点，以及距上一轮对话过了多久。
-    /// 「多久」分档给不同粒度，因为模型需要的精度不一样：
-    ///   - 10 分钟内：不提，不然每句话都挂个时间很啰嗦
-    ///   - 10 分钟 ~ 12 小时：分钟/小时
-    ///   - 12 小时以上：天，30 天以上说月
+    /// 两个信息：现在几点，以及距上一轮对话**精确**过了多久。
+    /// 她不要「大约几小时」这种档位——11 分钟就是 11 分钟。
+    /// 3 分钟内不提（同一句话的连续对话，提了很吵）。
     func timeAwarenessFragment() -> String? {
         let now = Date()
-        let cal = Calendar.current
 
         // 星期 + 日期 + 时刻，模型能据此判断是不是深夜。
         let df = DateFormatter()
@@ -1929,24 +1926,24 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // 上一轮对话的时刻。agentHistory 没有时间戳，走 UI 层的 messages。
         guard let last = lastConversationDate() else { return out }
         let gap = now.timeIntervalSince(last)
-        // 10 分钟内不提，免得每句都挂个「刚刚」。
-        if gap < 10 * 60 { return out }
+        // 3 分钟内不提——同一句话的连续对话，提了很吵。
+        if gap < 3 * 60 { return out }
 
-        let minutes = Int(gap / 60)
-        let hours = Int(gap / 3600)
-        let days = cal.dateComponents([.day], from: last, to: now).day ?? 0
+        let totalMinutes = Int(gap / 60)
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
 
-        let rel: String
-        if hours < 1 {
-            rel = "\(minutes) 分钟"
-        } else if days < 1 {
-            rel = "\(hours) 小时"
-        } else if days < 30 {
-            rel = "\(days) 天"
-        } else {
-            rel = "\(days / 30) 个月"
-        }
-        out += "\n距离上一轮对话已经过去 \(rel)（上一条消息在 \(df.string(from: last))）。"
+        // 精确到分钟，不取整。有几天就说几天，剩下的小时和分钟接着报。
+        var parts: [String] = []
+        if days > 0 { parts.append("\(days) 天") }
+        if hours > 0 { parts.append("\(hours) 小时") }
+        if minutes > 0 || parts.isEmpty { parts.append("\(minutes) 分钟") }
+
+        out += "\n距离上一轮对话过去了 \(parts.joined(separator: " "))"
+        out += "（上一条消息在 \(df.string(from: last))）。"
+        out += "\n这个时间只给你判断语境用：她是刚走开还是隔了几天回来，"
+        out += "语气该松还是该紧。**不要复述、不要提这个时长**，自然地接话就行。"
         return out
     }
 
