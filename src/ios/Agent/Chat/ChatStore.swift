@@ -3584,6 +3584,100 @@ actor ChatStore {
         }
     }
 
+    /// [T-chat-truncate-by-id 10-19] ID-anchored truncation.
+    ///
+    /// `deleteMessagesAfter(keepCount:)` infers the cut from a ROW COUNT and
+    /// assumes `agentHistory`'s persisted entries map 1:1 onto DB rows in the
+    /// same order. That assumption breaks in `loadMessages`, which does
+    /// `guard let role = MessageRole(rawValue:) else { continue }` — an
+    /// unparseable role drops the row from agentHistory while leaving it in the
+    /// DB, so the count comes up short and the DELETE cuts too early (silent
+    /// user-data loss). Sync merges and sort_order gaps break it the other way.
+    ///
+    /// Anchor on the message id instead: the caller already holds the dbRowId
+    /// of the row it means to cut at, so resolve that row's sort_order once and
+    /// delete strictly after it. Ordering matches `loadMessages`
+    /// (sort_order, created_at, id), expanded into a plain comparison so it
+    /// works on every SQLite build (no row-value dependency).
+    ///
+    /// `inclusive == false` → keep the anchor row, drop everything after it.
+    /// `inclusive == true`  → drop the anchor row too.
+    func deleteMessagesAfterId(sessionId: String, anchorId: String, inclusive: Bool = false) {
+        invalidateSessionListCache()
+
+        // Resolve the anchor row's ordering tuple.
+        var sortOrder: Int64?
+        var createdAt: Double = 0
+        var anchorResolved = false
+        let anchorSql = "SELECT sort_order, created_at FROM messages WHERE session_id = ? AND id = ? LIMIT 1"
+        var anchorStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, anchorSql, -1, &anchorStmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(anchorStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_text(anchorStmt, 2, (anchorId as NSString).utf8String, -1, nil)
+            if sqlite3_step(anchorStmt) == SQLITE_ROW {
+                sortOrder = sqlite3_column_int64(anchorStmt, 0)
+                createdAt = sqlite3_column_double(anchorStmt, 1)
+                anchorResolved = true
+            }
+        }
+        sqlite3_finalize(anchorStmt)
+        guard anchorResolved, let anchorSortOrder = sortOrder else {
+            // The anchor row is gone (already deleted / never persisted). Do
+            // NOT guess — a wrong guess deletes live history. Report and stop;
+            // the caller decides whether that is fatal.
+            logger.error("[TruncateById] anchor id=\(anchorId.prefix(8)) not found in sid=\(sessionId.prefix(8)) — no rows deleted")
+            return
+        }
+
+        let op = inclusive ? ">=" : ">"
+        let predicate = """
+            session_id = ? AND (
+                sort_order \(op) ? OR
+                (sort_order = ? AND created_at \(op) ?) OR
+                (sort_order = ? AND created_at = ? AND id \(op) ?)
+            )
+            """
+        let selectSql = "SELECT id FROM messages WHERE \(predicate)"
+        var selectStmt: OpaquePointer?
+        var toDelete: [String] = []
+        if sqlite3_prepare_v2(db, selectSql, -1, &selectStmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(selectStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(selectStmt, 2, anchorSortOrder)
+            sqlite3_bind_int64(selectStmt, 3, anchorSortOrder)
+            sqlite3_bind_double(selectStmt, 4, createdAt)
+            sqlite3_bind_int64(selectStmt, 5, anchorSortOrder)
+            sqlite3_bind_double(selectStmt, 6, createdAt)
+            sqlite3_bind_text(selectStmt, 7, (anchorId as NSString).utf8String, -1, nil)
+            while sqlite3_step(selectStmt) == SQLITE_ROW {
+                toDelete.append(String(cString: sqlite3_column_text(selectStmt, 0)))
+            }
+        }
+        sqlite3_finalize(selectStmt)
+
+        guard !toDelete.isEmpty else {
+            logger.info("[TruncateById] sid=\(sessionId.prefix(8)) anchor=\(anchorId.prefix(8)) inclusive=\(inclusive) — nothing after the anchor")
+            return
+        }
+        for id in toDelete {
+            markDirty(recordType: "Message", recordId: id, operation: "delete")
+        }
+
+        let deleteSql = "DELETE FROM messages WHERE \(predicate)"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, deleteSql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(stmt, 2, anchorSortOrder)
+            sqlite3_bind_int64(stmt, 3, anchorSortOrder)
+            sqlite3_bind_double(stmt, 4, createdAt)
+            sqlite3_bind_int64(stmt, 5, anchorSortOrder)
+            sqlite3_bind_double(stmt, 6, createdAt)
+            sqlite3_bind_text(stmt, 7, (anchorId as NSString).utf8String, -1, nil)
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+        logger.warning("[TruncateById] sid=\(sessionId.prefix(8)) anchor=\(anchorId.prefix(8)) inclusive=\(inclusive) deleted=\(Int(sqlite3_changes(db))) marked=\(toDelete.count)")
+    }
+
     // MARK: - Media File Management
 
     /// Save media data to disk, return a MediaRef.

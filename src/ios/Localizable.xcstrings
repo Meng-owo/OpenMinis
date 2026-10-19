@@ -109349,6 +109349,26 @@
           }
         }
       }
+    },
+    "Couldn't locate this message in the conversation history, so it can't be regenerated. Reload the session and try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在会话历史里找不到这条消息，无法重新生成。请重新加载会话后再试。"
+          }
+        }
+      }
+    },
+    "Couldn't locate this message in the conversation history, so it can't be deleted safely. Reload the session and try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在会话历史里找不到这条消息，无法安全删除。请重新加载会话后再试。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

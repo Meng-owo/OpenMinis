@@ -810,6 +810,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var transientNotice: String?
     @Published var autoRetryAttempt: Int = 0
     @Published var autoRetryCountdown: Int = 0
+    /// Total attempts the CURRENT failure's ladder allows (5 normally, 10 when
+    /// the upstream is throttling). The retry banner prints `n/this`, so the
+    /// countdown never claims "6/5" after an upgrade to the long ladder.
+    @Published var autoRetryBudget: Int = 0
     /// [T-ios-empty-after-toolresult-reminder] Guards the one-shot
     /// `<system-reminder>` retry when the server returns an empty response
     /// right after a tool result. Set the first time we inject the reminder in
@@ -3339,6 +3343,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // the no-id fallback below can use the LAST history bubble as the
         // selected row's exact twin.
         let wasLastUserRow = (messages.lastIndex(where: { $0.role == .user }) == idx)
+        captureTruncationSnapshot()
         if idx + 1 < messages.count {
             messages.removeSubrange((idx + 1)...)
         }
@@ -3404,14 +3409,34 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 logger.error("[RetryDiag] retryFromMessage anchor NOT FOUND (dbRowId=\(messages[idx].dbRowId?.prefix(8) ?? "nil"), targetUserCount=\(targetUserCount), history=\(self.agentHistory.count)) — fail-safe: trimming to last user bubble @\(lastBubble)")
                 keepUpTo = lastBubble
             } else {
-                logger.error("[RetryDiag] retryFromMessage anchor NOT FOUND and not safely locatable (dbRowId=\(messages[idx].dbRowId?.prefix(8) ?? "nil"), targetUserCount=\(targetUserCount), history=\(self.agentHistory.count), wasLastUserRow=\(wasLastUserRow)) — keeping full history")
-                keepUpTo = agentHistory.count - 1
+                // [T-chat-truncate-closed 10-19] Was: keep the full history and
+                // log. That is exactly the reported bug — "I refreshed the
+                // reply and the old answer is still in context". A middle-row
+                // rerun whose anchor can't be resolved cannot be truncated
+                // safely, but running the rerun anyway poisons the model with
+                // the answer it is supposed to replace. Refuse instead: restore
+                // the UI rows we already removed and surface the failure.
+                logger.error("[RetryDiag] retryFromMessage anchor NOT FOUND and not safely locatable (dbRowId=\(messages[idx].dbRowId?.prefix(8) ?? "nil"), targetUserCount=\(targetUserCount), history=\(self.agentHistory.count), wasLastUserRow=\(wasLastUserRow)) — REFUSING rerun, context would be stale")
+                restoreTruncatedMessages(from: idx)
+                errorMessage = AppLocalized("Couldn't locate this message in the conversation history, so it can't be regenerated. Reload the session and try again.")
+                isTruncatingForRetry = false
+                return
             }
         }
         // Keep entries 0...keepUpTo, remove the rest
         if keepUpTo + 1 < agentHistory.count {
             agentHistory.removeSubrange((keepUpTo + 1)...)
         }
+        discardTruncationSnapshot()
+
+        // [T-chat-truncate-marker 10-19] A compact marker anchors on a DB row
+        // id. If the truncation cut past that row, the marker now points at
+        // nothing: effectiveAgentHistory() degrades to the FULL history (so
+        // the "compressed" context silently un-compresses and blows the token
+        // budget) or, worse, slices from a stale anchor and reintroduces
+        // messages the user just deleted. Drop the marker when its anchor is
+        // no longer reachable from the surviving history.
+        postTruncationCleanup()
 
         // Replace attachments in the last user message of agentHistory if new ones are provided
         if let newAttachments = replacementAttachments, !newAttachments.isEmpty {
@@ -3456,8 +3481,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let hasMarkerResend = cachedLatestMarker != nil
         logger.info("[DeleteAfter] resend path: sid=\(sessionId?.prefix(8) ?? "nil") keepCount=\(persistedKeepCount) hasMarker=\(hasMarkerResend)")
         if let sessionId {
+            // [T-chat-truncate-closed 10-19] id-anchored + awaited, see
+            // deleteFromMessage for the reasoning. Here the anchor row is the
+            // user message we are re-running, so it must survive → inclusive:false.
+            let anchorId = agentHistory.last(where: { $0.dbMessageId != nil })?.dbMessageId
             Task { @MainActor [weak self] in
-                await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: persistedKeepCount)
+                if let anchorId {
+                    await ChatStore.shared.deleteMessagesAfterId(sessionId: sessionId, anchorId: anchorId, inclusive: false)
+                } else {
+                    await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: 0)
+                }
                 // DB truncation done — the truncation window is closed. By now
                 // launchRerunAgentLoop has set isProcessing=true, so reloads
                 // stay suppressed through the rerun; this just releases the
@@ -3514,6 +3547,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // the deleted row was the LAST user row, the condition under which the
         // no-id fallback below can locate its twin as the last history bubble.
         let deletedWasLastUserRow = (messages.lastIndex(where: { $0.role == .user }) == idx)
+        captureTruncationSnapshot()
         messages.removeSubrange(idx...)
         // [T-ios-retry-ui-clear] Force a top-level publish so the cells clear on
         // this tick; the $messages sink alone fires off-tick.
@@ -3569,19 +3603,46 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 keepUpTo = lastBubble - 1
                 anchorFound = true
             } else {
-                logger.error("[DeleteDiag] deleteFromMessage anchor NOT FOUND (keepUserCount=\(keepUserCount), history=\(self.agentHistory.count), deletedWasLastUserRow=\(deletedWasLastUserRow)) — keeping full history")
+                // [T-chat-truncate-closed 10-19] Was: keep the full history.
+                // Same bug as retry — the row the user deleted kept feeding the
+                // model on every later turn. Refuse, restore the UI, tell her.
+                logger.error("[DeleteDiag] deleteFromMessage anchor NOT FOUND (keepUserCount=\(keepUserCount), history=\(self.agentHistory.count), deletedWasLastUserRow=\(deletedWasLastUserRow)) — REFUSING delete, context would keep the row")
+                restoreTruncatedMessages(from: idx)
+                errorMessage = AppLocalized("Couldn't locate this message in the conversation history, so it can't be deleted safely. Reload the session and try again.")
+                isTruncatingForRetry = false
+                return
             }
         }
         if keepUpTo + 1 < agentHistory.count {
             agentHistory.removeSubrange((keepUpTo + 1)...)
         }
+        discardTruncationSnapshot()
 
         logger.info("[DeleteDiag] deleteFromMessage idx=\(idx) deleted=\(deletedCount) messagesLeft=\(self.messages.count) historyLeft=\(self.agentHistory.count)")
+        // [T-chat-truncate-marker 10-19] same reason as the retry path.
+        postTruncationCleanup()
 
         let persistedKeepCount = agentHistory.filter { $0.dbMessageId != nil }.count
+        logger.info("[DeleteDiag] persisted entries after truncation=\(persistedKeepCount)")
         if let sessionId {
+            // [T-chat-truncate-closed 10-19] Anchor the DB delete on the id of
+            // the row we kept last, not on a row COUNT. The count assumes
+            // agentHistory's persisted entries line up 1:1 with DB rows in the
+            // same order; loadMessages drops rows whose role fails to parse,
+            // and sync merges shift sort_order — either way the count lands on
+            // the wrong boundary and deletes live rows.
+            //
+            // Also awaited, not fire-and-forget: the truncation window must not
+            // close before the rows are actually gone, or a reload landing in
+            // between resurrects them (the second reported bug).
+            let anchorId = agentHistory.last(where: { $0.dbMessageId != nil })?.dbMessageId
             Task { @MainActor [weak self] in
-                await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: persistedKeepCount)
+                if let anchorId {
+                    await ChatStore.shared.deleteMessagesAfterId(sessionId: sessionId, anchorId: anchorId, inclusive: false)
+                } else {
+                    // Nothing persisted survived — clear the session's rows.
+                    await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: 0)
+                }
                 self?.isTruncatingForRetry = false
             }
         } else {
@@ -3591,7 +3652,59 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         rebuildToolSnapshotsFromMessages()
     }
 
-    // MARK: - [T-action-bar 09-11] Assistant message regenerate
+    /// [T-chat-truncate-closed 10-19] Snapshot taken before a truncation cuts
+    /// `messages`. The truncation paths remove UI rows first and only then try
+    /// to resolve the history anchor; when the anchor can't be resolved they
+    /// must put the rows back rather than leave the UI and the context
+    /// disagreeing. ChatMessage is a class, so the snapshot holds the same
+    /// objects — restoring is an array assignment, not a rebuild.
+    private var truncationSnapshot: [ChatMessage]?
+
+    private func captureTruncationSnapshot() {
+        truncationSnapshot = messages
+    }
+
+    private func restoreTruncatedMessages(from index: Int) {
+        guard let snapshot = truncationSnapshot else { return }
+        messages = snapshot
+        truncationSnapshot = nil
+        if !transitionSuspended { objectWillChange.send() }
+        logger.info("[TruncateRestore] restored messages count=\(messages.count) from cut@\(index)")
+    }
+
+    private func discardTruncationSnapshot() {
+        truncationSnapshot = nil
+    }
+
+    /// [T-chat-truncate-marker 10-19] After a truncation, a compact marker may
+    /// anchor on a row that no longer exists. `effectiveAgentHistory()` handles
+    /// an unresolvable anchor by degrading to the FULL history — which silently
+    /// undoes the compaction AND can re-expose messages the user just deleted.
+    /// Drop the marker (memory + DB) when its anchor is unreachable, so the
+    /// next inference call sees a clean, honest history instead.
+    ///
+    /// Also clears the cache keep-alive snapshot: it is a verbatim copy of the
+    /// pre-truncation history, and the warmup request replays it as-is. Left
+    /// alone, the next keep-alive fires the deleted turns back at the provider
+    /// and re-primes the prompt cache with them.
+    private func postTruncationCleanup() {
+        keepAliveHistory = []
+        keepAliveSystemPrompt = nil
+        keepAliveTools = []
+        guard let marker = cachedLatestMarker else { return }
+        // v2 markers anchor on lastCompactedMessageId; v1 on firstKeptMessageId.
+        let anchorId = marker.lastCompactedMessageId ?? marker.firstKeptMessageId ?? marker.boundaryMessageId
+        guard let anchorId else { return }
+        let reachable = agentHistory.contains { $0.dbMessageId == anchorId }
+        guard !reachable else { return }
+        logger.warning("[TruncateMarker] anchor=\(anchorId.prefix(8)) unreachable after truncation (marker=\(marker.id.prefix(8))) — dropping marker so history isn't re-expanded")
+        cachedLatestMarker = nil
+        if let sessionId {
+            Task { _ = await ChatStore.shared.deleteCompactMarker(id: marker.id) }
+        }
+    }
+
+    /// [T-action-bar 09-11] Assistant message regenerate
     //
     // 操作条挂在 AI 消息上。重新回复必须从它前面的用户消息切回去：
     // 不能只删 UI 里的一个 AI row，否则 agentHistory / tool_use-result 配对 /
