@@ -50,7 +50,7 @@ struct NovelStageBackdrop: View {
                     // 没全身图：用头像放大当占位，比空白好看。
                     // 用 SoulIconView 而不是 PersonAvatarView —— 后者是方的，
                     // 立绘要竖的。
-                    let icon = SoulStore.displayIcon(for: personaID ?? PersonaStore.currentID())
+                    let icon = SoulStore.displayIcon(for: personaID ?? PersonaStore.currentID()) ?? ""
                     Group {
                         if SoulIconImage.isImageReference(icon) {
                             SoulIconView(icon: icon,
