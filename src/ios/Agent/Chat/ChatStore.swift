@@ -3678,6 +3678,66 @@ actor ChatStore {
         logger.warning("[TruncateById] sid=\(sessionId.prefix(8)) anchor=\(anchorId.prefix(8)) inclusive=\(inclusive) deleted=\(Int(sqlite3_changes(db))) marked=\(toDelete.count)")
     }
 
+    // MARK: - Single-row / range deletion
+
+    /// Delete exactly the DB rows backing one UI message.
+    ///
+    /// A UI assistant bubble can be backed by SEVERAL raw rows: the agent loop
+    /// appends a continuation row each iteration (text, then tool_use, then
+    /// tool_result carriers), and `loadMessages` merges them back into one
+    /// bubble via `sourceSortOrder ... lastSourceSortOrder`. Deleting only the
+    /// first row would leave the tool_use/tool_result carriers orphaned — a
+    /// hard 400 from every provider on the next turn.
+    ///
+    /// So the unit of deletion is the sort_order RANGE the bubble covers, not a
+    /// single id. Callers pass the range captured from the UI message before it
+    /// was removed from the array.
+    ///
+    /// Returns the number of rows actually deleted.
+    @discardableResult
+    func deleteMessagesInSortRange(sessionId: String, fromSortOrder: Int, throughSortOrder: Int) -> Int {
+        invalidateSessionListCache()
+        guard throughSortOrder >= fromSortOrder else {
+            logger.error("[DeleteRange] invalid range \(fromSortOrder)...\(throughSortOrder) sid=\(sessionId.prefix(8)) — nothing deleted")
+            return 0
+        }
+
+        // Collect the ids first so every removal gets a cloud tombstone. Without
+        // this the rows come back on the next sync pull.
+        var toDelete: [String] = []
+        let selectSql = "SELECT id FROM messages WHERE session_id = ? AND sort_order >= ? AND sort_order <= ?"
+        var selectStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, selectSql, -1, &selectStmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(selectStmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(selectStmt, 2, Int64(fromSortOrder))
+            sqlite3_bind_int64(selectStmt, 3, Int64(throughSortOrder))
+            while sqlite3_step(selectStmt) == SQLITE_ROW {
+                toDelete.append(String(cString: sqlite3_column_text(selectStmt, 0)))
+            }
+        }
+        sqlite3_finalize(selectStmt)
+        guard !toDelete.isEmpty else {
+            logger.info("[DeleteRange] sid=\(sessionId.prefix(8)) range=\(fromSortOrder)...\(throughSortOrder) — no rows")
+            return 0
+        }
+        for id in toDelete {
+            markDirty(recordType: "Message", recordId: id, operation: "delete")
+        }
+
+        let sql = "DELETE FROM messages WHERE session_id = ? AND sort_order >= ? AND sort_order <= ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            sqlite3_bind_int64(stmt, 2, Int64(fromSortOrder))
+            sqlite3_bind_int64(stmt, 3, Int64(throughSortOrder))
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+        let deleted = Int(sqlite3_changes(db))
+        logger.warning("[DeleteRange] sid=\(sessionId.prefix(8)) range=\(fromSortOrder)...\(throughSortOrder) ids=\(toDelete.count) deleted=\(deleted)")
+        return deleted
+    }
+
     // MARK: - Media File Management
 
     /// Save media data to disk, return a MediaRef.

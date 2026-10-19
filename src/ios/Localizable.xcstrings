@@ -109369,6 +109369,56 @@
           }
         }
       }
+    },
+    "Delete This Message": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只删这条"
+          }
+        }
+      }
+    },
+    "Only this message will be deleted. The messages after it stay.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只删除这条消息，后面的消息会保留。"
+          }
+        }
+      }
+    },
+    "This reply will be deleted. Your message before it stays.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条回复会被删除，你前面的消息会保留。"
+          }
+        }
+      }
+    },
+    "This message hasn't finished saving yet, so it can't be deleted on its own. Try again in a moment.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条消息还没保存完，暂时无法单独删除。请稍后再试。"
+          }
+        }
+      }
+    },
+    "This message is paired with a tool call in the messages around it, so it can't be deleted on its own. Use \"Delete From Here\" instead.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这条消息和周围的工具调用成对存在，无法单独删除。请改用「从这里删除」。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

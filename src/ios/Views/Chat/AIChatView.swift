@@ -939,25 +939,25 @@ struct AIChatView: View {
         // single row: its model history can contain tool-use/result rows and
         // continuation rows. The safe operation is delete-from-its-user-prompt,
         // which necessarily deletes the later suffix too; say that before it runs.
+        // [T-chat-single-delete 10-20] Deleting an AI reply removes that reply
+        // only. It used to route through the preceding user prompt
+        // (`deleteFromMessage(precedingUser)`), which took her own message with
+        // it. "Delete From Here" is still available on the user bubble for the
+        // suffix case.
         .alert(AppLocalized("Delete Message?"), isPresented: Binding(
             get: { pendingAssistantDeleteId != nil },
             set: { if !$0 { pendingAssistantDeleteId = nil } }
         )) {
             Button(AppLocalized("Delete"), role: .destructive) {
-                guard let assistantId = pendingAssistantDeleteId,
-                      let assistantIdx = vm.messages.firstIndex(where: { $0.id == assistantId }) else {
-                    pendingAssistantDeleteId = nil
-                    return
-                }
-                let precedingUser = vm.messages[..<assistantIdx].last(where: { $0.role == .user })
-                if let precedingUser { vm.deleteFromMessage(precedingUser.id) }
+                guard let assistantId = pendingAssistantDeleteId else { return }
+                vm.deleteSingleMessage(assistantId)
                 pendingAssistantDeleteId = nil
             }
             Button(AppLocalized("Cancel"), role: .cancel) {
                 pendingAssistantDeleteId = nil
             }
         } message: {
-            Text(AppLocalized("This message and all messages after it will be deleted. This cannot be undone."))
+            Text(AppLocalized("This reply will be deleted. Your message before it stays."))
         }
         // Bridge VM's slash-command "/clear" request into the local @State that
         // drives the confirmation alert above, so the menu and slash-command
@@ -2931,6 +2931,7 @@ struct AIChatView: View {
                     inputFocused = true
                 },
                 onDeleteFrom: { vm.deleteFromMessage($0) },
+                onDeleteSingle: { vm.deleteSingleMessage($0) },
                 onWithdraw: { vm.withdrawQueuedMessage($0) },
                 onResume: { vm.resume(); vm.forceScrollToBottom.send() },
                 onStop: { vm.stopCurrentCommand() },

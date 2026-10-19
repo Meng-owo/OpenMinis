@@ -228,6 +228,8 @@ struct ChatMessageRow: View {
     /// [T-ios-delete-from-message] Delete this user message and everything
     /// after it. Only set for non-queued user bubbles when idle.
     var onDeleteFrom: (() -> Void)?
+    /// [T-chat-single-delete 10-20] Remove ONLY this message; later messages stay.
+    var onDeleteSingle: (() -> Void)?
     var onWithdraw: (() -> Void)?
     var autoRetryAttempt: Int = 0
     var autoRetryCountdown: Int = 0
@@ -264,6 +266,7 @@ struct ChatMessageRow: View {
     @State private var showCompactSummary = false
     /// [T-ios-delete-from-message] Confirmation gate for the suffix delete.
     @State private var showDeleteFromConfirm = false
+    @State private var showDeleteSingleConfirm = false
     /// Two-phase token usage reveal: space expands first, then content fades in.
     @State private var usageContentVisible = false
     /// Row frame in window coordinates — used to gate token-usage tap to bottom zone.
@@ -592,6 +595,20 @@ struct ChatMessageRow: View {
                 if onDeleteFrom != nil || onCompact != nil {
                     Divider()
                 }
+                // [T-chat-single-delete 10-20] Two distinct deletes, because
+                // "delete this message" and "delete everything from here down"
+                // are different intentions and used to be one action:
+                //   • Delete This Message — removes just this row; the replies
+                //     after it stay.
+                //   • Delete From Here — removes this row and every message
+                //     after it.
+                if let onDeleteSingle {
+                    Button(role: .destructive) {
+                        showDeleteSingleConfirm = true
+                    } label: {
+                        Label(AppLocalized("Delete This Message"), systemImage: "trash")
+                    }
+                }
                 if onDeleteFrom != nil {
                     Button(role: .destructive) {
                         showDeleteFromConfirm = true
@@ -620,6 +637,14 @@ struct ChatMessageRow: View {
         // [T-ios-delete-from-message] Suffix deletion is irreversible and takes
         // the following replies with it, so it gets an explicit confirmation
         // rather than firing straight off the menu.
+        .alert(AppLocalized("Delete Message?"), isPresented: $showDeleteSingleConfirm) {
+            Button(AppLocalized("Cancel"), role: .cancel) {}
+            Button(AppLocalized("Delete"), role: .destructive) {
+                onDeleteSingle?()
+            }
+        } message: {
+            Text(AppLocalized("Only this message will be deleted. The messages after it stay."))
+        }
         .alert(AppLocalized("Delete Message?"), isPresented: $showDeleteFromConfirm) {
             Button(AppLocalized("Cancel"), role: .cancel) {}
             Button(AppLocalized("Delete"), role: .destructive) {

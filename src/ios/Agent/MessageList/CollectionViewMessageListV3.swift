@@ -45,6 +45,8 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
     var onOpenSoulSettings: (() -> Void)?
     var onEdit: ((UUID) -> Void)?
     var onDeleteFrom: ((UUID) -> Void)?
+    /// [T-chat-single-delete 10-20] Remove only this message.
+    var onDeleteSingle: ((UUID) -> Void)?
     var onWithdraw: ((UUID) -> Void)?
     var onResume: (() -> Void)?
     var onStop: (() -> Void)?
@@ -91,6 +93,7 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
         coord.onRetryLast = onRetryLast
         coord.onEdit = onEdit
         coord.onDeleteFrom = onDeleteFrom
+        coord.onDeleteSingle = onDeleteSingle
         coord.onWithdraw = onWithdraw
         coord.onResume = onResume
         coord.onStop = onStop
@@ -704,6 +707,7 @@ private struct BridgedWholeMessageV3: View {
             onRetry: bridge.onRetry,
             onEdit: bridge.onEdit,
             onDeleteFrom: bridge.onDeleteFrom,
+            onDeleteSingle: bridge.onDeleteSingle,
             onWithdraw: bridge.onWithdraw,
             autoRetryAttempt: 0,
             autoRetryCountdown: 0,
@@ -776,6 +780,7 @@ extension CollectionViewMessageListV3 {
         var onRetryLast: (() -> Void)?
         var onEdit: ((UUID) -> Void)?
         var onDeleteFrom: ((UUID) -> Void)?
+        var onDeleteSingle: ((UUID) -> Void)?
         var onWithdraw: ((UUID) -> Void)?
         var onResume: (() -> Void)?
         var onStop: (() -> Void)?
@@ -1714,6 +1719,7 @@ extension CollectionViewMessageListV3 {
             let retryLast = onRetryLast
             let edit = onEdit
             let deleteFrom = onDeleteFrom
+            let deleteSingle = onDeleteSingle
             let compact = onCompact
             let forceSync = onForceSync
             bridge.onForceSync = forceSync
@@ -1733,6 +1739,7 @@ extension CollectionViewMessageListV3 {
             if message.isCompactedHistory || message.role == .compactDivider || message.role == .systemInfo {
                 bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil
                 bridge.onDeleteFrom = nil
+                bridge.onDeleteSingle = nil
             } else if !vm.isProcessing && !vm.isCompacting {
                 if message.role == .user {
                     bridge.onRetry = { retryMsg?(message.id) }
@@ -1749,10 +1756,14 @@ extension CollectionViewMessageListV3 {
                 // its removal path, so this stays off for it.
                 bridge.onDeleteFrom = (message.role == .user && !message.isQueued)
                     ? { deleteFrom?(message.id) } : nil
+                // [T-chat-single-delete 10-20] Only this message; later ones stay.
+                bridge.onDeleteSingle = (message.role == .user && !message.isQueued)
+                    ? { deleteSingle?(message.id) } : nil
                 bridge.onCompact = { compact?(message.id) }
             } else {
                 bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil
                 bridge.onDeleteFrom = nil
+                bridge.onDeleteSingle = nil
             }
 
             // [T-ios-plaf-cache-footer-staleness] If the footer's rendered SHAPE

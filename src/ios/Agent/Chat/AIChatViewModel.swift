@@ -3704,6 +3704,127 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
+    /// [T-chat-single-delete 10-20] Delete exactly ONE message, leaving the
+    /// rest of the conversation untouched.
+    ///
+    /// The old model only had suffix deletion: deleting an AI reply routed
+    /// through its preceding user prompt (`deleteFromMessage(precedingUser)`),
+    /// so her own message went with it. Kelivo deletes by message, not by
+    /// suffix — its `deleteMessage` takes the message and drops only that row
+    /// (plus the other versions in the same group when asked). We follow that.
+    ///
+    /// Two things make this non-trivial here:
+    ///
+    /// 1. One UI assistant bubble can be backed by SEVERAL raw rows — the agent
+    ///    loop appends a continuation row per iteration (text, tool_use,
+    ///    tool_result carriers) and `loadMessages` merges them back into one
+    ///    bubble via `sourceSortOrder ... lastSourceSortOrder`. Deleting one row
+    ///    would strand the tool parts, which is a hard 400 on the next turn. So
+    ///    the DB unit is the sort_order RANGE the bubble covers.
+    ///
+    /// 2. Removing a turn can strand a tool_use/tool_result pair across the
+    ///    cut. Check the surviving history before committing; if it would break
+    ///    pairing, refuse and point at "Delete From Here" instead.
+    func deleteSingleMessage(_ messageId: UUID) {
+        guard !isProcessing else { return }
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let target = messages[idx]
+
+        // Capture the DB rows this bubble covers BEFORE it leaves the array.
+        let rangeStart = target.sourceSortOrder
+        let rangeEnd = target.lastSourceSortOrder ?? target.sourceSortOrder
+
+        // Which history entries belong to this bubble? Match by db id (exact).
+        var removedIdxs: [Int] = []
+        if let rowId = target.dbRowId,
+           let hi = agentHistory.firstIndex(where: { $0.dbMessageId == rowId }) {
+            removedIdxs = [hi]
+            // Assistant continuation rows sit right after the first row and
+            // have no UI twin of their own — fold them in while they belong to
+            // the same turn (i.e. until the next user entry).
+            if target.role == .assistant {
+                var j = hi + 1
+                while j < agentHistory.count, agentHistory[j].role != .user {
+                    removedIdxs.append(j)
+                    j += 1
+                }
+            }
+        } else {
+            // No id link (never persisted, or a placeholder). The sort window
+            // alone can't name history entries — AgentMessage carries no
+            // sort_order. Refuse rather than guess and delete the wrong turn.
+            logger.warning("[SingleDelete] no dbRowId for role=\(target.role.rawValue) range=\(rangeStart.map(String.init) ?? "nil")...\(rangeEnd.map(String.init) ?? "nil") — refusing")
+            errorMessage = AppLocalized("This message hasn't finished saving yet, so it can't be deleted on its own. Try again in a moment.")
+            return
+        }
+
+        // Pairing check: simulate the removal before touching anything.
+        let removing = Set(removedIdxs)
+        let survivors = agentHistory.enumerated()
+            .filter { !removing.contains($0.offset) }
+            .map { $0.element }
+        if !Self.toolPartsArePaired(survivors) {
+            logger.error("[SingleDelete] refusing — removing entries \(removedIdxs) would strand a tool_use/tool_result pair")
+            errorMessage = AppLocalized("This message is paired with a tool call in the messages around it, so it can't be deleted on its own. Use \"Delete From Here\" instead.")
+            return
+        }
+
+        // Apply: UI → history → DB.
+        captureTruncationSnapshot()
+        messages.remove(at: idx)
+        if !transitionSuspended { objectWillChange.send() }
+        for i in removedIdxs.sorted(by: >) {
+            agentHistory.remove(at: i)
+        }
+        discardTruncationSnapshot()
+        postTruncationCleanup()
+
+        if let sessionId {
+            let sid = sessionId
+            if let s = rangeStart, let e = rangeEnd {
+                // Awaited, not fire-and-forget: the UI must not show the message
+                // gone while the row survives a reload.
+                Task { @MainActor [weak self] in
+                    let n = await ChatStore.shared.deleteMessagesInSortRange(sessionId: sid, fromSortOrder: s, throughSortOrder: e)
+                    self?.logger.info("[SingleDelete] role=\(target.role.rawValue) rows=\(n) range=\(s)...\(e)")
+                }
+            } else if let dbId = target.dbRowId {
+                Task { @MainActor [weak self] in
+                    await ChatStore.shared.deleteMessagesByIds(sessionId: sid, ids: [dbId])
+                    self?.logger.info("[SingleDelete] role=\(target.role.rawValue) by id=\(dbId.prefix(8))")
+                }
+            }
+        }
+
+        rebuildToolSnapshotsFromMessages()
+        logger.info("[SingleDelete] role=\(target.role.rawValue) idx=\(idx) historyRemoved=\(removedIdxs.count) messagesLeft=\(self.messages.count)")
+    }
+
+    /// True when every `toolResult` has a matching `toolUse` and vice versa.
+    /// Trailing unanswered calls in the LAST assistant turn are allowed — the
+    /// loop legitimately pauses there between issuing a call and receiving its
+    /// result.
+    private static func toolPartsArePaired(_ history: [AgentMessage]) -> Bool {
+        var uses: Set<String> = []
+        var results: Set<String> = []
+        for entry in history {
+            for part in entry.parts {
+                switch part {
+                case .toolUse(let id, _, _): uses.insert(id)
+                case .toolResult(let id, _, _, _, _, _, _, _): results.insert(id)
+                default: break
+                }
+            }
+        }
+        var pendingUses = uses.subtracting(results)
+        if let last = history.last, last.role == .assistant {
+            for part in last.parts {
+                if case .toolUse(let id, _, _) = part { pendingUses.remove(id) }
+            }
+        }
+        return pendingUses.isEmpty && results.subtracting(uses).isEmpty
+    }
+
     /// [T-action-bar 09-11] Assistant message regenerate
     //
     // 操作条挂在 AI 消息上。重新回复必须从它前面的用户消息切回去：
