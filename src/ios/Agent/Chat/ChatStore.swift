@@ -442,9 +442,26 @@ struct RawMessage: Identifiable, Codable, Hashable {
     /// DB round-trips.
     static let internalBridgeTexts: [String] = [
         internalBridgeText,
+        // [10-20 醒醒] 排队消息逐条进历史时垫的桥。跟上面那条语义不同：
+        // 上面是「任务被新消息打断」，这条是「用户连发了几条，都还没回」。
+        // 用错文本会让模型以为每一条都在打断它。
+        queuedFollowUpBridgeText,
         // Pre-d2e111e9 wording.
         "(Interrupted mid-task to handle your new message. Will return to the prior task after.)",
     ]
+
+    /// [10-20 醒醒] 排队消息之间的分隔桥。
+    ///
+    /// Anthropic 要求 user/assistant 严格交替，两条相邻 user 会被
+    /// `mergeConsecutiveSameRole` 折成一条。排队消息要「每条独立」，
+    /// 就得在中间垫一条 assistant。文本保持中性：不宣称任务被打断，
+    /// 也不规定模型怎么回，只说这几条是一起发的、都还没回。
+    ///
+    /// 必须登记进 `internalBridgeTexts`，否则重载会话时它会显示成一条
+    /// 真的 AI 回复。
+    static let queuedFollowUpBridgeText =
+        "(The user sent this while you were still working. Several of their messages are queued back to back and none of them has been answered yet — read them in order before replying.)"
+
 
     /// True when `text` is any known internal-bridge string. Shared by
     /// RawMessage and ChatMessage so every layer recognizes the same rows.

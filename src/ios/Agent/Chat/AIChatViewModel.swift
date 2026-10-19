@@ -4726,8 +4726,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             guard !parts.isEmpty else { rowIds.append(nil); continue }
 
             // 上一条也是 user 就垫一条桥，防止出站被折叠。
+            // 用 queuedFollowUpBridgeText 而不是 internalBridgeText：
+            // 后者写的是「任务被新消息打断」，连发三条会读成三次打断。
             if agentHistory.last?.role == .user {
-                let bridge = AgentMessage(role: .assistant, parts: [.text(RawMessage.internalBridgeText)])
+                let bridge = AgentMessage(role: .assistant, parts: [.text(RawMessage.queuedFollowUpBridgeText)])
                 let bridgeIdx = agentHistory.count
                 agentHistory.append(bridge)
                 if let bid = await persistAgentMessage(bridge, snapshots: [:]), bridgeIdx < agentHistory.count {
