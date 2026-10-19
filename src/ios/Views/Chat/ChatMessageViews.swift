@@ -231,6 +231,8 @@ struct ChatMessageRow: View {
     var onWithdraw: (() -> Void)?
     var autoRetryAttempt: Int = 0
     var autoRetryCountdown: Int = 0
+    /// Attempts the current ladder allows (5, or 10 while the upstream throttles).
+    var autoRetryBudget: Int = 0
     var canResume: Bool = false
     var onResume: (() -> Void)?
     var onCompact: (() -> Void)?
@@ -899,7 +901,7 @@ struct ChatMessageRow: View {
             Spacer()
 
             if autoRetryAttempt > 0 {
-                Text("Retry in \(autoRetryCountdown)s (\(autoRetryAttempt)/\(AIChatViewModel.retryDelays.count))")
+                Text("Retry in \(autoRetryCountdown)s (\(autoRetryAttempt)/\(autoRetryBudget > 0 ? autoRetryBudget : AIChatViewModel.retryDelays.count))")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(MinisTheme.secondaryText)
                     .padding(.horizontal, 12)
