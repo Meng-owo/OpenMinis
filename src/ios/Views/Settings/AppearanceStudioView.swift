@@ -797,6 +797,31 @@ struct AppearanceStudioView: View {
             }
             .modifier(StudioCard(variant: variant))
 
+            // [10-20 醒醒] 代码块
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(AppLocalized("代码块"))
+                Toggle(AppLocalized("长行自动换行"), isOn: codeBlockWrapBinding)
+                    .tint(studio.color(.accent, variant: variant))
+                Text(AppLocalized("关掉就保持横向滚动，缩进不会断。"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                Stepper(value: codeBlockCollapseLinesBinding, in: 4...40, step: 1) {
+                    HStack {
+                        Text(AppLocalized("超过多少行折叠"))
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        Spacer()
+                        Text("\(studio.currentThemePack().codeBlockCollapseLines)")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                    }
+                }
+                Text(AppLocalized("超出的部分收起来，点一下展开，看完能再收起。"))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+            }
+            .modifier(StudioCard(variant: variant))
+
             // [10-19 醒醒] 视觉小说模式。立绘照 ST 的 waifuMode 做，
             // 对话框是 Galgame 那种。
             novelModeCard(variant: variant)
@@ -1544,6 +1569,17 @@ struct AppearanceStudioView: View {
     private var letterSpacingBinding: Binding<Double> {
         Binding(get: { studio.currentThemePack().letterSpacing },
                 set: { studio.setLetterSpacing($0) })
+    }
+
+    // MARK: [10-20 醒醒] 代码块
+
+    private var codeBlockWrapBinding: Binding<Bool> {
+        Binding(get: { studio.currentThemePack().codeBlockWrap },
+                set: { studio.setCodeBlockWrap($0) })
+    }
+    private var codeBlockCollapseLinesBinding: Binding<Int> {
+        Binding(get: { studio.currentThemePack().codeBlockCollapseLines },
+                set: { studio.setCodeBlockCollapseLines($0) })
     }
 
     // MARK: [10-19 醒醒] 视觉小说模式

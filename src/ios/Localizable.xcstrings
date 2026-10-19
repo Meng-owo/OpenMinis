@@ -109419,6 +109419,56 @@
           }
         }
       }
+    },
+    "代码块": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code Block"
+          }
+        }
+      }
+    },
+    "长行自动换行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wrap long lines"
+          }
+        }
+      }
+    },
+    "关掉就保持横向滚动，缩进不会断。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off keeps horizontal scrolling, so indentation stays intact."
+          }
+        }
+      }
+    },
+    "超过多少行折叠": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse above"
+          }
+        }
+      }
+    },
+    "超出的部分收起来，点一下展开，看完能再收起。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rest folds away. Tap to expand, tap again to fold."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

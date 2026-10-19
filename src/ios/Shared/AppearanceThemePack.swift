@@ -2,6 +2,11 @@ import Foundation
 import SwiftUI
 import UIKit
 
+extension Notification.Name {
+    /// [10-20 醒醒] 代码块换行/折叠阈值变了，渲染层要重排。
+    static let codeBlockLayoutSettingsChanged = Notification.Name("codeBlockLayoutSettingsChanged")
+}
+
 /// Shape + thinking chrome that a theme pack can swap.
 /// Colors stay in AppearanceStudio; this file owns radii, bubble style,
 /// thinking card image, pack identity.
@@ -51,6 +56,10 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
     var novelMode: String
     /// 立绘模式用的角色全身图（base64 JPEG）。nil = 退回头像放大。
     var characterArtBase64: String?
+    /// [10-20 醒醒] 代码块长行自动换行。默认开。
+    var codeBlockWrap: Bool
+    /// 代码块超过多少行自动折叠。默认 12。
+    var codeBlockCollapseLines: Int
 
     static let currentKey = "appearanceStudio.themePack.v1"
     static let schemaVersion = 5
@@ -132,7 +141,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         letterSpacing: 0,
         rowBackgroundHex: nil,
         novelMode: AppearanceNovelMode.off.rawValue,
-        characterArtBase64: nil
+        characterArtBase64: nil,
+        codeBlockWrap: true,
+        codeBlockCollapseLines: 12
     )
 
     var userStyle: AppearanceBubbleStyle { AppearanceBubbleStyle.parse(userBubbleStyle) }
@@ -183,6 +194,8 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             "chatDisplay": AppearanceChatDisplay.parse(chatDisplay).rawValue,
             "lineHeight": lineHeight,
             "letterSpacing": letterSpacing,
+            "codeBlockWrap": codeBlockWrap,
+            "codeBlockCollapseLines": codeBlockCollapseLines,
         ]
         if let rowBackgroundHex { obj["rowBackgroundHex"] = rowBackgroundHex }
         obj["novelMode"] = AppearanceNovelMode.parse(novelMode).rawValue
@@ -286,7 +299,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             letterSpacing: min(3, max(-1, num("letterSpacing", fallback: base.letterSpacing))),
             rowBackgroundHex: (raw["rowBackgroundHex"] as? String).map(normalizeHex),
             novelMode: AppearanceNovelMode.parse(str("novelMode", fallback: base.novelMode)).rawValue,
-            characterArtBase64: raw["characterArtBase64"] as? String
+            characterArtBase64: raw["characterArtBase64"] as? String,
+            codeBlockWrap: (raw["codeBlockWrap"] as? Bool) ?? base.codeBlockWrap,
+            codeBlockCollapseLines: min(40, max(4, Int(num("codeBlockCollapseLines", fallback: Double(base.codeBlockCollapseLines)))))
         )
         if pack.id.isEmpty { pack.id = base.id }
         if pack.name.isEmpty { pack.name = pack.id }
@@ -522,6 +537,11 @@ extension AppearanceStudio {
     func persistPack(_ pack: AppearanceThemePack) {
         guard let data = try? JSONSerialization.data(withJSONObject: pack.asJSONObject()) else { return }
         UserDefaults.standard.set(data, forKey: Self.packKey)
+        // [10-20 醒醒] 代码块的换行/折叠阈值要给 UIKit 侧读。那条链路不能碰
+        // @MainActor 的 AppearanceStudio，所以额外写一份扁平快照。
+        UserDefaults.standard.set(["wrap": pack.codeBlockWrap,
+                                   "collapseLines": pack.codeBlockCollapseLines],
+                                  forKey: "appearanceStudio.codeBlock.v1")
         themePackLock.lock()
         cachedThemePack = pack
         themePackLoaded = true
@@ -834,6 +854,23 @@ extension AppearanceStudio {
         var pack = currentThemePack()
         pack.letterSpacing = min(3, max(-1, value))
         persistPack(pack)
+    }
+
+    // MARK: [10-20 醒醒] 代码块
+
+    func setCodeBlockWrap(_ on: Bool) {
+        var pack = currentThemePack()
+        pack.codeBlockWrap = on
+        persistPack(pack)
+        // 换行开关会改变高度计算，通知渲染层重排
+        NotificationCenter.default.post(name: .codeBlockLayoutSettingsChanged, object: nil)
+    }
+
+    func setCodeBlockCollapseLines(_ lines: Int) {
+        var pack = currentThemePack()
+        pack.codeBlockCollapseLines = min(40, max(4, lines))
+        persistPack(pack)
+        NotificationCenter.default.post(name: .codeBlockLayoutSettingsChanged, object: nil)
     }
 
     func setRowBackground(_ hex: String?) {

@@ -1463,13 +1463,29 @@ final class CodeBlockAttachment: NSTextAttachment {
     static let codeTextViewTag = 9873
     /// Tag for the line-number gutter UITextView inside the scroll view.
     static let gutterTag = 9874
+    /// Tag for the header hairline divider.
+    static let headerDividerTag = 9875
 
     // MARK: [chat-ui] collapse state (Kelivo-style)
 
-    /// Lines beyond which a code block becomes collapsible.
-    static let collapseLineThreshold = 12
-    /// Lines shown while collapsed.
-    static let collapsedVisibleLines = 8
+    /// [10-20 醒醒] 折叠阈值与换行都改成可配置。UIKit 侧不能碰
+    /// @MainActor 的 AppearanceStudio，所以从 UserDefaults 的镜像快照读，
+    /// 由 AppearanceStudio 在 persist 时同步写入。
+    static let codeSettingsKey = "appearanceStudio.codeBlock.v1"
+
+    /// 长行是否自动换行。默认开（她要的）。
+    static var codeBlockWrapEnabled: Bool {
+        (UserDefaults.standard.dictionary(forKey: codeSettingsKey)?["wrap"] as? Bool) ?? true
+    }
+
+    /// 超过多少行自动折叠。默认 12。
+    static var collapseLineThreshold: Int {
+        (UserDefaults.standard.dictionary(forKey: codeSettingsKey)?["collapseLines"] as? Int) ?? 12
+    }
+
+    /// Lines shown while collapsed. [10-20 醒醒] 跟着阈值走，最多 8 行：
+    /// 阈值调到 4 还显示 8 行就比「阈值」还长了，折叠没意义。
+    static var collapsedVisibleLines: Int { min(8, max(2, collapseLineThreshold - 1)) }
     /// fingerprint(code+language) → collapsed. Bounded (400) like the tool-group map.
     static var collapseState: [Int: Bool] = [:]
     /// Fingerprints the user toggled manually — the settle pass won't override these.
@@ -1496,6 +1512,15 @@ final class CodeBlockAttachment: NSTextAttachment {
         }
     }
 
+    /// [10-20 醒醒] 折叠阈值变了，把「自动决定」的那部分状态清掉重算。
+    /// 手动展开/收起的（manualCollapse 里的）保留——那是她的选择。
+    static func resetAutoCollapseStates() {
+        // 先取快照再删——边遍历 keys 边 removeValue 会踩到字典的独占访问。
+        let stale = collapseState.keys.filter { !manualCollapse.contains($0) }
+        for key in stale { collapseState.removeValue(forKey: key) }
+        collapseGeneration &+= 1
+    }
+
     static var metricsKey: UInt8 = 0
     static var toggleDebounceKey: UInt8 = 0
 
@@ -1516,6 +1541,10 @@ final class CodeBlockAttachment: NSTextAttachment {
         /// Width of the line-number gutter (0 when the gutter is hidden).
         /// fittingWidth INCLUDES this width (gutter + code).
         var gutterWidth: CGFloat
+        /// [10-20 醒醒] 建这个视图时是否处于换行模式。contentSize 的宽度
+        /// 要跟着它走：换行模式必须锁成 contentWidth，否则折叠/展开会把
+        /// 旧的「内容宽度」塞回去，长行又溢出。
+        var wrapEnabled: Bool = false
         init(fullWidth: CGFloat, inset: CGFloat, contentWidth: CGFloat, topOffset: CGFloat,
              fullHeight: CGFloat, fittingWidth: CGFloat, collapsedHeight: CGFloat,
              maxCodeHeight: CGFloat, bottomPadding: CGFloat,
@@ -1576,11 +1605,12 @@ final class CodeBlockAttachment: NSTextAttachment {
 
     /// Height of the first `lines` source lines (collapsed viewport).
     /// Same measurer as measureCodeHeight so the numbers agree.
-    private func measurePrefixHeight(lines: Int) -> CGFloat {
+    /// `wrapWidth` nil = 不换行（按内容宽度量）；有值 = 按该宽度换行后量。
+    private func measurePrefixHeight(lines: Int, wrapWidth: CGFloat? = nil) -> CGFloat {
         let prefix = code.components(separatedBy: "\n").prefix(lines).joined(separator: "\n")
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
+        codeStyle.lineBreakMode = wrapWidth == nil ? .byClipping : .byCharWrapping
         let attrStr = NSAttributedString(string: prefix.isEmpty ? " " : prefix, attributes: [
             .font: theme.codeBlockFont,
             .paragraphStyle: codeStyle,
@@ -1589,9 +1619,11 @@ final class CodeBlockAttachment: NSTextAttachment {
         tv.isScrollEnabled = false
         tv.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
         tv.textContainer.lineFragmentPadding = 0
-        tv.textContainer.lineBreakMode = .byClipping
+        tv.textContainer.lineBreakMode = codeStyle.lineBreakMode
+        tv.textContainer.widthTracksTextView = wrapWidth != nil
         tv.attributedText = attrStr
-        return tv.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
+        let measureWidth = wrapWidth ?? CGFloat.greatestFiniteMagnitude
+        return tv.sizeThatFits(CGSize(width: measureWidth, height: CGFloat.greatestFiniteMagnitude)).height
     }
 
     /// Re-layout the code view for a collapsed/expanded state.
@@ -1610,7 +1642,10 @@ final class CodeBlockAttachment: NSTextAttachment {
                                       height: visibleHeight + metrics.bottomPadding)
             // Collapsed: shrink the scrollable height so vertical scroll is
             // impossible, but keep horizontal panning for long lines.
-            scrollView.contentSize = CGSize(width: metrics.fittingWidth,
+            // [10-20 醒醒] 换行模式下宽度锁死在容器宽，折叠/展开都不会
+            // 冒出横向滚动条。
+            let contentW = metrics.wrapEnabled ? metrics.contentWidth : metrics.fittingWidth
+            scrollView.contentSize = CGSize(width: contentW,
                                             height: collapsed ? visibleHeight + metrics.bottomPadding : metrics.fullHeight)
             if collapsed { scrollView.contentOffset = .zero }
             if let fade = container.viewWithTag(fadeViewTag) {
@@ -1704,7 +1739,9 @@ final class CodeBlockAttachment: NSTextAttachment {
         let codeAttr = NSMutableAttributedString(attributedString: highlighted)
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
+        // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
+        // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
+        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
         codeAttr.addAttribute(.paragraphStyle, value: codeStyle,
                              range: NSRange(location: 0, length: codeAttr.length))
         codeTextView.attributedText = codeAttr
@@ -1739,14 +1776,15 @@ final class CodeBlockAttachment: NSTextAttachment {
     private var cachedContentHeight: (hash: Int, height: CGFloat)?
 
     /// Measure actual code text height using the same approach as makeView.
-    private func measureCodeHeight() -> CGFloat {
+    /// `wrapWidth` nil = 不换行（按内容宽度量，横向滚动）；有值 = 按该宽度换行后量。
+    private func measureCodeHeight(wrapWidth: CGFloat? = nil) -> CGFloat {
         let codeHash = code.hashValue
-        if let cached = cachedContentHeight, cached.hash == codeHash {
+        if wrapWidth == nil, let cached = cachedContentHeight, cached.hash == codeHash {
             return cached.height
         }
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
+        codeStyle.lineBreakMode = wrapWidth == nil ? .byClipping : .byCharWrapping
         let attrStr = NSAttributedString(string: code, attributes: [
             .font: theme.codeBlockFont,
             .paragraphStyle: codeStyle,
@@ -1755,11 +1793,20 @@ final class CodeBlockAttachment: NSTextAttachment {
         tv.isScrollEnabled = false
         tv.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: 8)
         tv.textContainer.lineFragmentPadding = 0
-        tv.textContainer.lineBreakMode = .byClipping
+        tv.textContainer.lineBreakMode = codeStyle.lineBreakMode
+        tv.textContainer.widthTracksTextView = wrapWidth != nil
         tv.attributedText = attrStr
-        let h = tv.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
-        cachedContentHeight = (hash: codeHash, height: h)
+        let measureWidth = wrapWidth ?? CGFloat.greatestFiniteMagnitude
+        let h = tv.sizeThatFits(CGSize(width: measureWidth, height: CGFloat.greatestFiniteMagnitude)).height
+        if wrapWidth == nil { cachedContentHeight = (hash: codeHash, height: h) }
         return h
+    }
+
+    /// 换行模式下代码可用的宽度（扣掉行号槽、左右内边距和块级缩进）。
+    private func codeWrapWidth(fullWidth: CGFloat) -> CGFloat {
+        let lineCount = code.components(separatedBy: "\n").count
+        let gutterW = Self.gutterWidth(forLineCount: lineCount)
+        return max(60, fullWidth - leftInset - gutterW - 16)
     }
 
     override func attachmentBounds(for textContainer: NSTextContainer?, proposedLineFragment lineFrag: CGRect, glyphPosition position: CGPoint, characterIndex charIndex: Int) -> CGRect {
@@ -1767,7 +1814,11 @@ final class CodeBlockAttachment: NSTextAttachment {
         let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 28 : 12
         // [chat-ui] Collapsed blocks measure the 8-line viewport, not the full text.
         let collapsed = Self.collapseState[contentFingerprint] ?? false
-        let contentHeight = collapsed ? measurePrefixHeight(lines: Self.collapsedVisibleLines) : measureCodeHeight()
+        // [10-20 醒醒] 换行模式下高度按可用宽度算，不再是内容宽度。
+        let wrapWidth: CGFloat? = Self.codeBlockWrapEnabled ? codeWrapWidth(fullWidth: width) : nil
+        let contentHeight = collapsed
+            ? measurePrefixHeight(lines: Self.collapsedVisibleLines, wrapWidth: wrapWidth)
+            : measureCodeHeight(wrapWidth: wrapWidth)
         let bottomPadding: CGFloat = 12
         let maxCodeHeight: CGFloat = 400 - topOffset - bottomPadding
         let scrollHeight = min(contentHeight, maxCodeHeight)
@@ -1788,18 +1839,25 @@ final class CodeBlockAttachment: NSTextAttachment {
         container.layer.cornerRadius = theme.codeBlockCornerRadius
         container.clipsToBounds = true
 
-        var topOffset: CGFloat = 12
+        var topOffset: CGFloat = 14
         let hasLanguage = language != nil && !language!.isEmpty
 
-        // Language label
+        // [10-20 醒醒] 头部重做：32pt 高，语言标签跟主题文字色走（原来是
+        // 硬编码白色，浅色主题下几乎看不见），底部一条发丝分隔线。
         if hasLanguage {
             let langLabel = UILabel()
             langLabel.text = language!.lowercased()
             langLabel.font = .systemFont(ofSize: 11, weight: .medium)
-            langLabel.textColor = .white.withAlphaComponent(0.4)
-            langLabel.frame = CGRect(x: 12, y: 8, width: contentWidth - 60, height: 16)
+            langLabel.textColor = theme.codeBlockTextColor.withAlphaComponent(0.45)
+            langLabel.frame = CGRect(x: 12, y: 9, width: contentWidth - 60, height: 14)
             container.addSubview(langLabel)
-            topOffset = 28
+            topOffset = 32
+
+            let divider = UIView()
+            divider.tag = Self.headerDividerTag
+            divider.backgroundColor = theme.codeBlockTextColor.withAlphaComponent(0.10)
+            divider.frame = CGRect(x: 0, y: 31.5, width: contentWidth, height: 0.5)
+            container.addSubview(divider)
         }
 
         // [chat-ui] Collapse bookkeeping (Kelivo-style). Fresh renders start
@@ -1837,7 +1895,9 @@ final class CodeBlockAttachment: NSTextAttachment {
         // unknown languages / over-long input — never crashes).
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
+        // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
+        // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
+        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
         let highlighted = CodeSyntaxHighlighter.highlight(
             code, language: language, font: theme.codeBlockFont,
             plainColor: theme.codeBlockTextColor, background: theme.codeBlockBackground)
@@ -1846,13 +1906,21 @@ final class CodeBlockAttachment: NSTextAttachment {
                              range: NSRange(location: 0, length: codeAttr.length))
         codeTextView.attributedText = codeAttr
 
-        // Measure content size (unconstrained width)
-        let fitting = codeTextView.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        // Measure content size. [10-20 醒醒] 换行模式下按可用宽度量，
+        // 不换行才用无约束宽度（横向滚动）。
+        let wrapEnabled = Self.codeBlockWrapEnabled
+        let gutterW = Self.gutterWidth(forLineCount: lineCount)
+        let availableCodeWidth = max(60, contentWidth - gutterW)
+        if wrapEnabled {
+            codeTextView.textContainer.lineBreakMode = .byCharWrapping
+            codeTextView.textContainer.widthTracksTextView = true
+        }
+        let measureWidth = wrapEnabled ? availableCodeWidth : CGFloat.greatestFiniteMagnitude
+        let fitting = codeTextView.sizeThatFits(CGSize(width: measureWidth, height: CGFloat.greatestFiniteMagnitude))
         let contentHeight = fitting.height
-        let fittingWidth = fitting.width
+        let fittingWidth = wrapEnabled ? availableCodeWidth : fitting.width
         // [P1-5] Line-number gutter: lives inside the scroll view so it stays
         // in sync for free; same text engine → identical line metrics.
-        let gutterW = Self.gutterWidth(forLineCount: lineCount)
         let gutter = Self.makeGutterTextView(theme: theme)
         gutter.attributedText = Self.gutterAttributedText(
             lineCount: lineCount, font: theme.codeBlockFont,
@@ -1864,15 +1932,20 @@ final class CodeBlockAttachment: NSTextAttachment {
         let bottomPadding: CGFloat = 12
         let metrics = CodeLayoutMetrics(
             fullWidth: width, inset: inset, contentWidth: contentWidth, topOffset: topOffset,
-            fullHeight: contentHeight, fittingWidth: gutterW + fittingWidth,
-            collapsedHeight: min(measurePrefixHeight(lines: Self.collapsedVisibleLines), maxCodeHeight),
+            fullHeight: contentHeight, fittingWidth: wrapEnabled ? contentWidth : gutterW + fittingWidth,
+            collapsedHeight: min(measurePrefixHeight(lines: Self.collapsedVisibleLines,
+                                                     wrapWidth: wrapEnabled ? availableCodeWidth : nil),
+                                 maxCodeHeight),
             maxCodeHeight: maxCodeHeight, bottomPadding: bottomPadding,
             language: language, theme: theme, gutterWidth: gutterW)
+        metrics.wrapEnabled = wrapEnabled
         objc_setAssociatedObject(wrapper, &Self.metricsKey, metrics, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
 
+        scrollView.showsHorizontalScrollIndicator = !wrapEnabled
+        scrollView.alwaysBounceHorizontal = !wrapEnabled
         scrollView.addSubview(gutter)
         scrollView.addSubview(codeTextView)
-        scrollView.contentSize = CGSize(width: gutterW + fittingWidth, height: contentHeight)
+        scrollView.contentSize = CGSize(width: metrics.fittingWidth, height: contentHeight)
         container.addSubview(scrollView)
         wrapper.addSubview(container)
 
@@ -1902,7 +1975,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         if collapsible {
             let headerButton = UIButton(type: .custom)
             headerButton.backgroundColor = .clear
-            headerButton.frame = CGRect(x: 0, y: 0, width: contentWidth, height: 28)
+            headerButton.frame = CGRect(x: 0, y: 0, width: contentWidth, height: 32)
             headerButton.accessibilityLabel = collapsed ? "Expand code block" : "Collapse code block"
             let toggle: () -> Void = { [weak wrapper, weak codeTextView, weak headerButton] in
                 guard let headerButton else { return }
@@ -1923,10 +1996,10 @@ final class CodeBlockAttachment: NSTextAttachment {
 
             let chevron = UIImageView()
             chevron.tag = Self.chevronTag
-            chevron.tintColor = .white.withAlphaComponent(0.4)
+            chevron.tintColor = theme.codeBlockTextColor.withAlphaComponent(0.45)
             chevron.contentMode = .center
             let rightButtons: CGFloat = isHTML ? 88 : 44
-            chevron.frame = CGRect(x: contentWidth - rightButtons - 24, y: 6, width: 24, height: 16)
+            chevron.frame = CGRect(x: contentWidth - rightButtons - 24, y: 8, width: 24, height: 16)
             container.addSubview(chevron)
             // Image (up/down) is set by applyCollapsedLayout — refresh once more
             // now that the chevron exists.
@@ -1937,8 +2010,8 @@ final class CodeBlockAttachment: NSTextAttachment {
         let iconConfig = UIImage.SymbolConfiguration(pointSize: 9, weight: .medium)
         let copyButton = UIButton(type: .system)
         copyButton.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-        copyButton.tintColor = .white.withAlphaComponent(0.5)
-        copyButton.frame = CGRect(x: contentWidth - 44, y: 0, width: 44, height: 44)
+        copyButton.tintColor = theme.codeBlockTextColor.withAlphaComponent(0.5)
+        copyButton.frame = CGRect(x: contentWidth - 44, y: 0, width: 44, height: 32)
         let debounce = CopyDebounce()
         let performCopy: () -> Void = { [weak codeTextView, weak copyButton] in
             // [T-ios17-codeblock-copy-dead] Double-fire guard: on versions
@@ -1955,7 +2028,7 @@ final class CodeBlockAttachment: NSTextAttachment {
             copyButton?.tintColor = AppearanceStudio.uiColorSnapshot(.success)
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 copyButton?.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-                copyButton?.tintColor = .white.withAlphaComponent(0.5)
+                copyButton?.tintColor = theme.codeBlockTextColor.withAlphaComponent(0.5)
             }
         }
         copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
@@ -1989,8 +2062,8 @@ final class CodeBlockAttachment: NSTextAttachment {
         if isHTML {
             let previewButton = UIButton(type: .system)
             previewButton.setImage(UIImage(systemName: "eye", withConfiguration: iconConfig), for: .normal)
-            previewButton.tintColor = .white.withAlphaComponent(0.5)
-            previewButton.frame = CGRect(x: contentWidth - 88, y: 0, width: 44, height: 44)
+            previewButton.tintColor = theme.codeBlockTextColor.withAlphaComponent(0.5)
+            previewButton.frame = CGRect(x: contentWidth - 88, y: 0, width: 44, height: 32)
             previewButton.accessibilityLabel = "Preview HTML"
             let showPreview: () -> Void = { [weak codeTextView, weak previewButton] in
                 guard let previewButton else { return }
@@ -2022,11 +2095,13 @@ final class CodeBlockAttachment: NSTextAttachment {
         guard let container = wrapper.subviews.first else { return }
         guard let scrollView = container.subviews.first(where: { $0 is UIScrollView }) as? UIScrollView else { return }
         guard let codeTextView = scrollView.viewWithTag(Self.codeTextViewTag) as? UITextView else { return }
-        guard var metrics = objc_getAssociatedObject(wrapper, &Self.metricsKey) as? CodeLayoutMetrics else { return }
+        guard let metrics = objc_getAssociatedObject(wrapper, &Self.metricsKey) as? CodeLayoutMetrics else { return }
 
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
-        codeStyle.lineBreakMode = .byClipping
+        // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
+        // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
+        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
         let codeAttr = NSAttributedString(string: code, attributes: [
             .font: theme.codeBlockFont,
             .foregroundColor: theme.codeBlockTextColor,
@@ -2034,7 +2109,14 @@ final class CodeBlockAttachment: NSTextAttachment {
         ])
         codeTextView.attributedText = codeAttr
 
-        let fitting = codeTextView.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        let wrapEnabled = Self.codeBlockWrapEnabled
+        metrics.wrapEnabled = wrapEnabled
+        if wrapEnabled {
+            codeTextView.textContainer.lineBreakMode = .byCharWrapping
+            codeTextView.textContainer.widthTracksTextView = true
+        }
+        let measureWidth = wrapEnabled ? max(60, metrics.contentWidth - metrics.gutterWidth) : CGFloat.greatestFiniteMagnitude
+        let fitting = codeTextView.sizeThatFits(CGSize(width: measureWidth, height: CGFloat.greatestFiniteMagnitude))
         // [P1-5] Keep the gutter in step as the code grows mid-stream.
         let lineCount = code.components(separatedBy: "\n").count
         let gutterW = Self.gutterWidth(forLineCount: lineCount)
@@ -2044,8 +2126,10 @@ final class CodeBlockAttachment: NSTextAttachment {
                 color: theme.codeBlockTextColor.withAlphaComponent(0.35))
             gutter.frame = CGRect(x: 0, y: 0, width: gutterW, height: fitting.height)
         }
-        codeTextView.frame = CGRect(x: gutterW, y: 0, width: fitting.width, height: fitting.height)
-        scrollView.contentSize = CGSize(width: gutterW + fitting.width, height: fitting.height)
+        let codeWidth = wrapEnabled ? max(60, metrics.contentWidth - gutterW) : fitting.width
+        codeTextView.frame = CGRect(x: gutterW, y: 0, width: codeWidth, height: fitting.height)
+        scrollView.contentSize = CGSize(width: wrapEnabled ? metrics.contentWidth : gutterW + fitting.width,
+                                        height: fitting.height)
 
         // The fresh attachment has a new fingerprint, but the VIEW's visual
         // state is the truth mid-stream — sync the map so attachmentBounds
@@ -2064,9 +2148,11 @@ final class CodeBlockAttachment: NSTextAttachment {
         let oldVisible = wrapperCollapsed ? metrics.collapsedHeight : min(metrics.fullHeight, metrics.maxCodeHeight)
         let oldTotal = metrics.topOffset + oldVisible + metrics.bottomPadding
         metrics.fullHeight = fitting.height
-        metrics.fittingWidth = gutterW + fitting.width
+        metrics.fittingWidth = wrapEnabled ? metrics.contentWidth : gutterW + fitting.width
         metrics.gutterWidth = gutterW
-        metrics.collapsedHeight = min(measurePrefixHeight(lines: Self.collapsedVisibleLines), metrics.maxCodeHeight)
+        metrics.collapsedHeight = min(measurePrefixHeight(lines: Self.collapsedVisibleLines,
+                                                          wrapWidth: wrapEnabled ? max(60, metrics.contentWidth - gutterW) : nil),
+                                      metrics.maxCodeHeight)
         let newTotal = metrics.topOffset + min(metrics.fullHeight, metrics.maxCodeHeight) + metrics.bottomPadding
         let heightGrew = newTotal > oldTotal + 0.5
         Self.applyCollapsedLayout(to: wrapper, collapsed: wrapperCollapsed, animated: heightGrew)
@@ -5768,6 +5854,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     /// Maps code block sequential index to its current UIView, for reuse when content changes
     /// (new attachment object but same visual position). Allows `updateExistingView` instead of full rebuild.
     private var codeBlockViewCache: [Int: UIView] = [:]
+    /// [10-20 醒醒] 上次渲染时的代码块设置（换行, 折叠阈值）。
+    private var lastCodeBlockSettings: (Bool, Int)?
     /// Tracks the last textContainer width used for layout, to detect rotation/size changes.
     private var lastLayoutWidth: CGFloat = 0
     /// Tracks the last computed intrinsic content height to detect when height changes
@@ -6748,7 +6836,30 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         )
     }
 
+    /// [10-20 醒醒] 代码块换行/折叠阈值改了，已经建好的代码块视图必须重造
+    /// ——高度和宽度都按旧设置算死了，光重排不算数。这里比一次设置指纹，
+    /// 变了就丢掉视图缓存并让下面的 dedupe 失效。
+    func applyCodeBlockSettingsIfChanged() -> Bool {
+        let current = (CodeBlockAttachment.codeBlockWrapEnabled,
+                       CodeBlockAttachment.collapseLineThreshold)
+        guard let last = lastCodeBlockSettings, last != current else {
+            lastCodeBlockSettings = current
+            return false
+        }
+        lastCodeBlockSettings = current
+        codeBlockViewCache.removeAll()
+        // 阈值改了，之前按旧阈值记下的「没折叠」要作废，否则调小阈值后
+        // 已经渲染过的长块永远不会折叠。手动展开过的保留（那是她的选择）。
+        CodeBlockAttachment.resetAutoCollapseStates()
+        lastUAVStorageLen = -1
+        lastUAVWidth = -1
+        lastUAVViewCount = -1
+        return true
+    }
+
     func updateAttachmentViews() {
+        _ = applyCodeBlockSettingsIfChanged()
+
         // [AttachHotPath] Dedupe: when nothing relevant changed since the last
         // successful call AND the existing view map already covers every
         // attachment in storage, there is nothing to do — every branch in the
@@ -8267,6 +8378,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
     func updateUIView(_ textView: SelectableMarkdownTextView, context: Context) {
         let updateStart = CFAbsoluteTimeGetCurrent()
+        context.coordinator.hostedTextView = textView
         context.coordinator.openURL = openURL
         textView.onTapBlank = onTapBlank
         textView.onCopyScreenshot = onCopyScreenshot
@@ -9702,6 +9814,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
         /// skip check, not only after the first deferred render.
         var inactiveEnteredAt: Date?
 
+        /// [10-20 醒醒] 代码块设置变更观察者。
+        private var codeBlockSettingsObserver: NSObjectProtocol?
+        /// 设置变了要重排的那个 textView（updateUIView 每次刷新）。
+        weak var hostedTextView: SelectableMarkdownTextView?
+
         override init() {
             super.init()
             foregroundObserver = NotificationCenter.default.addObserver(
@@ -9711,6 +9828,22 @@ struct SelectableMarkdownView: UIViewRepresentable {
             ) { [weak self] _ in
                 self?.inactiveEnteredAt = nil
                 self?.applyDeferredRenderIfNeeded()
+            }
+            // [10-20 醒醒] 装扮页改了代码块换行/折叠阈值，正显示着的块要立刻
+            // 重造 + 重排，不然要等下一次消息刷新才生效。
+            codeBlockSettingsObserver = NotificationCenter.default.addObserver(
+                forName: .codeBlockLayoutSettingsChanged,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self, let tv = self.hostedTextView else { return }
+                guard tv.applyCodeBlockSettingsIfChanged() else { return }
+                self.cachedSizes.removeAll(keepingCapacity: true)
+                self.cachedSizeMarkdownCount = -1
+                tv.updateAttachmentViews()
+                tv.invalidateIntrinsicContentSize()
+                tv.setNeedsLayout()
+                tv.invalidateCellSizeIfNeeded()
             }
             resignActiveObserver = NotificationCenter.default.addObserver(
                 forName: UIApplication.willResignActiveNotification,
@@ -9738,6 +9871,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
             }
             if let resignActiveObserver {
                 NotificationCenter.default.removeObserver(resignActiveObserver)
+            }
+            if let codeBlockSettingsObserver {
+                NotificationCenter.default.removeObserver(codeBlockSettingsObserver)
             }
         }
         var lastFontSize: CGFloat = FontSettings.shared.scaledMessage(16.5)
