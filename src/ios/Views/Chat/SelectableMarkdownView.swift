@@ -2026,9 +2026,9 @@ final class CodeBlockAttachment: NSTextAttachment {
             UIPasteboard.general.string = codeTextView?.text
             copyButton?.setImage(UIImage(systemName: "checkmark", withConfiguration: iconConfig), for: .normal)
             copyButton?.tintColor = AppearanceStudio.uiColorSnapshot(.success)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 copyButton?.setImage(UIImage(systemName: "doc.on.doc", withConfiguration: iconConfig), for: .normal)
-                copyButton?.tintColor = theme.codeBlockTextColor.withAlphaComponent(0.5)
+                copyButton?.tintColor = self?.theme.codeBlockTextColor.withAlphaComponent(0.5)
             }
         }
         copyButton.addAction(UIAction { _ in performCopy() }, for: .touchUpInside)
