@@ -1186,6 +1186,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onRetry: (() -> Void)?
     @Published var onEdit: (() -> Void)?
     @Published var onDeleteFrom: (() -> Void)?
+    /// [T-chat-single-delete 10-20] Remove ONLY this message; later messages stay.
+    @Published var onDeleteSingle: (() -> Void)?
     @Published var onWithdraw: (() -> Void)?
     @Published var autoRetryAttempt: Int = 0
     @Published var autoRetryCountdown: Int = 0
