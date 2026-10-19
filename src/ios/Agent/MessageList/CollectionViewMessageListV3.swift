@@ -686,6 +686,34 @@ private struct BridgedAssistantFooterV3: View {
         if u.cacheCreationTokens > 0 { parts.append("+cache:\(fmtTok(u.cacheCreationTokens))") }
         return parts.joined(separator: " ")
     }
+    // [10-20 醒醒] 时间胶囊的插入判断与文案。
+    //
+    // 规则（照她说的）：跟上一段隔 ≥5 分钟才插；12 小时内说「几分钟前 /
+    // 几小时前」；超过 12 小时换成「M月d日 HH:mm」，跨年补年份。
+    static func shouldShowTimeDivider(previous: ChatMessage?, current: ChatMessage) -> Bool {
+        // 列表最开头不插——第一屏就一个「3天前」很怪。
+        guard let previous else { return false }
+        return current.createdAt.timeIntervalSince(previous.createdAt) >= 5 * 60
+    }
+
+    /// 胶囊文案。滚动时现算，复用即刷新，不起定时器。
+    static func timeDividerText(for date: Date, now: Date = Date()) -> String {
+        let elapsed = now.timeIntervalSince(date)
+        if elapsed < 12 * 3600 {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .short
+            formatter.locale = Locale(identifier: "zh_Hans_CN")
+            return formatter.localizedString(for: date, relativeTo: now)
+        }
+        let cal = Calendar.current
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "zh_Hans_CN")
+        // 跨年才带年份，同年只显示月日。
+        let sameYear = cal.component(.year, from: date) == cal.component(.year, from: now)
+        df.dateFormat = sameYear ? "M月d日 HH:mm" : "yyyy年M月d日 HH:mm"
+        return df.string(from: date)
+    }
+
     private func fmtTok(_ c: Int) -> String {
         c >= 1000 ? (c >= 10000 ? "\(c/1000)k" : String(format: "%.1fk", Double(c)/1000)) : "\(c)"
     }
@@ -1072,6 +1100,10 @@ extension CollectionViewMessageListV3 {
                 [weak self] cell, indexPath, item in
                 self?.configureCell(cell, item: item, indexPath: indexPath)
             }
+            let timeReg = UICollectionView.CellRegistration<SelfSizingCell, MessageListItem> {
+                [weak self] cell, indexPath, item in
+                self?.configureCell(cell, item: item, indexPath: indexPath)
+            }
 
             dataSource = UICollectionViewDiffableDataSource<Section, MessageListItem>(
                 collectionView: collectionView
@@ -1091,6 +1123,8 @@ extension CollectionViewMessageListV3 {
                     return cv.dequeueConfiguredReusableCell(using: blockReg, for: indexPath, item: item)
                 case .assistantFooter:
                     return cv.dequeueConfiguredReusableCell(using: footerReg, for: indexPath, item: item)
+                case .timeDivider:
+                    return cv.dequeueConfiguredReusableCell(using: timeReg, for: indexPath, item: item)
                 }
             }
 
@@ -1401,6 +1435,18 @@ extension CollectionViewMessageListV3 {
                     )
                     .transaction { $0.disablesAnimations = true }
                     .environmentObject(vm)
+                }.minSize(width: 0, height: 0).margins(.all, 0)
+                cell.applyContentConfiguration(config)
+
+            // [10-20 醒醒] 时间胶囊。文案在 cell 配置时现算，滚回去看时
+            // 「3 分钟前」会自动变「2 小时前」。
+            case .timeDivider(let msgId):
+                guard let msgIdx = messageIndex[msgId], msgIdx < messages.count else { return }
+                let message = messages[msgIdx]
+                cell.backgroundColor = .clear
+                let config = UIHostingConfiguration {
+                    ChatTimeDividerView(date: message.createdAt)
+                        .transaction { $0.disablesAnimations = true }
                 }.minSize(width: 0, height: 0).margins(.all, 0)
                 cell.applyContentConfiguration(config)
             }
@@ -2949,7 +2995,14 @@ extension CollectionViewMessageListV3 {
                       let last = messages.last, last.role == .user else { return nil }
                 return last.id
             }()
+            var previousShownMessage: ChatMessage?
             for message in messages {
+                // [10-20 醒醒] 时间胶囊：跟微信一样，跟上一段隔久了就插一条。
+                // 隔 5 分钟以上才插，12 小时内说「几分钟前 / 几小时前」，
+                // 超过就换成日期 + 时刻。
+                if Self.shouldShowTimeDivider(previous: previousShownMessage, current: message) {
+                    newItems.append(.timeDivider(message.id))
+                }
                 switch message.role {
                 case .user, .compactDivider, .systemInfo:
                     newItems.append(.wholeMessage(message.id))
@@ -2989,6 +3042,7 @@ extension CollectionViewMessageListV3 {
                         newItems.append(.assistantFooter(message.id))
                     }
                 }
+                previousShownMessage = message
             }
 
             // Remap height cache + set accurate estimates for ALL item types
@@ -3298,6 +3352,10 @@ extension CollectionViewMessageListV3 {
                     case .assistantTurnSummary:
                         // Turn summary row: fixed 44pt (8+8 padding + 14pt text + 10 bottom margin).
                         layout.setEstimatedHeight(44, at: i)
+
+                    case .timeDivider:
+                        // [10-20 醒醒] 时间胶囊：胶囊 22pt + 上下 6pt 内边距。
+                        layout.setEstimatedHeight(34, at: i)
 
                     case .wholeMessage(let msgId):
                         // [T-ios-user-msg-estimate-tail-jitter] Accurate TextKit
@@ -3951,6 +4009,7 @@ extension CollectionViewMessageListV3 {
             case .wholeMessage(let id): return id
             case .assistantHeader(let id): return id
             case .assistantFooter(let id): return id
+            case .timeDivider(let id): return id
             case .assistantBlock(let mid, _), .assistantToolGroup(let mid, _),
                  .assistantTurnSummary(let mid, _): return mid
             }
@@ -4023,6 +4082,9 @@ extension CollectionViewMessageListV3 {
             case .assistantFooter(let id):
                 let c = msg(id)?.blocks.first?.content ?? ""
                 return "f#\(digest(c))"
+            case .timeDivider(let id):
+                // 时间胶囊的高度是固定的，内容只影响宽度不换行。
+                return "t#\(id.uuidString)"
             case .assistantBlock(let mid, let bid):
                 guard let b = msg(mid)?.blocks.first(where: { $0.id == bid }) else { return "b#?" }
                 let c = b.content
@@ -4060,6 +4122,8 @@ extension CollectionViewMessageListV3 {
                 return "h:\(id.uuidString)"
             case .assistantFooter(let id):
                 return "f:\(id.uuidString)"
+            case .timeDivider(let id):
+                return "t:\(id.uuidString)"
             case .assistantBlock(let mid, let bid):
                 let block = msg(mid)?.blocks.first(where: { $0.id == bid })
                 let n = block?.content.count ?? 0
@@ -4205,6 +4269,9 @@ extension CollectionViewMessageListV3 {
                 return 44
             case .assistantFooter:
                 return 4
+            case .timeDivider:
+                // 胶囊本身 22pt + 上下各 6pt 内边距。
+                return 34
             }
         }
 
@@ -4349,7 +4416,7 @@ extension CollectionViewMessageListV3 {
             case .assistantToolGroup(let mid, _): return mid == messageId
             case .assistantTurnSummary(let mid, _): return mid == messageId
             case .assistantFooter(let mid): return mid == messageId
-            case .wholeMessage, .assistantHeader: return false
+            case .wholeMessage, .assistantHeader, .timeDivider: return false
             }
         }
 

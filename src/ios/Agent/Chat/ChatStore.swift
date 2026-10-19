@@ -5576,7 +5576,8 @@ extension RawMessage {
             blocks.insert(AssistantBlock(kind: .thinking, content: rc), at: 0)
         }
 
-        let msg = ChatMessage(role: uiRole, content: textContent, blocks: blocks)
+        // [10-20 醒醒] 把 DB 时间带到 UI 层——时间胶囊靠它。
+        let msg = ChatMessage(role: uiRole, content: textContent, blocks: blocks, createdAt: createdAt)
         // Deduplicate attachments by path
         var seenPaths = Set<String>()
         msg.attachments = userAttachments.filter { seenPaths.insert($0.path).inserted }

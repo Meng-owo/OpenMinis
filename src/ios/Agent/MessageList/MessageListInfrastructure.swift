@@ -21,6 +21,10 @@ import UIKit
 enum MessageListItem: Hashable {
     /// A complete user message, compact divider, or system info message.
     case wholeMessage(UUID)
+    /// [10-20 醒醒] 居中的时间胶囊。参数是它**后面**那条消息的 id —— 用
+    /// 消息 id 而不是日期做 identity：日期每次刷新都变，塞进 diffable 的
+    /// 主键会导致整列表重载 + 闪。
+    case timeDivider(UUID)
     /// The "sparkles Minis" label row at the top of an assistant turn.
     case assistantHeader(UUID)
     /// A single AssistantBlock within an assistant turn.
@@ -41,7 +45,7 @@ enum MessageListItem: Hashable {
     var messageId: UUID {
         switch self {
         case .wholeMessage(let id), .assistantHeader(let id),
-             .assistantFooter(let id): return id
+             .assistantFooter(let id), .timeDivider(let id): return id
         case .assistantBlock(let msgId, _), .assistantToolGroup(let msgId, _),
              .assistantTurnSummary(let msgId, _): return msgId
         }

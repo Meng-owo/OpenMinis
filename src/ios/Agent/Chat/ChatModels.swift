@@ -103,11 +103,17 @@ final class ChatMessage: Identifiable, ObservableObject {
     var queuedPromptId: UUID?
     let timestamp = Date()
 
-    init(role: ChatMessageRole, content: String, blocks: [AssistantBlock] = [], isQueued: Bool = false) {
+    /// [10-20 醒醒] 消息时间。原来 UI 层完全没有时间，`RawMessage.createdAt`
+    /// 从 DB 读出来就丢了。时间胶囊要它，`toChatMessage` 负责带过来。
+    var createdAt: Date
+
+    init(role: ChatMessageRole, content: String, blocks: [AssistantBlock] = [],
+         isQueued: Bool = false, createdAt: Date = Date()) {
         self.role = role
         self.content = content
         self.blocks = blocks
         self.isQueued = isQueued
+        self.createdAt = createdAt
     }
 
     /// [T-p3-agent-callback-cell] A user-role message that is really an
