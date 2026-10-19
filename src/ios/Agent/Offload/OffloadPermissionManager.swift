@@ -194,9 +194,29 @@ final class OffloadPermissionManager: ObservableObject {
         "offloadPermission.\(command)"
     }
 
+    /// Default level for a command that the user has never touched.
+    ///
+    /// [10-20 醒醒] 隐私类命令（健康/日历/提醒/相册/定位/剪贴板/蓝牙/HomeKit）
+    /// 过去默认 `.bypass`——AI 不问就能读，和「授权过才有」正好相反。
+    /// 现在隐私类一律默认 `.askOnce`：第一次要读必须先弹窗问人，
+    /// 人在弹窗里点「Allow in Session」才放行。
+    /// 非隐私类（天气/地图/闹钟/朗读等，不碰个人数据）保持 `.bypass`，
+    /// 否则每问一次天气都要点一次确认，没人受得了。
+    static func defaultLevel(for command: String) -> OffloadPermissionLevel {
+        let info = allCommands.first { $0.name == command }
+        return info?.category == .privacy ? .askOnce : .bypass
+    }
+
     func permissionLevel(for command: String) -> OffloadPermissionLevel {
-        let raw = defaults.integer(forKey: defaultsKey(for: command))
-        return OffloadPermissionLevel(rawValue: raw) ?? .bypass
+        // integer(forKey:) returns 0 for a missing key, and 0 IS `.bypass` —
+        // so "absent" and "explicitly bypass" are indistinguishable unless we
+        // check for the key first. Without this, the privacy default above
+        // would never fire.
+        let key = defaultsKey(for: command)
+        guard defaults.object(forKey: key) != nil,
+              let level = OffloadPermissionLevel(rawValue: defaults.integer(forKey: key))
+        else { return Self.defaultLevel(for: command) }
+        return level
     }
 
     func setPermissionLevel(_ level: OffloadPermissionLevel, for command: String) {

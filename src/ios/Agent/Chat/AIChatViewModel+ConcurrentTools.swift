@@ -1136,13 +1136,40 @@ extension AIChatViewModel {
             let query = (toolArgs["query"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let start = (toolArgs["start_date"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let end = (toolArgs["end_date"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            var cmd = "apple-calendar query"
-            if !query.isEmpty { cmd += " --query '\(query.replacingOccurrences(of: "'", with: "'\\''"))'" }
+            // [10-20] `apple-calendar query` 这个子命令不存在（实测报
+            // Unknown command 'query'，合法命令只有 list/reminders/freebusy/
+            // calendars/create/…）。改用 list + 时间窗过滤。
+            // 也没有 --query 关键词参数：关键词在本地对 title/notes 过滤。
+            var cmd = "apple-calendar list"
             if !start.isEmpty { cmd += " --start '\(start)'" }
             if !end.isEmpty { cmd += " --end '\(end)'" }
+            if start.isEmpty && end.isEmpty { cmd += " --days 7" }
             do {
                 let res = try await executeCommand(cmd, timeout: 20) { _ in }
-                toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                var out = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                // 关键词过滤：CLI 没有 --query，本地对返回的 JSON 逐条筛
+                // title/notes/location，命中才留。没给 query 就原样返回。
+                if !query.isEmpty, let data = out.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let dataObj = obj["data"] as? [String: Any],
+                   let events = dataObj["events"] as? [[String: Any]] {
+                    let q = query.lowercased()
+                    let hits = events.filter { ev in
+                        ["title", "notes", "location"].contains { field in
+                            (ev[field] as? String)?.lowercased().contains(q) ?? false
+                        }
+                    }
+                    var newData = dataObj
+                    newData["events"] = hits
+                    newData["count"] = hits.count
+                    var newObj = obj
+                    newObj["data"] = newData
+                    if let d = try? JSONSerialization.data(withJSONObject: newObj, options: [.prettyPrinted]),
+                       let s = String(data: d, encoding: .utf8) {
+                        out = s
+                    }
+                }
+                toolOutput = out
                 toolSuccess = res.exitCode == 0
             } catch {
                 toolOutput = "Error: \(error.localizedDescription)"
@@ -1154,9 +1181,24 @@ extension AIChatViewModel {
 
         case "calendarCreate":
             let title = (toolArgs["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let start = (toolArgs["start_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            let end = (toolArgs["end_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var start = (toolArgs["start_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var end = (toolArgs["end_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let notes = (toolArgs["notes"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            // [10-20] CLI 只认 ISO 8601（`2026-10-25T10:00:00`），空格分隔的
+            // `2026-10-25 10:00` 会报 "Invalid date format"。模型很容易照
+            // 工具描述里的例子写成空格版，所以这里兜一手：把日期和时间的
+            // 第一个空格换成 T，其余不动。已经是 T 的保持原样。
+            func normalizeISO(_ raw: String) -> String {
+                guard raw.contains(" ") else { return raw }
+                if let r = raw.range(of: " ") {
+                    var s = raw
+                    s.replaceSubrange(r, with: "T")
+                    return s
+                }
+                return raw
+            }
+            start = normalizeISO(start)
+            end = normalizeISO(end)
             if title.isEmpty || start.isEmpty || end.isEmpty {
                 toolOutput = "Error: 'title', 'start_time' and 'end_time' are required."
                 toolSuccess = false
@@ -1251,12 +1293,39 @@ extension AIChatViewModel {
             }
 
         case "remindersComplete":
-            let title = (toolArgs["title"] as? String ?? (toolArgs["reminder_id"] as? String ?? "")).trimmingCharacters(in: .whitespacesAndNewlines)
-            if title.isEmpty {
-                toolOutput = "Error: 'title' or 'reminder_id' is required."
-                toolSuccess = false
+            // [10-20] `apple-reminders complete` 只认 --id <reminder_id>，
+            // 没有 --title。旧代码把 title 当 --title 传，每次都报
+            // "Required: --id <reminder_id>"，AI 说完成了其实没动。
+            // 现在：给了 id 直接用；只给 title 就先 list 按标题找 id，
+            // 找到唯一一条才完成，找到多条就报错让人选，避免误伤同名提醒。
+            let title = (toolArgs["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let explicitId = (toolArgs["reminder_id"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            var reminderId = explicitId
+            if reminderId.isEmpty && !title.isEmpty {
+                let listCmd = "apple-reminders list --incomplete --limit 200"
+                if let res = try? await executeCommand(listCmd, timeout: 20, lineCallback: { _ in }),
+                   let data = res.output.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let dataObj = obj["data"] as? [String: Any],
+                   let items = dataObj["reminders"] as? [[String: Any]] {
+                    let matches = items.filter {
+                        (($0["title"] as? String) ?? "").caseInsensitiveCompare(title) == .orderedSame
+                    }
+                    if matches.count == 1 {
+                        reminderId = (matches[0]["id"] as? String) ?? ""
+                    } else if matches.count > 1 {
+                        toolOutput = "Error: 有 \(matches.count) 条提醒都叫「\(title)」，请指定 reminder_id 再试。"
+                        toolSuccess = false
+                    }
+                }
+            }
+            if reminderId.isEmpty {
+                if toolOutput.isEmpty {
+                    toolOutput = "Error: 'reminder_id' is required (or a 'title' that matches exactly one reminder)."
+                    toolSuccess = false
+                }
             } else {
-                let cmd = "apple-reminders complete --title '\(title.replacingOccurrences(of: "'", with: "'\\''"))'"
+                let cmd = "apple-reminders complete --id '\(reminderId.replacingOccurrences(of: "'", with: "'\\''"))'"
                 do {
                     let res = try await executeCommand(cmd, timeout: 20) { _ in }
                     toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1272,7 +1341,12 @@ extension AIChatViewModel {
 
         case "healthSummary":
             let days = toolArgs["days"] as? Int ?? 1
-            let cmd = "apple-healthkit batch --types step_count,active_energy_burned,distance_walking_running,sleep_analysis --days \(days)"
+                // [10-20] 真名是 steps / active-energy /
+                // distance-walking-running / sleep。旧代码写的
+                // step_count / active_energy_burned / distance_walking_running /
+                // sleep_analysis 四个全不认识，每次都返回「None of the
+                // --types names were recognized」——健康摘要从来没出过数据。
+                let cmd = "apple-healthkit batch --types steps,active-energy,distance-walking-running,sleep --days \(days)"
             do {
                 let res = try await executeCommand(cmd, timeout: 25) { _ in }
                 toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)

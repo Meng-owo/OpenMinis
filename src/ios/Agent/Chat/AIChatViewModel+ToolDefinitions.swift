@@ -352,7 +352,7 @@ extension AIChatViewModel {
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "query": AgentToolParam(type: .string, description: "Optional keyword search query."),
-                "start_date": AgentToolParam(type: .string, description: "Optional start date filter (e.g. '2026-10-12')."),
+                "start_date": AgentToolParam(type: .string, description: "Optional start date filter, ISO 8601 (e.g. '2026-10-12')."),
                 "end_date": AgentToolParam(type: .string, description: "Optional end date filter (e.g. '2026-10-13').")
             ],
             required: [],
@@ -366,8 +366,8 @@ extension AIChatViewModel {
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "title": AgentToolParam(type: .string, description: "Title of the calendar event."),
-                "start_time": AgentToolParam(type: .string, description: "Start time of the event (e.g. '2026-10-12 18:00')."),
-                "end_time": AgentToolParam(type: .string, description: "End time of the event (e.g. '2026-10-12 19:00')."),
+                "start_time": AgentToolParam(type: .string, description: "Start time, ISO 8601 (e.g. '2026-10-12T18:00:00'). A space instead of T is tolerated."),
+                "end_time": AgentToolParam(type: .string, description: "End time, ISO 8601 (e.g. '2026-10-12T19:00:00'). A space instead of T is tolerated."),
                 "notes": AgentToolParam(type: .string, description: "Optional notes or description.")
             ],
             required: ["title", "start_time", "end_time"],
@@ -417,7 +417,7 @@ extension AIChatViewModel {
             parameters: [
                 "tool_title": AgentToolParam(type: .string, description: "Optional summary shown in UI."),
                 "title": AgentToolParam(type: .string, description: "Title of the reminder."),
-                "due_date": AgentToolParam(type: .string, description: "Optional due date (e.g. '2026-10-12 20:00')."),
+                "due_date": AgentToolParam(type: .string, description: "Optional due date, ISO 8601 (e.g. '2026-10-12T20:00:00')."),
                 "notes": AgentToolParam(type: .string, description: "Optional reminder notes."),
                 "list_name": AgentToolParam(type: .string, description: "Optional list name to add to.")
             ],
@@ -624,8 +624,8 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 id: "apple-vision",
                 name: "apple-vision",
                 category: .apple,
-                synopsis: "Image analysis (OCR, barcodes, faces, crop, diff, measure).",
-                quickSyntax: "apple-vision ocr/classify/diff/measure <img...>",
+                synopsis: "Image analysis (OCR, barcodes, faces, similarity, overlap).",
+                quickSyntax: "apple-vision ocr|classify|similarity|overlap <img...>",
                 docRef: "apple-vision --help"
             ),
             CatalogItem(
@@ -649,7 +649,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-maps",
                 category: .apple,
                 synopsis: "POI search, route navigation, and travel ETA.",
-                quickSyntax: "apple-maps search --query ... | route | eta",
+                quickSyntax: "apple-maps search --query <text> --lat <lat> --lon <lon> | route --from ... --to ... | eta",
                 docRef: "apple-maps --help"
             ),
             CatalogItem(
@@ -657,8 +657,8 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-player",
                 category: .apple,
                 synopsis: "Media playback control for audio and video files.",
-                quickSyntax: "apple-player play <file> | pause | resume | stop",
-                docRef: "apple-player --help"
+                quickSyntax: "apple-player play <file> | pause|resume|status|stop <session_id>",
+                docRef: "apple-player --help (play returns a session_id; the rest need it)"
             ),
             CatalogItem(
                 id: "apple-alarm",
@@ -675,6 +675,110 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 synopsis: "Open system URI schemes via iOS system handler (tel:, maps://, settings:).",
                 quickSyntax: "apple-open <url>",
                 docRef: "apple-open --help"
+            ),
+            CatalogItem(
+                id: "apple-device",
+                name: "apple-device",
+                category: .apple,
+                synopsis: "Device facts and battery state (model, OS, CPU, disk, network).",
+                quickSyntax: "apple-device info | battery",
+                docRef: "apple-device --help"
+            ),
+            CatalogItem(
+                id: "apple-clipboard",
+                name: "apple-clipboard",
+                category: .apple,
+                synopsis: "Read, write, or clear the device clipboard.",
+                quickSyntax: "apple-clipboard get | set --text \"...\" | clear | status",
+                docRef: "apple-clipboard --help (privacy: needs the user's permission)"
+            ),
+            CatalogItem(
+                id: "apple-location",
+                name: "apple-location",
+                category: .apple,
+                synopsis: "Current GPS position, reverse geocode, and forward geocode.",
+                quickSyntax: "apple-location current | geocode --lat ... --lng ... | forward --address \"...\"",
+                docRef: "apple-location --help (privacy: needs the user's permission)"
+            ),
+            CatalogItem(
+                id: "apple-photos",
+                name: "apple-photos",
+                category: .apple,
+                synopsis: "Photo library: list, albums, stats, export to /var/minis/offloads/.",
+                quickSyntax: "apple-photos list --limit N | albums | album --name ... | export --limit N",
+                docRef: "apple-photos --help (privacy: needs the user's permission)"
+            ),
+            CatalogItem(
+                id: "apple-calendar",
+                name: "apple-calendar",
+                category: .apple,
+                synopsis: "Calendar events and reminders (list, create, update, delete).",
+                quickSyntax: "apple-calendar list --start <ISO> --end <ISO> | create --title ... --start ... --end ...",
+                docRef: "apple-calendar --help (privacy: reads need permission, writes always ask)"
+            ),
+            CatalogItem(
+                id: "apple-reminders",
+                name: "apple-reminders",
+                category: .apple,
+                synopsis: "Reminders: list, lists, create, update, complete, delete.",
+                quickSyntax: "apple-reminders list | lists | create --title ... | complete --id <id>",
+                docRef: "apple-reminders --help (complete/update/delete need --id, not --title)"
+            ),
+            CatalogItem(
+                id: "apple-weather",
+                name: "apple-weather",
+                category: .apple,
+                synopsis: "WeatherKit forecasts: current, hourly, daily, alerts, report.",
+                quickSyntax: "apple-weather current | hourly | daily | report [--location \"...\"]",
+                docRef: "apple-weather --help"
+            ),
+            CatalogItem(
+                id: "apple-media",
+                name: "apple-media",
+                category: .apple,
+                synopsis: "Now-playing info and Music playback transport control.",
+                quickSyntax: "apple-media now-playing | play | pause | toggle | next | prev | volume",
+                docRef: "apple-media --help"
+            ),
+            CatalogItem(
+                id: "apple-notification",
+                name: "apple-notification",
+                category: .apple,
+                synopsis: "Inspect local notifications (pending, delivered) and auth status.",
+                quickSyntax: "apple-notification pending | delivered | settings",
+                docRef: "apple-notification --help"
+            ),
+            CatalogItem(
+                id: "apple-bluetooth",
+                name: "apple-bluetooth",
+                category: .apple,
+                synopsis: "BLE scan, connect, and read/write characteristics.",
+                quickSyntax: "apple-bluetooth status | scan | connect --uuid ... | read --uuid ... --characteristic ...",
+                docRef: "apple-bluetooth --help (privacy: needs the user's permission)"
+            ),
+            CatalogItem(
+                id: "apple-nfc",
+                name: "apple-nfc",
+                category: .apple,
+                synopsis: "NFC tag reading and NDEF writing (iOS 26+, device dependent).",
+                quickSyntax: "apple-nfc status | scan | write --type text --message \"...\"",
+                docRef: "apple-nfc --help"
+            ),
+            CatalogItem(
+                id: "apple-nlp",
+                name: "apple-nlp",
+                category: .apple,
+                synopsis: "On-device NLP: language detection, tokenize, POS, NER, sentiment.",
+                quickSyntax: "apple-nlp language --text \"...\" | tokenize | pos | sentiment",
+                docRef: "apple-nlp --help"
+            ),
+            CatalogItem(
+                id: "apple-speech",
+                name: "apple-speech",
+                category: .apple,
+                synopsis: "Speech-to-text on an audio file (SFSpeechRecognizer).",
+                quickSyntax: "apple-speech transcribe --source mic --duration 5 | transcribe <audio-file>",
+                docRef: "apple-speech --help"
             ),
             CatalogItem(
                 id: "apple-speak",
