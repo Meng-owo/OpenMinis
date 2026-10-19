@@ -55,6 +55,9 @@ struct AppearanceStudioView: View {
     @State private var wallpaperScope: AppearanceScope = .global
     @State private var userAvatarItem: PhotosPickerItem?
     @State private var assistantAvatarItem: PhotosPickerItem?
+    // [10-19 醒醒] 视觉小说模式的角色立绘
+    @State private var characterArtItem: PhotosPickerItem?
+    @State private var showCharacterArtPicker = false
     @State private var iconPickSlot: QuietIconSlot?
     @State private var iconItem: PhotosPickerItem?
     @State private var thinkingCardItem: PhotosPickerItem?
@@ -741,6 +744,10 @@ struct AppearanceStudioView: View {
                 sliderRow(AppLocalized("字距"), value: letterSpacingBinding, range: -1...3, unit: "pt")
             }
             .modifier(StudioCard(variant: variant))
+
+            // [10-19 醒醒] 视觉小说模式。立绘照 ST 的 waifuMode 做，
+            // 对话框是 Galgame 那种。
+            novelModeCard(variant: variant)
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("正文字体"))
@@ -1447,6 +1454,105 @@ struct AppearanceStudioView: View {
     private var letterSpacingBinding: Binding<Double> {
         Binding(get: { studio.currentThemePack().letterSpacing },
                 set: { studio.setLetterSpacing($0) })
+    }
+
+    // MARK: [10-19 醒醒] 视觉小说模式
+
+    private var novelModeBinding: Binding<AppearanceNovelMode> {
+        Binding(get: { AppearanceNovelMode.parse(studio.currentThemePack().novelMode) },
+                set: { studio.setNovelMode($0) })
+    }
+
+    /// 视觉小说模式卡。
+    ///
+    /// 立绘是照 ST 的 `waifuMode` 做的：全屏角色图 + 聊天窗压底部。
+    /// 对话框是 Galgame 那种：底部半透明框，一次一句，点一下往下推。
+    @ViewBuilder
+    private func novelModeCard(variant: AppearanceVariant) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle(AppLocalized("视觉小说"))
+            Picker("", selection: novelModeBinding) {
+                ForEach(AppearanceNovelMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            Text(AppearanceNovelMode.parse(studio.currentThemePack().novelMode).hint)
+                .font(.system(size: 10.5))
+                .lineSpacing(1.5)
+                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+
+            // 只有立绘和对话框模式才用得上角色图
+            if novelModeBinding.wrappedValue != .off {
+                hairline.padding(.leading, 0).padding(.vertical, 2)
+
+                HStack(spacing: 12) {
+                    if let b64 = studio.currentThemePack().characterArtBase64,
+                       let data = Data(base64Encoded: b64),
+                       let img = UIImage(data: data) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 52, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    } else {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(studio.color(.mutedSurface, variant: variant))
+                            .frame(width: 52, height: 72)
+                            .overlay {
+                                Image(systemName: "person.crop.rectangle")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.6))
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("角色立绘")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        Text("竖图最好，底部对齐铺满。不传就用头像放大。")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
+                    }
+
+                    Spacer()
+
+                    Button {
+                        showCharacterArtPicker = true
+                    } label: {
+                        Text(studio.currentThemePack().characterArtBase64 == nil ? "选择" : "更换")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .buttonStyle(.borderless)
+                }
+
+                if studio.currentThemePack().characterArtBase64 != nil {
+                    Button(role: .destructive) {
+                        studio.setCharacterArt(nil)
+                    } label: {
+                        Text("移除立绘")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+        }
+        .modifier(StudioCard(variant: variant))
+        .photosPicker(isPresented: $showCharacterArtPicker,
+                      selection: $characterArtItem,
+                      matching: .images)
+        .onChange(of: characterArtItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let img = UIImage(data: data),
+                   let jpeg = img.jpegData(compressionQuality: 0.82) {
+                    await MainActor.run {
+                        studio.setCharacterArt(jpeg.base64EncodedString())
+                        characterArtItem = nil
+                    }
+                }
+            }
+        }
     }
     private var rowBackgroundBinding: Binding<Color> {
         Binding(

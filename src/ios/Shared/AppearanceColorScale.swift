@@ -508,3 +508,44 @@ enum AppearanceChatDisplay: String, CaseIterable, Identifiable, Codable {
         }
     }
 }
+
+// MARK: - 视觉小说模式
+//
+// [10-19 醒醒] 她要"两个都做"，所以这里区分成三种。
+//
+// 查过 ST 源码：`waifuMode` 的真实行为是**全屏角色立绘 + 聊天窗压到底部 40%**
+// （`mobile-styles.css:447` 的 `body.waifuMode #sheld { height: 40dvh;
+// top: 60dvh }`，`expression-holder` 撑满 `100vh`）。**不是**半透明对话框。
+//
+// 她原本说的是"底部半透明对话框 + 头像挂左边 + 一句一句推台词"，那更像
+// Galgame，ST 里没有这个模式。两个都实现，她自己选。
+enum AppearanceNovelMode: String, CaseIterable, Identifiable, Codable {
+    /// 关。正常聊天。
+    case off
+    /// ST 的 waifuMode：全屏立绘，聊天窗压到底部 40%，可上滑展开。
+    case stage
+    /// Galgame：底部半透明对话框，一次只显示一条，点一下推下一条。
+    case galgame
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "关"
+        case .stage: return "立绘"
+        case .galgame: return "对话框"
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .off: return "正常聊天，不改变消息显示"
+        case .stage: return "全屏角色立绘，聊天窗压到底部，上滑展开"
+        case .galgame: return "底部半透明对话框，一次一句，点一下往下推"
+        }
+    }
+
+    static func parse(_ raw: String) -> AppearanceNovelMode {
+        AppearanceNovelMode(rawValue: raw) ?? .off
+    }
+}

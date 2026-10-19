@@ -51,6 +51,8 @@ enum SillyTavernTheme {
         var lineHeight: Double?
         var letterSpacing: Double?
         var bubbleRadius: Double?
+        /// [10-19 醒醒] ST 的 waifuMode → 我们的立绘模式。
+        var novelMode: AppearanceNovelMode
         var warnings: [String]
     }
 
@@ -255,8 +257,11 @@ enum SillyTavernTheme {
             }
         }()
 
-        if (obj["waifuMode"] as? Bool) == true {
-            warnings.append("视觉小说模式（waifuMode）还没做，这次先跳过。")
+        // [10-19 醒醒] waifuMode 现在真做了——照 ST 的行为：全屏立绘 +
+        // 聊天窗压到底部 40%（mobile-styles.css:447）。
+        let waifu = (obj["waifuMode"] as? Bool) == true
+        if waifu {
+            warnings.append("已开启立绘模式。记得在装扮页传一张角色立绘。")
         }
 
         return Imported(
@@ -271,6 +276,7 @@ enum SillyTavernTheme {
             lineHeight: lineHeight,
             letterSpacing: letterSpacing,
             bubbleRadius: cssRadius,
+            novelMode: waifu ? .stage : .off,
             warnings: warnings
         )
     }

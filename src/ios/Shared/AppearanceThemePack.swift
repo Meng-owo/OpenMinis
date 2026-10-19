@@ -47,6 +47,10 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
     var letterSpacing: Double
     /// 选项行背景。nil = 跟随 surface。
     var rowBackgroundHex: String?
+    /// [10-19 醒醒] 视觉小说模式：关 / 立绘 / 对话框。
+    var novelMode: String
+    /// 立绘模式用的角色全身图（base64 JPEG）。nil = 退回头像放大。
+    var characterArtBase64: String?
 
     static let currentKey = "appearanceStudio.themePack.v1"
     static let schemaVersion = 5
@@ -126,7 +130,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         chatDisplay: AppearanceChatDisplay.bubbles.rawValue,
         lineHeight: 1.0,
         letterSpacing: 0,
-        rowBackgroundHex: nil
+        rowBackgroundHex: nil,
+        novelMode: AppearanceNovelMode.off.rawValue,
+        characterArtBase64: nil
     )
 
     var userStyle: AppearanceBubbleStyle { AppearanceBubbleStyle.parse(userBubbleStyle) }
@@ -179,6 +185,8 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             "letterSpacing": letterSpacing,
         ]
         if let rowBackgroundHex { obj["rowBackgroundHex"] = rowBackgroundHex }
+        obj["novelMode"] = AppearanceNovelMode.parse(novelMode).rawValue
+        if let characterArtBase64 { obj["characterArtBase64"] = characterArtBase64 }
         if let listRowFillHex { obj["listRowFillHex"] = listRowFillHex }
         if let wallpaperShade { obj["wallpaperShade"] = wallpaperShade }
         if let surfaceOpacity { obj["surfaceOpacity"] = surfaceOpacity }
@@ -202,6 +210,7 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         "wallpaperShade", "surfaceOpacity",
         "colorsLight", "colorsDark", "wallpaperJPEGBase64",
         "avatarShape", "chatDisplay", "lineHeight", "letterSpacing", "rowBackgroundHex",
+        "novelMode", "characterArtBase64",
     ]
 
     /// True when `raw` carries at least one known theme-pack field.
@@ -275,7 +284,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             chatDisplay: AppearanceChatDisplay.parse(str("chatDisplay", fallback: base.chatDisplay)).rawValue,
             lineHeight: min(2.2, max(0.9, num("lineHeight", fallback: base.lineHeight))),
             letterSpacing: min(3, max(-1, num("letterSpacing", fallback: base.letterSpacing))),
-            rowBackgroundHex: (raw["rowBackgroundHex"] as? String).map(normalizeHex)
+            rowBackgroundHex: (raw["rowBackgroundHex"] as? String).map(normalizeHex),
+            novelMode: AppearanceNovelMode.parse(str("novelMode", fallback: base.novelMode)).rawValue,
+            characterArtBase64: raw["characterArtBase64"] as? String
         )
         if pack.id.isEmpty { pack.id = base.id }
         if pack.name.isEmpty { pack.name = pack.id }
@@ -798,6 +809,21 @@ extension AppearanceStudio {
         persistPack(pack)
     }
 
+    // MARK: [10-19 醒醒] 视觉小说模式
+
+    func setNovelMode(_ mode: AppearanceNovelMode) {
+        var pack = currentThemePack()
+        pack.novelMode = mode.rawValue
+        persistPack(pack)
+    }
+
+    /// 立绘图。传 nil 清掉。
+    func setCharacterArt(_ base64: String?) {
+        var pack = currentThemePack()
+        pack.characterArtBase64 = base64
+        persistPack(pack)
+    }
+
     func setLineHeight(_ value: Double) {
         var pack = currentThemePack()
         pack.lineHeight = min(2.2, max(0.9, value))
@@ -823,6 +849,8 @@ extension AppearanceStudio {
         pack.name = imported.name
         pack.avatarShape = imported.avatarShape.rawValue
         pack.chatDisplay = imported.chatDisplay.rawValue
+        // [10-19 醒醒] waifuMode → 立绘模式
+        pack.novelMode = imported.novelMode.rawValue
         if let lh = imported.lineHeight { pack.lineHeight = min(2.2, max(0.9, lh)) }
         if let ls = imported.letterSpacing { pack.letterSpacing = min(3, max(-1, ls)) }
         if let r = imported.bubbleRadius {

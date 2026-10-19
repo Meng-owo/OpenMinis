@@ -474,6 +474,7 @@
 		E5PERSONA01 /* PersonaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PERSONA101 /* PersonaStore.swift */; };
 		XMSTYLE024 /* GlobalRegexStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE124 /* GlobalRegexStore.swift */; };
 		XMSTYLE025 /* GlobalRegexRulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE125 /* GlobalRegexRulesView.swift */; };
+		XMSTYLE026 /* NovelModeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = XMSTYLE126 /* NovelModeViews.swift */; };
 		E5SOUL002 /* SoulSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SOUL102 /* SoulSettingsView.swift */; };
 		E5SVP0021 /* ShadowVoiceProviderDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SVP0031 /* ShadowVoiceProviderDetailView.swift */; };
 		E5T000001 /* SessionEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5T000011 /* SessionEntity.swift */; };
@@ -1274,6 +1275,7 @@
 		E5PERSONA101 /* PersonaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonaStore.swift; sourceTree = "<group>"; };
 		XMSTYLE124 /* GlobalRegexStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalRegexStore.swift; sourceTree = "<group>"; };
 		XMSTYLE125 /* GlobalRegexRulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "GlobalRegexRulesView.swift"; path = "Views/Chat/GlobalRegexRulesView.swift"; sourceTree = SOURCE_ROOT; };
+		XMSTYLE126 /* NovelModeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "NovelModeViews.swift"; path = "Views/Chat/NovelModeViews.swift"; sourceTree = SOURCE_ROOT; };
 		E5SOUL102 /* SoulSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoulSettingsView.swift; sourceTree = "<group>"; };
 		E5SVP0031 /* ShadowVoiceProviderDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShadowVoiceProviderDetailView.swift; sourceTree = "<group>"; };
 		E5T000011 /* SessionEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionEntity.swift; sourceTree = "<group>"; };
@@ -2589,6 +2591,7 @@
 				E5SRS0011 /* SessionRefreshScheduler.swift */,
 				E5PCV0011 /* PersonaContactsView.swift */,
 				XMSTYLE125 /* GlobalRegexRulesView.swift */,
+				XMSTYLE126 /* NovelModeViews.swift */,
 
 				E5PERSONA104 /* PersonaSettingsView.swift */,
 				E5N0000122F3B941A00049557 /* SessionSkillsView.swift */,
@@ -3482,6 +3485,7 @@
 				E5PERSONA01 /* PersonaStore.swift in Sources */,
 				XMSTYLE024 /* GlobalRegexStore.swift in Sources */,
 				XMSTYLE025 /* GlobalRegexRulesView.swift in Sources */,
+				XMSTYLE026 /* NovelModeViews.swift in Sources */,
 				E5SOUL002 /* SoulSettingsView.swift in Sources */,
 				E5LOCK002 /* FaceIDProtectionSettingsView.swift in Sources */,
 				E5LOCK003 /* AppLockOverlay.swift in Sources */,

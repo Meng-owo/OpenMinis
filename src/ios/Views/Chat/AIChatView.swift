@@ -573,8 +573,17 @@ struct AIChatView: View {
                          onTakeoverDone: { vm.resumeFromBrowserTakeover() })
     }
 
+    /// [10-19 醒醒] 视觉小说模式。读主题包，改设置立刻生效。
+    private var novelMode: AppearanceNovelMode {
+        AppearanceNovelMode.parse(AppearanceStudio.shared.currentThemePack().novelMode)
+    }
+
     var body: some View {
         ZStack {
+            // [10-19 醒醒] 视觉小说模式。立绘铺在最底下，不改消息数据。
+            if novelMode == .stage || novelMode == .galgame {
+                NovelStageBackdrop(personaID: vm.sessionPersonaId ?? PersonaStore.currentID())
+            }
             // Messages — floating tool preview overlaid at bottom
             messagesArea
                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -741,6 +750,22 @@ struct AIChatView: View {
                     // chat.
                     minisLogger.warning("[SpinnerTrace] isLoadingSession → \(newValue) sid=\(vm.sessionId?.prefix(8) ?? "nil") msgs=\(vm.messages.count)")
                 }
+
+            // [10-19 醒醒] Galgame 对话框。浮在消息区上方、输入栏上方。
+            // 只在「对话框」模式下出现；立绘模式不挡消息。
+            if novelMode == .galgame {
+                VStack {
+                    Spacer()
+                    NovelDialogueBox(
+                        messages: vm.messages,
+                        personaID: vm.sessionPersonaId ?? PersonaStore.currentID()
+                    )
+                    // 让开输入栏高度，不然对话框压在输入框上
+                    .padding(.bottom, inputBarHeight + 8)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeInOut(duration: 0.2), value: novelMode)
+            }
 
             // Full-screen kernel boot overlay
             kernelBootOverlay
