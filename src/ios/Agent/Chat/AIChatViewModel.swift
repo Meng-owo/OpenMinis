@@ -4601,18 +4601,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             self.promptQueue.removeAll()
             logger.info("📨[DRAIN] Draining \(queued.count) queued prompt(s)")
 
-            let queuedIds = Set(queued.map(\.id))
-            for msg in self.messages where msg.isQueued {
-                if let pid = msg.queuedPromptId, queuedIds.contains(pid) {
-                    // Queue drain: isQueued true -> false. The withdraw button
-                    // disappears here, so the bubble's wrap width widens by
-                    // ~28pt and any measurement taken while queued is
-                    // superseded from this point on.
-                    msg.isQueued = false
-                }
-            }
-            self.scrollToBottomSignal.send()
-
             let sid = self.sessionId ?? "unknown"
             let uploadsDir = Self.minisUploadsDir(for: sid)
             let isoFmt = ISO8601DateFormatter()
@@ -4620,49 +4608,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let nowStr = isoFmt.string(from: Date())
             try? FileManager.default.createDirectory(at: uploadsDir, withIntermediateDirectories: true)
 
-            var combinedParts: [AgentContentPart] = []
-            for prompt in queued {
-                if !prompt.attachments.isEmpty {
-                    let (attParts, attMetas) = self.processAttachments(prompt.attachments, uploadsDir: uploadsDir, nowStr: nowStr)
-                    combinedParts.append(contentsOf: attParts)
-                    Self.cleanupAttachmentFiles(prompt.attachments)
-                    if let chatMsg = self.messages.first(where: { $0.queuedPromptId == prompt.id }) {
-                        chatMsg.attachments = attMetas
-                        chatMsg.inputAttachments = []
-                        // [T-ios-user-attach-mount-invalidate #182-followup] The
-                        // mount above is an in-place +70pt/row content change on
-                        // a cell whose item identity does not move; without this
-                        // the tile-less height measured moments earlier stays
-                        // cached and the bubble truncates (see the Name's doc).
-                        NotificationCenter.default.post(name: .minisUserAttachmentsMounted, object: chatMsg.id)
-                    }
-                }
-                if !prompt.text.isEmpty {
-                    combinedParts.append(.text(prompt.text))
-                }
-            }
-
-            let queueAgentMsg = AgentMessage(role: .user, parts: combinedParts)
-            let qIdx = self.agentHistory.count
-            self.agentHistory.append(queueAgentMsg)
-            if let pid = await self.persistAgentMessage(queueAgentMsg), qIdx < self.agentHistory.count {
-                self.agentHistory[qIdx].dbMessageId = pid
-                // [T-retry-id-anchor 09-13] N queued UI rows fold into ONE
-                // history entry — every folded row gets the same dbRowId, so a
-                // retry from ANY of them anchors at this merged entry (exactly
-                // the bubble-counting bug: 2 UI rows vs 1 history bubble).
-                // [T-ios-retry-db-drift 09-27] Stamp ONLY this batch's rows.
-                // queuedPromptId is never cleared after a drain, so the old
-                // `!= nil` filter re-stamped rows from PREVIOUS batches with
-                // this entry's id: their retry anchor then landed on a LATER
-                // merged entry and kept the model's own previous answer (plus
-                // user turns no longer visible in the UI) in the rerun context.
-                for msg in self.messages {
-                    if let qid = msg.queuedPromptId, queuedIds.contains(qid) {
-                        msg.dbRowId = pid
-                    }
-                }
-            }
+            // [10-20 醒醒] 逐条进历史，每条独立。这里原来把所有排队消息
+            // 压成一条 user turn，模型只读到一段话，分不出是几句。
+            // isQueued 的翻转让 appendQueuedPromptsAsOwnTurns 自己负责，
+            // 顺序是「先标送达中（蓝点）→ 落库 → 再翻 false（点消失）」。
+            await self.appendQueuedPromptsAsOwnTurns(queued, uploadsDir: uploadsDir, nowStr: nowStr)
+            self.scrollToBottomSignal.send()
 
             do {
                 try await self.runAgentLoop()
@@ -4738,6 +4689,80 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// instead of breaking). `msgIdx` / `committedBlockCount` are advanced to the
     /// new assistant message. The caller must have already persisted the just-
     /// finished assistant reply before calling this.
+    /// [10-20 醒醒] 把排队消息**逐条**写进 agentHistory，不合并。
+    ///
+    /// 她定的：多条排队消息每条独立，模型该看见几句就是几句。
+    /// 合并会丢掉「这是第二句」这件事，模型只当一段话读。
+    ///
+    /// 逐条追加会遇到同一角色的连续折叠问题——`mergeConsecutiveSameRole`
+    /// 出站时把相邻 user 合进一个 content list，界面上两条就变一条了。
+    /// 所以每两条之间垫一条 assistant 桥（`RawMessage.internalBridgeText`），
+    /// 这个常量是会话重载时识别「内部行、不要显示成气泡」的凭据，
+    /// 沿用它，UI 不会多出气泡。
+    ///
+    /// 返回每条对应持久化后的 dbRowId（顺序与入参一致），失败的位置为 nil。
+    @discardableResult
+    private func appendQueuedPromptsAsOwnTurns(
+        _ queued: [QueuedPrompt],
+        uploadsDir: String,
+        nowStr: String
+    ) async -> [String?] {
+        var rowIds: [String?] = []
+        for prompt in queued {
+            // 附件先落盘，UI 上的缩略图跟着换成正式 meta。
+            var parts: [AgentContentPart] = []
+            if !prompt.attachments.isEmpty {
+                let (attParts, attMetas) = processAttachments(prompt.attachments, uploadsDir: uploadsDir, nowStr: nowStr)
+                parts.append(contentsOf: attParts)
+                Self.cleanupAttachmentFiles(prompt.attachments)
+                if let chatMsg = messages.first(where: { $0.queuedPromptId == prompt.id }) {
+                    chatMsg.attachments = attMetas
+                    chatMsg.inputAttachments = []
+                    NotificationCenter.default.post(name: .minisUserAttachmentsMounted, object: chatMsg.id)
+                }
+            }
+            if !prompt.text.isEmpty { parts.append(.text(prompt.text)) }
+            // 空消息（无文字无附件）是 400，跳过。
+            guard !parts.isEmpty else { rowIds.append(nil); continue }
+
+            // 上一条也是 user 就垫一条桥，防止出站被折叠。
+            if agentHistory.last?.role == .user {
+                let bridge = AgentMessage(role: .assistant, parts: [.text(RawMessage.internalBridgeText)])
+                let bridgeIdx = agentHistory.count
+                agentHistory.append(bridge)
+                if let bid = await persistAgentMessage(bridge, snapshots: [:]), bridgeIdx < agentHistory.count {
+                    agentHistory[bridgeIdx].dbMessageId = bid
+                }
+            }
+
+            // 送达中：气泡旁的小圆点变蓝。
+            if let chatMsg = messages.first(where: { $0.queuedPromptId == prompt.id }) {
+                chatMsg.isDelivering = true
+            }
+
+            let msg = AgentMessage(role: .user, parts: parts)
+            let idx = agentHistory.count
+            agentHistory.append(msg)
+            var rowId: String?
+            if let pid = await persistAgentMessage(msg, snapshots: [:]), idx < agentHistory.count {
+                agentHistory[idx].dbMessageId = pid
+                rowId = pid
+                // 现在一条历史对一条 UI 行，1:1 打标，不再是「N 行共享一个 id」。
+                if let chatMsg = messages.first(where: { $0.queuedPromptId == prompt.id }) {
+                    chatMsg.dbRowId = pid
+                }
+            }
+            rowIds.append(rowId)
+
+            // 已进上下文：isQueued 翻 false，小圆点消失，撤回按钮也一起消失。
+            if let chatMsg = messages.first(where: { $0.queuedPromptId == prompt.id }) {
+                chatMsg.isDelivering = false
+                chatMsg.isQueued = false
+            }
+        }
+        return rowIds
+    }
+
     private func injectQueuedPromptsAsNewTurn(
         msgIdx: inout Int,
         committedBlockCount: inout Int,
@@ -4746,15 +4771,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         guard !promptQueue.isEmpty else { return false }
         let queued = promptQueue
         promptQueue.removeAll()
-        // Mark corresponding chat messages as no longer queued (remove dashed border + X)
-        let queuedIds = Set(queued.map(\.id))
-        for msg in messages where msg.isQueued {
-            if let pid = msg.queuedPromptId, queuedIds.contains(pid) {
-                msg.isQueued = false
-            }
-        }
 
-        // Build combined parts from all queued prompts (text + attachments)
         let qSid = sessionId ?? "unknown"
         let qUploadsDir = Self.minisUploadsDir(for: qSid)
         let qIsoFormatter = ISO8601DateFormatter()
@@ -4762,71 +4779,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let qNowStr = qIsoFormatter.string(from: Date())
         try? FileManager.default.createDirectory(at: qUploadsDir, withIntermediateDirectories: true)
 
-        var qCombinedParts: [AgentContentPart] = []
-        for prompt in queued {
-            if !prompt.attachments.isEmpty {
-                let (attParts, attMetas) = processAttachments(prompt.attachments, uploadsDir: qUploadsDir, nowStr: qNowStr)
-                qCombinedParts.append(contentsOf: attParts)
-                Self.cleanupAttachmentFiles(prompt.attachments)
-                // Update the corresponding ChatMessage so attachment thumbnails appear in the UI
-                if let chatMsg = messages.first(where: { $0.queuedPromptId == prompt.id }) {
-                    chatMsg.attachments = attMetas
-                    chatMsg.inputAttachments = []
-                    // [T-ios-user-attach-mount-invalidate] See the sibling drain site.
-                    NotificationCenter.default.post(name: .minisUserAttachmentsMounted, object: chatMsg.id)
-                }
-            }
-            if !prompt.text.isEmpty {
-                qCombinedParts.append(.text(prompt.text))
-            }
-        }
-
-        // Guard: if every queued prompt was empty (no text, no attachments) the
-        // combined parts are empty — an empty user message is a 400. Skip.
-        guard !qCombinedParts.isEmpty else {
+        // [10-20 醒醒] 逐条进历史，每条独立。
+        let rowIds = await appendQueuedPromptsAsOwnTurns(queued, uploadsDir: qUploadsDir, nowStr: qNowStr)
+        // 全空就收工。
+        guard rowIds.contains(where: { $0 != nil }) else {
             logger.warning("injectQueuedPromptsAsNewTurn: \(queued.count) queued prompt(s) produced no content, skipping")
             return false
         }
 
-        // [T-ios-queued-message-interrupt-on-toolclose] When we interrupt mid-tool-
-        // loop (right after a tool call closes), the agentHistory tail is
-        // assistant(tool_use) → user(tool_result). Appending the queued user
-        // message directly would make two consecutive .user entries that
-        // mergeConsecutiveSameRole folds into one (tool_result + queued text) —
-        // exactly the bug where the model reads the queued prompt as in-loop
-        // context instead of a new turn (#579). Insert a minimal assistant bridge
-        // so the sequence is …user(tool_result) → assistant(interrupted) →
-        // user(queued) → assistant(responds). Only needed when the tail is .user;
-        // in the no-tool finish-branch the tail is already an assistant reply.
-        if agentHistory.last?.role == .user {
-            // Text MUST stay byte-identical to RawMessage.internalBridgeText —
-            // that constant is how the session-reload path recognizes this row
-            // as internal and keeps it out of the visible chat.
-            // [T-bridge-message-ui-leak]
-            let bridge = AgentMessage(role: .assistant, parts: [.text(RawMessage.internalBridgeText)])
-            let bridgeIdx = agentHistory.count
-            agentHistory.append(bridge)
-            if let pid = await persistAgentMessage(bridge, snapshots: [:]), bridgeIdx < agentHistory.count {
-                agentHistory[bridgeIdx].dbMessageId = pid
-            }
-        }
-
-        let queueMsg = AgentMessage(role: .user, parts: qCombinedParts)
-        let queueIdx = agentHistory.count
-        agentHistory.append(queueMsg)
-        if let pid = await persistAgentMessage(queueMsg, snapshots: [:]), queueIdx < agentHistory.count {
-            agentHistory[queueIdx].dbMessageId = pid
-            // [T-retry-id-anchor 09-13] N queued UI rows fold into ONE history
-            // entry here too — give every folded row the shared dbRowId.
-            // [T-ios-retry-db-drift 09-27] Same scope fix as the drain site:
-            // rows from earlier batches keep the id stamped when THEY drained
-            // (their own merged entry), not this batch's.
-            for msg in messages {
-                if let qid = msg.queuedPromptId, queuedIds.contains(qid) {
-                    msg.dbRowId = pid
-                }
-            }
-        }
         // Cache markdown on the completed assistant message before starting a new one
         if msgIdx < messages.count {
             for i in messages[msgIdx].blocks.indices {

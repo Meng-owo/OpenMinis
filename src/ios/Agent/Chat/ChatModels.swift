@@ -56,6 +56,11 @@ final class ChatMessage: Identifiable, ObservableObject {
     @Published var isAwaitingModelResponse = false
     /// True when this message is queued but not yet injected into the agent loop.
     @Published var isQueued = false
+    /// [10-20 醒醒] 排队消息的送达状态，驱动气泡旁边那颗小圆点：
+    ///   - `isQueued == true, isDelivering == false` → 灰点，待注入
+    ///   - `isQueued == true, isDelivering == true`  → 蓝点，正在注入
+    ///   - `isQueued == false`                       → 圆点消失，已进上下文
+    @Published var isDelivering = false
     /// True if this message is from the compacted history zone (read-only, no actions).
     @Published var isCompactedHistory = false
     /// True when this compact divider is still loading (LLM generating summary).

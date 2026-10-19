@@ -173,14 +173,11 @@ private struct UserBubbleSurface: ViewModifier {
             AppearanceStudio.shared.currentThemePack().chatDisplay)
 
         if isQueued {
-            // Provisional look, identical on every OS version.
+            // [10-20 醒醒] 排队消息不再画虚线——她要看的是「真气泡」，
+            // 状态交给气泡旁边那颗小圆点（灰=待注入/蓝=送达中/消失=已进上下文）。
+            // 底色仍压到 0.72，跟已发送的实心气泡留一线可辨。
             content
-                .background(shape.fill(Color.clear))
-                .overlay(
-                    shape
-                        .stroke(ChatColors.secondaryText.opacity(0.5),
-                                style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                )
+                .background(shape.fill(ChatColors.userBubble.opacity(0.72)))
         } else if display == .flat || display == .document {
             content
         } else if #available(iOS 26.0, *) {
@@ -202,6 +199,32 @@ private struct UserBubbleSurface: ViewModifier {
                 .background(shape.fill(ChatColors.userBubble))
         } else {
             content.background(shape.fill(ChatColors.userBubble))
+        }
+    }
+}
+
+/// [10-20 醒醒] 排队消息的状态点，叠在气泡右上角。
+///
+/// 用 overlay 而不是塞进 HStack：塞进去会改气泡的可用宽度，
+/// 撤回按钮那 28pt 是量高代码（`withdrawButtonWidth`）里算过的，
+/// 再多一个元素就得同步改测量，容易漏。overlay 不参与布局，零风险。
+///
+/// 灰 = 还在队列里等注入；蓝 = 正在送进上下文；isQueued 翻 false 就整颗消失。
+private struct QueuedStatusDot: ViewModifier {
+    let isQueued: Bool
+    let isDelivering: Bool
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .topTrailing) {
+            if isQueued {
+                Circle()
+                    .fill(isDelivering
+                          ? ChatColors.accent
+                          : ChatColors.secondaryText.opacity(0.55))
+                    .frame(width: 6, height: 6)
+                    .offset(x: 3, y: -3)
+                    .accessibilityLabel(isDelivering ? "正在送达" : "等待发送")
+            }
         }
     }
 }
@@ -481,6 +504,8 @@ struct ChatMessageRow: View {
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
                                         .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                        .modifier(QueuedStatusDot(isQueued: message.isQueued,
+                                                                  isDelivering: message.isDelivering))
                                         .id(appearanceStudio.themePackRevision)
 
                                     if message.isQueued, let onWithdraw {
@@ -506,6 +531,8 @@ struct ChatMessageRow: View {
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
                                         .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                        .modifier(QueuedStatusDot(isQueued: message.isQueued,
+                                                                  isDelivering: message.isDelivering))
                                         .id(appearanceStudio.themePackRevision)
 
                                     if message.isQueued, let onWithdraw {
@@ -529,6 +556,8 @@ struct ChatMessageRow: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                                 .modifier(UserBubbleSurface(isQueued: message.isQueued))
+                                .modifier(QueuedStatusDot(isQueued: message.isQueued,
+                                                          isDelivering: message.isDelivering))
                                 .id(appearanceStudio.themePackRevision)
 
                             if message.isQueued {
