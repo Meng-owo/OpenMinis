@@ -3005,7 +3005,7 @@ extension CollectionViewMessageListV3 {
                 // [10-20 醒醒] 时间胶囊：跟微信一样，跟上一段隔久了就插一条。
                 // 隔 5 分钟以上才插，12 小时内说「几分钟前 / 几小时前」，
                 // 超过就换成日期 + 时刻。
-                if Self.shouldShowTimeDivider(previous: previousShownMessage, current: message) {
+                if CollectionViewMessageListV3.shouldShowTimeDivider(previous: previousShownMessage, current: message) {
                     newItems.append(.timeDivider(message.id))
                 }
                 switch message.role {
