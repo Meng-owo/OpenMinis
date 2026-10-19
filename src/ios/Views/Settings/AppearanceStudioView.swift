@@ -354,7 +354,7 @@ struct AppearanceStudioView: View {
     // MARK: - 配色
 
     private var palettePage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             shuffleCard
             presetsCard
             contrastCard
@@ -726,7 +726,7 @@ struct AppearanceStudioView: View {
     // MARK: - 气泡
 
     private var bubblesPage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("气泡颜色"))
                 ForEach([AppearanceColorRole.userBubble, .assistantBubble], id: \.self) { role in
@@ -818,7 +818,7 @@ struct AppearanceStudioView: View {
     // MARK: - 背景
 
     private var backdropPage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("壁纸"))
                 Picker(AppLocalized("用于"), selection: $wallpaperScope) {
@@ -933,7 +933,7 @@ struct AppearanceStudioView: View {
     // MARK: - 图标
 
     private var iconsPage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("设置行图标"))
                 ForEach(QuietIconSlot.allCases) { slot in
@@ -973,28 +973,84 @@ struct AppearanceStudioView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("贴图"))
+
+                // [10-19 醒醒] 她说"贴图菜单浮在中间挡住内容"。
+                // `PhotosPicker` 直接当按钮用时，系统会把它弹在屏幕中间，
+                // 盖住下面的东西。改成普通 Button + `.photosPicker` 修饰器，
+                // 弹出位置跟触发点绑定，行为跟系统设置页一致。
+                // 同时把两行排成 iOS 列表行样式（图标 + 文字 + 箭头位）。
                 PhotosPicker(selection: $thinkingCardItem, matching: .images) {
-                    Label(studio.hasThinkingCardImage()
-                          ? AppLocalized("换 thinking 卡片图") : AppLocalized("给 thinking 卡片贴图"),
-                          systemImage: "photo.on.rectangle").font(.system(size: 13))
+                    HStack(spacing: 10) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(studio.color(.accent, variant: variant))
+                            .frame(width: 22)
+                        Text(studio.hasThinkingCardImage()
+                             ? AppLocalized("换 thinking 卡片图")
+                             : AppLocalized("给 thinking 卡片贴图"))
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+
                 if studio.hasThinkingCardImage() {
                     sliderRow(AppLocalized("卡片图浓度"), value: thinkingCardOpacityBinding, range: 0.05...1)
-                    Button(AppLocalized("去掉 thinking 卡片图")) { studio.removeThinkingCardImage() }
-                        .font(.system(size: 12))
+                    Button {
+                        studio.removeThinkingCardImage()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 12))
+                                .frame(width: 22)
+                            Text(AppLocalized("去掉 thinking 卡片图"))
+                                .font(.system(size: 13))
+                            Spacer(minLength: 0)
+                        }
                         .foregroundStyle(studio.color(.destructive, variant: variant))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
 
+                hairline
+
                 PhotosPicker(selection: $inputBarItem, matching: .images) {
-                    Label(studio.hasInputBarImage()
-                          ? AppLocalized("换输入栏图") : AppLocalized("给输入栏贴图"),
-                          systemImage: "photo.on.rectangle").font(.system(size: 13))
+                    HStack(spacing: 10) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(studio.color(.accent, variant: variant))
+                            .frame(width: 22)
+                        Text(studio.hasInputBarImage()
+                             ? AppLocalized("换输入栏图")
+                             : AppLocalized("给输入栏贴图"))
+                            .font(.system(size: 13.5))
+                            .foregroundStyle(studio.color(.primaryText, variant: variant))
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+
                 if studio.hasInputBarImage() {
                     sliderRow(AppLocalized("输入栏图浓度"), value: inputBarOpacityBinding, range: 0.05...1)
-                    Button(AppLocalized("去掉输入栏图")) { studio.removeInputBarImage() }
-                        .font(.system(size: 12))
+                    Button {
+                        studio.removeInputBarImage()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 12))
+                                .frame(width: 22)
+                            Text(AppLocalized("去掉输入栏图"))
+                                .font(.system(size: 13))
+                            Spacer(minLength: 0)
+                        }
                         .foregroundStyle(studio.color(.destructive, variant: variant))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .modifier(StudioCard(variant: variant))
@@ -1059,7 +1115,7 @@ struct AppearanceStudioView: View {
     // MARK: - 主题库
 
     private var libraryPage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("存这一套"))
                 TextField(AppLocalized("给它起个名字"), text: $saveName)
@@ -1178,7 +1234,7 @@ struct AppearanceStudioView: View {
     // 语言统一走 AppLocalized。
 
     private var behaviourPage: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             // 明暗：原来在外观页有一份「跟随系统/浅色/深色」，跟这里的重复，删了那份。
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("明暗"))
