@@ -1089,8 +1089,13 @@ extension AIChatViewModel {
                         throw NSError(domain: "calculate", code: -1)
                     }
                 } catch {
-                    let escaped = expressionStr.replacingOccurrences(of: "\"", with: "\\\"")
-                    let pyCmd = "python3 -c \"import math; print(\(escaped))\" 2>&1"
+                    // `import math` 只把模块绑到名字 math，裸写 sqrt(16) 仍是
+                    // NameError。工具描述承诺「支持 sqrt/sin/cos/abs」，所以这里
+                    // 必须 `from math import *`，否则回退路径永远算不出来。
+                    // 表达式整体包在单引号里，避免 $ 和反引号被 shell 展开。
+                    let escaped = expressionStr
+                        .replacingOccurrences(of: "'", with: "'\\''")
+                    let pyCmd = "python3 -c 'from math import *; print(\(escaped))' 2>&1"
                     do {
                         let res = try await executeCommand(pyCmd, timeout: 10) { _ in }
                         let out = res.output.trimmingCharacters(in: .whitespacesAndNewlines)

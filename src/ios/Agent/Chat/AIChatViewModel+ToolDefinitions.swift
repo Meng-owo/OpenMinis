@@ -649,7 +649,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-maps",
                 category: .apple,
                 synopsis: "POI search, route navigation, and travel ETA.",
-                quickSyntax: "apple-maps search --query <text> --lat <lat> --lon <lon> | route --from ... --to ... | eta",
+                quickSyntax: "apple-maps search --query <text> --lat <lat> --lon <lon> | route --from ... --to ... | eta --from ... --to ...",
                 docRef: "apple-maps --help"
             ),
             CatalogItem(
@@ -705,7 +705,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-photos",
                 category: .apple,
                 synopsis: "Photo library: list, albums, stats, export to /var/minis/offloads/.",
-                quickSyntax: "apple-photos list --limit N | albums | album --name ... | export --limit N",
+                quickSyntax: "apple-photos list --limit N | albums | album --name ... | export --id <asset-id>",
                 docRef: "apple-photos --help (privacy: needs the user's permission)"
             ),
             CatalogItem(
@@ -753,7 +753,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-bluetooth",
                 category: .apple,
                 synopsis: "BLE scan, connect, and read/write characteristics.",
-                quickSyntax: "apple-bluetooth status | scan | connect --uuid ... | read --uuid ... --characteristic ...",
+                quickSyntax: "apple-bluetooth status | scan | connect --uuid ... | read --uuid ... --service ... --characteristic ...",
                 docRef: "apple-bluetooth --help (privacy: needs the user's permission)"
             ),
             CatalogItem(
@@ -761,7 +761,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-nfc",
                 category: .apple,
                 synopsis: "NFC tag reading and NDEF writing (iOS 26+, device dependent).",
-                quickSyntax: "apple-nfc status | scan | write --type text --message \"...\"",
+                quickSyntax: "apple-nfc status | scan | write --type text --payload \"...\"",
                 docRef: "apple-nfc --help"
             ),
             CatalogItem(
@@ -777,7 +777,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-speech",
                 category: .apple,
                 synopsis: "Speech-to-text on an audio file (SFSpeechRecognizer).",
-                quickSyntax: "apple-speech transcribe --source mic --duration 5 | transcribe <audio-file>",
+                quickSyntax: "apple-speech transcribe --source mic --duration 5 | transcribe --source <audio-file>",
                 docRef: "apple-speech --help"
             ),
             CatalogItem(
