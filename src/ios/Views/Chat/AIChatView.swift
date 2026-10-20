@@ -375,7 +375,6 @@ struct AIChatView: View {
     @State private var showPlusPanel = false
     @State private var showStickerPanel = false
     @State private var showVoiceSettingsSheet = false
-    @State private var showStickerSheet = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
     @State private var showPhotoPicker = false
@@ -536,7 +535,7 @@ struct AIChatView: View {
             || pendingProviderImport != nil
             // [P-13] 漏了这 4 个弹窗，开着它们时回复结束仍会弹键盘。
             || callbackDetailTarget != nil || helperSheetTarget != nil
-            || showStickerSheet || showVoiceSettingsSheet
+            || showVoiceSettingsSheet
             || showKernelLogs
     }
 
@@ -693,8 +692,6 @@ struct AIChatView: View {
                                 }
                         }
                         VStack(spacing: 0) {
-                            floatingToolPreview
-                                .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.25) : UIColor(white: 0, alpha: 0) }), radius: 6, x: 0, y: 4)
                             #if DEBUG
                             if isReadOnly {
                                 forkBanner
@@ -1230,9 +1227,6 @@ struct AIChatView: View {
                         }
                     }
             }
-        }
-        .sheet(isPresented: $showStickerSheet) {
-            StickerPickerSheet(vm: vm)
         }
         .sheet(isPresented: $showMoveToSheet) {
             MoveToSessionSheet(currentSessionId: vm.sessionId) { targetId in
@@ -2058,79 +2052,6 @@ struct AIChatView: View {
     // MARK: - Toolbar Trailing Menu
 
     @ViewBuilder
-    private var trailingMenu: some View {
-        // [T-ios-navbar-uikit-menu] FINAL: UIKit-owned button+menu. The
-        // SwiftUI route is exhausted — with .equatable() the toolbar host
-        // provably stopped ALL ToolbarContent rebuilds (device log
-        // 2026-07-18 01:33: toolbarHostEval=1 across an entire session)
-        // and the open menu STILL refreshed on tool-render/streaming
-        // passes: SwiftUI's toolbar bridge re-pushes bar items on host
-        // updates unconditionally, independent of content diffing. Only a
-        // persistent UIKit anchor (the UIButton instance survives SwiftUI
-        // updates; the presented UIMenu hangs off it) is immune — user-
-        // verified to stop the refresh on 2026-07-17. sizeThatFits reports
-        // the intrinsic icon size so the system wraps it in the same round
-        // glass as a plain toolbar icon (fixes the earlier capsule).
-        ChatTrailingMenuButton(
-            messagesEmpty: vm.messages.isEmpty,
-            hasSession: vm.sessionId != nil,
-            isForcePulling: isForcePulling,
-            iCloudSyncEnabled: iCloudSyncEnabled,
-            memoryEnabled: vm.memoryEnabled,
-            showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
-            enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
-            showFastModeToggle: activeModelSupportsFastMode,
-            fastModeEnabled: codexFastModeEnabled,
-            onNewChat: { requestNewChatFromMenu() },
-            // [T-chat-menu-compact-entry] Same effect as the /compact slash
-            // command (AIChatViewModel+SlashCommands case "compact").
-            onCompact: { vm.compactAll() },
-            onClearChat: { showClearChatConfirm = true },
-            onForceSync: { runForceSync() },
-            onForcePull: { showForcePullConfirm = true },
-            onOpenTerminal: { showTerminal = true },
-            onOpenBrowser: { showBrowserSheet = true },
-            onBrowseFiles: { showFileBrowser = true },
-            onSkills: { showSessionSkills = true },
-            onMCPs: { showSessionMCPs = true },
-            onMemories: { showSessionMemory = true },
-            setEnhancedCache: { newValue in
-                if newValue && !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
-                    showEnhancedCacheAlert = true
-                } else {
-                    cached.vm.enhancedCacheEnabled = newValue
-                }
-            },
-            // [T-codex-fast-mode] Persisted via @AppStorage; OpenAIProvider
-            // reads the same key at request-build time, so the flip applies
-            // to the very next Codex request.
-            setFastMode: { enabled in codexFastModeEnabled = enabled },
-            onTokenUsage: { showTokenUsage = true },
-            // LastAPIRequestBody + copySessionDataToClipboard are DEBUG-only (the
-            // menu buttons that invoke these closures are #if DEBUG too); guard the
-            // bodies so Release/archive builds — where those symbols are compiled
-            // out — still link. Release keeps the closures as no-ops.
-            onCopyRequests: {
-                #if DEBUG
-                let requests = LastAPIRequestBody.shared.getAll()
-                if requests.isEmpty {
-                    UIPasteboard.general.string = "(no requests captured)"
-                } else {
-                    let all = requests.enumerated().map { idx, req in
-                        req.formatted(index: idx + 1)
-                    }.joined(separator: "\n\n")
-                    UIPasteboard.general.string = all
-                }
-                #endif
-            },
-            onCopySessionData: {
-                #if DEBUG
-                copySessionDataToClipboard()
-                #endif
-            }
-        )
-    }
-
     // MARK: - New Chat (menu entry)
 
     /// [T-new-chat-menu-entry] "New Chat" from the "…" menu. Streaming sessions
@@ -3110,11 +3031,10 @@ struct AIChatView: View {
                 .padding(.trailing, 4)
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
                 .padding(.horizontal, 12)
-                .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12))
+                .padding(.bottom, inputBarHeight + 12)
                 .animation(.easeInOut(duration: 0.2), value: vm.isNearBottom)
                 .animation(.easeInOut(duration: 0.2), value: vm.isAtFirstTurn)
-                .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
-            }
+                }
         }
         // [T-browser-download-ux-v2] Floating download button — same visual
         // family as the scroll buttons, stacked ABOVE their slot (the scroll
@@ -3128,8 +3048,7 @@ struct AIChatView: View {
             .padding(.trailing, 4)
             .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
             .padding(.horizontal, 12)
-            .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12) + 92)
-            .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
+            .padding(.bottom, inputBarHeight + 12 + 92)
         }
     }
 
@@ -3161,19 +3080,6 @@ struct AIChatView: View {
         var body: some View {
             AppearanceStudio.shared.color(.canvas, scope: .chat).opacity(colorScheme == .dark ? 0.8 : 0.92)
         }
-    }
-
-    // MARK: - Floating Tool Preview
-
-    @ViewBuilder
-    private var floatingToolPreview: some View {
-        // Suppressed: banner above input bar removed per user request.
-        EmptyView()
-    }
-
-    /// Whether the floating tool preview is visible.
-    private var hasAnyToolBlocks: Bool {
-        false
     }
 
     // MARK: - Fork Banner (Read-Only Mode)
@@ -3692,69 +3598,6 @@ struct AIChatView: View {
         .padding(.bottom, 2)
         return AnyView(view)
     }
-
-    /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
-    /// 所有零碎选项均已收纳至加号宫格面板内，保持底栏极致清爽。
-    private var inputBottomRow: AnyView {
-        let row = HStack(spacing: 12) {
-            attachmentMenuButton
-            if vm.editingMessageIndex != nil { editExitButton }
-            Spacer()
-            micButtonContainer
-            sendButton
-        }
-        return AnyView(row)
-    }
-
-    /// [T-menu-below-bubble 09-12] 醒醒 1：「•••」去哪里了。我想要放在ai气泡下
-    /// 面的编辑栏来的。」 The session-scoped voice controls (formerly buried in the
-    /// navbar "•••") live here now: read-aloud, voice capsule, AI voice replies.
-    /// Same visual language as the + / slash buttons — round 34pt icon chip.
-    private var voiceOptionsButton: some View {
-        let icon = Image(systemName: "ellipsis")
-            .font(.system(size: 18, weight: .medium))
-            .foregroundStyle(ChatColors.secondaryText)
-            .frame(width: 34, height: 34)
-            .accessibilityLabel(Text("Voice and session options", comment: "VoiceOver label for the composer options button"))
-            .background(ChatColors.inputIconBg)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
-        // [T-menu-below-bubble 09-12] 修复审查问题3/10: iOS16 confirmationDialog
-        // 分支是死代码（部署目标 iOS 26.2，else 永远不跑）且其 toggleAIVoiceReplies
-        // 缺 stopSpeech 与 iOS17 分支行为不一致——直接删掉整块和配套死 @State
-        // （showLegacyVoiceDialog / aiVoiceRepliesOn / toggleAIVoiceReplies）。
-        // [opaque-return 09-12] 显式 return：let 声明 + 多行 modifier 链之后的
-        // 表达式不被认作隐式 return（opaque return 只认单表达式 body）。
-        return Menu {
-            Toggle(isOn: Binding(
-                get: { vm.sessionId.map { AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: $0) } ?? false },
-                set: { v in
-                    // [T-voice-bubble-no-session 09-12] 修复审查问题2: 新会话
-                    // （还没发出第一条消息，sessionId=nil）点了开关原本静默无
-                    // 反应——看起来像按键失灵。Toast 说明「先发一条消息」。
-                    guard let sid = vm.sessionId else {
-                        MinisToast.show(AppLocalized("Send a message first to activate this session."),
-                                       systemImage: "exclamationmark.triangle.fill")
-                        return
-                    }
-                    AIVoiceMessageComposer.setVoiceReplies(enabled: v, sessionId: sid)
-                    // [batch1-A2] 开语音回复不再掐用户手点的朗读——StreamEnd 自动
-                    // 气泡已拆（batch9-voice/5），没有"双读"风险；这里只负责
-                    // mid-turn 开启时把新语义（AI 想发才发）讲清楚。
-                    if v {
-                        if vm.isProcessing {
-                            MinisToast.show(AppLocalized("AI voice replies on — the AI sends a voice bubble when it wants to."))
-                        }
-                    }
-                }
-            )) {
-                Label(AppLocalized("AI Voice Replies"), systemImage: "bubble.left.and.bubble.right.fill")
-            }
-        } label: {
-            icon
-        }
-    }
-
 
     /// `/` button that opens the slash command menu.
     private var slashMenuButton: some View {
@@ -5116,11 +4959,6 @@ struct AIChatView: View {
         }
     }
 
-    /// Whether the floating tool preview is visible.
-    private var hasFloatingPreview: Bool {
-        false
-    }
-
     /// Max content width — unconstrained in compact (portrait iPhone),
     /// capped in regular (landscape / iPad) for readability.
     private var maxContentWidth: CGFloat? {
@@ -5574,408 +5412,6 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             }
     }
 }
-
-/// [T-ios-navbar-uikit-menu] UIKit-owned replacement for ChatTrailingMenu.
-///
-/// Instrumented device run (NavbarEval, 2026-07-17 19:35): during a streaming
-/// reply the toolbar builder ran 34 times while BOTH equatable gates held
-/// (titleEval=3, menuEval=2) — yet the presented menu still refreshed. The
-/// leak is below SwiftUI: the toolbar bridge re-pushes the navigation item's
-/// bar buttons every host pass even when the content views compare equal, and
-/// UIKit refreshes/re-anchors a presented UIMenu whenever its bar's items are
-/// re-set. No amount of view-level Equatable can stop that.
-///
-/// Fix: own the button AND the menu in UIKit. The UIViewRepresentable's
-/// UIButton instance survives SwiftUI updates, the presented UIMenu is
-/// anchored to that stable instance, and updateUIView only touches
-/// `button.menu` when the DISPLAYED state actually changed — a no-op SwiftUI
-/// pass physically cannot reach the menu. Field names/order are identical to
-/// ChatTrailingMenu so the call site only swaps the type name. The DEBUG
-/// request-count rows use UIDeferredMenuElement.uncached to stay fresh at
-/// each open, matching the SwiftUI Menu's lazy content read.
-/// [T-ios-navbar-toolbar-host] Native SwiftUI "..." menu, restored. The
-/// UIKit ChatTrailingMenuButton below remains as the proven fallback (it
-/// verifiably stops the mid-stream refresh but loses the system's round
-/// Liquid-Glass chrome); with the toolbar now hosted in the equatable-gated
-/// ChatToolbarHost the ToolbarContent is never rebuilt during streaming, so
-/// the native Menu — and its native appearance — should be stable. Item set
-/// mirrors the UIKit buildMenu exactly (incl. Compact Messages + the divider
-/// between Clear Chat and the iCloud actions from T-chat-menu-compact-entry).
-private struct ChatTrailingMenu: View, Equatable {
-    let messagesEmpty: Bool
-    let hasSession: Bool
-    let isForcePulling: Bool
-    let iCloudSyncEnabled: Bool
-    let memoryEnabled: Bool
-    let showEnhancedCacheToggle: Bool
-    let enhancedCacheEnabled: Bool
-    /// [T-codex-fast-mode] Mirrors ChatTrailingMenuButton.
-    let showFastModeToggle: Bool
-    let fastModeEnabled: Bool
-
-    let onNewChat: () -> Void
-    let onCompact: () -> Void
-    let onClearChat: () -> Void
-    let onForceSync: () -> Void
-    let onForcePull: () -> Void
-    let onOpenTerminal: () -> Void
-    let onOpenBrowser: () -> Void
-    let onBrowseFiles: () -> Void
-    let onSkills: () -> Void
-    let onMCPs: () -> Void
-    let onMemories: () -> Void
-    let setEnhancedCache: (Bool) -> Void
-    let setFastMode: (Bool) -> Void
-    let onTokenUsage: () -> Void
-    let onCopyRequests: () -> Void
-    let onCopySessionData: () -> Void
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.messagesEmpty == rhs.messagesEmpty
-            && lhs.hasSession == rhs.hasSession
-            && lhs.isForcePulling == rhs.isForcePulling
-            && lhs.iCloudSyncEnabled == rhs.iCloudSyncEnabled
-            && lhs.memoryEnabled == rhs.memoryEnabled
-            && lhs.showEnhancedCacheToggle == rhs.showEnhancedCacheToggle
-            && lhs.enhancedCacheEnabled == rhs.enhancedCacheEnabled
-            && lhs.showFastModeToggle == rhs.showFastModeToggle
-            && lhs.fastModeEnabled == rhs.fastModeEnabled
-    }
-
-    var body: some View {
-        #if DEBUG
-        let _ = {
-            NavbarEvalStats.menuEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] menuEval=\(NavbarEvalStats.menuEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
-        }()
-        #endif
-        return Menu {
-            Button { onNewChat() } label: {
-                Label(AppLocalized("New Chat"), systemImage: "square.and.pencil")
-            }
-
-            Divider()
-
-            // [T-chat-menu-compact-entry] Compact above Clear Chat.
-            Button { onCompact() } label: {
-                Label(AppLocalized("Compact Messages"), systemImage: "arrow.down.right.and.arrow.up.left")
-            }
-            .disabled(messagesEmpty)
-
-            Button(role: .destructive) { onClearChat() } label: {
-                Label(AppLocalized("Clear Chat"), systemImage: "trash.fill")
-            }
-            .disabled(messagesEmpty)
-
-            Divider()
-
-            // iCloud sync actions: iOS 17+ (v2 sync engine) AND the user's
-            // iCloud Sync toggle on.
-            if #available(iOS 17.0, *), iCloudSyncEnabled {
-                Button { onForceSync() } label: {
-                    Label(AppLocalized("Force iCloud Sync"), systemImage: "icloud.and.arrow.up")
-                }
-                .disabled(!hasSession || isForcePulling)
-
-                Button { onForcePull() } label: {
-                    Label(AppLocalized("Force Pull Messages"), systemImage: "icloud.and.arrow.down")
-                }
-                .disabled(!hasSession || isForcePulling)
-
-                Divider()
-            }
-
-            Button { onOpenTerminal() } label: {
-                Label(AppLocalized("Open Terminal"), systemImage: "terminal.fill")
-            }
-
-            Button { onOpenBrowser() } label: {
-                Label(AppLocalized("Open Browser"), systemImage: "globe")
-            }
-
-            Button { onBrowseFiles() } label: {
-                Label(AppLocalized("Browse Chat Files"), systemImage: "folder.fill")
-            }
-
-            Divider()
-
-            Button { onSkills() } label: {
-                Label(AppLocalized("Skills in Session"), systemImage: "puzzlepiece.extension")
-            }
-
-            Button { onMCPs() } label: {
-                Label(AppLocalized("MCPs in Session"), systemImage: "wrench.and.screwdriver")
-            }
-
-            if memoryEnabled {
-                Button { onMemories() } label: {
-                    Label(AppLocalized("Memories in Session"), systemImage: "brain.head.profile")
-                }
-            }
-
-            // [T-menu-below-bubble 09-12] Voice Capsule + AI Voice Replies moved
-            // DOWN to the composer's "•••" (voiceOptionsButton) per 醒醒 1 —
-            // voice config lives under the AI bubble, not up in the navbar.
-
-            // [T-codex-fast-mode-menu-group] Model-control toggles in their
-            // own divider-separated section (mirrors the UIKit buildMenu).
-            if showEnhancedCacheToggle || showFastModeToggle {
-                Divider()
-
-                if showEnhancedCacheToggle {
-                    Toggle(isOn: Binding(
-                        get: { enhancedCacheEnabled },
-                        set: { setEnhancedCache($0) }
-                    )) {
-                        Label(AppLocalized("Enhanced Cache"), systemImage: "clock.arrow.circlepath")
-                    }
-                }
-
-                if showFastModeToggle {
-                    Toggle(isOn: Binding(
-                        get: { fastModeEnabled },
-                        set: { setFastMode($0) }
-                    )) {
-                        Label(AppLocalized("Enable Fast Mode"), systemImage: "bolt.fill")
-                    }
-                }
-            }
-
-            Divider()
-
-            Button { onTokenUsage() } label: {
-                Label(AppLocalized("Token Usage"), systemImage: "number")
-            }
-
-            #if DEBUG
-            Divider()
-
-            Button { onCopyRequests() } label: {
-                let n = LastAPIRequestBody.shared.getAll().count
-                Label("Copy Requests (\(n))", systemImage: "arrow.up.doc")
-            }
-
-            Button { onCopySessionData() } label: {
-                Label("Copy Session Data", systemImage: "tray.and.arrow.up")
-            }
-            #endif
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(ChatColors.primaryText)
-        }
-        // [T-ios-voiceover-labels] Matches the label the UIKit ellipsis button
-        // elsewhere in this file already sets, so both read the same.
-        .accessibilityLabel(Text("More options", comment: "VoiceOver label for the overflow menu button"))
-    }
-}
-
-/// [T-ios-navbar-uikit-menu] PROVEN FALLBACK, currently unused: swaps in for
-/// ChatTrailingMenu at the trailingMenu call site if the ChatToolbarHost
-/// approach ever regresses. Verified on-device (2026-07-17) to stop the
-/// mid-stream menu refresh; its remaining flaw was appearance (no native
-/// round glass chrome — mitigated here by sizeThatFits reporting the
-/// button's intrinsic size so the system container wraps it like a plain
-/// toolbar icon).
-private struct ChatTrailingMenuButton: UIViewRepresentable {
-    let messagesEmpty: Bool
-    let hasSession: Bool
-    let isForcePulling: Bool
-    let iCloudSyncEnabled: Bool
-    let memoryEnabled: Bool
-    let showEnhancedCacheToggle: Bool
-    let enhancedCacheEnabled: Bool
-    /// [T-codex-fast-mode] Shown only when the active model's provider is a
-    /// Codex OAuth instance (OpenAI OAuth, no custom base).
-    let showFastModeToggle: Bool
-    let fastModeEnabled: Bool
-
-    let onNewChat: () -> Void
-    let onCompact: () -> Void
-    let onClearChat: () -> Void
-    let onForceSync: () -> Void
-    let onForcePull: () -> Void
-    let onOpenTerminal: () -> Void
-    let onOpenBrowser: () -> Void
-    let onBrowseFiles: () -> Void
-    let onSkills: () -> Void
-    let onMCPs: () -> Void
-    let onMemories: () -> Void
-    let setEnhancedCache: (Bool) -> Void
-    let setFastMode: (Bool) -> Void
-    let onTokenUsage: () -> Void
-    let onCopyRequests: () -> Void
-    let onCopySessionData: () -> Void
-
-    /// The displayed-state snapshot — the ONLY trigger for a menu rebuild.
-    struct Key: Equatable {
-        let messagesEmpty: Bool
-        let hasSession: Bool
-        let isForcePulling: Bool
-        let iCloudSyncEnabled: Bool
-        let memoryEnabled: Bool
-        let showEnhancedCacheToggle: Bool
-        let enhancedCacheEnabled: Bool
-        let showFastModeToggle: Bool
-        let fastModeEnabled: Bool
-    }
-
-    private var key: Key {
-        Key(messagesEmpty: messagesEmpty, hasSession: hasSession,
-            isForcePulling: isForcePulling, iCloudSyncEnabled: iCloudSyncEnabled,
-            memoryEnabled: memoryEnabled,
-            showEnhancedCacheToggle: showEnhancedCacheToggle,
-            enhancedCacheEnabled: enhancedCacheEnabled,
-            showFastModeToggle: showFastModeToggle,
-            fastModeEnabled: fastModeEnabled)
-    }
-
-    final class Coordinator {
-        var lastKey: Key?
-        var parent: ChatTrailingMenuButton
-        init(parent: ChatTrailingMenuButton) { self.parent = parent }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-
-    func makeUIView(context: Context) -> UIButton {
-        let button = UIButton(type: .system)
-        let cfg = UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
-        button.setImage(UIImage(systemName: "ellipsis", withConfiguration: cfg), for: .normal)
-        button.tintColor = UIColor(ChatColors.primaryText)
-        button.showsMenuAsPrimaryAction = true
-        button.accessibilityLabel = AppLocalized("More options")
-        button.menu = Self.buildMenu(key: key, coordinator: context.coordinator)
-        context.coordinator.lastKey = key
-        return button
-    }
-
-    /// Report the button's intrinsic size so the toolbar proposes an
-    /// icon-sized footprint and the system wraps it in the same round glass
-    /// as a plain toolbar icon (a representable otherwise accepts the full
-    /// proposed width -> stretched capsule, the 2026-07-17 regression).
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
-        uiView.intrinsicContentSize
-    }
-
-    func updateUIView(_ button: UIButton, context: Context) {
-        // Closures capture view state -- refresh them every pass so actions
-        // always see the latest values (excluded from the rebuild decision,
-        // exactly like ChatTrailingMenu's ==).
-        context.coordinator.parent = self
-        guard context.coordinator.lastKey != key else { return }
-        context.coordinator.lastKey = key
-        button.menu = Self.buildMenu(key: key, coordinator: context.coordinator)
-        #if DEBUG
-        NavbarEvalStats.menuEval += 1
-        NavbarEvalStats.logger.info("[NavbarEval] uikitMenuRebuild=\(NavbarEvalStats.menuEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
-        #endif
-    }
-
-    private static func buildMenu(key: Key, coordinator: Coordinator) -> UIMenu {
-        var groups: [UIMenuElement] = []
-
-        groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: AppLocalized("New Chat"),
-                     image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
-        ]))
-
-        // [T-chat-menu-compact-entry] Compact sits ABOVE Clear Chat in its own
-        // group with the destructive clear; the iCloud actions moved to a
-        // separate inline group so a divider lands between Clear Chat and the
-        // sync rows (user-requested layout).
-        groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: AppLocalized("Compact Messages"),
-                     image: UIImage(systemName: "arrow.down.right.and.arrow.up.left"),
-                     attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onCompact() },
-            UIAction(title: AppLocalized("Clear Chat"),
-                     image: UIImage(systemName: "trash.fill"),
-                     attributes: key.messagesEmpty ? [.destructive, .disabled] : [.destructive]) { _ in coordinator.parent.onClearChat() },
-        ]))
-
-        // Same gate as before: iOS 17+ (v2 sync engine) AND the user's
-        // iCloud Sync toggle on.
-        if #available(iOS 17.0, *), key.iCloudSyncEnabled {
-            let disabled: UIMenuElement.Attributes = (!key.hasSession || key.isForcePulling) ? [.disabled] : []
-            groups.append(UIMenu(options: .displayInline, children: [
-                UIAction(title: AppLocalized("Force iCloud Sync"),
-                         image: UIImage(systemName: "icloud.and.arrow.up"),
-                         attributes: disabled) { _ in coordinator.parent.onForceSync() },
-                UIAction(title: AppLocalized("Force Pull Messages"),
-                         image: UIImage(systemName: "icloud.and.arrow.down"),
-                         attributes: disabled) { _ in coordinator.parent.onForcePull() },
-            ]))
-        }
-
-        groups.append(UIMenu(options: .displayInline, children: [
-            UIAction(title: AppLocalized("Open Terminal"),
-                     image: UIImage(systemName: "terminal.fill")) { _ in coordinator.parent.onOpenTerminal() },
-            UIAction(title: AppLocalized("Open Browser"),
-                     image: UIImage(systemName: "globe")) { _ in coordinator.parent.onOpenBrowser() },
-            UIAction(title: AppLocalized("Browse Chat Files"),
-                     image: UIImage(systemName: "folder.fill")) { _ in coordinator.parent.onBrowseFiles() },
-        ]))
-
-        var sessionGroup: [UIMenuElement] = [
-            UIAction(title: AppLocalized("Skills in Session"),
-                     image: UIImage(systemName: "puzzlepiece.extension")) { _ in coordinator.parent.onSkills() },
-            UIAction(title: AppLocalized("MCPs in Session"),
-                     image: UIImage(systemName: "wrench.and.screwdriver")) { _ in coordinator.parent.onMCPs() },
-        ]
-        if key.memoryEnabled {
-            sessionGroup.append(UIAction(title: AppLocalized("Memories in Session"),
-                                         image: UIImage(systemName: "brain.head.profile")) { _ in coordinator.parent.onMemories() })
-        }
-        // [T-menu-below-bubble 09-12] Voice Capsule + AI Voice Replies live in
-        // the composer's "•••" (voiceOptionsButton) — removed here per 醒醒 1.
-        groups.append(UIMenu(options: .displayInline, children: sessionGroup))
-
-        // [T-codex-fast-mode-menu-group] Model-control toggles (they shape how
-        // the MODEL is invoked, unlike the session-scoped rows above) live in
-        // their own inline group so dividers separate them on both sides.
-        var modelControlGroup: [UIMenuElement] = []
-        if key.showEnhancedCacheToggle {
-            modelControlGroup.append(UIAction(title: AppLocalized("Enhanced Cache"),
-                                              image: UIImage(systemName: "clock.arrow.circlepath"),
-                                              state: key.enhancedCacheEnabled ? .on : .off) { _ in
-                coordinator.parent.setEnhancedCache(!key.enhancedCacheEnabled)
-            })
-        }
-        // [T-codex-fast-mode] Only for Codex OAuth models. Injects
-        // service_tier=priority (the wire value codex_cli_rs sends for its
-        // Fast mode) into Codex requests while enabled; 2x credit burn.
-        if key.showFastModeToggle {
-            modelControlGroup.append(UIAction(title: AppLocalized("Enable Fast Mode"),
-                                              image: UIImage(systemName: "bolt.fill"),
-                                              state: key.fastModeEnabled ? .on : .off) { _ in
-                coordinator.parent.setFastMode(!key.fastModeEnabled)
-            })
-        }
-        if !modelControlGroup.isEmpty {
-            groups.append(UIMenu(options: .displayInline, children: modelControlGroup))
-        }
-
-        var tailGroup: [UIMenuElement] = [
-            UIAction(title: AppLocalized("Token Usage"),
-                     image: UIImage(systemName: "number")) { _ in coordinator.parent.onTokenUsage() },
-        ]
-        #if DEBUG
-        tailGroup.append(UIDeferredMenuElement.uncached { completion in
-            let n = LastAPIRequestBody.shared.getAll().count
-            completion([
-                UIAction(title: "Copy Requests (\(n))",
-                         image: UIImage(systemName: "arrow.up.doc")) { _ in coordinator.parent.onCopyRequests() },
-                UIAction(title: "Copy Session Data",
-                         image: UIImage(systemName: "tray.and.arrow.up")) { _ in coordinator.parent.onCopySessionData() },
-            ])
-        })
-        #endif
-        groups.append(UIMenu(options: .displayInline, children: tailGroup))
-
-        return UIMenu(children: groups)
-    }
-}
-
 
 // MARK: - Move To Session Sheet
 
@@ -6432,86 +5868,6 @@ private struct MicButton: View {
 }
 
 // MARK: - Speech Language Picker Sheet
-
-private struct SpeechLanguagePickerSheet: View {
-    @ObservedObject var speechManager: SpeechRecognitionManager
-    @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
-
-    private var filteredLocales: [Locale] {
-        if searchText.isEmpty { return speechManager.availableLocales }
-        let query = searchText.lowercased()
-        return speechManager.availableLocales.filter { loc in
-            let name = speechManager.displayName(for: loc).lowercased()
-            let id = loc.identifier.lowercased()
-            return name.contains(query) || id.contains(query)
-        }
-    }
-
-    /// Indices where the preferred/non-preferred boundary lies for section headers.
-    private var preferredCodes: Set<String> {
-        Set(Locale.preferredLanguages.map { Locale(identifier: $0).language.languageCode?.identifier ?? "" })
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                let preferred = filteredLocales.filter { preferredCodes.contains($0.language.languageCode?.identifier ?? "") }
-                let others = filteredLocales.filter { !preferredCodes.contains($0.language.languageCode?.identifier ?? "") }
-
-                if !preferred.isEmpty {
-                    Section(AppLocalized("Preferred", comment: "Section header for preferred speech languages")) {
-                        ForEach(preferred, id: \.identifier) { loc in
-                            languageRow(loc)
-                        }
-                    }
-                }
-
-                if !others.isEmpty {
-                    Section(AppLocalized("All Languages", comment: "Section header for all speech languages")) {
-                        ForEach(others, id: \.identifier) { loc in
-                            languageRow(loc)
-                        }
-                    }
-                }
-            }
-            .searchable(text: $searchText, prompt: Text("Search Languages", comment: "Search field placeholder for speech language picker"))
-            .navigationTitle(Text("Voice Language", comment: "Navigation title for speech language picker"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(AppLocalized("Done", comment: "Dismiss speech language picker")) {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func languageRow(_ loc: Locale) -> some View {
-        Button {
-            speechManager.setLanguage(loc)
-            dismiss()
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(speechManager.displayName(for: loc))
-                        .foregroundStyle(.primary)
-                    Text(loc.identifier)
-                        .font(.caption)
-                        .foregroundStyle(MinisTheme.secondaryText)
-                }
-                Spacer()
-                if loc.identifier == speechManager.locale.identifier {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(ChatColors.accent)
-                        .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
 
 // MARK: - Compact Summary Sheet
 
@@ -8896,7 +8252,6 @@ public struct StickerZoomPreviewSheet: View {
     }
 }
 
-// MARK: - 表情包选择抽屉面板 (StickerPickerSheet)
 
 enum StickerPickerActiveSheet: Identifiable {
     case add
@@ -8907,179 +8262,6 @@ enum StickerPickerActiveSheet: Identifiable {
         case .add: return "add"
         case .edit(let item): return "edit_\(item.id)"
         }
-    }
-}
-
-struct StickerPickerSheet: View {
-    @ObservedObject var vm: AIChatViewModel
-    @ObservedObject private var store = StickerStore.shared
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var selectedCategory: String = "常用"
-    @State private var showUploadSheet = false
-    @State private var editingSticker: StickerItem?
-
-    var displayCategories: [String] {
-        ["常用", "全部"] + store.categories
-    }
-
-    var currentStickers: [StickerItem] {
-        if selectedCategory == "常用" {
-            let sorted = store.stickers.sorted(by: { $0.useCount > $1.useCount })
-            return sorted.filter { $0.useCount > 0 }
-        } else if selectedCategory == "全部" {
-            return store.stickers
-        } else {
-            return store.stickers.filter { $0.category == selectedCategory }
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                // 分类胶囊标签栏
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(displayCategories, id: \.self) { cat in
-                            Button {
-                                selectedCategory = cat
-                            } label: {
-                                Text(cat)
-                                    .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        selectedCategory == cat
-                                            ? ChatColors.accent.opacity(0.18)
-                                            : AppearanceStudio.shared.color(.mutedSurface, scope: .chat)
-                                    )
-                                    .foregroundColor(
-                                        selectedCategory == cat
-                                            ? ChatColors.accent
-                                            : ChatColors.primaryText
-                                    )
-                                    .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                }
-
-                Divider()
-
-                if currentStickers.isEmpty {
-                    VStack(spacing: 12) {
-                        Spacer()
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 44))
-                            .foregroundColor(.secondary)
-                        Text(selectedCategory == "常用" ? "暂无常用表情包，发送几次就会出现在这里~" : "此分类下暂无表情包")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Button {
-                            showUploadSheet = true
-                        } label: {
-                            Label("添加表情包", systemImage: "plus.circle.fill")
-                                .font(.system(size: 14, weight: .medium))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(ChatColors.accent)
-                                .foregroundColor(.white)
-                                .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 6)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 75), spacing: 12)], spacing: 14) {
-                            ForEach(currentStickers) { sticker in
-                                Button {
-                                    vm.sendSticker(sticker)
-                                    dismiss()
-                                } label: {
-                                    VStack(spacing: 4) {
-                                        if let img = store.image(for: sticker) {
-                                            StickerAnimatedImageView(image: img)
-                                                .frame(width: 72, height: 72)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                                .overlay(
-                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                                        .stroke(Color.primary.opacity(0.06), lineWidth: 0.5)
-                                                )
-                                        } else {
-                                            Color.secondary.opacity(0.1)
-                                                .frame(width: 72, height: 72)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                        }
-
-                                        Text(sticker.title)
-                                            .font(.caption2)
-                                            .lineLimit(1)
-                                            .foregroundColor(.primary)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button {
-                                        editingSticker = sticker
-                                    } label: {
-                                        Label("编辑信息", systemImage: "pencil")
-                                    }
-                                    Button(role: .destructive) {
-                                        store.deleteSticker(id: sticker.id)
-                                    } label: {
-                                        Label("删除", systemImage: "trash.fill")
-                                    }
-                                }
-                            }
-                        }
-                        .padding(16)
-                    }
-                }
-            }
-            .navigationTitle("表情包")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showUploadSheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundColor(ChatColors.accent)
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("关闭") { dismiss() }
-                }
-            }
-            .sheet(item: Binding<StickerPickerActiveSheet?>(
-                get: {
-                    if let editing = editingSticker { return .edit(editing) }
-                    if showUploadSheet { return .add }
-                    return nil
-                },
-                set: { val in
-                    if val == nil {
-                        showUploadSheet = false
-                        editingSticker = nil
-                    }
-                }
-            )) { sheet in
-                switch sheet {
-                case .add:
-                    StickerEditSheet(editingItem: nil)
-                case .edit(let item):
-                    StickerEditSheet(editingItem: item)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }
 
