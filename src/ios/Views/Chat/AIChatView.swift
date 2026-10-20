@@ -427,8 +427,6 @@ struct AIChatView: View {
     @State private var isForcePulling = false
     @State private var forcePullToast: String?
     @State private var compactConfirmMessageId: UUID?
-    /// True while unsent share-extension content is in the input bar.
-    @State private var hasInjectedShareContent = false
     @State private var showModelPicker = false
     @State private var showThinkingLevelSheet = false
     @State private var showSessionSkills = false
@@ -1256,12 +1254,6 @@ struct AIChatView: View {
                 // restore reference the same cacheURLs.
                 vm.inputText = ""
                 vm.attachments.removeAll()
-                // The share content is no longer here — reset the flag that
-                // gates the "Move to…" pill. Currently `hasMovableShareContent`
-                // hides the pill anyway now the composer is empty, so this is
-                // not user-visible, but leaving it true is a latent trap for
-                // anything else that reads it.
-                hasInjectedShareContent = false
                 DispatchQueue.main.asyncAfter(deadline: .now() + ViewModelCache.PendingTransfer.staleAfter) {
                     // Match the exact stash we staged, not just its target: a
                     // second move to the same target within the stale window
@@ -2000,8 +1992,6 @@ struct AIChatView: View {
 
         minisLogger.info("[Share] Injection complete. inputText='\(String(self.vm.inputText.prefix(100)))' attachments=\(self.vm.attachments.count)")
 
-        hasInjectedShareContent = true
-
         // Focus input if we injected text
         if !vm.inputText.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -2223,31 +2213,31 @@ struct AIChatView: View {
             showClearChatConfirm = true
         case .fastMode:
             guard activeModelSupportsFastMode else {
-                MinisToast.show("当前模型不支持快速模式", systemImage: "info.circle")
+                MinisToast.show(AppLocalized("当前模型不支持快速模式"), systemImage: "info.circle")
                 return
             }
             codexFastModeEnabled.toggle()
-            MinisToast.show(codexFastModeEnabled ? "快速模式已开" : "快速模式已关", systemImage: "bolt.fill")
+            MinisToast.show(codexFastModeEnabled ? AppLocalized("快速模式已开") : AppLocalized("快速模式已关"), systemImage: "bolt.fill")
         case .enhancedCache:
             guard cached.vm.showEnhancedCacheToggle else {
-                MinisToast.show("当前模型不支持增强缓存", systemImage: "info.circle")
+                MinisToast.show(AppLocalized("当前模型不支持增强缓存"), systemImage: "info.circle")
                 return
             }
             if enhancedCacheEnabledStored {
                 cached.vm.enhancedCacheEnabled = false
-                MinisToast.show("增强缓存已关", systemImage: "clock")
+                MinisToast.show(AppLocalized("增强缓存已关"), systemImage: "clock")
             } else if !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
                 showEnhancedCacheAlert = true
             } else {
                 cached.vm.enhancedCacheEnabled = true
-                MinisToast.show("增强缓存已开", systemImage: "clock.badge.checkmark.fill")
+                MinisToast.show(AppLocalized("增强缓存已开"), systemImage: "clock.badge.checkmark.fill")
             }
         }
     }
 
     private func exportCurrentConversation() {
         guard !vm.messages.isEmpty else {
-            MinisToast.show("当前还没有对话记录可导出", systemImage: "info.circle.fill")
+            MinisToast.show(AppLocalized("当前还没有对话记录可导出"), systemImage: "info.circle.fill")
             return
         }
         var text = "# OpenMinis 对话记录导出\n\n"
@@ -2861,8 +2851,11 @@ struct AIChatView: View {
                     // overlay can appear right after the loading card on a
                     // cold entry, so a system spinner here read as "the old
                     // 菊花 came back".
-                    LoadingDotsView(dotSize: 9, color: ChatColors.secondaryText)
-                        .frame(height: 20)
+                    // [P-25] 注释说和 SessionLoadingCard 是「同一套三点语言」，
+                    // 实际一个 9pt 一个 8pt、框高 20/24。统一成同一组常量。
+                    LoadingDotsView(dotSize: LoadingDotsView.unifiedDotSize,
+                                    color: ChatColors.secondaryText)
+                        .frame(height: LoadingDotsView.unifiedFrameHeight)
                     Text("Booting Kernel")
                         .font(.subheadline)
                         .foregroundStyle(ChatColors.secondaryText)
@@ -2933,9 +2926,16 @@ struct AIChatView: View {
         }
         .contentShape(Rectangle())
         .onLongPressGesture {
+            // [P-26] 长按复制原来只有触觉反馈，没有视觉提示，旁白也不知道。
             UIPasteboard.general.string = error
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
+            MinisToast.show(AppLocalized("Copied"), systemImage: "doc.on.doc.fill")
+        }
+        .accessibilityHint(Text("Long press to copy this error", comment: "VoiceOver hint for the error banner"))
+        .accessibilityAction(named: Text("Copy error", comment: "VoiceOver action to copy the error text")) {
+            UIPasteboard.general.string = error
+            MinisToast.show(AppLocalized("Copied"), systemImage: "doc.on.doc.fill")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -4151,13 +4151,11 @@ struct AIChatView: View {
                 lastRecognizedLength = newLength
             }
             .overlay(alignment: .topTrailing) {
-                // Only offer "Move to…" when there is actually something to
-                // move. hasInjectedShareContent is flipped true after EVERY
-                // share ingestion, even when the share produced no text and no
-                // attachments (e.g. an unrecognized item, or all items diverted
-                // to Provider-import). Gate on real movable content so the pill
-                // doesn't linger over an empty composer. [T-ios-moveto-empty-content]
-                if hasInjectedShareContent && hasMovableShareContent {
+                // [T-ios-moveto-empty-content] 只在输入区真有东西可搬时才显示。
+                // [P-14] 原来还要求 hasInjectedShareContent（只有从系统分享进来
+                // 才为 true），用户自己打一半的字永远看不到这个入口。现在只要有
+                // 可搬的内容就显示；那个标志只写不读，已删。
+                if hasMovableShareContent {
                     Button { showMoveToSheet = true } label: {
                         Label("Move to…", systemImage: "arrow.right.circle")
                             .font(.system(size: 11, weight: .medium))
@@ -5105,7 +5103,6 @@ struct AIChatView: View {
         }
         speechManager.recognizedText = ""
         lastRecognizedLength = 0
-        hasInjectedShareContent = false
         // Send FIRST while inputText still holds the recognized text. Clearing the
         // voice transcript here (clearAndRearm) mirrors "" into inputText via the
         // onChange binding, so doing it before send() left send() with empty text
@@ -5987,6 +5984,9 @@ private struct MoveToSessionSheet: View {
     let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var sessions: [ChatSession] = []
+    /// [P-15] 默认只列当前人设的会话；打开这个才列全部人设（每条标注归属）。
+    /// 一打开就把别人角色的会话全铺出来会让人慌，所以默认关。
+    @State private var showAllPersonas = false
     @State private var searchText = ""
     @State private var searchMatchedIds: Set<String>?
     @State private var searchTask: Task<Void, Never>?
@@ -6013,6 +6013,15 @@ private struct MoveToSessionSheet: View {
                     } label: {
                         Label(AppLocalized("New Chat"), systemImage: "plus.bubble")
                     }
+
+                    // [P-15] 默认只看本角色。展开后每条会话会标出归属角色，
+                    // 避免「我的会话怎么没了」。
+                    Toggle(isOn: $showAllPersonas) {
+                        Label(AppLocalized("Show chats from all personas"), systemImage: "person.2")
+                    }
+                    .onChange(of: showAllPersonas) { on in
+                        reloadSessions(allPersonas: on)
+                    }
                 }
 
                 Section(isSearching ? AppLocalized("Results") : AppLocalized("Recent")) {
@@ -6037,9 +6046,16 @@ private struct MoveToSessionSheet: View {
                                     .lineLimit(1)
                                 }
                                 Spacer(minLength: 1)
-                                Text(relativeDate(session.updatedAt))
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(relativeDate(session.updatedAt))
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
+                                    if showAllPersonas, let owner = personaName(for: session) {
+                                        Text(owner)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.6))
+                                    }
+                                }
                             }
                         }
                     }
@@ -6056,8 +6072,28 @@ private struct MoveToSessionSheet: View {
             }
         }
         .task {
+            reloadSessions(allPersonas: showAllPersonas)
+        }
+    }
+
+    /// 当前人设的会话；showAllPersonas 时按人设逐个拉取再合并。
+    private func reloadSessions(allPersonas: Bool) {
+        if allPersonas {
+            var merged: [ChatSession] = []
+            for persona in PersonaStore.shared.personas {
+                merged += ChatStore.shared.listSessions(personaId: persona.id)
+            }
+            sessions = merged.filter { !$0.isChild }
+        } else {
             sessions = ChatStore.shared.listSessions().filter { !$0.isChild }
         }
+    }
+
+    /// 会话归属的角色名；本角色返回 nil（不用标）。
+    private func personaName(for session: ChatSession) -> String? {
+        let ownerId = session.personaId ?? PersonaStore.defaultPersonaID
+        guard ownerId != PersonaStore.currentID() else { return nil }
+        return PersonaStore.shared.personas.first(where: { $0.id == ownerId })?.name
     }
 
     // MARK: - Search
@@ -6074,7 +6110,12 @@ private struct MoveToSessionSheet: View {
             guard !Task.isCancelled else { return }
             let results = await ChatStore.shared.searchSessions(query: query)
             if !Task.isCancelled {
-                searchMatchedIds = Set(results.map(\.session.id))
+                // [P-15] 搜索本来就跨所有人设（SQL 不按 persona 过滤）。
+                // 列表只看本角色时，搜索结果也必须收在同一范围内，
+                // 否则会出现「搜到一条点进去却不在列表里」的会话。
+                let visible = Set(sessions.map(\.id))
+                let ids = showAllPersonas ? results.map(\.session.id) : results.map(\.session.id).filter { visible.contains($0) }
+                searchMatchedIds = Set(ids)
             }
         }
     }
@@ -6748,6 +6789,10 @@ private struct EmptyChatDirectoryTimeline: View {
 /// kernel boot) — replaces every system ProgressView spinner there, so the
 /// old "菊花" never appears after / alongside the new loading UI.
 struct LoadingDotsView: View {
+    /// [P-25] 会话加载卡和内核启动遮罩共用这一组尺寸，别再各写各的。
+    static let unifiedDotSize: CGFloat = 9
+    static let unifiedFrameHeight: CGFloat = 22
+
     var dotSize: CGFloat = 10
     // [T-tokenize-all-colors] accent→ ChatColors.accent was hard-coded blue;
     // follow the theme's accent so a warm palette doesn't leave a stray blue dot.
@@ -6787,7 +6832,7 @@ struct LoadingDotsView: View {
 /// isLoadingSession overlay in AIChatView.
 private struct SessionLoadingCard: View {
     var body: some View {
-        LoadingDotsView(dotSize: 8)
+        LoadingDotsView(dotSize: LoadingDotsView.unifiedDotSize)
             .frame(height: 24)
     }
 }
@@ -7035,6 +7080,16 @@ public struct ChatPlusPanel: View {
         GridItem(.flexible(), spacing: 10)
     ]
 
+    /// [P-20] 面板高度不再写死 295。
+    /// 一页磁贴 = 58 图标 + 8 间距 + 12 文字 ≈ 82，行距 22，
+    /// 两行 = 82*2 + 22 = 186；上下内边距 16 + 6 = 22 → 内容 208。
+    /// 指示点区 4 + 7 + 12 = 23，分隔线 1 → 总高 ≈ 232。
+    /// 原来 295 在小屏上把消息区压到 106pt，现在按内容给，不多占。
+    private var panelHeight: CGFloat { 232 }
+
+    /// 三页 TabView 的高度 = 面板高 − 指示点区 − 分隔线
+    private var tabViewHeight: CGFloat { panelHeight - 24 }
+
     public init(onItemTap: @escaping (PlusPanelItemType) -> Void,
                 fastModeOn: Bool = false,
                 enhancedCacheOn: Bool = false) {
@@ -7085,9 +7140,10 @@ public struct ChatPlusPanel: View {
                             onItemTap(item)
                         }
                     }
-                    // 占位保持4列对齐（4项 + 4占位 = 8格，满两行）
+                    // 占位保持4列对齐（4项 + 4占位 = 8格，满两行）。
+                    // [P-31] 不写死 82：字号一变就会错位，让网格自己算行高。
                     ForEach(0..<4, id: \.self) { _ in
-                        Color.clear.frame(height: 82)
+                        Color.clear.frame(maxHeight: .infinity)
                     }
                 }
                 .padding(.horizontal, 18)
@@ -7096,7 +7152,7 @@ public struct ChatPlusPanel: View {
                 .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: 250)
+            .frame(height: tabViewHeight)
 
             // 底部指示小圆点 (支持3页)
             HStack(spacing: 8) {
@@ -7110,7 +7166,7 @@ public struct ChatPlusPanel: View {
             .padding(.top, 4)
             .padding(.bottom, 12)
         }
-        .frame(height: 295)
+        .frame(height: panelHeight)
         .background(CSSThemeVariables.card(isDark: isDark))
     }
 }
@@ -7149,6 +7205,11 @@ struct ChatStickerPanel: View {
     @State private var selectedStickerIds: Set<String> = []
 
     private var isDark: Bool { colorScheme == .dark }
+
+    /// [P-20] 与加号面板同高，两个抽屉切换时不跳。
+    private var panelHeight: CGFloat { 232 }
+
+    private var gridHeight: CGFloat { panelHeight - 52 }
 
     private var displayCategories: [String] {
         // [P-08] 分类标签要跟 store.categories 走。原来写死 ["全部","常用"]，
@@ -7248,7 +7309,7 @@ struct ChatStickerPanel: View {
                             Button {
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                                 let moved = store.batchMoveCategory(ids: selectedStickerIds, newCategory: cat)
-                                MinisToast.show("已将 \(moved) 个表情移动至「\(cat)」")
+                                MinisToast.show(AppLocalized("已将 \(moved) 个表情移动至「\(cat)」"))
                                 selectedStickerIds.removeAll()
                             } label: {
                                 Text(cat)
@@ -7277,7 +7338,7 @@ struct ChatStickerPanel: View {
                         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
                         let count = selectedStickerIds.count
                         store.deleteStickers(ids: selectedStickerIds)
-                        MinisToast.show("已批量删除 \(count) 个表情包")
+                        MinisToast.show(AppLocalized("已批量删除 \(count) 个表情包"))
                         selectedStickerIds.removeAll()
                     } label: {
                         HStack(spacing: 3) {
@@ -7354,9 +7415,9 @@ struct ChatStickerPanel: View {
                             Button {
                                 let restored = store.restoreLatestBackup()
                                 if restored > 0 {
-                                    MinisToast.show("已从备份恢复 \(restored) 个表情", systemImage: "checkmark.circle.fill")
+                                    MinisToast.show(AppLocalized("已从备份恢复 \(restored) 个表情"), systemImage: "checkmark.circle.fill")
                                 } else {
-                                    MinisToast.show("备份文件已损坏，恢复失败", systemImage: "exclamationmark.triangle")
+                                    MinisToast.show(AppLocalized("备份文件已损坏，恢复失败"), systemImage: "exclamationmark.triangle")
                                 }
                             } label: {
                                 Label("从备份恢复表情档案", systemImage: "arrow.counterclockwise.circle")
@@ -7573,9 +7634,9 @@ struct ChatStickerPanel: View {
                 .padding(.top, 8)
                 .padding(.bottom, 16)
             }
-            .frame(height: 245)
+            .frame(height: gridHeight)
         }
-        .frame(height: 295)
+        .frame(height: panelHeight)
         .background(CSSThemeVariables.card(isDark: isDark))
         .contentShape(Rectangle())
         .onTapGesture {
@@ -7612,7 +7673,7 @@ struct ChatStickerPanel: View {
                 }
                 if addedCount > 0 {
                     await MainActor.run {
-                        MinisToast.show("成功导入 \(addedCount) 个表情", systemImage: "checkmark.circle.fill")
+                        MinisToast.show(AppLocalized("成功导入 \(addedCount) 个表情"), systemImage: "checkmark.circle.fill")
                     }
                 }
             }
@@ -7677,10 +7738,10 @@ struct ChatStickerPanel: View {
                     }
                     await MainActor.run {
                         if addedCount > 0 {
-                            MinisToast.show("成功批量添加 \(addedCount) 个表情包！", systemImage: "checkmark.circle.fill")
+                            MinisToast.show(AppLocalized("成功批量添加 \(addedCount) 个表情包！"), systemImage: "checkmark.circle.fill")
                         } else {
                             // [P-11] 全部失败（太大 / 权限被拒 / 读不出来）时不报成功。
-                            MinisToast.show("没有添加任何表情包，请检查图片是否可读", systemImage: "exclamationmark.triangle")
+                            MinisToast.show(AppLocalized("没有添加任何表情包，请检查图片是否可读"), systemImage: "exclamationmark.triangle")
                         }
                     }
                 }
@@ -7699,7 +7760,7 @@ struct ChatStickerPanel: View {
         .onAppear {
             // [P-01] 档案被按图片重建过时，在这里提示一次（store 构造时还没有 window）。
             if store.consumeRebuildNotice() {
-                MinisToast.show("表情档案读取失败，已按图片重建（标题用文件名，分类落「其他」）。可在「功能」菜单里从备份恢复。", systemImage: "exclamationmark.triangle")
+                MinisToast.show(AppLocalized("表情档案读取失败，已按图片重建（标题用文件名，分类落「其他」）。可在「功能」菜单里从备份恢复。"), systemImage: "exclamationmark.triangle")
             }
         }
     }
@@ -9213,7 +9274,7 @@ struct StickerEditSheet: View {
                     if self.title.isEmpty { self.title = name }
                     if self.shortDesc.isEmpty { self.shortDesc = name }
                 } else {
-                    MinisToast.show("图片超过15MB上限", systemImage: "exclamationmark.triangle.fill")
+                    MinisToast.show(AppLocalized("图片超过15MB上限"), systemImage: "exclamationmark.triangle.fill")
                 }
             }
         }

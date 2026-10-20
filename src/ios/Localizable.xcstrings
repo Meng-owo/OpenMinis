@@ -1,6 +1,139 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Show chats from all personas" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show chats from all personas" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "显示所有人设的会话" } }
+      }
+    },
+    "Copy error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy error" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制错误信息" } }
+      }
+    },
+    "Long press to copy this error" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Long press to copy this error" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "长按可复制这条错误" } }
+      }
+    },
+    "当前模型不支持快速模式" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fast mode is not supported by the current model." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前模型不支持快速模式" } }
+      }
+    },
+    "当前模型不支持增强缓存" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enhanced cache is not supported by the current model." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前模型不支持增强缓存" } }
+      }
+    },
+    "增强缓存已关" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enhanced cache off." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "增强缓存已关" } }
+      }
+    },
+    "增强缓存已开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Enhanced cache on." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "增强缓存已开" } }
+      }
+    },
+    "快速模式已开" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fast mode on." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "快速模式已开" } }
+      }
+    },
+    "快速模式已关" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fast mode off." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "快速模式已关" } }
+      }
+    },
+    "当前还没有对话记录可导出" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No conversation to export yet." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "当前还没有对话记录可导出" } }
+      }
+    },
+    "备份文件已损坏，恢复失败" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The backup is corrupted — restore failed." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "备份文件已损坏，恢复失败" } }
+      }
+    },
+    "没有添加任何表情包，请检查图片是否可读" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing was added. Check that the images are readable." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有添加任何表情包，请检查图片是否可读" } }
+      }
+    },
+    "图片超过15MB上限" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Image exceeds the 15 MB limit." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "图片超过15MB上限" } }
+      }
+    },
+    "已将 %lld 个表情移动至「%@」" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Moved %lld sticker(s) to %@." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已将 %lld 个表情移动至「%@」" } }
+      }
+    },
+    "已批量删除 %lld 个表情包" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Deleted %lld sticker(s)." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已批量删除 %lld 个表情包" } }
+      }
+    },
+    "成功导入 %lld 个表情" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Imported %lld sticker(s)." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "成功导入 %lld 个表情" } }
+      }
+    },
+    "成功批量添加 %lld 个表情包！" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Added %lld sticker(s)!" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "成功批量添加 %lld 个表情包！" } }
+      }
+    },
+    "已从备份恢复 %lld 个表情" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restored %lld sticker(s) from backup." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已从备份恢复 %lld 个表情" } }
+      }
+    },
+    "表情档案读取失败，已按图片重建（标题用文件名，分类落「其他」）。可在「功能」菜单里从备份恢复。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The sticker catalog could not be read and was rebuilt from the image files (titles use file names, category falls back to Other). You can restore a backup from the Function menu." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "表情档案读取失败，已按图片重建（标题用文件名，分类落「其他」）。可在「功能」菜单里从备份恢复。" } }
+      }
+    },
     "This session is read-only. Fork it from the session list to continue." : {
       "extractionState" : "manual",
       "localizations" : {
