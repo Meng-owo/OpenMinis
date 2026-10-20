@@ -1710,7 +1710,7 @@ extension AIChatViewModel {
     func resolveCityCoordinate(_ name: String) async -> (lat: Double, lng: Double)? {
         let escaped = name.replacingOccurrences(of: "'", with: "'\\''")
         guard let res = try? await executeCommand(
-            "apple-location forward --address '\(escaped)' --compact", timeout: 20, { _ in }),
+            "apple-location forward --address '\(escaped)' --compact", timeout: 20, lineCallback: { _ in }),
               res.exitCode == 0,
               let data = res.output.data(using: .utf8),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
