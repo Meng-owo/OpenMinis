@@ -2408,6 +2408,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // which the no-id fallback below can locate its twin as the last
             // history bubble.
             let editRowWasLastUserRow = (messages.lastIndex(where: { $0.role == .user }) == editIdx)
+            // [10-20] Same guard as retryFromMessage: a deferred iCloud reload
+            // landing inside this window would rebuild `messages` from a stale
+            // DB snapshot and resurrect the rows we are about to drop.
+            let hadSnapshot = truncationSnapshot != nil
+            if !hadSnapshot { captureTruncationSnapshot() }
+            isTruncatingForRetry = true
+            canResume = false
+            userDidCancel = false
+
             // Remove the edited message and everything after it from UI
             if editIdx < messages.count {
                 messages.removeSubrange(editIdx...)
@@ -2437,21 +2446,24 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     }
                     keepUpTo = i
                 }
-                // [T-ios-retry-db-drift 09-27] Fail-safe: the count never
-                // reached its target (queued N-in-1 merges shrink the bubble
-                // total) — the loop above then left keepUpTo at the last index
-                // and the edit-resend would keep the edited entry's old answer
-                // in the model's context. If the edited row was the LAST user
-                // row its twin is the last user bubble — cut strictly before
-                // it. A middle-row edit with a missing id can't be located
-                // exactly; keep the full history and let the log show it.
                 if !cutFound {
                     if editRowWasLastUserRow,
                        let lastBubble = agentHistory.lastIndex(where: { Self.isUserBubbleEntry($0) }) {
                         logger.error("✏️[RetryDiag] edit path bubble-count not found (remainingUserCount=\(remainingUserCount), history=\(agentHistory.count)) — fail-safe: cutting before last user bubble @\(lastBubble)")
                         keepUpTo = lastBubble - 1
                     } else {
-                        logger.error("✏️[RetryDiag] edit path bubble-count not found and not safely locatable (remainingUserCount=\(remainingUserCount), history=\(agentHistory.count), editRowWasLastUserRow=\(editRowWasLastUserRow)) — keeping full history")
+                        // [10-20] Fail CLOSED, matching retryFromMessage. The old
+                        // path kept the FULL history here, which means the model
+                        // still had the answer the user just edited away — the
+                        // reported "I edited it and it quoted the old reply".
+                        // A middle-row edit with no resolvable id cannot be cut
+                        // safely, so refuse instead of poisoning the rerun.
+                        logger.error("✏️[RetryDiag] edit path anchor NOT FOUND and not safely locatable (remainingUserCount=\(remainingUserCount), history=\(agentHistory.count), editRowWasLastUserRow=\(editRowWasLastUserRow)) — REFUSING resend, context would be stale")
+                        if !hadSnapshot { restoreTruncatedMessages(from: editIdx) }
+                        truncationSnapshot = nil
+                        isTruncatingForRetry = false
+                        errorMessage = AppLocalized("Couldn't locate this message in the conversation history, so it can't be re-sent. Reload the session and try again.")
+                        return
                     }
                 }
             }
@@ -2468,8 +2480,20 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let hasMarker = cachedLatestMarker != nil
             logger.info("[DeleteAfter] edit path: sid=\(sessionId?.prefix(8) ?? "nil") keepCount=\(persistedKeepCount) hasMarker=\(hasMarker)")
             if let sessionId {
-                Task { await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: persistedKeepCount) }
+                Task { [weak self] in
+                    await ChatStore.shared.deleteMessagesAfter(sessionId: sessionId, keepCount: persistedKeepCount)
+                    // DB 截断落盘后再放开守卫；此后 isProcessing=true 继续压着重载。
+                    self?.isTruncatingForRetry = false
+                }
+            } else {
+                isTruncatingForRetry = false
             }
+            // [10-20] Same cleanup retry does: a compact marker anchored on a
+            // row we just cut now points at nothing, and effectiveAgentHistory()
+            // degrades to the FULL history — silently undoing the compaction
+            // and feeding the model the turns the user just removed.
+            if !hadSnapshot { discardTruncationSnapshot() }
+            postTruncationCleanup()
             // Rebuild toolSnapshots from remaining messages
             toolSnapshots = messages
                 .filter { $0.role == .assistant }
