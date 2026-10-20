@@ -85,6 +85,11 @@ enum MCPManagementTools {
     }
 
     /// 在沙箱里跑一条 minis-mcp-cli 命令（工具清单/探针/管理都走这条）。
+    ///
+    /// 必须看 exitCode：CLI 失败时（remove/enable/disable 目标不存在）退出码是 1，
+    /// 但 stdout 仍可能是空串或非 JSON。旧实现只回 output，于是
+    /// `_ = try await runCLI("...remove...")` 一律当成功，对用户报「已移除」，
+    /// 实际一个字节都没动。现在非零退出码直接抛，调用方的 catch 才生效。
     private static func runCLI(_ command: String, timeout: TimeInterval = 60) async throws -> String {
         let result = try await ISHExecutionCoordinator.shared.execute(
             sessionId: "mcp-settings",
@@ -92,6 +97,11 @@ enum MCPManagementTools {
             timeout: timeout,
             lineCallback: { _ in },
             pidCallback: { _ in })
+        guard result.exitCode == 0 else {
+            let detail = result.output.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw MCPManagementError.cli(
+                detail.isEmpty ? "命令失败（exit \(result.exitCode)）：\(command)" : detail)
+        }
         return result.output
     }
 
