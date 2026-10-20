@@ -5839,11 +5839,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // that later rounds respect.
             var contextHistory = applyRequestImageBudget(effectiveAgentHistory())
             // [Kelivo Alignment] 人设级上下文条数限制
-            if let activeP = PersonaStore.shared.personas.first(where: { $0.id == (sessionPersonaId ?? PersonaStore.currentID()) }),
-               activeP.limitContextMessages, activeP.contextMessageSize > 0,
-               contextHistory.count > activeP.contextMessageSize {
-                contextHistory = Array(contextHistory.suffix(activeP.contextMessageSize))
-            }
+            //
+            // [10-20] 不能直接 suffix(n)。原始下标可能落在 assistant 的
+            // tool_use 和紧接着的 tool_result 之间，切出来的历史里工具调用
+            // 没有配对结果（或反之），上游必回 400，而且这个 400 是确定性的
+            // ——同一份历史每次都会撞。改成按「整轮」对齐：从尾部往回数到
+            // 目标条数，再向后推到最近一条 user 消息之前，保证 user 开头、
+            // 工具配对完整。
+            contextHistory = applyPersonaContextLimit(contextHistory)
             // [T-msgidx-oob] Re-resync before subscripting. The loop-top resync
             // (~line 4698) is not sufficient for this site: the in-loop
             // compaction guard above runs `await compactBefore(...)` in between,
@@ -6073,7 +6076,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     msgIdx = resynced
                     streamResult = try await streamWithGroupFallbackUntilContent(
                         provider: provider,
-                        messages: applyRequestImageBudget(effectiveAgentHistory()),
+                        messages: applyPersonaContextLimit(applyRequestImageBudget(effectiveAgentHistory())),
                         baseSystemPrompt: baseSystemPrompt,
                         systemPrompt: userSystemPrompt,
                         tools: tools,
@@ -6096,7 +6099,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     do {
                         let retryStream = try await streamWithAutoRetry(
                             provider: provider,
-                            messages: applyRequestImageBudget(effectiveAgentHistory()),
+                            messages: applyPersonaContextLimit(applyRequestImageBudget(effectiveAgentHistory())),
                             systemPrompt: userSystemPrompt,
                             tools: tools,
                             maxTokens: dynamicMaxTokens(provider: provider, model: activeModel, lastContextTokens: turnUsage.latestContextTokens),
@@ -6147,7 +6150,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         // group entries until one returns non-empty content.
                         streamResult = try await streamWithGroupFallbackUntilContent(
                             provider: provider,
-                            messages: applyRequestImageBudget(effectiveAgentHistory()),
+                            messages: applyPersonaContextLimit(applyRequestImageBudget(effectiveAgentHistory())),
                             baseSystemPrompt: baseSystemPrompt,
                             systemPrompt: userSystemPrompt,
                             tools: tools,
@@ -7147,5 +7150,51 @@ enum LLMProviderError: LocalizedError {
         switch self {
         case .noCredentials: return "No API credentials available"
         }
+    }
+}
+
+// MARK: - Persona context limit
+
+extension AIChatViewModel {
+
+    /// 从历史尾部取至多 `maxCount` 条，但只在「轮边界」切。
+    ///
+    /// 直接 `suffix(n)` 会把一轮切碎：assistant 的 tool_use 和紧随其后的
+    /// tool_result 是分开的两条，切在中间上游必回 400。这里从 n 开始往后
+    /// 找第一条 user 消息，从它开始保留——宁可少几条，也不送半轮。
+    /// 找不到 user 边界（全是 assistant，例如某段纯续写）时退回原样保留
+    /// 尾部，不再二次尝试。
+    static func safeContextSuffix(_ history: [AgentMessage], maxCount: Int) -> [AgentMessage] {
+        guard maxCount > 0, history.count > maxCount else { return history }
+        var start = history.count - maxCount
+        // 往后推到最近的 user 消息
+        var found = false
+        while start < history.count {
+            if history[start].role == .user {
+                found = true
+                break
+            }
+            start += 1
+        }
+        guard found else {
+            // 整段都没有 user（极端的纯续写场景）——保尾部，交给上游判断。
+            return Array(history.suffix(maxCount))
+        }
+        return Array(history[start...])
+    }
+}
+
+// MARK: - Persona context limit
+
+extension AIChatViewModel {
+
+    /// 人设级上下文条数限制。抽成方法是因为三处都要用：主请求、autoRetry、
+    /// group fallback。原来只包了主路径，重试和回退送的是未裁剪的完整历史
+    /// ——用户以为限制生效了，实际换个模型重试就绕过去了。
+    func applyPersonaContextLimit(_ history: [AgentMessage]) -> [AgentMessage] {
+        guard let activeP = PersonaStore.shared.personas.first(where: { $0.id == (sessionPersonaId ?? PersonaStore.currentID()) }),
+              activeP.limitContextMessages, activeP.contextMessageSize > 0,
+              history.count > activeP.contextMessageSize else { return history }
+        return Self.safeContextSuffix(history, maxCount: activeP.contextMessageSize)
     }
 }

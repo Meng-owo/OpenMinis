@@ -4914,8 +4914,17 @@ struct AIChatView: View {
         // [T-ios-photo-pick-placeholder] Same attachment gate as canSend: while
         // any picked photo/video is still loading, enqueueing would snapshot
         // its /dev/null placeholder and silently drop the real bytes.
-        vm.isProcessing && !vm.hasLoadingAttachments
-            && !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        //
+        // [10-20] Content test must match canSend exactly. It used to require
+        // non-empty TEXT, so with only a photo attached during a running reply
+        // the button stayed in Stop mode — tapping it killed the reply instead
+        // of queueing the photo. enqueuePrompt() has always accepted
+        // attachments, so the gate was the only thing blocking it.
+        guard vm.isProcessing, !vm.hasLoadingAttachments else { return false }
+        let hasText = !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasReadyAttachment = vm.attachments.contains { $0.loadState == .ready }
+        let hasPendingSticker = vm.pendingSticker != nil
+        return hasText || hasReadyAttachment || hasPendingSticker
     }
 
     /// Whether the composer actually holds something worth moving to another
