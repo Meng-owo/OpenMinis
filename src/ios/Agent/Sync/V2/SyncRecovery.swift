@@ -80,6 +80,15 @@ enum SyncRecovery {
         // Clear the local sync bookkeeping (tokens, caches, remote mirrors) so
         // the next run starts from scratch. Local sessions/messages/files are
         // untouched; `markAllLocalForReupload` is what repopulates the cloud.
+        //
+        // [T-sync-recovery-v1-parity] The CloudKit change token MUST go too:
+        // it names zone changes in zones we just deleted, and restarting with
+        // it would ask CloudKit about records that no longer exist.
+        for t in SyncCore.shared.transports {
+            if let icloud = t as? ICloudSharedZoneTransport {
+                await icloud.resetChangeToken()
+            }
+        }
         await ChatStore.shared.clearAllRemoteTables()
         await ChatStore.shared.markAllLocalForReupload(force: true)
         _ = await ForceSyncHelper.markMemoryDirty()

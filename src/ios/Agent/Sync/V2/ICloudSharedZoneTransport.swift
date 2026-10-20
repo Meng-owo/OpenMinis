@@ -1107,6 +1107,19 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         recentFetchTimer = nil
     }
 
+    /// Drop the persisted CKSyncEngine change token.
+    ///
+    /// [T-sync-recovery-v1-parity] Required after every zone this account owns
+    /// has been deleted: the token names zone changes that no longer exist, so
+    /// a restart carrying it asks CloudKit about zones that are gone. Clearing
+    /// it makes the next start begin from a clean state, which is exactly what
+    /// the "Delete iCloud Data" recovery action needs.
+    func resetChangeToken() {
+        stateSerialization = nil
+        try? FileManager.default.removeItem(at: stateURL)
+        logger.warning("[SyncTransport] change token cleared (recovery)")
+    }
+
     func observe(handler: @escaping (SyncInboundBatch) -> Void) {
         self.observeHandler = handler
     }
