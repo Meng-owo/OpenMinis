@@ -340,7 +340,12 @@ private struct MemoryContentView: View {
                 withAnimation { saved = false }
             }
         } catch {
-            // stay in editing mode on failure
+            // Stay in editing mode so the user's text is not lost — but say
+            // why, otherwise the Save button just looks dead.
+            MinisToast.show(
+                String(format: AppLocalized("Save failed: %@"), error.localizedDescription),
+                systemImage: "exclamationmark.triangle.fill"
+            )
         }
     }
 }
@@ -466,6 +471,14 @@ private struct MemoryWriteDetailView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                 withAnimation { saved = false }
             }
+        } else {
+            // `replaceEntryInLog` returns nil when the entry could not be
+            // located in the last two days' logs, or when the write failed.
+            // Staying in edit mode without a word looks like a dead button.
+            MinisToast.show(
+                AppLocalized("Could not save: this memory entry was not found in the daily log."),
+                systemImage: "exclamationmark.triangle.fill"
+            )
         }
     }
 

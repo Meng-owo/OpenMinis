@@ -109469,6 +109469,29 @@
           }
         }
       }
+    },
+    "Could not save: this memory entry was not found in the daily log.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save: this memory entry was not found in the daily log."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存：这条记忆没有在日志里找到。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法儲存：這條記憶沒有在日誌裡找到。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
