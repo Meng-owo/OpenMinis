@@ -57,8 +57,8 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 
     @objc public static func getSticker(id: String) -> NSDictionary {
         let sem = DispatchSemaphore(value: 0)
@@ -101,8 +101,8 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 
     @objc public static func editSticker(
         id: String,
@@ -154,8 +154,8 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 
     @objc public static func deleteSticker(id: String) -> NSDictionary {
         let sem = DispatchSemaphore(value: 0)
@@ -179,8 +179,8 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 
     @objc public static func batchMove(ids: [String], category: String) -> NSDictionary {
         let sem = DispatchSemaphore(value: 0)
@@ -223,8 +223,8 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 
     @objc public static func listCategories() -> NSDictionary {
         let sem = DispatchSemaphore(value: 0)
@@ -245,6 +245,6 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-            return out as NSDictionary
-}
+        return out as NSDictionary
+    }
 }
