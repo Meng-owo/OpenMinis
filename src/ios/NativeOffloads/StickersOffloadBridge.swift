@@ -51,10 +51,12 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 
     @objc public static func getSticker(id: String) -> NSDictionary {
@@ -92,10 +94,12 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 
     @objc public static func editSticker(
@@ -142,10 +146,12 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 
     @objc public static func deleteSticker(id: String) -> NSDictionary {
@@ -164,10 +170,12 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 
     @objc public static func batchMove(ids: [String], category: String) -> NSDictionary {
@@ -205,10 +213,12 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 
     @objc public static func listCategories() -> NSDictionary {
@@ -224,9 +234,11 @@ import UIKit
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时不能当成功返回：ObjC 侧把缺 ok 视为 true，会变成
+            // 「命令成功但什么都没做」。这里明确给 ok:false。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return ["ok": false, "error": "timeout",
+                    "message": "The app did not answer within the timeout."] as NSDictionary
         }
-        return out as NSDictionary
     }
 }

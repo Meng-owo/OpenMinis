@@ -17,7 +17,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
 
     /// Blocking helper: the offload handler runs on the iSH guest thread,
     /// never on main, so a semaphore around a main-actor Task is safe here.
-    private static func onMain<T>(_ body: @escaping @MainActor () async -> T) -> T {
+    private static func onMain<T>(_ body: @escaping @MainActor () async -> T) -> T? {
         let sem = DispatchSemaphore(value: 0)
         var out: T!
         Task { @MainActor in
@@ -25,8 +25,11 @@ private let logger = AppLogger(category: "ScheduledOffload")
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {
-            // [batch7 / W3C-01] Never hang the caller forever.
-            NSLog("[CLIBridge] semaphore wait timed out - returning default value")
+            // 超时直接返回 nil：旧代码只 NSLog 一句，然后 `return out`，
+            // 此时 out 仍是未赋值的 T!，强解包当场崩。调用方拿到 nil 会走
+            // 各自的失败分支（字典返回值转成 ok:false，Bool 当失败）。
+            NSLog("[CLIBridge] semaphore wait timed out")
+            return nil
         }
         return out
     }
@@ -245,7 +248,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
                 out["reply_hint"] = "This is a proactive pulse: fires are your own heartbeat, not a task report. Tell her you set it up in your own voice — what you might do with the free time — and she can tap the heart icon to see or poke it. Never announce reminders mechanically."
             }
             return out as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     // MARK: - list / delete / enable / run
@@ -255,7 +259,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             let registry = AgentJobRegistry.shared
             let jobs = registry.list().map { registry.jobDict($0) }
             return ["tasks": jobs, "count": jobs.count] as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     @objc public static func delete(id: String) -> NSDictionary {
@@ -268,7 +273,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             registry.cancel(jobId: job.id, reason: "cli delete")
             registry.remove(jobId: job.id)
             return ["deleted": job.id].merging(labelNote) { _, new in new } as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     @objc public static func setEnabled(id: String, enabled: Bool) -> NSDictionary {
@@ -280,7 +286,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             }
             registry.setEnabled(jobId: job.id, enabled: enabled)
             return ["id": job.id, "enabled": enabled].merging(labelNote) { _, new in new } as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     @objc public static func run(id: String) -> NSDictionary {
@@ -296,7 +303,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             out["note"] = "Returned as soon as the prompt was handed to the session; poll `minis-sessions-cli status --id <sessionId>` for completion."
             out.merge(labelNote) { _, new in new }
             return out as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     @objc public static func runsWithId(_ id: String) -> NSDictionary {
@@ -308,7 +316,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             }
             let list = registry.runs(jobId: job.id).map { $0.toDict() }
             return ["id": job.id, "runs": list, "count": list.count].merging(labelNote) { _, new in new } as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     /// [AUD-09] Resolve `--id <uuid|label>` for list / delete / enable / run.
@@ -523,7 +532,8 @@ private let logger = AppLogger(category: "ScheduledOffload")
             out["updated"] = true
             out["note"] = "Only the fields you named were changed; the task kept its id, its creation time and its run history."
             return out.merging(labelNote) { _, new in new } as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 
     /// [AUD-11] Write one task's definition + full run history to a file.
@@ -563,6 +573,7 @@ private let logger = AppLogger(category: "ScheduledOffload")
             logger.info("[minis-scheduled] exported \(runs.count) run(s) of \(job.id.prefix(8)) to \(path)")
             return ["ok": true, "job_id": job.id, "path": path, "count": runs.count]
                 .merging(labelNote) { _, new in new } as NSDictionary
-        }
+        } ?? ["ok": false, "error": "timeout",
+              "message": "The app did not answer within 5s; nothing was changed."] as NSDictionary
     }
 }
