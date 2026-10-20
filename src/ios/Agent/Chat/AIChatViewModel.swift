@@ -3874,6 +3874,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             return
         }
 
+        // [T-single-delete-id-fallback] Collect the DB ids of EVERY history row
+        // this bubble owns, not just the first one. A live bubble never got a
+        // sourceSortOrder — that is only stamped by loadMessages — so a
+        // continuation-carrying reply used to fall through to the by-id branch
+        // and lose only its first row; the rest came back on the next reload.
+        // Read BEFORE the array mutation below, since removedIdxs indexes into
+        // the array that is about to shrink.
+        let removedDbIds: [String] = removedIdxs.compactMap { agentHistory[$0].dbMessageId }
+
         // Apply: UI → history → DB.
         captureTruncationSnapshot()
         messages.remove(at: idx)
@@ -3886,9 +3895,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         if let sessionId {
             let sid = sessionId
-            if let s = rangeStart, let e = rangeEnd {
+            if !removedDbIds.isEmpty {
                 // Awaited, not fire-and-forget: the UI must not show the message
                 // gone while the row survives a reload.
+                Task { @MainActor in
+                    await ChatStore.shared.deleteMessagesByIds(sessionId: sid, ids: removedDbIds)
+                    logger.info("[SingleDelete] role=\(String(describing: target.role)) by ids=\(removedDbIds.count) first=\(removedDbIds[0].prefix(8))")
+                }
+            } else if let s = rangeStart, let e = rangeEnd {
                 Task { @MainActor in
                     let n = await ChatStore.shared.deleteMessagesInSortRange(sessionId: sid, fromSortOrder: s, throughSortOrder: e)
                     logger.info("[SingleDelete] role=\(String(describing: target.role)) rows=\(n) range=\(s)...\(e)")
