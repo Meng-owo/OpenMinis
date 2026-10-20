@@ -800,7 +800,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
             ),
             CatalogItem(
                 id: "send_voice",
-                name: "send_voice",
+                name: "send_voice / textToSpeech",
                 category: .webMedia,
                 synopsis: "Send WeChat-style voice message bubbles via configured TTS service.",
                 quickSyntax: "tool call: send_voice(text: \"...\")",
@@ -841,12 +841,60 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 docRef: "List /var/minis/skills/ to discover"
             ),
             CatalogItem(
+                id: "subagent_task",
+                name: "subagent_task",
+                category: .memoryExtensions,
+                synopsis: "Delegate a self-contained job to a sub agent with its own tool loop; returns a result message later.",
+                quickSyntax: "tool call: subagent_task(task: \"...\", agent: \"...\", wait: true|false)",
+                docRef: "Tool schema (status/steer/cancel/resume actions)"
+            ),
+            CatalogItem(
+                id: "ask_user",
+                name: "askUser / ask_user_input_v0",
+                category: .memoryExtensions,
+                synopsis: "Ask the user a question on an in-chat card and wait for the answer (options / confirm / free text).",
+                quickSyntax: "tool call: askUser(questions: [{type: \"options\", question: \"...\", options: [...]}])",
+                docRef: "Tool schema"
+            ),
+            CatalogItem(
+                id: "device_utility_tools",
+                name: "calculate / timeInfo / clipboard / read_image",
+                category: .system,
+                synopsis: "Built-in device utilities: math evaluation, local date-time, clipboard read/write, image inspection.",
+                quickSyntax: "tool calls: calculate(expression), timeInfo, clipboard(action: read|write), read_image(path)",
+                docRef: "Tool schemas"
+            ),
+            CatalogItem(
+                id: "device_data_tools",
+                name: "weather / currentLocation / calendar* / reminders* / healthSummary",
+                category: .apple,
+                synopsis: "Structured wrappers over Apple frameworks: weather (location is geocoded to lat/lng first), location, calendar query+create, reminders query+create+complete, health summary.",
+                quickSyntax: "tool calls: weather(location), currentLocation, calendarQuery(range), calendarCreate(title,start_time,end_time), remindersQuery(list_name), remindersCreate(title,due_date), remindersComplete(reminder_id), healthSummary",
+                docRef: "Tool schemas (the apple-* CLI entries below are the raw equivalents)"
+            ),
+            CatalogItem(
+                id: "browse_stickers",
+                name: "browse_stickers",
+                category: .webMedia,
+                synopsis: "Browse one sticker drawer's full catalog to pick an exact sticker id before sending.",
+                quickSyntax: "tool call: browse_stickers(drawer: \"撒娇\")",
+                docRef: "Tool schema"
+            ),
+            CatalogItem(
                 id: "mcp_catalog",
                 name: "MCP Servers",
                 category: .memoryExtensions,
                 synopsis: "External MCP server ecosystem for specialized tools.",
                 quickSyntax: "minis-mcp-cli tools <server> | call <server> <tool>",
                 docRef: "minis-mcp-cli list | minis-mcp-cli --help"
+            ),
+            CatalogItem(
+                id: "mcp_management",
+                name: "add_mcp / list_mcp / remove_mcp / toggle_mcp",
+                category: .memoryExtensions,
+                synopsis: "Add, list, remove or enable/disable an MCP server from chat (two-stage: probe first, then write after the owner confirms).",
+                quickSyntax: "tool calls: list_mcp, add_mcp(name, transport, url|command), toggle_mcp(name, enabled), remove_mcp(name)",
+                docRef: "Tool schemas"
             )
         ]
     }
