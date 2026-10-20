@@ -82,8 +82,10 @@ final class BridgeKernelAssembly {
     private func registerToolsWithRetry() async {
         var deviceError: Error?
         for attempt in 1...Self.maxRegisterAttempts {
-            for name in DeviceTools.toolNames {
-                _ = await registry.unregister(name: name)
+            // 按 device_ 前缀清残留，不依赖 DeviceTools.toolNames 这张手写名单。
+            let cleared = await DeviceTools.clearRegistered(into: registry)
+            if !cleared.isEmpty {
+                Self.logger.info("重试前清掉 \(cleared.count) 个设备工具残留：\(cleared.joined(separator: ", "))")
             }
             do {
                 try await DeviceTools.registerAll(into: registry)
