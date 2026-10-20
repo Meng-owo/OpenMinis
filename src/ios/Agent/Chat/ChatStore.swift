@@ -7100,7 +7100,13 @@ extension ChatStore {
                 sqlite3_bind_text(stmt, 4, (session.modelId as NSString).utf8String, -1, nil)
                 sqlite3_bind_double(stmt, 5, session.createdAt.timeIntervalSince1970)
                 sqlite3_bind_double(stmt, 6, remoteUpdated)
-                sqlite3_bind_text(stmt, 7, (fromDeviceId as NSString).utf8String, -1, nil)
+                // [T-sync-recovery-v1-parity] An empty origin means "the writer
+                // didn't say" (a peer that predates the source-device stamp),
+                // not "the device whose id is the empty string". Storing "" makes
+                // `remoteDeviceId` non-nil, so the row claims to be remote while
+                // being unattributable — the iCloud badge shows and nothing can
+                // say where it came from. NULL is the honest value.
+                bindOptionalText(stmt, index: 7, value: fromDeviceId.isEmpty ? nil : fromDeviceId)
                 sqlite3_bind_int(stmt, 8, memoryEnabled ? 1 : 0)
                 bindOptionalText(stmt, index: 9, value: modelBinding)
                 if let pinTs = resolvedPinnedAt {

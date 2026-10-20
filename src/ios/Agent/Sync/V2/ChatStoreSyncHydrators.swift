@@ -214,10 +214,21 @@ enum ChatStoreSyncHydrators {
             createdAt: createdAt, updatedAt: updatedAt
         )
         session.pinnedAt = pinnedAt
-        // v2 doesn't currently track per-device origin in PortableRecord;
-        // pass an empty string as a sentinel ("unknown remote device").
+        // [T-sync-recovery-v1-parity] Attribute the session to the device that
+        // actually wrote it. This used to pass "" with the comment "v2 doesn't
+        // track per-device origin" — but it does now: every outbound record is
+        // stamped with `syncSourceDeviceId`. An empty id is worse than nil:
+        // `colTextOpt` returns "" (not nil) for a zero-length column, so
+        // `remoteDeviceId` becomes "" and `isRemote` is true, which means every
+        // peer session shows the iCloud badge and nothing can say where it came
+        // from. Pass the real id, or nil when the writer predates the stamp.
+        let originDeviceId: String? = {
+            if case .string(let s)? = record.unknownFields[DeviceSyncPolicy.sourceDeviceIdKey],
+               !s.isEmpty { return s }
+            return nil
+        }()
         await ChatStore.shared.mergeRemoteSession(
-            session, fromDeviceId: "",
+            session, fromDeviceId: originDeviceId ?? "",
             memoryEnabled: memoryEnabled,
             modelBinding: modelBinding,
             remotePinnedAtRaw: pinnedAt,
