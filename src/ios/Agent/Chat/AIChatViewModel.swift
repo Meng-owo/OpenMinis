@@ -2501,7 +2501,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // row we just cut now points at nothing, and effectiveAgentHistory()
             // degrades to the FULL history — silently undoing the compaction
             // and feeding the model the turns the user just removed.
-            if !hadSnapshot { discardTruncationSnapshot() }
+            // Unconditional like the retry path: the snapshot is scratch space
+            // for this window, and a caller that already held one (a nested
+            // send) must not leave it dangling after the cut lands.
+            discardTruncationSnapshot()
             postTruncationCleanup()
             // Rebuild toolSnapshots from remaining messages
             toolSnapshots = messages
