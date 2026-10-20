@@ -6033,7 +6033,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     }
                     let reminderStream = try await streamWithAutoRetry(
                         provider: provider,
-                        messages: applyRequestImageBudget(historyWithEmptyToolResultReminder()),
+                        messages: applyPersonaContextLimit(applyRequestImageBudget(historyWithEmptyToolResultReminder())),
                         systemPrompt: userSystemPrompt,
                         tools: tools,
                         maxTokens: dynamicMaxTokens(provider: provider, model: activeModel, lastContextTokens: turnUsage.latestContextTokens),
@@ -7195,17 +7195,24 @@ extension AIChatViewModel {
     static func safeContextSuffix(_ history: [AgentMessage], maxCount: Int) -> [AgentMessage] {
         guard maxCount > 0, history.count > maxCount else { return history }
         var start = history.count - maxCount
-        // 往后推到最近的 user 消息
+        // 往后推到最近的一轮真正的起点。
+        // [T-persona-slice-toolresult] `role == .user` 不等于「一轮开始」：工具
+        // 结果也是 user role 的消息（见 cancel 分支的注释「history already
+        // ends with tool_result (user role)」）。切在它上面，对应的 tool_use
+        // 在刚被切掉的 assistant 里，上游收到孤儿 tool_result 就是确定性 400。
+        // 所以要求这条 user 消息不带 toolResult part。
         var found = false
         while start < history.count {
-            if history[start].role == .user {
+            let entry = history[start]
+            if entry.role == .user,
+               !entry.parts.contains(where: { if case .toolResult = $0 { return true }; return false }) {
                 found = true
                 break
             }
             start += 1
         }
         guard found else {
-            // 整段都没有 user（极端的纯续写场景）——保尾部，交给上游判断。
+            // 整段都是工具往返（极端的纯续写场景）——保尾部，交给上游判断。
             return Array(history.suffix(maxCount))
         }
         return Array(history[start...])
