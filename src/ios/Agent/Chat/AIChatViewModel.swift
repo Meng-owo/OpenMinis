@@ -3895,17 +3895,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         if let sessionId {
             let sid = sessionId
-            if !removedDbIds.isEmpty {
-                // Awaited, not fire-and-forget: the UI must not show the message
-                // gone while the row survives a reload.
-                Task { @MainActor in
-                    await ChatStore.shared.deleteMessagesByIds(sessionId: sid, ids: removedDbIds)
-                    logger.info("[SingleDelete] role=\(String(describing: target.role)) by ids=\(removedDbIds.count) first=\(removedDbIds[0].prefix(8))")
-                }
-            } else if let s = rangeStart, let e = rangeEnd {
+            if let s = rangeStart, let e = rangeEnd {
+                // Reloaded bubble: the sort range is the DB's own answer for
+                // "which rows make up this bubble" — a superset of what
+                // agentHistory knows, so it stays the first choice.
                 Task { @MainActor in
                     let n = await ChatStore.shared.deleteMessagesInSortRange(sessionId: sid, fromSortOrder: s, throughSortOrder: e)
                     logger.info("[SingleDelete] role=\(String(describing: target.role)) rows=\(n) range=\(s)...\(e)")
+                }
+            } else if !removedDbIds.isEmpty {
+                // Live bubble (never reloaded → no sort range): delete EVERY row
+                // it owns, not just the first. Continuation rows had no UI twin
+                // and used to survive, so the bubble came back half-populated
+                // on the next load.
+                Task { @MainActor in
+                    await ChatStore.shared.deleteMessagesByIds(sessionId: sid, ids: removedDbIds)
+                    logger.info("[SingleDelete] role=\(String(describing: target.role)) by ids=\(removedDbIds.count) first=\(removedDbIds[0].prefix(8))")
                 }
             } else if let dbId = target.dbRowId {
                 Task { @MainActor in
