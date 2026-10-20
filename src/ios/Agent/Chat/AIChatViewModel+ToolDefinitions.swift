@@ -729,7 +729,7 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 name: "apple-weather",
                 category: .apple,
                 synopsis: "WeatherKit forecasts: current, hourly, daily, alerts, report.",
-                quickSyntax: "apple-weather current | hourly | daily | report [--location \"...\"]",
+                quickSyntax: "apple-weather current | hourly | daily | report [--lat N --lng N]",
                 docRef: "apple-weather --help"
             ),
             CatalogItem(

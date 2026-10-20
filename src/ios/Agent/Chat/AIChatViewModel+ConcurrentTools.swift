@@ -1233,8 +1233,22 @@ extension AIChatViewModel {
 
         case "weather":
             let loc = (toolArgs["location"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            // `apple-weather` 只认 --lat/--lng，没有 --location。以前把城市名直接
+            // 拼成 `--location '上海'`，参数被静默忽略，永远返回本机位置——问北京
+            // 天气答的是本机城市，而且 exitCode=0 看不出来。现在先地理编码。
             var cmd = "apple-weather"
-            if !loc.isEmpty { cmd += " --location '\(loc.replacingOccurrences(of: "'", with: "'\\''"))'" }
+            if !loc.isEmpty {
+                if let coord = await resolveCityCoordinate(loc) {
+                    cmd += " --lat \(coord.lat) --lng \(coord.lng)"
+                } else {
+                    toolOutput = "Error: could not resolve location '\(loc)'. Ask the user for a more specific place name."
+                    toolSuccess = false
+                    if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                        messages[msgIdx].blocks[blockIdx].content = toolOutput
+                    }
+                    break
+                }
+            }
             do {
                 let res = try await executeCommand(cmd, timeout: 25) { _ in }
                 toolOutput = res.output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1685,5 +1699,29 @@ private extension AIChatViewModel {
                             systemImage: "exclamationmark.triangle.fill")
             return settle("Error: \(msg)", false)
         }
+    }
+}
+
+// MARK: - Weather location resolution
+
+extension AIChatViewModel {
+    /// 把城市名/地址转成坐标。`apple-weather` 没有 `--location` 参数，
+    /// 只能吃经纬度，所以天气工具必须先用 `apple-location forward` 做一次
+    /// 正向地理编码。解析不出来返回 nil，由调用方给出可见的失败结果，
+    /// 而不是退回"本机位置"这种看起来成功、实际答错地方的行为。
+    func resolveCityCoordinate(_ name: String) async -> (lat: Double, lng: Double)? {
+        let escaped = name.replacingOccurrences(of: "'", with: "'\\''")
+        guard let res = try? await executeCommand(
+            "apple-location forward --address '\(escaped)' --compact", timeout: 20, { _ in }),
+              res.exitCode == 0,
+              let data = res.output.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let body = root["data"] as? [String: Any],
+              let hits = body["locations"] as? [[String: Any]],
+              let first = hits.first,
+              let lat = first["latitude"] as? Double,
+              let lng = first["longitude"] as? Double
+        else { return nil }
+        return (lat, lng)
     }
 }
