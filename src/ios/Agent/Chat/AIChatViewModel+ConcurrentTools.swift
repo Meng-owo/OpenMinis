@@ -1185,20 +1185,10 @@ extension AIChatViewModel {
             var end = (toolArgs["end_time"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             let notes = (toolArgs["notes"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // [10-20] CLI 只认 ISO 8601（`2026-10-25T10:00:00`），空格分隔的
-            // `2026-10-25 10:00` 会报 "Invalid date format"。模型很容易照
-            // 工具描述里的例子写成空格版，所以这里兜一手：把日期和时间的
-            // 第一个空格换成 T，其余不动。已经是 T 的保持原样。
-            func normalizeISO(_ raw: String) -> String {
-                guard raw.contains(" ") else { return raw }
-                if let r = raw.range(of: " ") {
-                    var s = raw
-                    s.replaceSubrange(r, with: "T")
-                    return s
-                }
-                return raw
-            }
-            start = normalizeISO(start)
-            end = normalizeISO(end)
+            // `2026-10-25 10:00` 会报 "Invalid date format"。规范化逻辑抽到
+            // normalizeISODateTime，提醒工具也用它（那边是静默丢弃，更隐蔽）。
+            start = normalizeISODateTime(start)
+            end = normalizeISODateTime(end)
             if title.isEmpty || start.isEmpty || end.isEmpty {
                 toolOutput = "Error: 'title', 'start_time' and 'end_time' are required."
                 toolSuccess = false
@@ -1290,7 +1280,10 @@ extension AIChatViewModel {
                 toolSuccess = false
             } else {
                 var cmd = "apple-reminders create --title '\(title.replacingOccurrences(of: "'", with: "'\\''"))'"
-                if !due.isEmpty { cmd += " --due '\(due)'" }
+                // [10-20] 和 calendarCreate 同一个坑：CLI 只认 ISO 8601，
+                // 空格版 `2026-10-21 09:00` 会被静默丢掉——不报错、exitCode=0，
+                // 但返回里没有 due，提醒变成"没有时间"。模型很爱写空格版。
+                if !due.isEmpty { cmd += " --due '\(normalizeISODateTime(due))'" }
                 if !notes.isEmpty { cmd += " --notes '\(notes.replacingOccurrences(of: "'", with: "'\\''"))'" }
                 if !listName.isEmpty { cmd += " --list '\(listName.replacingOccurrences(of: "'", with: "'\\''"))'" }
                 do {
@@ -1723,5 +1716,24 @@ extension AIChatViewModel {
               let lng = first["longitude"] as? Double
         else { return nil }
         return (lat, lng)
+    }
+}
+
+// MARK: - ISO date normalization
+
+extension AIChatViewModel {
+    /// 把 `2026-10-25 10:00` 这种空格分隔的时间改成 CLI 认的
+    /// `2026-10-25T10:00`。只换日期和时间之间的第一个空格，其余原样。
+    /// 已经是 T 的、纯日期的、空串的都原样返回。
+    ///
+    /// 为什么必须兜：`apple-calendar` 遇到空格版会报错（用户能看到），
+    /// 而 `apple-reminders` 是**静默丢弃** —— exitCode=0、ok:true，
+    /// 但返回里根本没有 due，提醒变成没时间的。两种表现同一个根因。
+    func normalizeISODateTime(_ raw: String) -> String {
+        guard raw.contains(" ") else { return raw }
+        guard let r = raw.range(of: " ") else { return raw }
+        var s = raw
+        s.replaceSubrange(r, with: "T")
+        return s
     }
 }
