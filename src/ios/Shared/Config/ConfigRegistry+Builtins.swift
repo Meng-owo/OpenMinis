@@ -1219,13 +1219,10 @@ extension ConfigRegistry {
             userDefaultsKey: "toolPreviewEnabled",
             defaultValue: true
         ))
-        r.register(AppStorageBoolField(
-            path: "chat.fabOnLeft",
-            displayName: "FAB on left",
-            description: "Move the floating action button to the left edge.",
-            userDefaultsKey: "fabOnLeft",
-            defaultValue: false
-        ))
+        // [T-fab-gone] The floating action button row was replaced by the
+        // bottom bar tabs (c02568f), so nothing reads `fabOnLeft` any more.
+        // The registration stayed behind and made `minis-config` advertise a
+        // switch that changed nothing. Removed rather than rewired.
         // [T-keyboard-auto-pop default flip] On by default — most users
         // want the input ready for a follow-up immediately after the
         // reply lands; turn off if you prefer to read the response first.

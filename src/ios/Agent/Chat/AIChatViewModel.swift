@@ -2269,8 +2269,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
 
         // [Feedback 10-12] 提取此前积累的静默系统反馈指令
+        // [T-feedback-drain-order] Only DRAIN once the send is actually going
+        // ahead. This used to clear the buffer before the guard below, so a
+        // send that bailed out (still streaming, or empty) silently threw away
+        // whatever the user had just told the model about the last reply.
         let activeFeedbackDirectives = pendingFeedbackDirectives
-        pendingFeedbackDirectives.removeAll()
 
         // [S1-fix] Programmatic sends carry no attachments: the composer's staged
         // chips are the user's, not the transport's.
@@ -2283,6 +2286,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isProcessing else {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) isProcessing=\(self.isProcessing)")
             return
+        }
+
+        // [T-feedback-drain-order] The send is going ahead — now the buffered
+        // directives are consumed for real.
+        if !activeFeedbackDirectives.isEmpty {
+            pendingFeedbackDirectives.removeAll()
         }
 
         // [batch9-voice-1b] 朗读改为"点读即发、读完即止"；这里只刷新每次回复的

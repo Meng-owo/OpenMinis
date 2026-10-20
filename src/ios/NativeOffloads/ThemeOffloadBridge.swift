@@ -28,6 +28,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func applyJSON(_ json: String) -> NSDictionary {
@@ -86,6 +87,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func exportJSON(includeWallpaper: Bool) -> NSDictionary {
@@ -105,6 +107,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func resetPack() -> NSDictionary {
@@ -128,6 +131,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func undoReset() -> NSDictionary {
@@ -148,6 +152,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func saveCurrent(name: String) -> NSDictionary {
@@ -170,6 +175,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func listSaved() -> NSDictionary {
@@ -197,6 +203,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func applySaved(id: String) -> NSDictionary {
@@ -216,6 +223,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func deleteSaved(id: String) -> NSDictionary {
@@ -235,6 +243,7 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 
     @objc public static func renameSaved(id: String, name: String) -> NSDictionary {
@@ -254,5 +263,6 @@ import UIKit
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
+        return result as NSDictionary
     }
 }
