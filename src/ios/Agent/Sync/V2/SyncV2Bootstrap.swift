@@ -132,9 +132,6 @@ enum SyncV2Bootstrap {
         return false
     }
 
-    /// Called once from MinisApp launch (or on flag flip in debug builds).
-    /// Idempotent — running twice is harmless.
-    @MainActor
     /// Restart the engine after a destructive recovery action.
     ///
     /// `startIfEnabled()` is deliberately launch-only (it registers types,
@@ -151,6 +148,9 @@ enum SyncV2Bootstrap {
         logger.info("[SyncCore] restarted after recovery (deviceId=\(DeviceIdentity.deviceId.prefix(8)))")
     }
 
+    /// Called once from MinisApp launch (or on flag flip in debug builds).
+    /// Idempotent — running twice is harmless.
+    @MainActor
     static func startIfEnabled() async {
         guard isEnabled else {
             logger.debug("[SyncCore] v2 disabled (flag off) — staying on v1")
