@@ -9,6 +9,16 @@ extension AIChatViewModel {
 
     // MARK: - Kernel Boot
 
+    /// [P-05] 内核启动失败后重试。失败页原来一个按钮都没有，只能退出 App。
+    /// 先把状态退回 notBooted（ensureKernelBooted 只在 notBooted 时动），
+    /// 再走同一条启动链。内核若已经 boot 到一半，bootWithRootPath 会自己返回错误。
+    func retryKernelBoot() {
+        guard case .failed = kernelStatus else { return }
+        logger.info("[KernelBoot] retry requested by user")
+        kernelStatus = .notBooted
+        ensureKernelBooted()
+    }
+
     func ensureKernelBooted() {
         guard kernelStatus == .notBooted else { return }
         kernelStatus = .booting

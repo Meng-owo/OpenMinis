@@ -878,8 +878,26 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     // Note: Stream throttle timestamps (lastTextDeltaFlush, lastFileWriteStreamUpdate,
     // lastToolInputStreamUpdate) are now local vars inside processStreamEvents().
     @Published var kernelStatus: KernelStatus = .notBooted
-    /// When enabled, uses 1-hour cache TTL instead of 5-minute for Anthropic requests.
-    @Published var enhancedCacheEnabled = false
+    /// [P-09] 本轮已经替模型翻过几次抽屉。上限防止模型反复输出 [翻:...] 打转。
+    var stickerFlipsThisRun: Int = 0
+    static let kMaxStickerFlips: Int = 2
+    /// [P-21] 增强缓存开关。以前是纯内存 @Published，重启就回 false。
+    /// 现在唯一真源是 UserDefaults 的 "enhancedCacheEnabled"：
+    /// VM 是按会话缓存的（ViewModelCache），每个实例存一份本地副本会互相
+    /// 覆盖 —— A 会话开着、切到 B 会话关掉，回到 A 就变成关。
+    /// 所以读写都走同一个键，实例只是转发。
+    /// 注意与 "enhancedCacheConfirmed" 区分：那个记的是「用户已同意多花钱」。
+    static let enhancedCacheDefaultsKey = "enhancedCacheEnabled"
+
+    var enhancedCacheEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.enhancedCacheDefaultsKey) }
+        set {
+            let old = UserDefaults.standard.bool(forKey: Self.enhancedCacheDefaultsKey)
+            guard old != newValue else { return }
+            UserDefaults.standard.set(newValue, forKey: Self.enhancedCacheDefaultsKey)
+            objectWillChange.send()
+        }
+    }
 
     /// Whether the Enhanced Cache toggle should be visible. Only Anthropic
     /// official API (no custom base URL) supports the cache TTL protocol.
@@ -2231,7 +2249,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     ///   consumes them as before.
     func send(overrideText: String? = nil) {
         // Read-only mode — cannot send messages
-        guard remoteDeviceId == nil else { return }
+        // [P-03] 静默 return 会让用户以为「按了没反应」。现在界面已经不给输入框，
+        // 这条兜底也要说一句，免得从别处（斜杠、快捷指令）触发时无声无息。
+        guard remoteDeviceId == nil else {
+            transientNotice = AppLocalized("This session is read-only. Fork it from the session list to continue.")
+            return
+        }
 
         // [T-stop-sibling-subagent] The user's own new message re-opens
         // delivery: sub agents muted by their Stop may report again. A
@@ -5333,6 +5356,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         // [T-ios-empty-after-toolresult-reminder] Fresh turn → allow one reminder retry.
         didInjectEmptyToolReminderThisRun = false
+        // [P-09] 新的一轮，翻抽屉配额重置。
+        stickerFlipsThisRun = 0
 
         // [10-20 醒醒] 新一轮开始，时间感知重新算。放在这里而不是 build 里，
         // 是因为 build 每次 fallback 都会再走一遍。
@@ -6461,6 +6486,65 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     }
                 }
                 hitTurnLimit = false
+
+                // [P-09] `[翻:抽屉名]` 真接上。提示词教模型用它翻抽屉，但代码
+                // 只在渲染层把标签抹掉 —— 模型以为翻过了，实际什么都没拿到。
+                // 这里把标签翻成真实目录，作为一条 system-reminder 让模型续一轮。
+                // 每轮最多翻 kMaxStickerFlips 次，且只在没有工具调用的收尾轮触发。
+                if let flip = StickerFlipParser.firstDrawer(in: streamResult.assistantText),
+                   stickerFlipsThisRun < Self.kMaxStickerFlips {
+                    stickerFlipsThisRun += 1
+                    let catalog = StickerStore.shared.promptDrawerContent(drawer: flip)
+                    if msgIdx < messages.count {
+                        for i in messages[msgIdx].blocks.indices where messages[msgIdx].blocks[i].kind == .text {
+                            messages[msgIdx].blocks[i].content =
+                                StickerFlipParser.strippingDrawerTags(messages[msgIdx].blocks[i].content)
+                        }
+                    }
+                    // agentHistory 里的同一段也要抹掉，否则模型下一轮会看到
+                    // 自己刚才那个 [翻:x] 标签，可能照抄再翻一次。
+                    // 用 dbMessageId 反查，不依赖局部 assistantAgentIdx（那个在
+                    // no-tool 分支里才声明，这个位置取不到）。
+                    if let uiRowId = (msgIdx < messages.count ? messages[msgIdx].dbRowId : nil),
+                       let histIdx = agentHistory.lastIndex(where: { $0.dbMessageId == uiRowId }) {
+                        agentHistory[histIdx].parts = agentHistory[histIdx].parts.map { part in
+                            if case .text(let t) = part {
+                                return .text(StickerFlipParser.strippingDrawerTags(t))
+                            }
+                            return part
+                        }
+                    } else if let lastAsst = agentHistory.lastIndex(where: { $0.role == .assistant }) {
+                        agentHistory[lastAsst].parts = agentHistory[lastAsst].parts.map { part in
+                            if case .text(let t) = part {
+                                return .text(StickerFlipParser.strippingDrawerTags(t))
+                            }
+                            return part
+                        }
+                    }
+                    let flipMsg = AgentMessage(
+                        role: .user,
+                        parts: [.text("<system-reminder>\n\(catalog)\n（以上是你要翻的抽屉内容。请继续回答，不要再输出 [翻:...] 标签。）\n</system-reminder>")]
+                    )
+                    let flipIdx = agentHistory.count
+                    agentHistory.append(flipMsg)
+                    // 注入的 system-reminder 也要落库：截断路径信任 agentHistory:DB
+                    // 1:1，凭空多一条历史会让后面的删除/重试切错行。照 resume()
+                    // 的 continueMsg 做法（3199）异步补 id。
+                    let flipMsgRef = flipMsg
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        if let pid = await self.persistAgentMessage(flipMsgRef), flipIdx < self.agentHistory.count {
+                            self.agentHistory[flipIdx].dbMessageId = pid
+                        }
+                    }
+                    messages.append(ChatMessage(role: .assistant, content: "", blocks: []))
+                    msgIdx = messages.count - 1
+                    committedBlockCount = 0
+                    self.committedBlockCount = 0
+                    runMsgId = messages[msgIdx].id
+                    logger.info("[StickerFlip] injected drawer=\(flip) (flip #\(stickerFlipsThisRun))")
+                    continue
+                }
 
                 // [T-ios-queued-message-continues-prev-turn] The current turn's
                 // tool loop has fully converged (no tool calls this iteration) and

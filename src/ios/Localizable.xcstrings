@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "This session is read-only. Fork it from the session list to continue." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This session is read-only. Fork it from the session list to continue." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "这个会话是只读的。在会话列表里 fork 一份才能继续。" } }
+      }
+    },
+    "View Logs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "View Logs" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "查看日志" } }
+      }
+    },
     "Force Full Resync" : {
       "extractionState" : "manual",
       "localizations" : {

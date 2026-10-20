@@ -5,7 +5,6 @@ import Combine
 import GameController
 import PhotosUI
 import QuickLook
-import QuickLook
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -414,6 +413,9 @@ struct AIChatView: View {
     /// only). Same key OpenAIProvider reads at request-build time; @AppStorage
     /// so the toolbar (menu checkmark + nav bolt badge) re-renders on flip.
     @AppStorage(OpenAIProvider.fastModeDefaultsKey) private var codexFastModeEnabled: Bool = false
+    /// [P-21] 增强缓存开关。视图自己观察这个键，才能在别的会话/别处改动后
+    /// 立刻重绘；VM 上那份只是转发到同一个键。
+    @AppStorage(AIChatViewModel.enhancedCacheDefaultsKey) private var enhancedCacheEnabledStored: Bool = false
     // Observe the in-app language so the view's body re-runs the moment
     // the user switches it. Without this, parts of the chat surface that
     // hold UIKit-bridged strings (PastableTextView placeholder, etc.)
@@ -433,6 +435,8 @@ struct AIChatView: View {
     @State private var showSessionMCPs = false
     @State private var showSessionMemory = false
     @State private var showEnhancedCacheAlert = false
+    /// [P-05] 内核启动失败页的「看日志」开关。
+    @State private var showKernelLogs = false
     @State private var showTokenUsage = false
     // [T-ios-json-open-provider-import-prompt] A shared/opened JSON file that
     // looks like a Provider export (providerType + credentialType + models)
@@ -532,6 +536,10 @@ struct AIChatView: View {
             || previewDocumentFile != nil || shareFile != nil
             || safariURL != nil || fullBrowserURL != nil
             || pendingProviderImport != nil
+            // [P-13] 漏了这 4 个弹窗，开着它们时回复结束仍会弹键盘。
+            || callbackDetailTarget != nil || helperSheetTarget != nil
+            || showStickerSheet || showVoiceSettingsSheet
+            || showKernelLogs
     }
 
     /// Tracks whether this ChatView is the currently visible screen.
@@ -696,7 +704,14 @@ struct AIChatView: View {
                                 inputBar
                             }
                             #else
-                            inputBar
+                            // [P-03] Release 里原来直接露 inputBar —— 远程会话
+                            // 只读链没接通，输入框能打字、按发送什么都不发生。
+                            // 现在统一显示只读横幅（frozen 版本，无 DEBUG 专属按钮）。
+                            if isReadOnly {
+                                readOnlyBanner
+                            } else {
+                                inputBar
+                            }
                             #endif
                         }
                         inputPopupOverlay
@@ -739,9 +754,6 @@ struct AIChatView: View {
                     .animation(.easeOut(duration: 0.28), value: vm.isLoadingSession)
                     .allowsHitTesting(false)
                 }
-                .overlay {
-                    SessionLockGateOverlay(sessionId: vm.sessionId)
-                }
                 .onChange(of: vm.isLoadingSession) { newValue in
                     // [SpinnerTrace] Every transition of the
                     // session-loading overlay logged, so we can confirm
@@ -766,6 +778,12 @@ struct AIChatView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeInOut(duration: 0.2), value: novelMode)
             }
+
+            // [P-12] 会话锁遮罩盖整页（消息区 + 输入栏）。原来挂在 messagesArea
+            // 上，锁着的时候输入栏露在外面还能打字、还能发送。
+            // 放在 kernelBootOverlay 之前，内核遮罩仍然盖在锁之上（启动失败时
+            // 重试/看日志要能点）。
+            SessionLockGateOverlay(sessionId: vm.sessionId)
 
             // Full-screen kernel boot overlay
             kernelBootOverlay
@@ -933,7 +951,7 @@ struct AIChatView: View {
             Button(AppLocalized("Clear"), role: .destructive) { vm.clearChat() }
             Button(AppLocalized("Cancel"), role: .cancel) {}
         } message: {
-            Text(AppLocalized("All messages in this session will be permanently deleted."))
+            Text(AppLocalized("All messages in this session will be permanently deleted, along with this session's workspace, attachments, offloads and browser files."))
         }
         // [T-action-bar 09-12] A message turn is not safely deletable as a
         // single row: its model history can contain tool-use/result rows and
@@ -1203,6 +1221,17 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showVoiceSettingsSheet) {
             ChatVoiceSettingsSheet(vm: vm)
+        }
+        .sheet(isPresented: $showKernelLogs) {
+            // [P-05] 内核启动失败时用户要能看到真实报错，不是只有一行红字。
+            NavigationStack {
+                LogManagementView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(AppLocalized("Done")) { showKernelLogs = false }
+                        }
+                    }
+            }
         }
         .sheet(isPresented: $showStickerSheet) {
             StickerPickerSheet(vm: vm)
@@ -2118,7 +2147,17 @@ struct AIChatView: View {
     /// get a confirm first (stopping the task is destructive); idle sessions go
     // MARK: - 加号功能面板动作分发
 
+    /// 开关型磁贴：点一下只翻状态，不收起面板，也不弹任何 sheet。
+    /// 用户要能立刻看到磁贴变成「已开启」。
+    private var isToggleTile: (PlusPanelItemType) -> Bool {
+        { $0 == .fastMode || $0 == .enhancedCache }
+    }
+
     private func handlePlusPanelAction(_ item: PlusPanelItemType) {
+        if isToggleTile(item) {
+            performPlusPanelAction(item)
+            return
+        }
         if item != .sticker {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showPlusPanel = false
@@ -2182,6 +2221,27 @@ struct AIChatView: View {
             vm.compactAll()
         case .clear:
             showClearChatConfirm = true
+        case .fastMode:
+            guard activeModelSupportsFastMode else {
+                MinisToast.show("当前模型不支持快速模式", systemImage: "info.circle")
+                return
+            }
+            codexFastModeEnabled.toggle()
+            MinisToast.show(codexFastModeEnabled ? "快速模式已开" : "快速模式已关", systemImage: "bolt.fill")
+        case .enhancedCache:
+            guard cached.vm.showEnhancedCacheToggle else {
+                MinisToast.show("当前模型不支持增强缓存", systemImage: "info.circle")
+                return
+            }
+            if enhancedCacheEnabledStored {
+                cached.vm.enhancedCacheEnabled = false
+                MinisToast.show("增强缓存已关", systemImage: "clock")
+            } else if !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
+                showEnhancedCacheAlert = true
+            } else {
+                cached.vm.enhancedCacheEnabled = true
+                MinisToast.show("增强缓存已开", systemImage: "clock.badge.checkmark.fill")
+            }
         }
     }
 
@@ -2196,7 +2256,19 @@ struct AIChatView: View {
             // own name from SOUL rather than a literal.
             let personaName = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
             let roleName = (msg.role == .user) ? "我" : (personaName.isEmpty ? "助手" : personaName)
-            text += "### \(roleName):\n\(msg.content)\n\n"
+            // [P-04] 助手回复的正文本体在 `blocks`，`content` 流式期间从不写入
+            // （SSEStream 只写 block.content），只读 content 会让本次会话新
+            // 回复导出成空。用户消息仍在 content 里，两个都兜住。
+            var messageText = msg.content
+            if msg.role == .assistant {
+                let blockText = msg.blocks
+                    .filter { $0.kind == .text }
+                    .map(\.content)
+                    .joined(separator: "\n\n")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !blockText.isEmpty { messageText = blockText }
+            }
+            text += "### \(roleName):\n\(messageText)\n\n"
         }
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("OpenMinis-Chat-\(Int(Date().timeIntervalSince1970)).md")
         do {
@@ -2326,7 +2398,7 @@ struct AIChatView: View {
             iCloudSyncEnabled: iCloudSyncEnabled,
             memoryEnabled: vm.memoryEnabled,
             showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
-            enhancedCacheEnabled: cached.vm.enhancedCacheEnabled,
+            enhancedCacheEnabled: enhancedCacheEnabledStored,
             showFastModeToggle: activeModelSupportsFastMode,
             fastModeEnabled: codexFastModeEnabled
         )
@@ -2810,6 +2882,27 @@ struct AIChatView: View {
                         .foregroundStyle(ChatColors.destructive)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
+                    // [P-05] 失败页原来零按钮，只能退出 App 重进。给重试和看日志。
+                    HStack(spacing: 12) {
+                        Button {
+                            vm.retryKernelBoot()
+                        } label: {
+                            Label(AppLocalized("Retry"), systemImage: "arrow.clockwise")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+
+                        Button {
+                            showKernelLogs = true
+                        } label: {
+                            Label(AppLocalized("View Logs"), systemImage: "doc.text.magnifyingglass")
+                                .font(.subheadline.weight(.medium))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .padding(.top, 4)
                 }
             }
             .transition(.opacity)
@@ -3084,6 +3177,25 @@ struct AIChatView: View {
     }
 
     // MARK: - Fork Banner (Read-Only Mode)
+
+    /// [P-03] Release 版的只读横幅：不露输入框，也不含 DEBUG 专属的 fork 按钮。
+    /// fork 入口在会话列表的长按菜单里（ContentView 的 "Fork Session"）。
+    private var readOnlyBanner: some View {
+        VStack(spacing: 0) {
+            Divider()
+            HStack {
+                Image(systemName: "eye")
+                    .foregroundStyle(MinisTheme.secondaryText)
+                Text(AppLocalized("Read-only session from another device"))
+                    .font(.subheadline)
+                    .foregroundStyle(MinisTheme.secondaryText)
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(.ultraThinMaterial)
+        }
+    }
 
     #if DEBUG
     private var forkBanner: some View {
@@ -3468,9 +3580,11 @@ struct AIChatView: View {
     /// 底部抽屉面板区域（加号面板与微信式表情包面板同高度无缝切换）
     private var bottomDrawerSection: AnyView {
         if showPlusPanel {
-            let panel = ChatPlusPanel { item in
-                handlePlusPanelAction(item)
-            }
+            let panel = ChatPlusPanel(
+                onItemTap: { item in handlePlusPanelAction(item) },
+                fastModeOn: codexFastModeEnabled,
+                enhancedCacheOn: enhancedCacheEnabledStored
+            )
             .transition(.move(edge: .bottom).combined(with: .opacity))
             return AnyView(panel)
         } else if showStickerPanel {
@@ -4432,11 +4546,11 @@ struct AIChatView: View {
     private var inputPopupOverlay: some View {
         ZStack {
             if vm.showSlashMenu && !vm.filteredSlashCommands.isEmpty {
-                popupOverlayContainer(onDismiss: { vm.dismissSlashMenu() }) {
+                popupOverlayContainer {
                     slashCommandMenu
                 }
             } else if vm.showMentionMenu {
-                popupOverlayContainer(onDismiss: { vm.dismissMentionMenu() }) {
+                popupOverlayContainer {
                     mentionMenu
                 }
             }
@@ -4495,7 +4609,6 @@ struct AIChatView: View {
     ///   stays bottom-aligned (matches input bar top).
     @ViewBuilder
     private func popupOverlayContainer<Content: View>(
-        onDismiss: @escaping () -> Void,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
@@ -4710,7 +4823,7 @@ struct AIChatView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.basename)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? ChatColors.primaryText : ChatColors.primaryText)
+                        .foregroundStyle(ChatColors.primaryText)
                         .lineLimit(1)
                     Text(entry.displayPath)
                         .font(.system(size: 11))
@@ -4803,7 +4916,7 @@ struct AIChatView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         let isThinkingActive = cmd.id == "thinking" && thinkingLevel.isEnabled && thinkingSupported
                         let titleColor: Color = isThinkingActive
-                            ? ChatColors.accent : (isSelected ? ChatColors.primaryText : ChatColors.primaryText)
+                        ? ChatColors.accent : ChatColors.primaryText
                         let subtitleText = (cmd.id == "thinking" && !thinkingSupported)
                             ? AppLocalized("Not supported by current model")
                             : cmd.subtitle
@@ -5075,7 +5188,7 @@ private struct ComposerSurface: ViewModifier {
                     }
                 }
                 .clipShape(shape)
-                .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 2)
+                .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.5) : UIColor(white: 0, alpha: 0.12) }), radius: 8, x: 0, y: 2)
                 .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.5) : UIColor(white: 0, alpha: 0) }), radius: 8, x: 0, y: -4)
         }
     }
@@ -6261,6 +6374,9 @@ private struct MicButton: View {
                     }
             )
             .accessibilityAddTraits(.isButton)
+            // [P-10] 底层是 DragGesture 不是 Button，旁白双击不会走手势。
+            // 补一个显式默认动作，VoiceOver 用户才能真正触发语音输入。
+            .accessibilityAction { onTap() }
             .accessibilityLabel(isVoiceActive
                 ? Text("Switch to text input", comment: "Mic button exits voice mode")
                 : Text("Voice input", comment: "Mic button opens voice panel"))
@@ -6753,9 +6869,11 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     case gauge = "gauge"         // Token用量
     case share = "share"         // 导出对话
 
-    // Page 3: 会话管理与特殊模式 (2项)
+    // Page 3: 会话管理与特殊模式
     case compact = "compact"     // 压缩历史
     case clear = "clear"         // 清空对话
+    case fastMode = "fastMode"   // 快速模式 (Codex)
+    case enhancedCache = "enhancedCache" // 增强缓存 (Anthropic)
 
     public var id: String { rawValue }
 
@@ -6779,6 +6897,8 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "导出对话"
         case .compact: return "压缩历史"
         case .clear: return "清空对话"
+        case .fastMode: return "快速模式"
+        case .enhancedCache: return "增强缓存"
         }
     }
 
@@ -6803,6 +6923,8 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "square.and.arrow.up.fill"
         case .compact: return "arrow.down.right.and.arrow.up.left"
         case .clear: return "trash.fill"
+        case .fastMode: return "bolt.fill"
+        case .enhancedCache: return "clock.badge.checkmark.fill"
         }
     }
 }
@@ -6812,11 +6934,14 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
 public struct PlusPanelTileButton: View {
     let item: PlusPanelItemType
     let isDark: Bool
+    /// 开关型磁贴（快速模式 / 增强缓存）的当前状态；其余磁贴恒为 nil。
+    var isOn: Bool? = nil
     let onTap: () -> Void
 
-    public init(item: PlusPanelItemType, isDark: Bool, onTap: @escaping () -> Void) {
+    public init(item: PlusPanelItemType, isDark: Bool, isOn: Bool? = nil, onTap: @escaping () -> Void) {
         self.item = item
         self.isDark = isDark
+        self.isOn = isOn
         self.onTap = onTap
     }
 
@@ -6828,10 +6953,15 @@ public struct PlusPanelTileButton: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(CSSThemeVariables.optionBg(isDark: isDark))
+                        .fill(isOn == true
+                              ? CSSThemeVariables.accentSoft(isDark: isDark)
+                              : CSSThemeVariables.optionBg(isDark: isDark))
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                .strokeBorder(isOn == true
+                                              ? CSSThemeVariables.accent(isDark: isDark).opacity(0.45)
+                                              : CSSThemeVariables.optionBorder(isDark: isDark),
+                                              lineWidth: 1.0)
                         )
                         .shadow(
                             color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06),
@@ -6853,6 +6983,7 @@ public struct PlusPanelTileButton: View {
         }
         .buttonStyle(TilePressButtonStyle())
         .accessibilityLabel(Text(item.title))
+        .accessibilityValue(isOn == nil ? Text("") : Text(isOn == true ? "已开启" : "已关闭"))
     }
 }
 
@@ -6868,12 +6999,23 @@ private struct TilePressButtonStyle: ButtonStyle {
 
 public struct ChatPlusPanel: View {
     let onItemTap: (PlusPanelItemType) -> Void
+    /// 开关型磁贴的当前状态，由调用方注入。
+    var fastModeOn: Bool = false
+    var enhancedCacheOn: Bool = false
     @Environment(\.colorScheme) private var colorScheme
     @State private var currentPage: Int = 0
 
+    private func onState(for item: PlusPanelItemType) -> Bool? {
+        switch item {
+        case .fastMode: return fastModeOn
+        case .enhancedCache: return enhancedCacheOn
+        default: return nil
+        }
+    }
+
     private var isDark: Bool { colorScheme == .dark }
 
-    // 三页分页：8 + 8 + 2
+    // 三页分页：8 + 8 + 4
     private let page1Items: [PlusPanelItemType] = [
         .photo, .camera, .doc, .sticker,
         .voice, .sparkles, .newChat, .slash
@@ -6883,7 +7025,7 @@ public struct ChatPlusPanel: View {
         .browser, .files, .gauge, .share
     ]
     private let page3Items: [PlusPanelItemType] = [
-        .compact, .clear
+        .compact, .clear, .fastMode, .enhancedCache
     ]
 
     private let columns = [
@@ -6893,8 +7035,12 @@ public struct ChatPlusPanel: View {
         GridItem(.flexible(), spacing: 10)
     ]
 
-    public init(onItemTap: @escaping (PlusPanelItemType) -> Void) {
+    public init(onItemTap: @escaping (PlusPanelItemType) -> Void,
+                fastModeOn: Bool = false,
+                enhancedCacheOn: Bool = false) {
         self.onItemTap = onItemTap
+        self.fastModeOn = fastModeOn
+        self.enhancedCacheOn = enhancedCacheOn
     }
 
     public var body: some View {
@@ -6935,12 +7081,12 @@ public struct ChatPlusPanel: View {
                 // Page 3
                 LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page3Items) { item in
-                        PlusPanelTileButton(item: item, isDark: isDark) {
+                        PlusPanelTileButton(item: item, isDark: isDark, isOn: onState(for: item)) {
                             onItemTap(item)
                         }
                     }
-                    // 占位保持4列对齐（2项 + 6占位 = 8格，满两行）
-                    ForEach(0..<6, id: \.self) { _ in
+                    // 占位保持4列对齐（4项 + 4占位 = 8格，满两行）
+                    ForEach(0..<4, id: \.self) { _ in
                         Color.clear.frame(height: 82)
                     }
                 }
@@ -7005,15 +7151,19 @@ struct ChatStickerPanel: View {
     private var isDark: Bool { colorScheme == .dark }
 
     private var displayCategories: [String] {
-        ["全部", "常用"]
+        // [P-08] 分类标签要跟 store.categories 走。原来写死 ["全部","常用"]，
+        // 登记时却能选 10 个分类，选完回抽屉找不到那个标签。
+        ["全部", "常用"] + store.categories
     }
 
     private var currentStickers: [StickerItem] {
         if selectedCategory == "常用" {
             let used = store.stickers.filter { $0.useCount > 0 }.sorted(by: { $0.useCount > $1.useCount })
             return used.isEmpty ? store.stickers : used
-        } else {
+        } else if selectedCategory == "全部" {
             return store.stickers
+        } else {
+            return store.stickers.filter { $0.category == selectedCategory }
         }
     }
 
@@ -7197,6 +7347,20 @@ struct ChatStickerPanel: View {
                             activeSheet = .add(initialData: nil)
                         } label: {
                             Label("手动登记单个表情", systemImage: "pencil.and.list.clipboard")
+                        }
+
+                        if store.hasRebuildBackup {
+                            Divider()
+                            Button {
+                                let restored = store.restoreLatestBackup()
+                                if restored > 0 {
+                                    MinisToast.show("已从备份恢复 \(restored) 个表情", systemImage: "checkmark.circle.fill")
+                                } else {
+                                    MinisToast.show("备份文件已损坏，恢复失败", systemImage: "exclamationmark.triangle")
+                                }
+                            } label: {
+                                Label("从备份恢复表情档案", systemImage: "arrow.counterclockwise.circle")
+                            }
                         }
                     } label: {
                         HStack(spacing: 4) {
@@ -7512,7 +7676,12 @@ struct ChatStickerPanel: View {
                         }
                     }
                     await MainActor.run {
-                        MinisToast.show("成功批量添加 \(addedCount) 个表情包！", systemImage: "checkmark.circle.fill")
+                        if addedCount > 0 {
+                            MinisToast.show("成功批量添加 \(addedCount) 个表情包！", systemImage: "checkmark.circle.fill")
+                        } else {
+                            // [P-11] 全部失败（太大 / 权限被拒 / 读不出来）时不报成功。
+                            MinisToast.show("没有添加任何表情包，请检查图片是否可读", systemImage: "exclamationmark.triangle")
+                        }
                     }
                 }
             }
@@ -7525,6 +7694,12 @@ struct ChatStickerPanel: View {
                 StickerEditSheet(editingItem: item)
             case .preview(let item):
                 StickerZoomPreviewSheet(sticker: item)
+            }
+        }
+        .onAppear {
+            // [P-01] 档案被按图片重建过时，在这里提示一次（store 构造时还没有 window）。
+            if store.consumeRebuildNotice() {
+                MinisToast.show("表情档案读取失败，已按图片重建（标题用文件名，分类落「其他」）。可在「功能」菜单里从备份恢复。", systemImage: "exclamationmark.triangle")
             }
         }
     }
@@ -7892,6 +8067,13 @@ public final class StickerStore: ObservableObject {
     ]
     private var deletedIds: Set<String> = []
     private var nextNumericId: Int = 1
+    /// [P-01] 本次启动是否发生过「按图片重建档案」。抽屉打开时提示一次。
+    private(set) var didRebuildFromImages = false
+    func consumeRebuildNotice() -> Bool {
+        guard didRebuildFromImages else { return false }
+        didRebuildFromImages = false
+        return true
+    }
     private let imageCache = NSCache<NSString, UIImage>()
 
     private var stickersDir: URL {
@@ -7999,36 +8181,112 @@ public final class StickerStore: ObservableObject {
             ].compactMap { $0 }
 
             let imgExts: Set<String> = ["png", "gif", "jpg", "jpeg", "webp", "heic"]
+            // [P-01] 重建时不再写死 "表情包"/"全部"/"表情"：
+            //  · 标题用文件名（去掉扩展名），至少能认出来是哪张；
+            //  · 分类用图片所在子目录名，目录名不在分类表里就落「其他」。
+            //    "全部" 不在 store.categories 里，写进去等于把表情从抽屉栏和
+            //    AI 提示词里同时摘掉（8243 会过滤掉「全部」）。
+            let validCategories = Set(categories)
+            let fallbackCategory = validCategories.contains("其他") ? "其他" : (categories.first ?? "其他")
+
+            func absorb(dir: URL, forcedCategory: String?) {
+                guard let files = try? fm.contentsOfDirectory(atPath: dir.path) else { return }
+                let imgFiles = files.filter { imgExts.contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
+                for imgFile in imgFiles {
+                    let id = (imgFile as NSString).deletingPathExtension
+                    let dst = stickersDir.appendingPathComponent(imgFile)
+                    if dir.path != stickersDir.path && !fm.fileExists(atPath: dst.path) {
+                        try? fm.copyItem(at: dir.appendingPathComponent(imgFile), to: dst)
+                    }
+                    if !stickers.contains(where: { $0.id == id }) {
+                        let rawTitle = id.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let item = StickerItem(
+                            id: id,
+                            title: rawTitle.isEmpty ? "表情包" : rawTitle,
+                            content: "",
+                            scenario: "",
+                            shortDesc: "表情",
+                            category: forcedCategory ?? fallbackCategory,
+                            useCount: 0,
+                            imageFilename: imgFile,
+                            createdAt: Date()
+                        )
+                        stickers.append(item)
+                    }
+                }
+            }
+
             for dir in candidateDirs {
-                if let files = try? fm.contentsOfDirectory(atPath: dir.path) {
-                    let imgFiles = files.filter { imgExts.contains(($0 as NSString).pathExtension.lowercased()) }.sorted()
-                    for imgFile in imgFiles {
-                        let id = (imgFile as NSString).deletingPathExtension
-                        let dst = stickersDir.appendingPathComponent(imgFile)
-                        if dir.path != stickersDir.path && !fm.fileExists(atPath: dst.path) {
-                            try? fm.copyItem(at: dir.appendingPathComponent(imgFile), to: dst)
-                        }
-                        if !stickers.contains(where: { $0.id == id }) {
-                            let item = StickerItem(
-                                id: id,
-                                title: "表情包",
-                                content: "",
-                                scenario: "",
-                                shortDesc: "表情",
-                                category: "全部",
-                                useCount: 0,
-                                imageFilename: imgFile,
-                                createdAt: Date()
-                            )
-                            stickers.append(item)
-                        }
+                absorb(dir: dir, forcedCategory: nil)
+                // 一层子目录：目录名当分类（历史版本按分类建过子目录）
+                if let subs = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsHiddenFiles]) {
+                    for sub in subs {
+                        let isDir = (try? sub.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                        guard isDir else { continue }
+                        let name = sub.lastPathComponent
+                        absorb(dir: sub, forcedCategory: validCategories.contains(name) ? name : nil)
                     }
                 }
             }
             if !stickers.isEmpty {
                 nextNumericId = (stickers.compactMap { Int($0.id) }.max() ?? 0) + 1
                 saveToDisk()
+                // 重建过的档案要让用户知道，否则他们只会觉得「我的表情全乱了」。
+                // 不在 loadFromDisk 里直接弹 toast：StickerStore 可能在启动早期
+                // 就被构造，那时还没有 window。置个标记，抽屉打开时再提示一次。
+                didRebuildFromImages = true
             }
+        }
+
+        // 备份存在性（抽屉菜单用它决定是否显示「从备份恢复」）。
+        refreshRebuildBackupFlag()
+    }
+
+    /// [P-01] 从 `.before-rebuild-<时间戳>.json` 备份恢复档案。
+    /// 返回恢复的条目数，0 表示没有可用备份或备份同样解不开。
+    /// 成功恢复后会把该备份标记成 `.restored`，避免下次误点重复恢复同一份。
+    @discardableResult
+    public func restoreLatestBackup() -> Int {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(atPath: stickersDir.path) else { return 0 }
+        let backups = files
+            .filter { $0.hasPrefix("stickers_catalog.before-rebuild-") && $0.hasSuffix(".json") }
+            .sorted(by: >)   // 时间戳在文件名里，字典序倒排即最新在前
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        for name in backups {
+            let url = stickersDir.appendingPathComponent(name)
+            guard let data = try? Data(contentsOf: url),
+                  let catalog = try? decoder.decode(StickerCatalogData.self, from: data),
+                  !catalog.stickers.isEmpty else { continue }
+            stickers = catalog.stickers
+            if !catalog.categories.isEmpty { categories = catalog.categories }
+            deletedIds = Set(catalog.deletedIds)
+            nextNumericId = max(catalog.nextNumericId, 1)
+            imageCache.removeAllObjects()
+            saveToDisk()
+            // 恢复过的备份改名，菜单入口随之消失，不会再点第二次覆盖现场。
+            try? fm.moveItem(at: url, to: stickersDir.appendingPathComponent(name + ".restored"))
+            refreshRebuildBackupFlag()
+            didRebuildFromImages = false
+            return stickers.count
+        }
+        return 0
+    }
+
+    /// 是否存在可恢复的备份。缓存成属性 —— 它要在抽屉菜单的 body 里读，
+    /// 每次渲染都列一遍目录是不可接受的。
+    /// 用普通属性而非 @Published：它在 init → loadFromDisk 里被赋值，
+    /// @Published 的 didSet 会走 objectWillChange，此时 self 还没完全初始化。
+    private(set) var hasRebuildBackup: Bool = false
+
+    private func refreshRebuildBackupFlag() {
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: stickersDir.path) else {
+            hasRebuildBackup = false
+            return
+        }
+        hasRebuildBackup = files.contains {
+            $0.hasPrefix("stickers_catalog.before-rebuild-") && $0.hasSuffix(".json")
         }
     }
 
@@ -8375,6 +8633,28 @@ public enum StickerParser {
     }
 }
 
+/// [P-09] `[翻:抽屉名]` 的取用与清除。解析放在这里，让 Agent 层也能拿到，
+/// 不依赖 UI 文件里的 StickerParser 内部正则。
+public enum StickerFlipParser {
+    private static let flipRegex = try! NSRegularExpression(pattern: #"\[翻:([^\]]+)\]"#)
+
+    /// 回复里第一个要翻的抽屉名（去掉空白）。没有就返回 nil。
+    public static func firstDrawer(in text: String) -> String? {
+        let ns = text as NSString
+        guard let m = flipRegex.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)),
+              m.numberOfRanges > 1 else { return nil }
+        let name = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? nil : name
+    }
+
+    /// 抹掉所有 `[翻:...]` 标签。
+    public static func strippingDrawerTags(_ text: String) -> String {
+        let ns = text as NSString
+        return flipRegex.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 // MARK: - 表情包展示组件与全屏预览
 
 // MARK: - [3-B 醒醒] 表情包动图渲染组件 (StickerAnimatedImageView)
@@ -8447,7 +8727,7 @@ public struct StickerThumbnailView: View {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
                             .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
                     )
-                    .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 1)
+                    .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.4) : UIColor(white: 0, alpha: 0.06) }), radius: 3, x: 0, y: 1)
             } else {
                 ProgressView()
                     .frame(width: 80, height: 80)
@@ -8495,7 +8775,7 @@ public struct StickerZoomPreviewSheet: View {
                         StickerAnimatedImageView(image: uiImage)
                             .frame(maxWidth: 240, maxHeight: 240)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 3)
+                            .shadow(color: Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0, alpha: 0.45) : UIColor(white: 0, alpha: 0.1) }), radius: 8, x: 0, y: 3)
                     }
 
                     VStack(alignment: .leading, spacing: 12) {

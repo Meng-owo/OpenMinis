@@ -676,8 +676,13 @@ extension AIChatViewModel {
 
         if let sessionId {
             Task { await ISHExecutionCoordinator.shared.sessionDidTerminate(sessionId: sessionId) }
-            BrowserTabPool.deletePersistedData(for: sessionId)
             BrowserUseOffloadBridge.releasePool(forSession: sessionId)
+            // [P-22] 「清空」要连会话文件一起删。新会话引导卡写着这些目录
+            // "wiped when the session ends"，但这里只删了 DB 行 ——
+            // workspace/attachments/offloads/browser 全留着。
+            // 走 SessionTeardown 的同一个删除函数（内含 BrowserTabPool 清理），
+            // 保证跟删会话的行为一致。
+            SessionTeardown.deleteSessionFiles(sessionId)
             Task {
                 await ChatStore.shared.deleteMessages(sessionId: sessionId)
                 await ChatStore.shared.deleteCompactMarkers(sessionId: sessionId)
