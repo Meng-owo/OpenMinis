@@ -699,16 +699,23 @@ final class SyncCore {
                     // don't, and their records land in `unknownFields` — an
                     // unknown origin is allowed, otherwise every older device
                     // would silently stop syncing. See DeviceSyncPolicy.
-                    let origin: String? = {
-                        if case .string(let s)? = record.unknownFields[DeviceSyncPolicy.sourceDeviceIdKey] {
-                            return s
+                    //
+                    // Device records are ALWAYS let through: the switch itself
+                    // is drawn from that list, so blocking them would delete
+                    // the row and leave the user with no way to switch that
+                    // device back on.
+                    if record.id.type != "SyncDeviceV2" {
+                        let origin: String? = {
+                            if case .string(let s)? = record.unknownFields[DeviceSyncPolicy.sourceDeviceIdKey] {
+                                return s
+                            }
+                            return nil
+                        }()
+                        guard DeviceSyncPolicy.allowsInbound(from: origin) else {
+                            blockedByDevicePolicy += 1
+                            logger.info("[DeviceSyncPolicy] inbound from device \(origin?.prefix(8) ?? "nil") blocked (type=\(record.id.type)) — download disabled for that device")
+                            continue
                         }
-                        return nil
-                    }()
-                    guard DeviceSyncPolicy.allowsInbound(from: origin) else {
-                        blockedByDevicePolicy += 1
-                        logger.info("[DeviceSyncPolicy] inbound from device \(origin?.prefix(8) ?? "nil") blocked (type=\(record.id.type)) — download disabled for that device")
-                        continue
                     }
                     if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
                         logger.warning("[SyncSchema] minimumCompatibleVersionBlocked: type=\(record.id.type) required=\(minimum) local=\(metadata.version)")
