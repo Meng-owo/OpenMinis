@@ -2178,11 +2178,6 @@ struct AIChatView: View {
             showTokenUsage = true
         case .share:
             exportCurrentConversation()
-        case .stealth:
-            let key = "scheduled.stealthMode"
-            let cur = UserDefaults.standard.bool(forKey: key)
-            UserDefaults.standard.set(!cur, forKey: key)
-            MinisToast.show(!cur ? "隐身模式已开启" : "隐身模式已退出", systemImage: "eye.slash.fill")
         case .compact:
             vm.compactAll()
         case .clear:
@@ -6749,8 +6744,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     case gauge = "gauge"         // Token用量
     case share = "share"         // 导出对话
 
-    // Page 3: 会话管理与特殊模式 (3项)
-    case stealth = "stealth"     // 隐身模式
+    // Page 3: 会话管理与特殊模式 (2项)
     case compact = "compact"     // 压缩历史
     case clear = "clear"         // 清空对话
 
@@ -6774,7 +6768,6 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "会话文件"
         case .gauge: return "Token用量"
         case .share: return "导出对话"
-        case .stealth: return "隐身模式"
         case .compact: return "压缩历史"
         case .clear: return "清空对话"
         }
@@ -6799,7 +6792,6 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "folder.fill"
         case .gauge: return "gauge.with.needle.fill"
         case .share: return "square.and.arrow.up.fill"
-        case .stealth: return "eye.slash.fill"
         case .compact: return "arrow.down.right.and.arrow.up.left"
         case .clear: return "trash.fill"
         }
@@ -6872,7 +6864,7 @@ public struct ChatPlusPanel: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    // 三页分页：8 + 8 + 3
+    // 三页分页：8 + 8 + 2
     private let page1Items: [PlusPanelItemType] = [
         .photo, .camera, .doc, .sticker,
         .voice, .sparkles, .newChat, .slash
@@ -6882,7 +6874,7 @@ public struct ChatPlusPanel: View {
         .browser, .files, .gauge, .share
     ]
     private let page3Items: [PlusPanelItemType] = [
-        .stealth, .compact, .clear
+        .compact, .clear
     ]
 
     private let columns = [
@@ -6938,8 +6930,8 @@ public struct ChatPlusPanel: View {
                             onItemTap(item)
                         }
                     }
-                    // 占位保持4列对齐
-                    ForEach(0..<5, id: \.self) { _ in
+                    // 占位保持4列对齐（2项 + 6占位 = 8格，满两行）
+                    ForEach(0..<6, id: \.self) { _ in
                         Color.clear.frame(height: 82)
                     }
                 }
