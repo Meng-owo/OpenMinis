@@ -3849,10 +3849,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             removedIdxs = [hi]
             // Assistant continuation rows sit right after the first row and
             // have no UI twin of their own — fold them in while they belong to
-            // the same turn (i.e. until the next user entry).
+            // the same turn.
+            // [T-single-delete-turn-fold] The boundary is a real USER BUBBLE, not
+            // `role == .user`: tool results are user-role carriers of the same
+            // turn (and so are system-reminder injections). Stopping at them left
+            // an orphan tool_result behind, the pairing check then refused, and
+            // every tool-using reply became undeletable.
             if target.role == .assistant {
                 var j = hi + 1
-                while j < agentHistory.count, agentHistory[j].role != .user {
+                while j < agentHistory.count, !Self.isUserBubbleEntry(agentHistory[j]) {
                     removedIdxs.append(j)
                     j += 1
                 }
