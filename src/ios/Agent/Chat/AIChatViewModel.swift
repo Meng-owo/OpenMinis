@@ -6404,6 +6404,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 if let persistedId = await persistAgentMessage(assistantMessage, tokenUsage: turnUsage, thoughtSignatures: sigMap, streamInterruptCount: interruptCount, modelEntryId: activeEntryId),
                    assistantAgentIdx < agentHistory.count {
                     agentHistory[assistantAgentIdx].dbMessageId = persistedId
+                    // [10-20] The UI bubble needs the same id. Only the history
+                    // entry got it, so deleting a reply that had just finished
+                    // streaming hit deleteSingleMessage's "no id link" branch
+                    // and told the user "this message hasn't finished saving
+                    // yet" — for a message that was already in the DB.
+                    if runMsgId != nil, let uiIdx = messages.firstIndex(where: { $0.id == runMsgId }) {
+                        messages[uiIdx].dbRowId = persistedId
+                    }
                     // [T-error-persist-ios] Persist this turn's error state AFTER the
                     // row exists + dbMessageId is assigned, keyed by that id, so the
                     // indicator survives reload. Write UNCONDITIONALLY (incl. nil) so a
