@@ -2060,8 +2060,11 @@ struct AIChatView: View {
 
     /// 开关型磁贴：点一下只翻状态，不收起面板，也不弹任何 sheet。
     /// 用户要能立刻看到磁贴变成「已开启」。
-    private var isToggleTile: (PlusPanelItemType) -> Bool {
-        { $0 == .fastMode || $0 == .enhancedCache }
+    private func isToggleTile(_ item: PlusPanelItemType) -> Bool {
+        switch item {
+        case .fastMode, .enhancedCache: return true
+        default: return false
+        }
     }
 
     private func handlePlusPanelAction(_ item: PlusPanelItemType) {
