@@ -581,6 +581,8 @@
 		E5W000038 /* WebAppAddToHomeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB000020 /* WebAppAddToHomeSheet.swift */; };
 		E5W00003A /* SessionFileChangeTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W00003B /* SessionFileChangeTracker.swift */; };
 		E5W000080 /* ForceSyncHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W000180 /* ForceSyncHelper.swift */; };
+		E5W000081 /* DeviceSyncPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W000181 /* DeviceSyncPolicy.swift */; };
+		E5W000082 /* SyncRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5W000182 /* SyncRecovery.swift */; };
 		E5X000001 /* SwiftMathRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5X000011 /* SwiftMathRenderer.swift */; };
 		E5Y000001 /* MathRenderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5Y000011 /* MathRenderScheduler.swift */; };
 		E6A000001 /* AntigravityProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A000011 /* AntigravityProvider.swift */; };
@@ -1363,6 +1365,8 @@
 		E5W00001D /* ChatStoreSyncHydrators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStoreSyncHydrators.swift; sourceTree = "<group>"; };
 		E5W00003B /* SessionFileChangeTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFileChangeTracker.swift; sourceTree = "<group>"; };
 		E5W000180 /* ForceSyncHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForceSyncHelper.swift; sourceTree = "<group>"; };
+		E5W000181 /* DeviceSyncPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceSyncPolicy.swift; sourceTree = "<group>"; };
+		E5W000182 /* SyncRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRecovery.swift; sourceTree = "<group>"; };
 		E5X000011 /* SwiftMathRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftMathRenderer.swift; sourceTree = "<group>"; };
 		E5Y000011 /* MathRenderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MathRenderScheduler.swift; sourceTree = "<group>"; };
 		E6A000011 /* AntigravityProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AntigravityProvider.swift; sourceTree = "<group>"; };
@@ -2503,6 +2507,8 @@
 				E5W000017 /* SyncCore.swift */,
 				E5W000018 /* SyncCoreHydrators.swift */,
 				E5W000180 /* ForceSyncHelper.swift */,
+				E5W000181 /* DeviceSyncPolicy.swift */,
+				E5W000182 /* SyncRecovery.swift */,
 				E5W000019 /* ICloudSharedZoneTransport.swift */,
 				E5W00001A /* MigrationEngine.swift */,
 				E5W00001B /* TombstoneManager.swift */,
@@ -3594,6 +3600,8 @@
 				E5W000007 /* SyncCore.swift in Sources */,
 				E5W000008 /* SyncCoreHydrators.swift in Sources */,
 				E5W000080 /* ForceSyncHelper.swift in Sources */,
+				E5W000081 /* DeviceSyncPolicy.swift in Sources */,
+				E5W000082 /* SyncRecovery.swift in Sources */,
 				E5W000009 /* ICloudSharedZoneTransport.swift in Sources */,
 				E5W00000A /* MigrationEngine.swift in Sources */,
 				E5W00000B /* TombstoneManager.swift in Sources */,

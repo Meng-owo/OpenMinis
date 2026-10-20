@@ -673,7 +673,7 @@ final class SyncCore {
         // 3+GB resident before OOM crash on a 1196-session migration.
         Task { @MainActor [weak self] in
             defer { onComplete?() }
-            var applied = 0, skipped = 0, blocked = 0, ownEcho = 0
+            var applied = 0, skipped = 0, blocked = 0, ownEcho = 0, blockedByDevicePolicy = 0
             let allRecords = batch.records
             let allDeletes = batch.deletes
             let chunkSize = 25
@@ -692,6 +692,22 @@ final class SyncCore {
                     guard let metadata = registry.metadata(for: record.id.type) else {
                         logger.info("[SyncSchema] unknownRecordType: type=\(record.id.type) source=\(transport) action=ignored")
                         skipped += 1
+                        continue
+                    }
+                    // [T-device-sync-policy] Per-device download switch. The
+                    // writer stamps its device id into the record; older peers
+                    // don't, and their records land in `unknownFields` — an
+                    // unknown origin is allowed, otherwise every older device
+                    // would silently stop syncing. See DeviceSyncPolicy.
+                    let origin: String? = {
+                        if case .string(let s)? = record.unknownFields[DeviceSyncPolicy.sourceDeviceIdKey] {
+                            return s
+                        }
+                        return nil
+                    }()
+                    guard DeviceSyncPolicy.allowsInbound(from: origin) else {
+                        blockedByDevicePolicy += 1
+                        logger.info("[DeviceSyncPolicy] inbound from device \(origin?.prefix(8) ?? "nil") blocked (type=\(record.id.type)) — download disabled for that device")
                         continue
                     }
                     if let minimum = record.minimumCompatibleVersion, minimum > metadata.version {
@@ -750,7 +766,7 @@ final class SyncCore {
                 await SyncCoreHydrators.shared.applyRemoteDeletion(deleteId)
                 applied += 1
             }
-            logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked) ownEcho=\(ownEcho)")
+            logger.info("[SyncCore] inbound from \(transport): applied=\(applied) skipped=\(skipped) blocked=\(blocked) ownEcho=\(ownEcho) blockedByDevicePolicy=\(blockedByDevicePolicy)")
             // Wake up any AIChatViewModel currently rendering an affected
             // session so it can `reloadMessagesFromDB`. Without this, the
             // SQLite rows landed but the on-screen messages array stays

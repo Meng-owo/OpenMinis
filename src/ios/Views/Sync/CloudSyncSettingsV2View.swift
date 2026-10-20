@@ -18,6 +18,11 @@ struct CloudSyncSettingsV2View: View {
     @State private var remoteDevices: [SyncDevice] = []
     @State private var statusText: String = ""
     @State private var icloudBlockedNotice: String = ""
+    // [T-sync-recovery-v1-parity] State for the two repair actions.
+    @State private var isResyncing = false
+    @State private var isDeletingCloud = false
+    @State private var showDeleteCloudStep1 = false
+    @State private var deleteCloudResult: String?
     // [T-ios-migration-timer-sessionlist-uaf-crash] 5s refresh cadence is driven by
     // a `.task` async loop (see refreshLoop), NOT a process-lived
     // `Timer.publish(every:5).autoconnect()` + `.onReceive`. A graph-bound Combine
@@ -168,17 +173,28 @@ struct CloudSyncSettingsV2View: View {
                             .padding(.vertical, 4)
                     } else {
                         ForEach(remoteDevices, id: \.id) { d in
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(d.deviceName).font(.body)
-                                    Spacer()
-                                    Text(relativeDate(d.lastSeen)).font(.caption2).foregroundStyle(MinisTheme.secondaryText)
-                                }
-                                if !d.uploadTypes.isEmpty {
-                                    Text(uploadTypesSummary(d.uploadTypes))
-                                        .font(.caption)
-                                        .foregroundStyle(MinisTheme.secondaryText)
-                                        .lineLimit(2)
+                            // [T-device-sync-policy] The download switch lives
+                            // on the row itself: a separate section would make
+                            // the reader match names across two lists. Turning
+                            // it off stops records written by THAT device from
+                            // landing here; it does not stop this device from
+                            // uploading, and it is not a delete.
+                            Toggle(isOn: Binding(
+                                get: { DeviceSyncPolicy.isEnabled(d.id) },
+                                set: { DeviceSyncPolicy.setEnabled(d.id, $0) }
+                            )) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(d.deviceName).font(.body)
+                                        Spacer()
+                                        Text(relativeDate(d.lastSeen)).font(.caption2).foregroundStyle(MinisTheme.secondaryText)
+                                    }
+                                    if !d.uploadTypes.isEmpty {
+                                        Text(uploadTypesSummary(d.uploadTypes))
+                                            .font(.caption)
+                                            .foregroundStyle(MinisTheme.secondaryText)
+                                            .lineLimit(2)
+                                    }
                                 }
                             }
                         }
@@ -187,6 +203,49 @@ struct CloudSyncSettingsV2View: View {
                     Text("Other Devices")
                 } footer: {
                     Text("Devices that are signed in to the same iCloud account and have sync enabled. Last seen reflects the most recent push from that device.")
+                        .font(.caption)
+                }
+
+                // [T-sync-recovery-v1-parity] The two escape hatches that only
+                // the retired v1 page had. They live below the ordinary
+                // controls because they are repair actions, not settings.
+                Section {
+                    Button {
+                        Task { await runForceResync() }
+                    } label: {
+                        HStack {
+                            Text("Force Full Resync")
+                            if isResyncing {
+                                Spacer()
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isResyncing || isDeletingCloud)
+                } header: {
+                    Text("Sync Problems")
+                } footer: {
+                    Text("Re-uploads everything on this device and re-downloads everything from iCloud. Nothing is deleted on either side. Use it when another device is missing changes you can see here.")
+                        .font(.caption)
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteCloudStep1 = true
+                    } label: {
+                        HStack {
+                            Text("Delete iCloud Data")
+                            if isDeletingCloud {
+                                Spacer()
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isResyncing || isDeletingCloud)
+                } header: {
+                    Text("Danger Zone")
+                } footer: {
+                    Text("Permanently erases everything this app has stored in your iCloud account, then re-uploads this device's copy. Chat history on this device is not affected.")
                         .font(.caption)
                 }
             }
@@ -201,6 +260,26 @@ struct CloudSyncSettingsV2View: View {
         // that pattern caused — see refreshIntervalSeconds). SwiftUI cancels this Task
         // on teardown.
         .task { await refreshLoop() }
+        // Two-step confirmation for the destructive action: the first dialog
+        // spells out what is lost, the second is the one that actually runs it.
+        .confirmationDialog("Delete all iCloud data?",
+                            isPresented: $showDeleteCloudStep1,
+                            titleVisibility: .visible) {
+            Button("Continue", role: .destructive) {
+                Task { await runDeleteCloudData() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This erases every record this app has in your iCloud account, on all your devices, and then re-uploads this device's copy. Chat history stored on this device is not affected. Other devices will re-download from this one.")
+        }
+        .alert("iCloud Data", isPresented: Binding(
+            get: { deleteCloudResult != nil },
+            set: { if !$0 { deleteCloudResult = nil } }
+        )) {
+            Button("OK", role: .cancel) { deleteCloudResult = nil }
+        } message: {
+            Text(deleteCloudResult ?? "")
+        }
         .alert("Device Name", isPresented: $showDeviceNameEditor) {
             TextField("Device name", text: $deviceNameDraft)
             Button("Save") {
@@ -245,6 +324,34 @@ struct CloudSyncSettingsV2View: View {
             if !backgrounded {
                 await refresh()
             }
+        }
+    }
+
+    /// [T-sync-recovery-v1-parity] The two repair actions, ported from the
+    /// retired v1 page. Both are gated on the engine actually running — with
+    /// sync off there is nothing to resync and nothing to delete.
+    @MainActor
+    private func runForceResync() async {
+        guard #available(iOS 17.0, *) else { return }
+        isResyncing = true
+        defer { isResyncing = false }
+        await SyncRecovery.forceFullResync()
+        MinisToast.show(AppLocalized("Resync started — this can take a minute."),
+                        systemImage: "arrow.triangle.2.circlepath")
+    }
+
+    @MainActor
+    private func runDeleteCloudData() async {
+        guard #available(iOS 17.0, *) else { return }
+        isDeletingCloud = true
+        defer { isDeletingCloud = false }
+        do {
+            let result = try await SyncRecovery.deleteAllCloudData()
+            deleteCloudResult = result.failedZones == 0
+                ? String(format: AppLocalized("Deleted %d iCloud zone(s) and re-uploaded this device's data."), result.deletedZones)
+                : String(format: AppLocalized("Deleted %1$d zone(s); %2$d could not be deleted. Try again in a moment."), result.deletedZones, result.failedZones)
+        } catch {
+            deleteCloudResult = String(format: AppLocalized("Couldn't delete iCloud data: %@"), error.localizedDescription)
         }
     }
 

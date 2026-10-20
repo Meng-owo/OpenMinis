@@ -1415,6 +1415,17 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     /// the CKRecord. Combined with the serverRecordCache reuse above,
     /// this is what makes write-back forward-compatible (§3.6.4).
     private func applyPortable(_ portable: PortableRecord, to record: CKRecord) {
+        // [T-device-sync-policy] Stamp the writer's device id so peers can
+        // honour a per-device download switch. It is deliberately NOT in any
+        // type's `knownCloudKeys`, so it arrives as a `PortableRecord`
+        // unknownField — that is the one channel every record type shares.
+        //
+        // Semantics: this names the LAST writer, not the creator. All devices
+        // share one zone per record type, so a record created on the old phone
+        // and edited here carries THIS device's id. That is the honest meaning
+        // of "which device is pushing this at me", which is what the switch
+        // governs.
+        record[DeviceSyncPolicy.sourceDeviceIdKey] = DeviceIdentity.deviceId as CKRecordValue
         for (key, value) in portable.fields {
             switch value {
             case .null:

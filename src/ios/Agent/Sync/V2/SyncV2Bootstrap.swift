@@ -135,6 +135,22 @@ enum SyncV2Bootstrap {
     /// Called once from MinisApp launch (or on flag flip in debug builds).
     /// Idempotent — running twice is harmless.
     @MainActor
+    /// Restart the engine after a destructive recovery action.
+    ///
+    /// `startIfEnabled()` is deliberately launch-only (it registers types,
+    /// hydrators and transports, and wiring twice would double-observe every
+    /// inbound batch). Recovery already has all of that in place and only tore
+    /// the engine DOWN, so all it needs is `start()` again — plus a device
+    /// re-registration, because the zone holding that record was just deleted.
+    @available(iOS 17.0, *)
+    @MainActor
+    static func restartAfterRecovery() async {
+        await SyncCore.shared.start()
+        await ChatStore.shared.markDirty(recordType: "SyncDeviceV2",
+                                         recordId: DeviceIdentity.deviceId)
+        logger.info("[SyncCore] restarted after recovery (deviceId=\(DeviceIdentity.deviceId.prefix(8)))")
+    }
+
     static func startIfEnabled() async {
         guard isEnabled else {
             logger.debug("[SyncCore] v2 disabled (flag off) — staying on v1")
