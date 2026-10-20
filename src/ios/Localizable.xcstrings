@@ -1,6 +1,259 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Force Full Resync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Force Full Resync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "强制重新同步"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "強制重新同步"
+          }
+        }
+      }
+    },
+    "Sync Problems" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Problems"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步出问题时"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步出問題時"
+          }
+        }
+      }
+    },
+    "Re-uploads everything on this device and re-downloads everything from iCloud. Nothing is deleted on either side. Use it when another device is missing changes you can see here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Re-uploads everything on this device and re-downloads everything from iCloud. Nothing is deleted on either side. Use it when another device is missing changes you can see here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把本机内容全部重传一遍，再从 iCloud 全部拉一遍。两边都不会删东西。另一台设备少了你这边能看到的变化时，用它。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把本機內容全部重傳一遍，再從 iCloud 全部拉一遍。兩邊都不會刪東西。另一台裝置少了你這邊能看到的變化時，用它。"
+          }
+        }
+      }
+    },
+    "Permanently erases everything this app has stored in your iCloud account, then re-uploads this device's copy. Chat history on this device is not affected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permanently erases everything this app has stored in your iCloud account, then re-uploads this device's copy. Chat history on this device is not affected."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久清除这个 app 存在你 iCloud 里的全部数据，然后把本机这份重新传上去。本机的聊天记录不受影响。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "永久清除這個 app 存在你 iCloud 裡的全部資料，然後把本機這份重新傳上去。本機的聊天記錄不受影響。"
+          }
+        }
+      }
+    },
+    "Delete all iCloud data?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete all iCloud data?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除全部 iCloud 数据？"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刪除全部 iCloud 資料？"
+          }
+        }
+      }
+    },
+    "This erases every record this app has in your iCloud account, on all your devices, and then re-uploads this device's copy. Chat history stored on this device is not affected. Other devices will re-download from this one." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This erases every record this app has in your iCloud account, on all your devices, and then re-uploads this device's copy. Chat history stored on this device is not affected. Other devices will re-download from this one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这会清掉这个 app 在你 iCloud 账号里的全部记录（所有设备共享的那份），然后把本机这份重新传上去。存在本机的聊天记录不受影响，其他设备会从这台重新下载。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這會清掉這個 app 在你 iCloud 帳號裡的全部記錄（所有裝置共享的那份），然後把本機這份重新傳上去。存在本機的聊天記錄不受影響，其他裝置會從這台重新下載。"
+          }
+        }
+      }
+    },
+    "iCloud Data" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud Data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iCloud 資料"
+          }
+        }
+      }
+    },
+    "Resync started — this can take a minute." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resync started — this can take a minute."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开始重新同步，可能要一会儿。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已開始重新同步，可能要一會兒。"
+          }
+        }
+      }
+    },
+    "Deleted %d iCloud zone(s) and re-uploaded this device's data." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted %d iCloud zone(s) and re-uploaded this device's data."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除 %d 个 iCloud 同步区，本机数据已重新上传。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已刪除 %d 個 iCloud 同步區，本機資料已重新上傳。"
+          }
+        }
+      }
+    },
+    "Deleted %1$d zone(s); %2$d could not be deleted. Try again in a moment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted %1$d zone(s); %2$d could not be deleted. Try again in a moment."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除 %1$d 个同步区，还有 %2$d 个没删掉，稍后再试一次。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已刪除 %1$d 個同步區，還有 %2$d 個沒刪掉，稍後再試一次。"
+          }
+        }
+      }
+    },
+    "Couldn't delete iCloud data: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't delete iCloud data: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能删除 iCloud 数据：%@"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "沒能刪除 iCloud 資料：%@"
+          }
+        }
+      }
+    },
     "Image read": {
       "extractionState": "manual",
       "localizations": {
