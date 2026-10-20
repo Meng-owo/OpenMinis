@@ -181,7 +181,19 @@ struct CloudSyncSettingsV2View: View {
                             // uploading, and it is not a delete.
                             Toggle(isOn: Binding(
                                 get: { DeviceSyncPolicy.isEnabled(d.id) },
-                                set: { DeviceSyncPolicy.setEnabled(d.id, $0) }
+                                set: { newValue in
+                                    DeviceSyncPolicy.setEnabled(d.id, newValue)
+                                    // Turning a device back ON must catch up on
+                                    // what was skipped while it was off. The
+                                    // incremental change token has already
+                                    // moved past those records, so they will
+                                    // never be re-delivered on their own —
+                                    // without this the switch would silently
+                                    // leave a permanent hole.
+                                    if newValue, #available(iOS 17.0, *) {
+                                        Task { await SyncCore.shared.fullFetchAndReconcile(trigger: .manual) }
+                                    }
+                                }
                             )) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     HStack {

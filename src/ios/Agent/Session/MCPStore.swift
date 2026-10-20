@@ -823,6 +823,18 @@ final class MCPStore: ObservableObject {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
+    /// Re-emit an upsert for every configured server. Used by the force-sync /
+    /// recovery paths so a device can re-push its whole MCP roster — same
+    /// purpose as `SubAgentStore.markAllDirty` and
+    /// `EnvVarStore.markAllEntriesDirty`.
+    ///
+    /// Needed because `markAllLocalForReupload` only walks ChatStore's own
+    /// tables; MCP servers live in their own file and would otherwise never
+    /// come back after a cloud wipe.
+    func markAllServersDirty() {
+        noteSyncedLocalChange(names: servers.map(\.id))
+    }
+
     /// Record a local mutation: refresh fingerprints and queue per-server
     /// upsert dirty rows.
     private func noteSyncedLocalChange(names: [String]) {

@@ -760,6 +760,14 @@ final class SyncCore {
                 try? await Task.sleep(nanoseconds: 50_000_000)
             }
             for deleteId in allDeletes {
+                // [T-device-sync-policy] Deliberately NOT filtered by the
+                // per-device switch. A delete carries no writer id — the
+                // transport reports `SyncInboundBatch.sourceDeviceId` as nil
+                // and a tombstone is just a record id. Blocking what cannot
+                // be attributed would mean guessing, and guessing wrong here
+                // leaves a record the peer already deleted sitting here
+                // forever. The switch governs what this device accepts, not
+                // what it forgets.
                 guard registry.metadata(for: deleteId.type) != nil else {
                     skipped += 1
                     if deleteId.type == "Message" {

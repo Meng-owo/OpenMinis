@@ -1117,7 +1117,18 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
     func resetChangeToken() {
         stateSerialization = nil
         try? FileManager.default.removeItem(at: stateURL)
-        logger.warning("[SyncTransport] change token cleared (recovery)")
+        // [T-sync-recovery-v1-parity] The etag cache has to go with it. It
+        // holds `recordChangeTag` for records that lived in the zones we just
+        // deleted; a restart carrying those tags sends every push as an
+        // "update" for a record CloudKit no longer has. The NOT_FOUND
+        // recovery path does clear them one at a time, but that is one
+        // server round-trip per record — with a few thousand records the
+        // recovery would crawl for minutes. Drop the whole cache here so the
+        // first push after a wipe is a clean create.
+        serverRecordCache.removeAll()
+        etagCacheDirty = false
+        try? FileManager.default.removeItem(at: etagCacheURL)
+        logger.warning("[SyncTransport] change token + etag cache cleared (recovery)")
     }
 
     func observe(handler: @escaping (SyncInboundBatch) -> Void) {

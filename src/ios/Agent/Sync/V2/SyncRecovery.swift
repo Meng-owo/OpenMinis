@@ -15,6 +15,32 @@ private let logger = AppLogger(category: "SyncRecovery")
 /// Both are deliberately explicit: nothing here runs on its own.
 enum SyncRecovery {
 
+    /// Re-mark every local record type that `markAllLocalForReupload` cannot
+    /// see on its own.
+    ///
+    /// That function only walks ChatStore's own tables. Its own comment says
+    /// so: "Skills are stored in SkillStore's own DB; CloudSyncEngine / its
+    /// v2 caller enumerates SkillStore separately." The v1 recovery path does
+    /// enumerate them; this file — the v2 replacement — originally did not,
+    /// which meant "Delete iCloud Data" erased skills, env-var entries, MCP
+    /// servers, sub agents and folders from the cloud and never put them back.
+    /// They stayed gone on every other device until something touched each
+    /// one locally.
+    @available(iOS 17.0, *)
+    @MainActor
+    private static func markStoresThatChatStoreCannotSee() async {
+        for skill in SkillStore.shared.skills {
+            await ChatStore.shared.markDirty(recordType: "Skill", recordId: skill.id)
+        }
+        EnvVarStore.shared.markAllEntriesDirty()
+        MCPStore.shared.markAllServersDirty()
+        SubAgentStore.shared.markAllDirty()
+        for folder in await ChatStore.shared.listFolders() {
+            await ChatStore.shared.markDirty(recordType: "Folder", recordId: folder.id)
+        }
+        logger.warning("[SyncRecovery] re-marked stores outside ChatStore: skills=\(SkillStore.shared.skills.count) envVars=\(EnvVarStore.shared.entries.count) mcp=\(MCPStore.shared.servers.count) subAgents=\(SubAgentStore.shared.subAgents.count)")
+    }
+
     /// Push everything local again and pull everything remote again.
     ///
     /// Re-marks every local row dirty (the dirty queue may have been dropped
@@ -29,6 +55,7 @@ enum SyncRecovery {
         // Force=true: this is the recovery path, explicitly the case the
         // once-per-install guard on the initial backlog is meant to exempt.
         await ChatStore.shared.markAllLocalForReupload(force: true)
+        await markStoresThatChatStoreCannotSee()
         _ = await ForceSyncHelper.markMemoryDirty()
         _ = await ForceSyncHelper.markProvidersDirty()
         _ = await ForceSyncHelper.markSoulDirty()
@@ -91,6 +118,7 @@ enum SyncRecovery {
         }
         await ChatStore.shared.clearAllRemoteTables()
         await ChatStore.shared.markAllLocalForReupload(force: true)
+        await markStoresThatChatStoreCannotSee()
         _ = await ForceSyncHelper.markMemoryDirty()
         _ = await ForceSyncHelper.markProvidersDirty()
         _ = await ForceSyncHelper.markSoulDirty()
