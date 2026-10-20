@@ -54,7 +54,8 @@ import Foundation
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-    }
+            return out as NSDictionary
+}
 
     @objc public static func getStatus() -> NSDictionary {
         let sem = DispatchSemaphore(value: 0)
@@ -78,5 +79,6 @@ import Foundation
             return ["ok": false, "error": "timeout",
                     "message": "The app did not answer within the timeout."] as NSDictionary
         }
-    }
+            return out as NSDictionary
+}
 }
