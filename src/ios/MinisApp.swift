@@ -60,9 +60,6 @@ extension Notification.Name {
     /// Posted when the user wants to move input (text + attachments) to another session.
     /// userInfo: ["targetId": String]
     static let moveInputToSession = Notification.Name("moveInputToSession")
-    /// Posted when a session's model binding changes (group or direct entry).
-    /// userInfo: ["sessionId": String] and optionally ["groupId": String] when bound to a group.
-    static let sessionModelBindingChanged = Notification.Name("sessionModelBindingChanged")
 
     /// Posted by any path that's about to take over the screen (incoming
     /// share, WebApp deep-link launch). Every fullScreenCover host —

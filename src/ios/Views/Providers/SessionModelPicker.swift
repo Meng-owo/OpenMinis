@@ -139,11 +139,6 @@ struct SessionModelPicker: View {
                 cfg.thinkingLevel = thinkLevel
                 store.setInferenceConfig(cfg, for: sid)
             }
-            NotificationCenter.default.post(
-                name: .sessionModelBindingChanged,
-                object: nil,
-                userInfo: ["groupId": group.id, "sessionId": sid]
-            )
             if let entry = store.entry(for: resolvedEntryId) {
                 await ChatStore.shared.updateSessionModelId(sid, modelId: entry.model.id)
             }
@@ -172,13 +167,6 @@ struct SessionModelPicker: View {
                 cfg.thinkingLevel = thinkLevel
                 store.setInferenceConfig(cfg, for: sid)
             }
-            var info: [String: Any] = ["sessionId": sid]
-            if let group { info["groupId"] = group.id }
-            NotificationCenter.default.post(
-                name: .sessionModelBindingChanged,
-                object: nil,
-                userInfo: info
-            )
             await ChatStore.shared.updateSessionModelId(sid, modelId: entry.model.id)
             dismiss()
         }
