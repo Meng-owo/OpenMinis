@@ -713,6 +713,11 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
     private let fileURL: URL?
     private let soulName: String
     private let voiceText: String
+    /// [B09-V3 2026-10-22] Shown when the audio file is gone but the transcript
+    /// sidecar survived (the storage cleanup promises "their text stays"). The
+    /// card used to be completely inert in that state: no marquee, and the play
+    /// button's first line was `guard let url = fileURL else { return }`.
+    private let missingAudioText: String?
     private var knownDuration: Double
 
     // MARK: - Runtime state
@@ -757,16 +762,19 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
 
     // MARK: - Init
 
-    init(frame: CGRect, fileURL: URL?, duration: Double, soulName: String, voiceText: String) {
+    init(frame: CGRect, fileURL: URL?, duration: Double, soulName: String, voiceText: String,
+         missingAudioText: String? = nil) {
         self.fileURL = fileURL
         self.soulName = soulName
         self.voiceText = voiceText
+        self.missingAudioText = missingAudioText
         self.knownDuration = duration
         super.init(frame: frame)
         backgroundColor = .clear
         buildUI()
         bindPlayer()
         refreshResumeBadge()
+        applyMissingAudioState()
         if knownDuration <= 0 { probeDuration() }
     }
 
@@ -1073,7 +1081,12 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         let active = fileURL != nil && activeURL == fileURL
         isPlayingFile = playing && active
         playButton.setImage(Self.iconImage(isPlayingFile ? "pause.fill" : "play.fill"), for: .normal)
-        setKicker(isPlayingFile ? "NOW PLAYING" : "VOICE MESSAGE")
+        // [B09-V3 2026-10-22] Keep the "audio removed" note: the global player
+        // re-publishes state on every tick, and this line used to stomp the
+        // note back to "VOICE MESSAGE" one frame after it was set.
+        if fileURL != nil {
+            setKicker(isPlayingFile ? "NOW PLAYING" : "VOICE MESSAGE")
+        }
         setDotBlinking(isPlayingFile)
         setCatGroove(isPlayingFile)
         setNotesFloating(isPlayingFile)
@@ -1134,7 +1147,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         }
         let key = url.deletingPathExtension().lastPathComponent
         if let pos = VoiceBubblePlaybackState.resumePosition(for: key, duration: knownDuration) {
-            resumeLabel.text = "续听 \(Self.format(pos))"
+            resumeLabel.text = AppLocalized("Resume \(Self.format(pos))")
             let w = resumeLabel.sizeThatFits(CGSize(width: 120, height: 14)).width + 14
             resumeBadgeWidth = max(44, w.rounded())
             resumeBadge.isHidden = false
@@ -1326,6 +1339,21 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
     }
 
     // MARK: - Interactions
+
+    /// [B09-V3 2026-10-22] Audio deleted, transcript still here: keep the card
+    /// readable and say why it cannot play, instead of a play button that does
+    /// nothing when tapped.
+    private func applyMissingAudioState() {
+        guard fileURL == nil else { return }
+        if let note = missingAudioText {
+            setKicker(note)
+        }
+        playButton.isEnabled = false
+        playButton.alpha = 0.35
+        speedButton.isEnabled = false
+        speedButton.alpha = 0.35
+        totalLabel.text = Self.formatUnknownAware(0)
+    }
 
     @objc private func handlePlayTap() {
         guard let url = fileURL else { return }

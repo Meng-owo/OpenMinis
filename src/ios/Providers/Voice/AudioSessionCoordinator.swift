@@ -247,6 +247,16 @@ final class AudioSessionCoordinator {
     /// end clear every other source's pause (e.g. a phone call ending
     /// resumed TTS while another app still held the mic).
     private var externalAudioSources: Set<ExternalAudioSource> = []
+
+    /// [B09-V9 2026-10-22] Is external audio (call / recording / dictation)
+    /// currently holding our playback paused? `VoiceOutputPlayer.stopAll()`
+    /// used to clear `isPaused` unconditionally, which is fine for a
+    /// user-initiated stop but WRONG when the pause belongs to this latch:
+    /// the next pump would then speak under the recorder. The per-session
+    /// `stopSession` path documented exactly that (AUD8-07) and was careful not
+    /// to clear it; routing "read this reply" back through stopAll lost the
+    /// protection.
+    var isHoldingExternalAudioPause: Bool { !externalAudioSources.isEmpty }
     /// Whether the user had already paused cloud TTS before the external-audio
     /// latch. Recorded when the FIRST source latches so the matching resume
     /// can leave a user-owned pause alone instead of undoing it.

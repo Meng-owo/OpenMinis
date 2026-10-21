@@ -470,6 +470,9 @@ final class TTSServiceStore: @unchecked Sendable {
     private let lock = NSLock()
     private var _services: [TTSServiceOptions]
     private var _selectedId: String?
+    /// Keeps the foreground-refresh observer alive (see init). The store lives
+    /// for the whole process, so it never needs removing.
+    private var foregroundObserver: NSObjectProtocol?
 
     private init() {
         let d = UserDefaults.standard
@@ -483,6 +486,18 @@ final class TTSServiceStore: @unchecked Sendable {
         _selectedId = sel
         if let sel, !_services.contains(where: { $0.id == sel }) {
             _selectedId = nil
+        }
+        // [B09-V10 2026-10-22] Credentials can arrive from another device while
+        // we are backgrounded (the keychain item is synchronizable). Without a
+        // foreground refresh the "no key" answer was cached forever and the
+        // service stayed unusable until the app was killed and relaunched.
+        // Referenced by name so this store stays UIKit-free (it is also read
+        // from non-UI callers).
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("UIApplicationDidBecomeActiveNotification"),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.invalidateCredentialCaches()
         }
     }
 
@@ -582,8 +597,47 @@ final class TTSServiceStore: @unchecked Sendable {
 
     // MARK: Credential
 
+    /// [B09-V5 2026-10-22] The KEY is cached too, not just its presence.
+    ///
+    /// `hasAPIKey` was cached (R-8) but every `TTSProviderBridge.provider(for:)`
+    /// call still did a synchronous Keychain read — and `provider(for:)` is what
+    /// `VoiceChain.canSpeak` runs for EVERY service on every render (settings
+    /// row, group subtitle, sheet summary, the read-aloud label on the settings
+    /// root). One settings refresh was a dozen Keychain IPCs on the main thread.
+    ///
+    /// Invalidation: save / delete / list change (local), plus app foreground
+    /// (iCloud Keychain can deliver a key from another device while we are
+    /// backgrounded — without that, the presence cache kept answering "no key"
+    /// forever, which is V-10: an iPad-added key never showed up on the iPhone
+    /// until a relaunch).
+    private var keyCache: [String: String] = [:]
+    private var keyMisses: Set<String> = []
+    private let keyCacheLock = NSLock()
+
     func apiKey(for service: TTSServiceOptions) -> String? {
-        ProviderKeychainHelper.loadAPIKey(instanceId: service.keychainInstanceId, caller: "TTSServiceStore")
+        let id = service.id
+        keyCacheLock.lock()
+        if let hit = keyCache[id] { keyCacheLock.unlock(); return hit }
+        if keyMisses.contains(id) { keyCacheLock.unlock(); return nil }
+        keyCacheLock.unlock()
+
+        let key = ProviderKeychainHelper.loadAPIKey(instanceId: service.keychainInstanceId,
+                                                   caller: "TTSServiceStore")
+        keyCacheLock.lock()
+        if let key, !key.isEmpty { keyCache[id] = key } else { keyMisses.insert(id) }
+        keyCacheLock.unlock()
+        return key
+    }
+
+    /// Drop every cached credential + presence flag. Called when the app comes
+    /// back to the foreground (iCloud Keychain may have synced in the meantime)
+    /// and whenever the local list/key changes.
+    func invalidateCredentialCaches() {
+        keyCacheLock.lock()
+        keyCache.removeAll()
+        keyMisses.removeAll()
+        keyCacheLock.unlock()
+        invalidateKeyPresence()
     }
 
     /// [B09-R8 2026-10-22] Presence cache. `hasAPIKey` is now asked on every
@@ -602,6 +656,8 @@ final class TTSServiceStore: @unchecked Sendable {
             return cached
         }
         keyPresenceLock.unlock()
+        // Goes through apiKey(for:) so the key cache warms at the same time —
+        // the next provider(for:) is then free.
         let present = (apiKey(for: service)?.isEmpty == false)
         keyPresenceLock.lock()
         keyPresence[service.id] = present
@@ -614,6 +670,10 @@ final class TTSServiceStore: @unchecked Sendable {
         keyPresenceLock.lock()
         if let id { keyPresence.removeValue(forKey: id) } else { keyPresence.removeAll() }
         keyPresenceLock.unlock()
+        keyCacheLock.lock()
+        if let id { keyCache.removeValue(forKey: id); keyMisses.remove(id) }
+        else { keyCache.removeAll(); keyMisses.removeAll() }
+        keyCacheLock.unlock()
     }
 
     /// [T-capsule-service-picker 09-12] Id-keyed convenience for picker rows,

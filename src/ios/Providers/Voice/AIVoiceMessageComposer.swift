@@ -40,6 +40,11 @@ enum AIVoiceMessageComposer {
         case groupEmpty(name: String)
         case voiceNotFound(name: String, available: [String])
         case serviceDisabled(name: String)
+        /// [B09-V4 2026-10-22] Enabled + key present, but the credential cannot
+        /// build a provider (e.g. iFlytek saved as one segment instead of
+        /// `appId;apiKey;apiSecret`). Previously this surfaced as a generic
+        /// "synthesis failed" after a wasted round trip.
+        case serviceNotUsable(name: String)
         case synthesisFailed(detail: String)
 
         var errorDescription: String? {
@@ -56,6 +61,8 @@ enum AIVoiceMessageComposer {
                 return "没有这个 TTS 服务「\(name)」。\(opts)不传 voice 就用默认分组。"
             case .serviceDisabled(let name):
                 return "TTS 服务「\(name)」已停用。让主人去「设置 > Voice Services」里启用，或换个服务。"
+            case .serviceNotUsable(let name):
+                return "TTS 服务「\(name)」的凭证不完整，合成不了。让主人去「设置 > Voice Services」里重新填一遍密钥（讯飞要 appId;apiKey;apiSecret 三段），或换个服务。"
             case .synthesisFailed(let detail):
                 return "语音合成失败（\(detail)）。如实告诉主人这条语音没发出去，不要谎称已发送；可以建议她检查 TTS 服务配置。"
             }
@@ -164,13 +171,35 @@ enum AIVoiceMessageComposer {
         // line through VoiceLog.problem, which owns its own logger and is the
         // Release-visible channel anyway.
         VoiceLog.problem("cleared \(count) voice file(s), \(bytes) bytes, older than \(days)d")
+        pruneProgressForRemainingFiles()
         return (count, bytes)
+    }
+
+    /// [B09-V12 2026-10-22] Voice-bubble listen-progress is keyed by file name
+    /// and capped at 200 entries. Deleting the audio left the record behind, so
+    /// cleaned-up files kept occupying slots until live ones were pushed out.
+    /// `nonisolated` + UserDefaults-only, safe off the main actor.
+    nonisolated static func pruneProgressForRemainingFiles() {
+        let fm = FileManager.default
+        let base = AIChatViewModel.minisPersistentBase
+        var names = Set<String>()
+        if let sessions = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) {
+            for sessionDir in sessions {
+                let attach = sessionDir.appendingPathComponent("attachments", isDirectory: true)
+                guard let files = try? fm.contentsOfDirectory(at: attach, includingPropertiesForKeys: nil)
+                else { continue }
+                for f in files where f.lastPathComponent.hasPrefix("tts-") {
+                    names.insert(f.deletingPathExtension().lastPathComponent)
+                }
+            }
+        }
+        VoiceBubblePlaybackState.pruneMissing(existingFileNames: names)
     }
 
     /// [voice-bubble-tool 2026-10-02] send_voice 专用：voice/group 点名版。
     /// - voice: TTS 服务名（服务的 id 也行），用该服务的音色合成。
     /// - group: TTS 分组名（分组 id 也行），按分组成员顺序 fallback。
-    /// 都不传 = 走默认链路（默认 TTS 分组 → 选中服务 → 模型分组）。
+    /// 都不传 = 走默认链路（选中服务 → 默认 TTS 分组 → 模型分组，见 VoiceChain）。
     /// 点名时是严格语义：只试点名的候选，死透了就抛错，不会悄悄用别的声音顶。
     static func compose(for text: String, sessionId: String, voice: String?, group: String?) async throws -> Result {
         let sanitized = VoiceTextSanitizer.sanitize(text)
@@ -232,7 +261,7 @@ enum AIVoiceMessageComposer {
             }
             throw VoiceComposeError.synthesisFailed(detail: "点名的 TTS 候选都失败了")
         }
-        // 默认链路：和以前完全一致（默认 TTS 分组 → 选中服务 → 模型分组）。
+        // 默认链路：选中服务 → 默认 TTS 分组 → 模型分组（VoiceChain.serviceCandidates）。
         // 取消透传（不能 try? 吞掉），其他失败才落到下面的 synthesisFailed。
         do {
             let (data, _) = try await synthesizeWithServiceOrGroup(text)
@@ -277,6 +306,14 @@ enum AIVoiceMessageComposer {
             guard svc.enabled else {
                 throw VoiceComposeError.serviceDisabled(name: svc.name)
             }
+            // [B09-V4 2026-10-22] A service that passes `enabled` but whose
+            // credential cannot build a provider (iFlytek missing the secret
+            // segment) used to be returned here and then fail at synthesis with
+            // a generic error. Refuse it up front with the same predicate the
+            // rest of the chain uses.
+            guard VoiceChain.canSpeak(svc) else {
+                throw VoiceComposeError.serviceNotUsable(name: svc.name)
+            }
             logger.info("[AIVoice] explicit voice service '\(svc.name)'")
             return [svc]
         }
@@ -286,6 +323,49 @@ enum AIVoiceMessageComposer {
     /// [P1-6] Sidecar transcript for a composed voice file: the .txt written
     /// next to the audio at compose time (zero-STT 转文字 source).
     /// Returns the text, or nil when the sidecar is absent (old bubbles).
+    ///
+    /// [B09-V3 2026-10-22] Takes the SOURCE LINK, not a resolved audio URL.
+    /// The storage page deletes old `tts-*.wav` but deliberately keeps the
+    /// `.txt` ("those bubbles lose their audio, their text stays") — except the
+    /// caller only got a URL after the audio file was found on disk, so once the
+    /// audio was gone `resolvedURL` was nil and the transcript could never be
+    /// read. The text stayed on disk and stayed invisible.
+    ///
+    /// Resolving from the link means the sidecar is found whether or not the
+    /// audio still exists. `audioURL` is still accepted for the normal path
+    /// (already-resolved file), and is used only as a fast hint.
+    nonisolated static func transcript(forLink link: String) -> String? {
+        guard let txt = sidecarURL(forLink: link) else { return nil }
+        return try? String(contentsOf: txt, encoding: .utf8)
+    }
+
+    /// The `.txt` sidecar path implied by a `minis-clone://` link, whether or
+    /// not the audio itself still exists. nil when the link is not a session
+    /// attachment (nothing to look for).
+    nonisolated static func sidecarURL(forLink link: String) -> URL? {
+        // Strip the query (voice_bubble=1 / dur=… are metadata).
+        let clean: String
+        if let u = URL(string: link), var c = URLComponents(url: u, resolvingAgainstBaseURL: false) {
+            c.queryItems = nil
+            clean = c.url?.absoluteString ?? link
+        } else {
+            clean = link
+        }
+        guard let url = URL(string: clean), url.scheme == "minis-clone" else { return nil }
+        guard let host = url.host, host == "attachments" else { return nil }
+        let sub = url.percentEncodedPath.isEmpty
+            ? ""
+            : String(url.percentEncodedPath.dropFirst())
+        let decoded = sub.removingPercentEncoding ?? sub
+        guard !decoded.isEmpty else { return nil }
+        let name = (decoded as NSString).deletingPathExtension
+        let txtName = name + ".txt"
+        guard let sid = AIChatViewModel.activeSessionId, !sid.isEmpty else { return nil }
+        return AIChatViewModel.minisAttachmentsPersistentDir(for: sid)
+            .appendingPathComponent(txtName)
+    }
+
+    /// Kept for callers that already hold a resolved audio URL.
     nonisolated static func transcriptForAudioFile(_ audioURL: URL) -> String? {
         let txtURL = audioURL.deletingPathExtension().appendingPathExtension("txt")
         guard FileManager.default.fileExists(atPath: txtURL.path) else { return nil }
@@ -416,9 +496,11 @@ enum AIVoiceMessageComposer {
         return VoiceOutputPlayer.concatPieces(pieces)
     }
 
-    /// [tts-groups 2026-10-02] 候选链：默认 TTS 分组成员（按分组顺序）→ 之前选中
-    /// 的单个服务（兼容老配置）→ Voice Output 模型分组。没建分组时行为和以前
-    /// 完全一致（选中服务 → 模型分组）。
+    /// [tts-groups 2026-10-02] 候选链：服务层（选中服务 → 默认 TTS 分组成员，
+    /// 见 VoiceChain）→ Voice Output 模型分组。
+    /// [B09-V11 2026-10-22] 上面那句原文写的是"默认分组成员 → 之前选中的单个
+    /// 服务"，与实际顺序相反（R-2 之后是选中优先）。改代码不改注释，下一个接手
+    /// 的人会照注释再改错一次。
     /// [B09-L01 2026-10-22] Returns `(audio, container)` — the second value is
     /// the file CONTAINER ("wav"/"mp3"), which is what every return statement
     /// here already put in it. It used to be typed/read as a service name
@@ -457,24 +539,14 @@ enum AIVoiceMessageComposer {
         throw VoiceProviderError.parseError("all voice candidates failed")
     }
 
-    /// 有序去重的 TTS 服务候选：默认分组成员优先，然后是选中的单个服务。
+    /// 有序去重的 TTS 服务候选。
+    ///
+    /// [B09-V1 2026-10-22] Delegates to VoiceChain: this used to be a second,
+    /// hand-maintained copy of the same order (and it silently drifted every
+    /// time the player's copy changed — that is what made the bubble path and
+    /// the read-aloud path disagree about which service speaks).
     private static func ttsServiceCandidates() -> [TTSServiceOptions] {
-        var out: [TTSServiceOptions] = []
-        var seen = Set<String>()
-        // [B09-S01 2026-10-22] Keyless members are filtered out up front instead
-        // of being tried and skipped one by one — same order, no wasted round
-        // trip on a service that can never speak.
-        // [B09-R2 2026-10-22] Selected service first, group as fallback — the
-        // tick in the services list has to mean something.
-        let svcStore = TTSServiceStore.shared
-        if let s = svcStore.selectedService(), s.enabled,
-           svcStore.hasAPIKey(for: s), seen.insert(s.id).inserted {
-            out.append(s)
-        }
-        for s in TTSGroupStore.shared.usableDefaultGroupCandidates() where seen.insert(s.id).inserted {
-            out.append(s)
-        }
-        return out
+        VoiceChain.serviceCandidates()
     }
 
     /// 单个 TTS 服务合成一次。普通失败记 LOUD 日志并返回 nil（调用方继续下

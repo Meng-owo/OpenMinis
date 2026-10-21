@@ -46,10 +46,21 @@ final class VoiceZeroCandidateTests: XCTestCase {
             VoiceOutputPreferences.systemVoiceAllowed = previousSystemVoice
         }
 
-        var drainedCount = 0
+        // [B09-V6 2026-10-22] `addObserver(forName:object:queue:using:)` takes a
+        // `@Sendable` block. Under Swift 6 (this target is SWIFT_VERSION 6.0)
+        // mutating a captured `var` inside it is a COMPILE ERROR, not a warning
+        // — "mutation of captured var in concurrently-executing code". A boxed
+        // counter is the supported shape.
+        final class Counter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var n = 0
+            func bump() { lock.lock(); n += 1; lock.unlock() }
+            var value: Int { lock.lock(); defer { lock.unlock() }; return n }
+        }
+        let drained = Counter()
         let token = NotificationCenter.default.addObserver(
             forName: .ttsQueueDrainedSilently, object: nil, queue: .main
-        ) { _ in drainedCount += 1 }
+        ) { _ in drained.bump() }
         defer { NotificationCenter.default.removeObserver(token) }
 
         player.enqueue("测试一句没有任何语音可以合成的话。", sessionId: "test-session")
@@ -59,7 +70,7 @@ final class VoiceZeroCandidateTests: XCTestCase {
 
         XCTAssertFalse(player.isPlaying, "nothing can speak — must not report playing")
         XCTAssertFalse(player.isSynthesizing, "nothing can speak — must not report synthesizing")
-        XCTAssertEqual(drainedCount, 1,
+        XCTAssertEqual(drained.value, 1,
                        "the drain notification must fire exactly once, not per recursion round")
     }
 

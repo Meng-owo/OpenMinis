@@ -5345,13 +5345,18 @@ final class AudioAttachment: NSTextAttachment {
         container.backgroundColor = .clear
         container.isUserInteractionEnabled = true
 
-        let transcript = resolvedURL.flatMap { AIVoiceMessageComposer.transcriptForAudioFile($0) } ?? ""
+        // [B09-V3 2026-10-22] Transcript comes from the LINK, not from
+        // `resolvedURL`: once the storage cleanup deleted the audio the URL was
+        // nil, so the marquee was empty and the bubble was a dead card even
+        // though the .txt sidecar was still on disk.
+        let transcript = AIVoiceMessageComposer.transcript(forLink: source) ?? ""
         let card = VoiceCatBubbleCardView(
             frame: CGRect(x: 0, y: 0, width: width, height: h),
             fileURL: resolvedURL,
             duration: voiceDuration,
             soulName: Self.currentSoulDisplayName(),
-            voiceText: transcript)
+            voiceText: transcript,
+            missingAudioText: resolvedURL == nil ? Self.audioGoneText : nil)
         container.addSubview(card)
 
         // 长按呼出菜单
@@ -5362,6 +5367,12 @@ final class AudioAttachment: NSTextAttachment {
         card.addGestureRecognizer(longPress)
 
         return container
+    }
+
+    /// [B09-V3 2026-10-22] Kicker line for a bubble whose audio was cleaned up
+    /// (the storage copy promises "their text stays").
+    private static var audioGoneText: String {
+        AppLocalized("AUDIO REMOVED · TEXT KEPT")
     }
 
     /// [T-voice-cat-card] 当前人设名（卡片标题「XX 给你留了言」）。

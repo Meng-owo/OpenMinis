@@ -6934,16 +6934,16 @@ struct ChatVoiceSettingsSheet: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(AppLocalized("AI Voice Replies"))
                                 .font(.body.weight(.medium))
-                            Text("以语音气泡发送语音消息")
+                            Text(AppLocalized("Send voice messages as voice bubbles"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
 
                 } header: {
-                    Text("AI 语音回复")
+                    Text(AppLocalized("AI voice replies"))
                 } footer: {
-                    Text("针对当前会话生效。")
+                    Text(AppLocalized("Applies to this session only."))
                 }
 
                 // 朗读状态与控制（收口悬浮播放器全部调节）
@@ -6953,7 +6953,13 @@ struct ChatVoiceSettingsSheet: View {
                             Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : (noVoiceWarning ? "speaker.slash.fill" : "speaker.wave.2.fill")))
                                 .font(ChatFont.font(16))
                                 .foregroundStyle(isSpeaking ? MinisTheme.accent : MinisTheme.secondaryText)
-                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : (noVoiceWarning ? "没有可用的声音" : "播报就绪")))
+                            Text(isSpeaking && !isPaused
+                             ? AppLocalized("Reading aloud…")
+                             : (isPaused
+                                ? AppLocalized("Playback paused")
+                                : (noVoiceWarning
+                                   ? AppLocalized("No voice available")
+                                   : AppLocalized("Ready to speak"))))
                                 .font(.body.weight(.medium))
                         }
                         Spacer()
@@ -6965,7 +6971,7 @@ struct ChatVoiceSettingsSheet: View {
                                 dismiss()
                                 DeepLinkCoordinator.shared.pendingSettingsTarget = .voiceServices
                             } label: {
-                                Text("去配置")
+                                Text(AppLocalized("Fix it"))
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 10)
@@ -6978,7 +6984,7 @@ struct ChatVoiceSettingsSheet: View {
                             Button {
                                 state.togglePause()
                             } label: {
-                                Text(isPaused ? "继续" : "暂停")
+                                Text(isPaused ? AppLocalized("Resume") : AppLocalized("Pause"))
                                     .font(.subheadline.weight(.medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 4)
@@ -6989,7 +6995,7 @@ struct ChatVoiceSettingsSheet: View {
                             Button {
                                 state.stop()
                             } label: {
-                                Text("停止")
+                                Text(AppLocalized("Stop"))
                                     .font(.subheadline.weight(.medium))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 10)
@@ -7003,14 +7009,14 @@ struct ChatVoiceSettingsSheet: View {
                     // [audit-批0] 复看更名：自动朗读已删，此处实为手动点读的
                     // 实时状态 + 遥控（继续/暂停/停止），"实时播报"易读成自动
                     // 播报类功能名——按现状命名。
-                    Text("朗读状态与控制")
+                    Text(AppLocalized("Read-aloud status and controls"))
                 }
 
                 Section {
                     // 1. 播放倍速调节
                     // [B09-N05 2026-10-22] One ladder for both players — the
                     // steps and the labels are derived, never retyped.
-                    Picker("播放倍速", selection: Binding(
+                    Picker(AppLocalized("Playback speed"), selection: Binding(
                         get: {
                             let cur = VoiceOutputPreferences.speedMultiplier
                             return VoiceOutputPreferences.speedSteps
@@ -7035,15 +7041,15 @@ struct ChatVoiceSettingsSheet: View {
                     } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("朗读声音")
+                                Text(AppLocalized("Reading voice"))
                                     .font(.body.weight(.medium))
                                     .foregroundStyle(Color.primary)
-                                Text("选择系统或第三方语音服务")
+                                Text(AppLocalized("Pick the System voice or one of your TTS services"))
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
                             Spacer()
-                            Text(modelLabel.isEmpty ? "默认声音" : modelLabel)
+                            Text(modelLabel.isEmpty ? AppLocalized("Default voice") : modelLabel)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
@@ -7053,9 +7059,9 @@ struct ChatVoiceSettingsSheet: View {
                         }
                     }
                 } header: {
-                    Text("朗读偏好设置")
+                    Text(AppLocalized("Read-aloud settings"))
                 } footer: {
-                    Text("播放、倍速与声音调节已统一收纳在此处。")
+                    Text(AppLocalized("Playback, speed and voice are all handled here."))
                 }
 
                 // [batch9-voice/3 · VT-F2] 系统语音闸门回显——设置页是权威，
@@ -7063,19 +7069,19 @@ struct ChatVoiceSettingsSheet: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("允许系统语音")
+                            Text(AppLocalized("Allow System voice"))
                                 .font(.body.weight(.medium))
-                            Text("关闭时只用你配置的声音发声")
+                            Text(AppLocalized("Off: only the voices you configured are used"))
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
-                        Text(systemVoiceAllowed ? "已允许" : "未允许")
+                        Text(systemVoiceAllowed ? AppLocalized("Allowed") : AppLocalized("Not allowed"))
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                 } footer: {
-                    Text("在 设置 › 语音服务 里调整。")
+                    Text(AppLocalized("Change this in Settings › Voice Services."))
                 }
 
                 // [B09 2026-10-22] The sheet is where users land when a reply
@@ -7085,7 +7091,7 @@ struct ChatVoiceSettingsSheet: View {
                 Section {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("当前会用的声音")
+                            Text(AppLocalized("Voice that will be used"))
                                 .font(.body.weight(.medium))
                             Text(voiceSummary)
                                 .font(.caption)
@@ -7098,7 +7104,7 @@ struct ChatVoiceSettingsSheet: View {
                         DeepLinkCoordinator.shared.pendingSettingsTarget = .voiceServices
                     } label: {
                         HStack {
-                            Text("打开语音设置")
+                            Text(AppLocalized("Open voice settings"))
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(ChatFont.font(13, weight: .semibold))
@@ -7106,14 +7112,14 @@ struct ChatVoiceSettingsSheet: View {
                         }
                     }
                 } header: {
-                    Text("声音配置")
+                    Text(AppLocalized("Voice setup"))
                 }
             }
-            .navigationTitle("语音设置")
+            .navigationTitle(AppLocalized("Voice settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("完成") { dismiss() }
+                    Button(AppLocalized("Done")) { dismiss() }
                 }
             }
             .onAppear {
@@ -7160,14 +7166,14 @@ struct ChatVoiceSettingsSheet: View {
     /// [B09-R6 2026-10-22] Every branch goes through AppLocalized so the line
     /// follows the in-app language. These were Chinese interpolated Strings fed
     /// to `Text(String)`, which bypasses the String Catalog entirely.
+    ///
+    /// [B09-V1 2026-10-22] The "first enabled service" branch is GONE. The
+    /// player never had it, so it could only ever produce a label for a service
+    /// that would not speak — the summary said "Service: X", the sheet said not
+    /// broken, and tapping read-aloud drained the queue in silence. The chain
+    /// now has exactly one definition (VoiceChain) and this reads it.
     private var voiceSummary: String {
-        let store = TTSServiceStore.shared
-        // Same order the player resolves: explicit selection, then the group.
-        if let s = store.selectedService() {
-            if !store.hasAPIKey(for: s) { return AppLocalized("Selected service \(s.name) has no API key") }
-            if !s.enabled { return AppLocalized("Selected service \(s.name) is turned off") }
-            return AppLocalized("Service: \(s.name)")
-        }
+        if let s = VoiceChain.selectedService() { return AppLocalized("Service: \(s.name)") }
         let group = TTSGroupStore.shared
         if let gid = group.defaultGroupId, let g = group.group(id: gid) {
             let usable = group.usableCandidates(for: g)
@@ -7182,21 +7188,22 @@ struct ChatVoiceSettingsSheet: View {
                 return AppLocalized("Group \(g.name): all \(members.count) services are missing an API key")
             }
         }
-        if let s = store.services.first(where: { $0.enabled && store.hasAPIKey(for: $0) }) {
-            return AppLocalized("Service: \(s.name) (no default group, saved order)")
-        }
+        if let reason = VoiceChain.silenceReason() { return reason }
         if VoiceOutputPreferences.systemVoiceAllowed { return AppLocalized("System voice (Apple)") }
-        return AppLocalized("No voice configured yet")
+        // 走到这里说明服务层没有目标、但 Voice Output 模型分组里有能出声的条目
+        // ——播放器会用它，所以这里要报它的名字，而不是"没配"。
+        let modelLabel = VoiceProviderResolver.outputModelLabel()
+        return modelLabel.isEmpty ? AppLocalized("No voice configured yet") : modelLabel
     }
 
     /// True when nothing can actually speak — the sheet shows this in red and
     /// surfaces the "go configure" action instead of a dead-end sentence.
+    ///
+    /// [B09-V1 2026-10-22] Was a third hand-written copy of the chain (and the
+    /// widest one: it accepted ANY enabled+keyed service, including one the
+    /// player would skip). Now it is the negation of the single chain.
     private var voiceSummaryIsBroken: Bool {
-        if !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty { return false }
-        let store = TTSServiceStore.shared
-        if let s = store.selectedService(), s.enabled, store.hasAPIKey(for: s) { return false }
-        if store.services.contains(where: { $0.enabled && store.hasAPIKey(for: $0) }) { return false }
-        return !VoiceOutputPreferences.systemVoiceAllowed
+        VoiceChain.silenceReason() != nil
     }
 
     private func refreshModelLabel() {

@@ -21,6 +21,24 @@ enum TTSProviderBridge {
 
     private static let logger = AppLogger(category: "TTSBridge")
 
+    /// [B09-V4 2026-10-22] THE answer to "can this service actually make sound
+    /// right now". Playback, group counts, summaries, labels and the model paper
+    /// all go through this one predicate — before, each of them had its own
+    /// approximation (`enabled`, `enabled + hasKey`, …) and they disagreed:
+    /// a service with a malformed credential (iFlytek saved as one segment
+    /// instead of `appId;apiKey;apiSecret`) counted as "usable" in every count
+    /// and label, then got silently skipped at synthesis time.
+    ///
+    /// Credential shape is checked by actually BUILDING the provider, which is
+    /// cheap (a struct/class with a few stored fields) now that the key itself
+    /// is cached — see TTSServiceStore.apiKey(for:).
+    static func canSynthesize(_ service: TTSServiceOptions) -> Bool {
+        guard service.enabled else { return false }
+        let store = TTSServiceStore.shared
+        guard store.hasAPIKey(for: service) else { return false }
+        return provider(for: service) != nil
+    }
+
     /// Build the provider for a service, or nil when the vendor cannot synthesize.
     /// `apiKey` overrides the stored credential (used by the editor's Test button
     /// so an unsaved key can be tried before it is persisted).

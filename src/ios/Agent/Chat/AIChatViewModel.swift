@@ -1484,12 +1484,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         VoiceOutputPlayer.shared.stopAll()
         speechPaused = false
         isReadingAloud = false
-        // stopAll() releases the session when the queue is empty; only end the
-        // intent here if that did not happen (defensive, keeps the coordinator
-        // and the player from disagreeing).
-        if !VoiceOutputPlayer.shared.isPlaying {
-            AudioSessionCoordinator.shared.end(.replyTTS)
-        }
+        // [B09-V9 2026-10-22] Was `if !VoiceOutputPlayer.shared.isPlaying { end }`
+        // with a comment claiming it only ends the intent when stopAll did not
+        // release it. That condition is always true right after stopAll (it sets
+        // isPlaying = false), so the comment described a branch that never ran
+        // the other way. Ending the intent unconditionally is what actually
+        // happens; the coordinator's own `guard active.contains` makes the
+        // second call a no-op.
+        AudioSessionCoordinator.shared.end(.replyTTS)
         syncSpeechStateToGlobal()
         if wasPlayingSomething {
             MinisToast.show(AppLocalized("Switched to this reply — the previous read-aloud stopped."),
@@ -1593,24 +1595,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // service store FIRST), not the on-device AVSpeechSynthesizer path —
         // otherwise a configured service would be silently ignored whenever the
         // Model-Group path resolves to System, i.e. exactly the "播音腔" trap.
-        // Only an explicitly selected *enabled* service is a target. Treating
-        // every enabled service as selected made a half-configured background
-        // service hijack System playback and fail silently before the normal
-        // System fallback could speak.
-        let store = TTSServiceStore.shared
-        let selectedService = store.selectedService()
-        let serviceSelected = selectedService?.enabled == true
-            && (selectedService.map { store.hasAPIKey(for: $0) } ?? false)
-            && (selectedService.flatMap { TTSProviderBridge.provider(for: $0) } != nil)
-        // [B09-S01 2026-10-22] A usable default TTS group is a cloud engine too.
-        // Read-aloud now leads with the group (VoiceOutputPlayer.pumpPrefetch),
-        // so the engine decision has to agree — otherwise a user whose only
-        // configuration is a group gets routed to AVSpeechSynthesizer whenever
-        // System voice happens to be allowed, and the group is ignored again.
-        let groupSelected = !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty
-        return serviceSelected
-            || groupSelected
-            || !(VoiceProviderResolver.outputProvider() is SystemVoiceProvider)
+        //
+        // [B09-V1 2026-10-22] The service-layer test is VoiceChain's, not a
+        // fourth local copy. This one used to accept a service that had a key
+        // but could not build a provider, so it routed to the cloud player and
+        // the player then found zero candidates — silence, with the sheet
+        // insisting a voice was configured.
+        if VoiceChain.hasServiceTarget() { return true }
+        return !(VoiceProviderResolver.outputProvider() is SystemVoiceProvider)
             // [T-system-voice-off 09-12] System voice is opt-in: when the
             // resolution IS System but the switch is OFF, force the cloud path
             // anyway. It will find zero candidates and stay silent (with a log

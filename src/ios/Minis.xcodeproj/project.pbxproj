@@ -41,6 +41,7 @@
 		E5TD7B01 /* TTSDiskCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TD7F01 /* TTSDiskCache.swift */; };
 		E5VN0B01 /* VoiceNowPlaying.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VN0F01 /* VoiceNowPlaying.swift */; };
 		E5VB5B01 /* VoiceBubblePlaybackState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VB5F01 /* VoiceBubblePlaybackState.swift */; };
+		E5VCH001 /* VoiceChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VCH002 /* VoiceChain.swift */; };
 		F1T00025 /* TTSServiceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00021 /* TTSServiceModels.swift */; };
 		F1T00026 /* TTSProviderBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00022 /* TTSProviderBridge.swift */; };
 		F1T00027 /* VoiceServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1T00023 /* VoiceServicesView.swift */; };
@@ -773,6 +774,7 @@
 		E5TD7F01 /* TTSDiskCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TTSDiskCache.swift; sourceTree = "<group>"; };
 		E5VN0F01 /* VoiceNowPlaying.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceNowPlaying.swift; sourceTree = "<group>"; };
 		E5VB5F01 /* VoiceBubblePlaybackState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceBubblePlaybackState.swift; sourceTree = "<group>"; };
+		E5VCH002 /* VoiceChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceChain.swift; sourceTree = "<group>"; };
 		4D1A2B7331C508B0D3E77D28 /* InlineVoiceInputView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InlineVoiceInputView.swift; sourceTree = "<group>"; };
 		535D58AA5C4B7B563E4C8821 /* VoiceInputModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceInputModels.swift; sourceTree = "<group>"; };
 		5F3D1138DBE516F31D76ABF4 /* VoiceProviderTemplate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceProviderTemplate.swift; sourceTree = "<group>"; };
@@ -1545,6 +1547,7 @@
 				E5TD7F01 /* TTSDiskCache.swift */,
 				E5VN0F01 /* VoiceNowPlaying.swift */,
 				E5VB5F01 /* VoiceBubblePlaybackState.swift */,
+				E5VCH002 /* VoiceChain.swift */,
 				5F3D1138DBE516F31D76ABF4 /* VoiceProviderTemplate.swift */,
 				28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */,
 				DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */,
@@ -3639,6 +3642,7 @@
 				E5TD7B01 /* TTSDiskCache.swift in Sources */,
 				E5VN0B01 /* VoiceNowPlaying.swift in Sources */,
 				E5VB5B01 /* VoiceBubblePlaybackState.swift in Sources */,
+				E5VCH001 /* VoiceChain.swift in Sources */,
 				F1T00025 /* TTSServiceModels.swift in Sources */,
 				F1T00026 /* TTSProviderBridge.swift in Sources */,
 				F1T00027 /* VoiceServicesView.swift in Sources */,

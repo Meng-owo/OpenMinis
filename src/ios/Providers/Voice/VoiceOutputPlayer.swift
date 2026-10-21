@@ -330,7 +330,13 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         playingSessionId = nil
         playingUnit = nil
         isPlaying = false
-        isPaused = false
+        // [B09-V9 2026-10-22] Do NOT clear an EXTERNAL pause. `isPaused` is two
+        // things at once: "the user paused" and "external audio (call /
+        // recording / dictation) holds us silent". Clearing the second one here
+        // let the next pump speak under the recorder — the exact hazard the
+        // per-session stop path documented as AUD8-07 before this call site was
+        // routed back through stopAll.
+        if !AudioSessionCoordinator.shared.isHoldingExternalAudioPause { isPaused = false }
         isSynthesizing = false
         // [AUD8-23] Full stop — hand the keep-alive engine back.
         releaseKeepAliveForPlayback()
@@ -344,6 +350,13 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// from other sessions. Units owned by other sessions are untouched — this
     /// is what lets multiple concurrent chats share the queue without a new
     /// reply in one chat wiping another chat's pending speech.
+    ///
+    /// [B09-V11 2026-10-22] CURRENTLY UNUSED — kept deliberately, not dead code
+    /// left behind by accident. Read-aloud is a takeover (see
+    /// `AIChatViewModel.stopSpeechForThisSession`), so nothing calls this today;
+    /// the per-session ownership plumbing it needs (`ownerSessionId`, AUD8-07/13
+    /// notes) is still live and correct. If per-session playback comes back,
+    /// call THIS — do not re-add a `stopAll()` and call it isolation.
     func stopSession(_ sessionId: String) {
         let owned = queue.filter { $0.ownerSessionId == sessionId }
         guard !owned.isEmpty || playingSessionId == sessionId else { return }
@@ -518,7 +531,9 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             playingSessionId = nil
             playingUnit = nil
             isPlaying = false
-            isPaused = false
+            // [B09-V9 2026-10-22] Same rule as stopAll: an external-audio latch
+            // is not ours to clear.
+            if !AudioSessionCoordinator.shared.isHoldingExternalAudioPause { isPaused = false }
             stopProgressTick(reset: true)
             releaseKeepAliveForPlayback()
             releaseSessionIfSafe()
@@ -724,30 +739,13 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// and turn a tap into a silent network failure.
     @MainActor
     private static func resolvedServiceCandidates() -> [Candidate] {
-        // [B09-S01 2026-10-22] The default TTS group now leads, exactly like the
-        // AI voice-bubble path (AIVoiceMessageComposer.ttsServiceCandidates) and
-        // exactly what the settings copy / "朗读声音" label / model paper have
-        // been claiming all along. Before this, read-aloud only ever looked at
-        // the single explicitly-selected service, so a user who built a group
-        // and set it as default heard nothing while the UI said "分组 · X".
+        // [B09-V1 2026-10-22] Order and eligibility both come from VoiceChain —
+        // the ONE place that answers "who speaks". This function used to carry
+        // its own copy of the chain, which is how the player, the settings
+        // summary, the chat sheet and the model paper drifted into four
+        // different answers to the same question (S-01 recurred three times).
         var out: [Candidate] = []
-        var seen = Set<String>()
-        // [B09-R2 2026-10-22] EXPLICIT SELECTION WINS, the group is the fallback.
-        // The first attempt put the group first, which made the checkmark in the
-        // services list decorative: tap a service, see it checked, and read-aloud
-        // still used the group. A tick means "use this one" — so it goes first.
-        // The group still gets used whenever nothing usable is selected, which is
-        // what S-01 was actually about (the group was ignored ENTIRELY before).
-        let store = TTSServiceStore.shared
-        if let service = store.selectedService(),
-           service.enabled,
-           store.hasAPIKey(for: service),
-           let provider = TTSProviderBridge.provider(for: service) {
-            seen.insert(service.id)
-            out.append(candidate(for: service, provider: provider))
-        }
-        for service in TTSGroupStore.shared.usableDefaultGroupCandidates()
-        where seen.insert(service.id).inserted {
+        for service in VoiceChain.serviceCandidates() {
             guard let provider = TTSProviderBridge.provider(for: service) else { continue }
             out.append(candidate(for: service, provider: provider))
         }

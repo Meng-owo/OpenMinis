@@ -139,16 +139,10 @@ struct VoiceServicesView: View {
     /// One line: who speaks right now, plus the reason when nothing can.
     private var summarySection: some View {
         let label = VoiceProviderResolver.effectiveVoiceLabel()
-        let usableGroup = TTSGroupStore.shared.usableDefaultGroupCandidates()
-        let broken: String? = {
-            if !usableGroup.isEmpty { return nil }
-            let sel = store.selectedService()
-            if let sel, sel.enabled, store.hasAPIKey(for: sel) { return nil }
-            if store.services.contains(where: { $0.enabled && store.hasAPIKey(for: $0) }) { return nil }
-            if VoiceOutputPreferences.systemVoiceAllowed { return nil }
-            if store.services.isEmpty { return AppLocalized("No voice service yet — add one below.") }
-            return AppLocalized("Nothing can speak: every service is off or missing its API key, and System voice is muted.")
-        }()
+        // [B09-V1 2026-10-22] Same single chain the player uses. This block had
+        // its own three-tier test, one tier wider than the player's, so it could
+        // report "Speaking now" for a setup that synthesizes nothing.
+        let broken = VoiceChain.silenceReason()
         return Section {
             HStack(spacing: 12) {
                 rowIcon(symbol: broken == nil ? "waveform" : "speaker.slash.fill", active: broken == nil)
@@ -329,14 +323,23 @@ struct VoiceServicesView: View {
         // failure only surfaced as silence at read-aloud time. Show it, and
         // refuse the check with a reason instead of a silent dead end.
         let hasKey = store.hasAPIKey(for: service)
-        let usable = service.enabled && hasKey
+        // [B09-V4 2026-10-22] Same predicate as playback: enabled + key + the
+        // vendor can build a provider. A malformed credential (iFlytek missing
+        // its secret segment) used to be checkable and then silent.
+        let usable = VoiceChain.canSpeak(service)
         return Button {
             guard usable else {
-                MinisToast.show(
-                    hasKey
-                        ? AppLocalized("This service is turned off — enable it first")
-                        : AppLocalized("No API key saved for this service — open it and add the key"),
-                    systemImage: "exclamationmark.triangle.fill")
+                let reason: String
+                if !service.enabled {
+                    reason = AppLocalized("This service is turned off — enable it first")
+                } else if !hasKey {
+                    reason = AppLocalized("No API key saved for this service — open it and add the key")
+                } else {
+                    // Enabled + keyed, but the credential cannot build a
+                    // provider — the one case that used to look healthy.
+                    reason = AppLocalized("This service's saved credentials are incomplete — open it and re-enter the key")
+                }
+                MinisToast.show(reason, systemImage: "exclamationmark.triangle.fill")
                 return
             }
             store.setSelectedServiceId(service.id)
@@ -455,8 +458,15 @@ struct VoiceServicesView: View {
         Task { @MainActor in
             defer { previewing = false }
             do {
+                // [B09-V4 2026-10-22] Distinguish "this vendor has no TTS" from
+                // "your saved credential is incomplete" — both used to say
+                // "this vendor cannot synthesize speech", which sent users
+                // looking for a vendor problem that did not exist.
                 guard let provider = TTSProviderBridge.provider(for: service) else {
-                    throw VoiceProviderError.unsupported("This vendor cannot synthesize speech")
+                    throw VoiceProviderError.unsupported(
+                        service.kind == .xunfei
+                        ? AppLocalized("iFlytek needs appId;apiKey;apiSecret in one field — re-enter the key")
+                        : AppLocalized("This vendor cannot synthesize speech"))
                 }
                 let request = TTSProviderBridge.request(for: service, text: service.previewSentence)
                 let data = try await provider.synthesize(request)

@@ -65,6 +65,21 @@ enum VoiceBubblePlaybackState {
         saveAll(all)
     }
 
+    /// [B09-V12 2026-10-22] Drop progress records whose audio file no longer
+    /// exists. The storage cleanup deletes old `tts-*.wav` but left the 200-slot
+    /// progress table untouched — deleted files kept their slots forever, and a
+    /// heavy user could push live entries out of the cap with dead ones.
+    /// `existingFileNames` is passed in because this file has no business
+    /// knowing where sessions live on disk.
+    static func pruneMissing(existingFileNames: Set<String>) {
+        let all = loadAll()
+        let stale = all.keys.filter { !existingFileNames.contains($0) }
+        guard !stale.isEmpty else { return }
+        var kept = all
+        for k in stale { kept.removeValue(forKey: k) }
+        saveAll(kept)
+    }
+
     private static func loadAll() -> [String: Progress] {
         guard let data = UserDefaults.standard.data(forKey: progressKey),
               let decoded = try? JSONDecoder().decode([String: Progress].self, from: data)

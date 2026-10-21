@@ -249,14 +249,15 @@ struct TTSGroupDetailView: View {
                 // to a group used to be possible — it just never spoke, with a
                 // tiny caption as the only clue. Offer only services that can
                 // actually synthesize, and say why the rest are hidden.
+                // [B09-V4 2026-10-22] Same predicate as playback (VoiceChain):
+                // enabled + key + the vendor can actually build a provider. A
+                // service whose credential shape is wrong used to be offered
+                // here, added to the group, and then silently skipped.
                 let available = serviceStore.services.filter { s in
-                    !g.memberServiceIds.contains(s.id)
-                        && s.enabled
-                        && serviceStore.hasAPIKey(for: s)
+                    !g.memberServiceIds.contains(s.id) && VoiceChain.canSpeak(s)
                 }
                 let hiddenCount = serviceStore.services.filter { s in
-                    !g.memberServiceIds.contains(s.id)
-                        && !(s.enabled && serviceStore.hasAPIKey(for: s))
+                    !g.memberServiceIds.contains(s.id) && !VoiceChain.canSpeak(s)
                 }.count
                 if !available.isEmpty || hiddenCount > 0 {
                     Section {

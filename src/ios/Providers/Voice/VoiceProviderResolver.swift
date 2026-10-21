@@ -285,25 +285,21 @@ enum VoiceProviderResolver {
 
     /// [audit-A6/D2] "此刻谁会发声"的唯一口径 —— 语音服务页的 System 行判定与
     /// 聊天语音设置弹窗的「朗读声音」标签共用同一条解析链，避免再出现
-    /// "正在使用"与真实发声方错位。顺序：选中服务 → 播放器运行时（上次真正
-    /// 发声的模型）→ 默认 TTS 分组 → 模型组解析。
+    /// "正在使用"与真实发声方错位。
+    ///
+    /// [B09-V1 2026-10-22] The ORDER and the eligibility test now both come from
+    /// `VoiceChain` — this function used to carry a second copy of the chain, so
+    /// fixing the player's order left the label claiming a different speaker.
+    /// Order: selected service → default group → (last model that really spoke)
+    /// → the configured voice model group.
     static func effectiveVoiceLabel() -> String {
-        // [B09-S01 2026-10-22] Order now MATCHES what actually plays. Read-aloud
-        // leads with the default group's usable members, so the label has to
-        // lead with the group too — it used to name the selected service first
-        // and claim the group only as a fallback, i.e. the exact opposite of the
-        // chain, which is how "分组 · X" ended up on screen while silence came
-        // out of the speaker.
-        // [B09-R2 2026-10-22] Same order the player resolves: an explicit
-        // selection beats the default group, and the group is the fallback.
-        let svcStore = TTSServiceStore.shared
-        if let svc = svcStore.selectedService(), svc.enabled,
-           svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
-            return svc.name
-        }
+        if let svc = VoiceChain.selectedService() { return svc.name }
         let groupStore = TTSGroupStore.shared
-        if let g = groupStore.defaultGroup(), !groupStore.usableDefaultGroupCandidates().isEmpty {
-            return "分组 · \(g.name)"
+        if let g = groupStore.defaultGroup(), !groupStore.usableCandidates(for: g).isEmpty {
+            // [B09-V7 2026-10-22] Was a hardcoded "分组 · \(g.name)" — the very
+            // first line a user reads on the settings root, in Chinese, on every
+            // language. Goes through the String Catalog now.
+            return AppLocalized("Group · \(g.name)")
         }
         if let instance = VoiceOutputPlayer.shared.activeModelLabel {
             return instance
@@ -315,13 +311,8 @@ enum VoiceProviderResolver {
     /// 模型组三级逐层让位检查。此前只看 `selectedServiceId == nil`，把"没选服务"
     /// 错当成"就是 System"（建了默认分组/模型组时其实都不是它）。
     static func isSystemVoiceEffectivelyActive() -> Bool {
-        let svcStore = TTSServiceStore.shared
-        if let svc = svcStore.selectedService(), svc.enabled,
-           svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
-            return false
-        }
-        if !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty { return false }
-        guard VoiceOutputPreferences.systemVoiceAllowed else { return false }
+        if VoiceChain.hasServiceTarget() { return false }
+        if !VoiceOutputPreferences.systemVoiceAllowed { return false }
         guard let first = resolvedOutputCandidates().first else { return false }
         return isSystemEntry(first.providerInstanceId)
     }
