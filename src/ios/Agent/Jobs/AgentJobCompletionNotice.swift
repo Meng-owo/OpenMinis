@@ -95,7 +95,7 @@ final class AgentJobCompletionNotice {
             guard !isViewing else { return }
             SessionBadgeStore.shared.pushFront(.unread, for: sessionId)
             MinisToast.show(
-                message: Self.toastText(name: name, state: state),
+                Self.toastText(name: name, state: state),
                 duration: 2.4,
                 systemImage: state == .failed ? "exclamationmark.triangle.fill" : "checkmark.circle.fill"
             )
