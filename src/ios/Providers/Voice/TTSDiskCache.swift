@@ -33,13 +33,27 @@ enum TTSDiskCache {
     }
 
     static func load(key: String) -> Data? {
-        queue.sync {
-            let url = fileURL(for: key)
-            guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
-            // Touch mtime so LRU eviction reflects replay value.
-            try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
-            return data
+        queue.sync { loadLocked(key: key) }
+    }
+
+    /// [B09-N13 2026-10-22] Non-blocking load for the read-aloud hot path.
+    /// `load` uses `queue.sync`, and the caller (VoiceOutputPlayer.cachedAudio)
+    /// runs on the MainActor — so every cache probe on every candidate did a
+    /// synchronous disk read on the main thread before the first syllable could
+    /// start. This variant hops to the cache queue instead.
+    static func loadAsync(key: String) async -> Data? {
+        await withCheckedContinuation { cont in
+            queue.async {
+                cont.resume(returning: loadLocked(key: key))
+            }
         }
+    }
+
+    private static func loadLocked(key: String) -> Data? {
+        let url = fileURL(for: key)
+        guard let data = try? Data(contentsOf: url), !data.isEmpty else { return nil }
+        try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: url.path)
+        return data
     }
 
     static func store(key: String, data: Data) {

@@ -14,4 +14,14 @@ enum VoiceLog {
         logger.info("[Voice] \(message())")
         #endif
     }
+
+    /// [B09-S06 2026-10-22] The three "why did nothing play" events, kept in
+    /// Release too. Every TTS support case was "no sound, nothing in the log":
+    /// VoiceLog is compiled out of release, and only the final failure used
+    /// logger.error. These are the ones worth a permanent record.
+    private static let releaseLogger = AppLogger(category: "Voice")
+
+    static func problem(_ message: @autoclosure () -> String) {
+        releaseLogger.error("[Voice] \(message())")
+    }
 }

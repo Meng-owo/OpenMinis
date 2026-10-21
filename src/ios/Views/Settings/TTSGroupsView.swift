@@ -5,6 +5,10 @@ import SwiftUI
 // [tts-groups 2026-10-02] 对标 Providers/ModelGroupsView：TTS 服务分组列表。
 // 分组 = 有序的多个 TTS 服务，合成时按顺序 fallback。默认分组由
 // AIVoiceMessageComposer.synthesizeWithServiceOrGroup 优先使用。
+//
+// [B09-N01 2026-10-22] 这一页原来是硬编码中文，而隔壁 Voice Services 页是英文
+// 走 xcstrings —— 中文界面一半英文一半中文，英文界面整页中文完全没法用。
+// 全部文案改成 AppLocalized（英文源串）+ xcstrings 九语种。
 
 struct TTSGroupsView: View {
     @ObservedObject private var appearanceStudio = AppearanceStudio.shared
@@ -23,10 +27,10 @@ struct TTSGroupsView: View {
                         Image(systemName: "square.stack.3d.up")
                             .font(.system(size: 32))
                             .foregroundStyle(.quaternary)
-                        Text("还没有 TTS 分组")
+                        Text(AppLocalized("No voice groups yet"))
                             .font(.subheadline)
                             .foregroundStyle(MinisTheme.secondaryText)
-                        Text(VoiceServicesCopy.routingNote)
+                        Text(LocalizedStringKey(VoiceServicesCopy.routingNote))
                             .font(.caption)
                             .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                             .multilineTextAlignment(.center)
@@ -46,14 +50,14 @@ struct TTSGroupsView: View {
                             Button(role: .destructive) {
                                 pendingDelete = group
                             } label: {
-                                Label("删除", systemImage: "trash")
+                                Label(AppLocalized("Delete"), systemImage: "trash")
                             }
                         }
                     }
                     .onMove(perform: moveGroups)
                 } header: {
                     HStack {
-                        Text("TTS 分组")
+                        Text(AppLocalized("Voice Groups"))
                         Spacer()
                         EditButton()
                             .font(.caption)
@@ -62,22 +66,22 @@ struct TTSGroupsView: View {
                 }
 
                 Section {
-                    Picker("默认分组", selection: Binding(
+                    Picker(AppLocalized("Default group"), selection: Binding(
                         get: { store.defaultGroupId ?? "" },
                         set: { store.setDefaultGroupId($0.isEmpty ? nil : $0) }
                     )) {
-                        Text("不分组（用单个服务）").tag("")
+                        Text(AppLocalized("None (use a single service)")).tag("")
                         ForEach(store.groups) { g in
                             Text(g.name).tag(g.id)
                         }
                     }
                 } footer: {
-                    Text(VoiceServicesCopy.routingNote)
+                    Text(LocalizedStringKey(VoiceServicesCopy.routingNote))
                 }
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("TTS 分组")
+        .navigationTitle(AppLocalized("Voice Groups"))
         .navigationBarTitleDisplayMode(.inline)
         .appearancePage(.settings)
         .toolbar {
@@ -87,31 +91,31 @@ struct TTSGroupsView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .accessibilityLabel("新建 TTS 分组")
+                .accessibilityLabel(AppLocalized("New voice group"))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .ttsServicesChanged)) { _ in
             revision &+= 1
         }
-        .alert("新建分组", isPresented: $showCreate) {
-            TextField("分组名", text: $newName)
-            Button("取消", role: .cancel) { newName = "" }
-            Button("创建") {
+        .alert(AppLocalized("New group"), isPresented: $showCreate) {
+            TextField(AppLocalized("Group name"), text: $newName)
+            Button(AppLocalized("Cancel"), role: .cancel) { newName = "" }
+            Button(AppLocalized("Create")) {
                 store.createGroup(name: newName)
                 newName = ""
             }
         }
-        .alert("删除分组？", isPresented: Binding(
+        .alert(AppLocalized("Delete this group?"), isPresented: Binding(
             get: { pendingDelete != nil },
             set: { if !$0 { pendingDelete = nil } }
         )) {
-            Button("删除", role: .destructive) {
+            Button(AppLocalized("Delete"), role: .destructive) {
                 if let g = pendingDelete { store.removeGroup(id: g.id) }
                 pendingDelete = nil
             }
-            Button("取消", role: .cancel) { pendingDelete = nil }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDelete = nil }
         } message: {
-            Text("分组里的服务不受影响，只是解散这个分组。")
+            Text(AppLocalized("The services in it are untouched — only the group is dissolved."))
         }
         .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
     }
@@ -119,6 +123,15 @@ struct TTSGroupsView: View {
     private func groupRow(_ group: TTSGroup) -> some View {
         let isDefault = store.defaultGroupId == group.id
         let members = store.candidates(for: group)
+        let usable = store.usableCandidates(for: group)
+        // [B09-S02 2026-10-22] The row said "没有可用服务" only when the member
+        // list was empty — a group full of keyless services looked fine and
+        // then produced silence. Name the real reason.
+        let subtitle: String = {
+            if members.isEmpty { return AppLocalized("No services yet") }
+            if usable.isEmpty { return AppLocalized("Every member is missing an API key") }
+            return usable.map { $0.name }.joined(separator: " → ")
+        }()
         return HStack(spacing: 12) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -133,7 +146,7 @@ struct TTSGroupsView: View {
                     Text(group.name)
                         .foregroundStyle(MinisTheme.primaryText)
                     if isDefault {
-                        Text("默认")
+                        Text(AppLocalized("Default"))
                             .font(.caption2)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -141,9 +154,11 @@ struct TTSGroupsView: View {
                             .foregroundStyle(MinisTheme.accent)
                     }
                 }
-                Text(members.isEmpty ? "没有可用服务" : members.map { $0.name }.joined(separator: " → "))
+                Text(subtitle)
                     .font(.caption)
-                    .foregroundStyle(MinisTheme.secondaryText)
+                    .foregroundStyle(usable.isEmpty && !members.isEmpty
+                                     ? MinisTheme.destructive
+                                     : MinisTheme.secondaryText)
                     .lineLimit(1)
             }
             Spacer()
@@ -171,8 +186,8 @@ struct TTSGroupDetailView: View {
 
     var body: some View {
         List {
-            Section("名称") {
-                TextField("分组名", text: $name)
+            Section(AppLocalized("Name")) {
+                TextField(AppLocalized("Group name"), text: $name)
                     .onSubmit { saveName() }
             }
 
@@ -180,7 +195,7 @@ struct TTSGroupDetailView: View {
                 Section {
                     let members = memberRows(for: g)
                     if members.isEmpty {
-                        Text("还没有服务，去下面添加。")
+                        Text(AppLocalized("No services yet — add some below."))
                             .font(.caption)
                             .foregroundStyle(MinisTheme.secondaryText)
                     }
@@ -191,31 +206,38 @@ struct TTSGroupDetailView: View {
                                 .foregroundStyle(MinisTheme.secondaryText)
                                 .frame(width: 24)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(row.service?.name ?? "已删除的服务")
+                                Text(row.service?.name ?? AppLocalized("Deleted service"))
                                     .foregroundStyle(MinisTheme.primaryText)
-                                Text(row.service.map { "\($0.kind.displayName)·音色 \($0.voice)" } ?? "这个服务已经删了，顺序保留")
+                                Text(row.service.map { "\($0.kind.displayName) · \($0.voice)" }
+                                     ?? AppLocalized("This service was deleted; its slot is kept"))
                                     .font(.caption)
                                     .foregroundStyle(MinisTheme.secondaryText)
                             }
                             Spacer()
-                            if let s = row.service, !s.enabled {
-                                Text("已停用")
-                                    .font(.caption2)
-                                    .foregroundStyle(MinisTheme.secondaryText)
+                            if let s = row.service {
+                                if !serviceStore.hasAPIKey(for: s) {
+                                    Text(AppLocalized("No API key"))
+                                        .font(.caption2.weight(.medium))
+                                        .foregroundStyle(MinisTheme.destructive)
+                                } else if !s.enabled {
+                                    Text(AppLocalized("Turned off"))
+                                        .font(.caption2)
+                                        .foregroundStyle(MinisTheme.secondaryText)
+                                }
                             }
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             Button(role: .destructive) {
                                 removeMember(row.id, from: g)
                             } label: {
-                                Label("移出", systemImage: "trash")
+                                Label(AppLocalized("Remove"), systemImage: "trash")
                             }
                         }
                     }
                     .onMove { source, dest in moveMember(from: source, to: dest, in: g) }
                 } header: {
                     HStack {
-                        Text("成员服务（按顺序 fallback）")
+                        Text(AppLocalized("Members (tried in this order)"))
                         Spacer()
                         EditButton()
                             .font(.caption)
@@ -223,9 +245,21 @@ struct TTSGroupDetailView: View {
                     }
                 }
 
-                let available = serviceStore.services.filter { s in !g.memberServiceIds.contains(s.id) }
-                if !available.isEmpty {
-                    Section("添加服务") {
+                // [B09-N09 2026-10-22] Turning a service off and then adding it
+                // to a group used to be possible — it just never spoke, with a
+                // tiny caption as the only clue. Offer only services that can
+                // actually synthesize, and say why the rest are hidden.
+                let available = serviceStore.services.filter { s in
+                    !g.memberServiceIds.contains(s.id)
+                        && s.enabled
+                        && serviceStore.hasAPIKey(for: s)
+                }
+                let hiddenCount = serviceStore.services.filter { s in
+                    !g.memberServiceIds.contains(s.id)
+                        && !(s.enabled && serviceStore.hasAPIKey(for: s))
+                }.count
+                if !available.isEmpty || hiddenCount > 0 {
+                    Section {
                         ForEach(available) { s in
                             Button {
                                 var updated = g
@@ -240,12 +274,18 @@ struct TTSGroupDetailView: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text(AppLocalized("Add a service"))
+                    } footer: {
+                        if hiddenCount > 0 {
+                            Text(AppLocalized("Some services are hidden here because they are turned off or have no API key."))
+                        }
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("编辑分组")
+        .navigationTitle(AppLocalized("Edit group"))
         .navigationBarTitleDisplayMode(.inline)
         .appearancePage(.settings)
         .onReceive(NotificationCenter.default.publisher(for: .ttsServicesChanged)) { _ in
@@ -270,10 +310,17 @@ struct TTSGroupDetailView: View {
         g.memberServiceIds.map { MemberRow(id: $0, service: serviceStore.service(id: $0)) }
     }
 
+    /// [B09-L03 2026-10-22] An emptied name field used to be dropped silently on
+    /// leave — the user thought the rename took. Put the original name back in
+    /// the field so what they see is what is stored.
     private func saveName() {
         guard var g = group else { return }
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, trimmed != g.name else { return }
+        guard !trimmed.isEmpty else {
+            name = g.name
+            return
+        }
+        guard trimmed != g.name else { return }
         g.name = trimmed
         store.updateGroup(g)
     }

@@ -26,8 +26,12 @@ enum TTSPaper {
     /// 常驻声明和详细纸条永远不互相矛盾）。
     static func hasConfiguredVoice() -> Bool {
         let serviceStore = TTSServiceStore.shared
-        if serviceStore.services.contains(where: { $0.enabled }) { return true }
-        return !TTSGroupStore.shared.defaultGroupCandidates().isEmpty
+        // [B09 2026-10-22] "Configured" now means "can actually speak": a service
+        // saved without a key never synthesizes, so telling the model it has a
+        // voice just produces a failed send_voice. Same rule as the synthesis
+        // chain (enabled + key present).
+        if serviceStore.services.contains(where: { $0.enabled && serviceStore.hasAPIKey(for: $0) }) { return true }
+        return !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty
     }
 
     /// 常驻能力声明：短、一句。配了 TTS 就每轮进 prompt，让模型永久知道
@@ -40,11 +44,11 @@ enum TTSPaper {
         var desc = ""
         if let defId = groupStore.defaultGroupId,
            let g = groupStore.group(id: defId),
-           !groupStore.defaultGroupCandidates().isEmpty {
+           !groupStore.usableDefaultGroupCandidates().isEmpty {
             desc = "默认 TTS 分组「\(g.name)」"
-        } else if let s = serviceStore.selectedService(), s.enabled {
+        } else if let s = serviceStore.selectedService(), s.enabled, serviceStore.hasAPIKey(for: s) {
             desc = "TTS 服务「\(s.name)」（音色 \(s.voice)）"
-        } else if let s = serviceStore.services.first(where: { $0.enabled }) {
+        } else if let s = serviceStore.services.first(where: { $0.enabled && serviceStore.hasAPIKey(for: $0) }) {
             desc = "TTS 服务「\(s.name)」（音色 \(s.voice)）"
         }
         let what = desc.isEmpty ? "TTS 语音" : desc
@@ -56,7 +60,9 @@ enum TTSPaper {
     static func paperText(skipIntro: Bool = false) -> String? {
         let groupStore = TTSGroupStore.shared
         let serviceStore = TTSServiceStore.shared
-        let services = serviceStore.services.filter { $0.enabled }
+        // [B09 2026-10-22] Only list what can actually synthesize — a keyless
+        // service in the list invites the model to name it and get rejected.
+        let services = serviceStore.services.filter { $0.enabled && serviceStore.hasAPIKey(for: $0) }
         guard hasConfiguredVoice() else { return nil }
 
         var lines: [String] = []
@@ -67,7 +73,7 @@ enum TTSPaper {
         }
 
         // 当前配置（活的）：默认分组优先，其次单个服务。
-        let defaultCandidates = groupStore.defaultGroupCandidates()
+        let defaultCandidates = groupStore.usableDefaultGroupCandidates()
         if let defId = groupStore.defaultGroupId, let g = groupStore.group(id: defId) {
             if defaultCandidates.isEmpty {
                 lines.append("默认 TTS 分组「\(g.name)」里没有可用的服务——先跟主人说 TTS 还没配好，让她去「设置 > Voice Services」里配。")
@@ -78,7 +84,7 @@ enum TTSPaper {
                 }
                 lines.append("  合成时会按这个顺序自动 fallback：第一个挂了自动换下一个，你不用管。")
             }
-        } else if let s = serviceStore.selectedService(), s.enabled {
+        } else if let s = serviceStore.selectedService(), s.enabled, serviceStore.hasAPIKey(for: s) {
             lines.append("当前 TTS 服务：\(s.name)（\(s.kind.displayName)·音色 \(s.voice)）。")
         } else if let s = services.first {
             lines.append("当前 TTS 服务：\(s.name)（\(s.kind.displayName)·音色 \(s.voice)）。")
@@ -92,7 +98,7 @@ enum TTSPaper {
         }
         lines.append("")
         lines.append("调用方法：send_voice(text=要说的话，tool_title=一句话摘要)。text 写口语化的中文，直接是主人会听到的话，别带 markdown 符号；别太长，太长分段调多次。")
-        lines.append("换音色你换不了：音色/分组是主人在「设置 > Voice Services」里定的。主人让你换声音时，别自己编个音色名传进去——跟她说去设置里换默认分组/服务。")
+        lines.append("换声音：你可以用 send_voice 的 voice 参数点名这次用哪个服务、group 参数点名用哪个分组。名字只能从上面这份清单里挑，原样照抄（别自己编、别翻译）；清单外的会被拒绝。不传就用默认顺序，一般不用传。")
         lines.append("失败时：工具会明确报错。如实告诉主人这条语音没发出去，不要谎称已发送；可以建议她检查 TTS 服务配置。")
         return lines.joined(separator: "\n")
     }
@@ -102,9 +108,14 @@ enum TTSPaper {
     /// skipIntro = true 时跳过开头段（常驻声明已讲过，不重复）。
     static func paperIfRelevant(userMessage: String, skipIntro: Bool = false) -> String? {
         let t = userMessage.lowercased()
+        // [B09-L08 2026-10-22] "声音" alone ("这个声音好听") pulled the whole
+        // 300-char manual (every service, every voice id, the calling rules)
+        // into the prompt for nothing — the standing capability line already
+        // tells the model it has a voice. Keep only phrasings that actually ask
+        // it to SPEAK.
         let triggers = [
-            "语音", "发语音", "声音", "朗读", "读出来", "念给我", "说给我听",
-            "亲口", "tts", "voice", "speak", "播报", "有声", "哄睡",
+            "发语音", "发条语音", "语音说", "用语音", "声音说", "朗读", "读出来",
+            "念给我", "说给我听", "亲口", "tts", "voice", "speak", "播报", "哄睡",
         ]
         guard triggers.contains(where: { t.contains($0) }) else { return nil }
         return paperText(skipIntro: skipIntro)

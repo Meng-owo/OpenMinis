@@ -7,8 +7,11 @@ import CryptoKit
 enum VoiceOutputPreferences {
     private static let speedKey = "voice.output.speedMultiplier"
 
-    /// The speed steps the floating speaker button cycles through.
-    static let speedSteps: [Float] = [1.0, 1.25, 1.5, 2.0]
+    /// The speed steps read-aloud offers. [B09-N05 2026-10-22] Same ladder the
+    /// voice-bubble player uses (0.75×…2×) — two different sets for "make the
+    /// voice faster/slower" read as a bug. This is the single source: the
+    /// chat voice sheet and the floating control both read it.
+    static let speedSteps: [Float] = [0.75, 1.0, 1.25, 1.5, 2.0]
 
     /// Playback speed multiplier for read-replies TTS (applies to subsequently
     /// generated/queued utterances). Persisted so it survives across replies.
@@ -79,8 +82,11 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// can show the model that's actually producing audio. nil = use the resolved
     /// default label.
     @Published private(set) var activeModelLabel: String?
-    /// Bumped each time a unit fully fails (all candidates exhausted) — the speech
-    /// control observes it to flash the speaker icon red for a few seconds.
+    /// Bumped each time a unit fully fails (all candidates exhausted) or the
+    /// queue drains with nothing to synthesize. [B09-N07 2026-10-22] This used
+    /// to be a dead signal — nothing read it, so the promised "flash the speaker
+    /// red" never happened. The chat voice sheet observes it now and flips its
+    /// status row to the failure state.
     @Published private(set) var synthFailureTick = 0
 
     /// One ordered fail-over candidate.
@@ -444,6 +450,15 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
 
     /// Start synthesize for the earliest not-yet-generated units, up to maxPrefetch.
     private func pumpPrefetch() {
+        // [B09-F01 2026-10-22] Nothing queued → nothing to prefetch. Without
+        // this, an empty queue still counted as "2 free slots" and walked the
+        // zero-candidate branch below, which used to bounce back into
+        // pumpPlayback. Cheap early exit, also keeps the pump pair from ever
+        // ping-ponging on an empty queue.
+        guard !queue.isEmpty else {
+            refreshSynthesizingState()
+            return
+        }
         let inFlight = queue.filter { $0.task != nil && $0.audio == nil && !$0.failed }.count
         var slots = Self.maxPrefetch - inFlight
         guard slots > 0 else { return }
@@ -484,13 +499,31 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             // failure is diagnosable from the device log. (With the switch ON,
             // a zero-candidate group is a misconfiguration; same drain — the
             // alternative is retry-looping units forever.)
-            VoiceLog.log("TTS pumpPrefetch: no usable candidates — draining \(queue.count) unit(s)")
+            //
+            // [B09-F01 2026-10-22] NEVER call pumpPlayback() from here. That
+            // function's tail unconditionally calls pumpPrefetch(), and the
+            // drained queue leaves `slots == maxPrefetch` (nothing in flight),
+            // so the two pumps called each other forever: stack overflow on
+            // the very first tap for a default install (System voice OFF, no
+            // service, no TTS group member). Inline the teardown instead.
+            logger.error("TTS pumpPrefetch: no usable candidates — draining \(queue.count) unit(s). Configure a TTS service/group or allow System voice.")
             for i in queue.indices {
                 queue[i].failed = true
                 queue[i].task = nil
             }
+            queue.removeAll()
+            player?.stop()
+            player = nil
+            playingSeq = -1
+            playingSessionId = nil
+            playingUnit = nil
+            isPlaying = false
+            isPaused = false
+            stopProgressTick(reset: true)
+            releaseKeepAliveForPlayback()
+            releaseSessionIfSafe()
+            VoiceNowPlaying.shared.refresh()
             synthFailureTick &+= 1
-            pumpPlayback()   // skip-and-drain so isPlaying/UI settle promptly
             refreshSynthesizingState()
             // [T-system-voice-off 09-12] Tell the reading VM to settle its
             // isReadingAloud state — nothing will ever play, so the capsule
@@ -528,7 +561,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                     // candidate, reuse the bytes — replay costs nothing.
                     var data: Data?
                     var used: Candidate?
-                    if let cached = self.cachedAudio(for: unit.text, candidates: candidates) {
+                    if let cached = await self.cachedAudio(for: unit.text, candidates: candidates) {
                         data = cached.data
                         used = cached.candidate
                         VoiceLog.log("TTS cache hit #\(seq)")
@@ -568,7 +601,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
                         unit.failed = true
                         self.synthFailureTick &+= 1   // flash the control red
                         self.logger.error("TTS synth failed #\(seq): \(error.localizedDescription)")
-                        VoiceLog.log("TTS synth FAILED #\(seq) after all retries + split: \(error.localizedDescription)")
+                        VoiceLog.problem("TTS synth FAILED #\(seq) after all retries + split: \(error.localizedDescription)")
                         MinisToast.show(AppLocalized("Voice synthesis failed — some content may not be read aloud."),
                                         systemImage: "exclamationmark.triangle.fill")
                         self.pumpPlayback()
@@ -621,14 +654,17 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// Find cached audio for this text among the given candidates (sticky
     /// candidate first — it's been moved to the front by the caller).
     /// Memory first, then disk (a disk hit refills the memory level).
-    private func cachedAudio(for text: String, candidates: [Candidate]) -> (data: Data, candidate: Candidate)? {
+    /// [B09-N13 2026-10-22] async now: the disk probe used to be a synchronous
+    /// read on the MainActor (one per candidate, per unit), which is exactly the
+    /// delay you feel before the first sentence starts on a long reply.
+    private func cachedAudio(for text: String, candidates: [Candidate]) async -> (data: Data, candidate: Candidate)? {
         guard VoiceOutputPreferences.cacheNetworkAudio else { return nil }
         for c in candidates {
             let k = cacheKey(text: text, candidate: c)
             if let hit = synthCache[k] {
                 return (hit.data, c)
             }
-            if let disk = TTSDiskCache.load(key: k) {
+            if let disk = await TTSDiskCache.loadAsync(key: k) {
                 // [AUD8-15] The disk-hit refill used to skip the LRU trim, so
                 // repeated disk hits grew the "64-entry" memory level without
                 // bound (entries hold strong Data references). Same trim as
@@ -656,6 +692,16 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
 
     /// [AUD8-15] Shared LRU trim — the store path and the disk-hit refill must
     /// enforce the same bound, or one side silently voids the other's cap.
+    /// [B09-N12 2026-10-22] Drop the in-memory layer too. The disk cache was
+    /// cleared but the 64-entry memory cache survived, so replaying the same
+    /// sentence right after "Clear cache" still hit instantly and the user
+    /// concluded nothing was cleared (only a restart actually emptied it).
+    func clearSynthCache() {
+        synthCache.removeAll()
+        synthCacheOrder.removeAll()
+        VoiceLog.log("TTS synth cache cleared (memory)")
+    }
+
     private func trimSynthCacheIfNeeded() {
         while synthCacheOrder.count > Self.synthCacheLimit {
             let oldest = synthCacheOrder.removeFirst()
@@ -676,17 +722,41 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
     /// and turn a tap into a silent network failure.
     @MainActor
     private static func resolvedServiceCandidates() -> [Candidate] {
+        // [B09-S01 2026-10-22] The default TTS group now leads, exactly like the
+        // AI voice-bubble path (AIVoiceMessageComposer.ttsServiceCandidates) and
+        // exactly what the settings copy / "朗读声音" label / model paper have
+        // been claiming all along. Before this, read-aloud only ever looked at
+        // the single explicitly-selected service, so a user who built a group
+        // and set it as default heard nothing while the UI said "分组 · X".
+        var out: [Candidate] = []
+        var seen = Set<String>()
+        for service in TTSGroupStore.shared.usableDefaultGroupCandidates()
+        where seen.insert(service.id).inserted {
+            guard let provider = TTSProviderBridge.provider(for: service) else { continue }
+            out.append(candidate(for: service, provider: provider))
+        }
         let store = TTSServiceStore.shared
-        guard let service = store.selectedService(),
-              service.enabled,
-              store.hasAPIKey(for: service),
-              let provider = TTSProviderBridge.provider(for: service) else { return [] }
-        return [Candidate(
+        if let service = store.selectedService(),
+           service.enabled,
+           seen.insert(service.id).inserted,
+           store.hasAPIKey(for: service),
+           let provider = TTSProviderBridge.provider(for: service) {
+            out.append(candidate(for: service, provider: provider))
+        }
+        return out
+    }
+
+    /// One Candidate from an independent TTS service (vendor/baseURL/key/model/
+    /// voice all live on the service, so it is a complete target by itself).
+    @MainActor
+    private static func candidate(for service: TTSServiceOptions,
+                                  provider: any VoiceOutputCapable) -> Candidate {
+        Candidate(
             key: "tts-service:\(service.id)",
             label: "\(service.name) · \(service.voice)",
             provider: provider,
             makeRequest: { text in TTSProviderBridge.request(for: service, text: text) }
-        )]
+        )
     }
 
     /// Fail over across Model-Group TTS candidates: try each model's
@@ -701,7 +771,7 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
             if Task.isCancelled { throw CancellationError() }
             do {
                 let data = try await synthWithRetry(text: text, candidate: c, seq: seq)
-                if i > 0 { VoiceLog.log("TTS #\(seq): succeeded on fail-over model \(i + 1)/\(candidates.count) (\(c.label))") }
+                if i > 0 { VoiceLog.problem("TTS #\(seq): succeeded on fail-over model \(i + 1)/\(candidates.count) (\(c.label))") }
                 return (data, c)
             } catch is CancellationError {
                 throw CancellationError()

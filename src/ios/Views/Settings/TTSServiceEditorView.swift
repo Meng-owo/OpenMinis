@@ -60,7 +60,7 @@ struct TTSServiceEditorView: View {
             testSection
         }
         .scrollContentBackground(.hidden)
-        .background(MinisTheme.canvas)
+        .background(MinisTheme.color(.canvas, scope: .settings))
         .navigationTitle(service == nil ? "New Voice Service" : "Edit Voice Service")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -79,11 +79,16 @@ struct TTSServiceEditorView: View {
 
     private var vendorSection: some View {
         Section("Vendor") {
+            // [B09-S04 2026-10-22] The copy already said the vendor of a saved
+            // service can't change, but the picker stayed live: switching it
+            // saved a service whose kind no longer matched its baseURL/model/
+            // voice, and every later synthesis failed. Lock it for real.
             Picker("Vendor", selection: $kind) {
                 ForEach(TTSServiceKind.allCases) { k in
                     Label(k.displayName, systemImage: k.symbol).tag(k)
                 }
             }
+            .disabled(service != nil)
             if service != nil {
                 Text("The vendor of an existing service can't be changed — create a new service instead.")
                     .font(.caption)
@@ -99,6 +104,18 @@ struct TTSServiceEditorView: View {
             SecureLabeledTextField(label: "API Key", text: $apiKey,
                                    placeholder: apiKeyPlaceholder,
                                    footnote: kind.compoundCredentialFormat)
+            // [B09-L04 2026-10-22] Leaving the field empty means "keep the old
+            // key", so there was no way to remove one — you had to delete the
+            // whole service. Explicit button instead.
+            if apiKeyFromKeychain && apiKey.isEmpty {
+                Button(role: .destructive) {
+                    store.deleteAPIKey(for: service ?? buildDraft())
+                    apiKeyFromKeychain = false
+                    MinisToast.show(AppLocalized("API key removed"), systemImage: "key.slash")
+                } label: {
+                    Text(AppLocalized("Remove saved API key"))
+                }
+            }
             LabeledTextField(label: "Model", text: $model, placeholder: kind.defaultModel)
             LabeledTextField(label: "Voice ID", text: $voice, placeholder: kind.defaultVoice)
             Toggle("Enabled", isOn: $enabled)
@@ -307,7 +324,10 @@ struct LabeledTextField: View {
                 .font(.caption)
                 .foregroundStyle(MinisTheme.secondaryText)
         }
-        .listRowBackground(MinisTheme.surface)
+        // [B09-N08 2026-10-22] Was a static surface color; every other voice
+        // page uses the theme-scoped dynamic role, so a custom light/dark theme
+        // left these rows visibly out of step with the rest of the sheet.
+        .listRowBackground(MinisTheme.color(.surface, scope: .settings))
         if let footnote = footnote {
             Text(footnote)
                 .font(.caption2)
@@ -332,7 +352,10 @@ struct SecureLabeledTextField: View {
                 .font(.caption)
                 .foregroundStyle(MinisTheme.secondaryText)
         }
-        .listRowBackground(MinisTheme.surface)
+        // [B09-N08 2026-10-22] Was a static surface color; every other voice
+        // page uses the theme-scoped dynamic role, so a custom light/dark theme
+        // left these rows visibly out of step with the rest of the sheet.
+        .listRowBackground(MinisTheme.color(.surface, scope: .settings))
         if let footnote = footnote {
             Text(footnote)
                 .font(.caption2)

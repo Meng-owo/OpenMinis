@@ -695,8 +695,9 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         static let livelySpan = 12
     }
 
-    /// 倍速档位（与 HTML 稿一致）。
-    static let rates: [Float] = [0.75, 1, 1.25, 1.5, 2]
+    /// 倍速档位（与 HTML 稿一致）。[B09-N05 2026-10-22] 与朗读档位同一条梯子
+    /// （VoiceOutputPreferences.speedSteps），两处别再各写一套。
+    static let rates: [Float] = VoiceOutputPreferences.speedSteps
 
     // MARK: - Palette（主题快照；小猫固定黑）
 
@@ -944,7 +945,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         totalLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
         totalLabel.textColor = subTextColor
         totalLabel.textAlignment = .right
-        totalLabel.text = Self.format(knownDuration)
+        totalLabel.text = Self.formatUnknownAware(knownDuration)
         cardView.addSubview(totalLabel)
 
         speedButton.titleLabel?.font = .systemFont(ofSize: 12, weight: .semibold)
@@ -1079,7 +1080,7 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
         if active, duration > 0, abs(duration - knownDuration) > 0.05 {
             knownDuration = duration
         }
-        totalLabel.text = Self.format(knownDuration)
+        totalLabel.text = Self.formatUnknownAware(knownDuration)
         if isPlayingFile {
             updateLively(passed: passedCount, playing: true)
         } else {
@@ -1383,6 +1384,15 @@ final class VoiceCatBubbleCardView: UIView, UIGestureRecognizerDelegate {
     }
 
     // MARK: - Helpers
+
+    /// [B09-L02 2026-10-22] Unknown duration (an MP3 whose length the composer
+    /// couldn't measure) rendered as "0:00", i.e. the card claimed the message
+    /// was zero seconds long until the async probe landed. Show a placeholder
+    /// instead so "not known yet" reads differently from "empty".
+    static func formatUnknownAware(_ t: Double) -> String {
+        guard t.isFinite, t > 0 else { return "--:--" }
+        return format(t)
+    }
 
     static func format(_ t: Double) -> String {
         guard t.isFinite, t > 0 else { return "0:00" }

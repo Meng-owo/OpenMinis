@@ -82,6 +82,21 @@ final class TTSGroupStore: @unchecked Sendable {
         return group.memberServiceIds.compactMap { store.service(id: $0) }.filter { $0.enabled }
     }
 
+    /// [B09-S01 2026-10-22] 某分组里**真能出声**的成员：存在、启用、并且
+    /// 存了 API Key。列表页的"（N 个可用服务）"、朗读链、气泡链都该用这个
+    /// —— 之前的 candidates(for:) 只过滤 enabled，缺 key 的条目排在第一位时
+    /// 每次朗读都要先撞一次失败再换下一个，第一句永远慢半拍，而页面上显示
+    /// 的数字也是假的。
+    func usableCandidates(for group: TTSGroup) -> [TTSServiceOptions] {
+        let store = TTSServiceStore.shared
+        return candidates(for: group).filter { store.hasAPIKey(for: $0) }
+    }
+
+    func usableDefaultGroupCandidates() -> [TTSServiceOptions] {
+        guard let g = defaultGroup() else { return [] }
+        return usableCandidates(for: g)
+    }
+
     // MARK: Writes
 
     @discardableResult

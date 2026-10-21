@@ -1659,7 +1659,17 @@ private extension AIChatViewModel {
         // 这一道门控。关 = 彻底没 AI 语音：给模型明确交代，让它如实告诉主人
         // 去开开关，而不是谎称发了。
         guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
-            return settle("Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent.", false)
+            // [B09-N06 2026-10-22] The switch defaults to OFF and only flips on
+            // when you send a message BY VOICE — so a normal typing user asking
+            // "say it out loud" got a model apology telling them to go flip a
+            // setting. When the user clearly asked for voice in this turn,
+            // turn it on here and send: that is what they asked for.
+            let askedForVoice = Self.userAskedForVoice(lastUserText(in: agentHistory))
+            guard askedForVoice else {
+                return settle("Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent.", false)
+            }
+            AIVoiceMessageComposer.setVoiceReplies(enabled: true, sessionId: sid)
+            ctLogger.info("[VoiceBubbleTool] switch was OFF, user explicitly asked for voice → enabled for session")
         }
         do {
             let voice = try await AIVoiceMessageComposer.compose(

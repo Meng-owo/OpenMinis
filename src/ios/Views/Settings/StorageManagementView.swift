@@ -17,6 +17,10 @@ class StorageManagementViewModel: ObservableObject {
     /// [MSC-4] Cache-category sizes: TTS disk cache + URL response cache.
     @Published var ttsCacheSize: Int64 = 0
     @Published var networkCacheSize: Int64 = 0
+    /// [B09-S05 2026-10-22] AI voice bubbles live in each session's attachments
+    /// folder as tts-*.wav/.mp3 and were never counted or cleanable anywhere.
+    @Published var voiceFileCount: Int = 0
+    @Published var voiceFileSize: Int64 = 0
     var totalCacheSize: Int64 { ttsCacheSize + networkCacheSize }
 
     private let fm = FileManager.default
@@ -54,6 +58,8 @@ class StorageManagementViewModel: ObservableObject {
             // [MSC-4] Caches
             let ttsSize = Int64(TTSDiskCache.totalBytes())
             let netSize = Int64(URLCache.shared.currentDiskUsage)
+            // [B09-S05 2026-10-22] AI voice bubbles on disk (never counted before).
+            let voiceStats = AIVoiceMessageComposer.voiceFileStats()
 
             // Per-session minis files: Library/MinisChat/minis/<sessionId>/
             let minisBaseURL = libraryURL.appendingPathComponent("MinisChat/minis", isDirectory: true)
@@ -89,6 +95,8 @@ class StorageManagementViewModel: ObservableObject {
                 self.sessions = sorted
                 self.ttsCacheSize = ttsSize
                 self.networkCacheSize = netSize
+                self.voiceFileCount = voiceStats.count
+                self.voiceFileSize = voiceStats.bytes
                 self.isLoading = false
             }
         }
@@ -98,6 +106,10 @@ class StorageManagementViewModel: ObservableObject {
     func clearCaches() {
         Task.detached(priority: .userInitiated) { [weak self] in
             TTSDiskCache.clearAll()
+            // [B09-N12 2026-10-22] The 64-entry memory layer lives in the player
+            // and outlived a disk clear — replaying a sentence right after
+            // still hit memory, so "cleared" looked like a lie until restart.
+            await MainActor.run { VoiceOutputPlayer.shared.clearSynthCache() }
             URLCache.shared.removeAllCachedResponses()
             ThumbnailCache.shared.removeAll()
             self?.load()
@@ -132,6 +144,7 @@ class StorageManagementViewModel: ObservableObject {
 struct StorageManagementView: View {
     @StateObject private var vm = StorageManagementViewModel()
     @State private var showClearCachesConfirmation = false
+    @State private var showClearVoiceFilesConfirmation = false
 
     var body: some View {
         List {
@@ -153,6 +166,25 @@ struct StorageManagementView: View {
                     Text(AppLocalized("Clear all caches"))
                 }
                 .disabled(vm.totalCacheSize == 0)
+            }
+
+            // [B09-S05 2026-10-22] AI voice bubbles: real files in each
+            // session's attachments folder, never listed or reclaimable before.
+            if vm.voiceFileCount > 0 {
+                Section {
+                    storageRow(icon: "waveform.circle", color: .pink,
+                               label: AppLocalized("AI voice messages"),
+                               value: "\(vm.voiceFileCount) · \(vm.format(vm.voiceFileSize))")
+                    Button(role: .destructive) {
+                        showClearVoiceFilesConfirmation = true
+                    } label: {
+                        Text(AppLocalized("Delete voice files older than 30 days"))
+                    }
+                } header: {
+                    Text(AppLocalized("Voice files"))
+                } footer: {
+                    Text(AppLocalized("Voice messages are stored as audio files in each chat. Deleting old ones frees space; those bubbles lose their audio, their text stays."))
+                }
             }
 
             Section("Sessions") {
@@ -185,6 +217,19 @@ struct StorageManagementView: View {
         .navigationTitle("Storage")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { vm.load() }
+        .confirmationDialog(AppLocalized("Delete old voice files?"),
+                            isPresented: $showClearVoiceFilesConfirmation,
+                            titleVisibility: .visible) {
+            Button(AppLocalized("Delete"), role: .destructive) {
+                Task.detached(priority: .userInitiated) {
+                    _ = AIVoiceMessageComposer.clearVoiceFiles(olderThanDays: 30)
+                    await MainActor.run { vm.load() }
+                }
+            }
+            Button(AppLocalized("Cancel"), role: .cancel) {}
+        } message: {
+            Text(AppLocalized("Voice messages older than 30 days lose their audio. Their text stays in the chat."))
+        }
         .confirmationDialog(AppLocalized("Clear all caches?"),
                             isPresented: $showClearCachesConfirmation,
                             titleVisibility: .visible) {

@@ -5,7 +5,10 @@ import SwiftUI
 /// [audit-A10] 选声链路说明——语音服务页与 TTS 分组页四处页脚共用同一段话，
 /// 终结"三处三种口径"；明确含 TTS 分组一级（旧文案全漏了它）。
 enum VoiceServicesCopy {
-    static let routingNote = "发声候选：默认 TTS 分组里的服务（按分组顺序自动切换）、单独选中的服务（自带厂商/密钥/音色）、声音模型组；系统语音只在「允许系统语音」开启时参与。"
+    /// [B09-N01 2026-10-22] English source string (the xcstrings key), same as
+    /// every other string in this layer — the old Chinese literal was shown
+    /// verbatim to every language. Call sites wrap it in LocalizedStringKey.
+    static let routingNote = "Who speaks: the default voice group's services in order, then the single selected service, then the voice model group. The built-in System voice only joins when it is allowed below."
 }
 
 // MARK: - Voice Services (kelivo-style TTS service list)
@@ -44,6 +47,8 @@ struct VoiceServicesView: View {
     @State private var showSystemEditor = false
     /// [audit-A7] 系统语音开闸确认框。
     @State private var showSystemSwitchConfirm = false
+    /// [B09-N11 2026-10-22] Staged delete target (swipe → confirmation).
+    @State private var pendingDelete: TTSServiceOptions?
     /// TTSServiceStore is a plain Sendable (read from the synthesis queue too),
     /// not an ObservableObject — this throws on its change notification so the
     /// list re-renders on add / edit / delete / selection.
@@ -54,8 +59,14 @@ struct VoiceServicesView: View {
 
     var body: some View {
         List {
-            servicesSection
+            // [B09 2026-10-22] Answer "what will speak" at the top. The page is a
+            // list of configuration; the one thing a user opening it wants is
+            // the current answer, and it used to require reading three sections
+            // and knowing which one wins.
+            summarySection
             groupsSection
+            servicesSection
+            providerVoiceSection
             playbackSection
         }
         .listStyle(.insetGrouped)
@@ -92,15 +103,64 @@ struct VoiceServicesView: View {
         }
         .listRowBackground(appearanceStudio.color(.surface, scope: .settings))
         // [audit-A7] 系统语音开闸确认（与 C2 同款口径：先问，再改路由）。
-        .confirmationDialog("把发声切换为系统语音吗？", isPresented: $showSystemSwitchConfirm, titleVisibility: .visible) {
-            Button("切换为系统语音") {
+        .confirmationDialog("Switch the speaking voice to System?", isPresented: $showSystemSwitchConfirm, titleVisibility: .visible) {
+            Button("Switch to System voice") {
                 VoiceOutputPreferences.systemVoiceAllowed = true
                 store.setSelectedServiceId(nil)
-                MinisToast.show("已切换为系统语音发声", systemImage: "waveform")
+                // [B09-N02 2026-10-22] Was a hardcoded Chinese string shown even
+                // on an English UI.
+                MinisToast.show(AppLocalized("Switched to System voice"), systemImage: "waveform")
             }
-            Button("保持当前设置", role: .cancel) {}
+            Button("Keep current setting", role: .cancel) {}
         } message: {
-            Text("系统语音当前被静音。允许后它会参与朗读与 AI 语音回复；随时可在本页关闭。")
+            Text("System voice is muted. Allowing it lets it speak for read-aloud and AI voice replies; you can turn it off here anytime.")
+        }
+        // [B09-N11 2026-10-22] Deleting a service also deletes its stored API
+        // key from the Keychain — irreversible, and the old swipe deleted it
+        // outright with no undo.
+        .confirmationDialog(
+            AppLocalized("Delete this voice service?"),
+            isPresented: Binding(get: { pendingDelete != nil },
+                                 set: { if !$0 { pendingDelete = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(AppLocalized("Delete"), role: .destructive) {
+                if let s = pendingDelete { store.remove(id: s.id) }
+                pendingDelete = nil
+            }
+            Button(AppLocalized("Cancel"), role: .cancel) { pendingDelete = nil }
+        } message: {
+            Text(AppLocalized("Its API key is deleted too. Groups that reference it keep the gap."))
+        }
+    }
+
+    // MARK: Summary
+
+    /// One line: who speaks right now, plus the reason when nothing can.
+    private var summarySection: some View {
+        let label = VoiceProviderResolver.effectiveVoiceLabel()
+        let usableGroup = TTSGroupStore.shared.usableDefaultGroupCandidates()
+        let broken: String? = {
+            if !usableGroup.isEmpty { return nil }
+            let sel = store.selectedService()
+            if let sel, sel.enabled, store.hasAPIKey(for: sel) { return nil }
+            if store.services.contains(where: { $0.enabled && store.hasAPIKey(for: $0) }) { return nil }
+            if VoiceOutputPreferences.systemVoiceAllowed { return nil }
+            if store.services.isEmpty { return AppLocalized("No voice service yet — add one below.") }
+            return AppLocalized("Nothing can speak: every service is off or missing its API key, and System voice is muted.")
+        }()
+        return Section {
+            HStack(spacing: 12) {
+                rowIcon(symbol: broken == nil ? "waveform" : "speaker.slash.fill", active: broken == nil)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(broken == nil ? AppLocalized("Speaking now") : AppLocalized("No voice"))
+                        .font(.subheadline.weight(.medium))
+                    Text(broken ?? label)
+                        .font(.caption)
+                        .foregroundStyle(broken == nil ? MinisTheme.secondaryText : MinisTheme.destructive)
+                }
+                Spacer()
+            }
         }
     }
 
@@ -114,16 +174,59 @@ struct VoiceServicesView: View {
                 serviceRow(service)
             }
             .onDelete { indexSet in
-                for i in indexSet {
-                    let service = store.services[i]
-                    store.remove(id: service.id)
+                // [B09-N11 2026-10-22] Route through the same confirmation as
+                // the swipe action — one deletion path, always asks.
+                if let i = indexSet.first, i < store.services.count {
+                    pendingDelete = store.services[i]
                 }
             }
         } header: {
             Text("Text-to-Speech")
         } footer: {
-            Text(VoiceServicesCopy.routingNote)
+            Text(LocalizedStringKey(VoiceServicesCopy.routingNote))
         }
+    }
+
+    /// [B09-N14 2026-10-22] Voice providers borrowed from an existing provider
+    /// instance (an audio-modality model on a configured provider). They used
+    /// to live only under Settings › Providers as a second, differently-behaved
+    /// "Voice Services" list — two answers to "where do I set up my voice".
+    /// Same rows, one home now.
+    @ViewBuilder
+    private var providerVoiceSection: some View {
+        let shadows = ProviderConfigStore.shared.shadowVoiceProviders()
+        if !shadows.isEmpty {
+            Section {
+                ForEach(shadows) { shadow in
+                    NavigationLink {
+                        ShadowVoiceProviderDetailView(instanceId: shadow.instanceId)
+                    } label: {
+                        HStack(spacing: 12) {
+                            rowIcon(symbol: "waveform", active: false)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(shadow.displayName)
+                                Text(shadowSummary(shadow))
+                                    .font(.caption)
+                                    .foregroundStyle(MinisTheme.secondaryText)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("From your providers")
+            } footer: {
+                Text("Voice models you already configured on a provider. They use that provider's key and endpoint.")
+            }
+        }
+    }
+
+    private func shadowSummary(_ shadow: ProviderConfigStore.ShadowVoiceProvider) -> String {
+        var parts: [String] = []
+        // Counts are numeric, not localized prose — same shape as the shadow row
+        // this replaced.
+        if !shadow.inputModels.isEmpty { parts.append("\(shadow.inputModels.count) STT") }
+        if !shadow.outputModels.isEmpty { parts.append("\(shadow.outputModels.count) TTS") }
+        return parts.joined(separator: " · ")
     }
 
     /// The built-in Apple engine — selectable; the gear opens the System voice
@@ -178,7 +281,7 @@ struct VoiceServicesView: View {
                     rowIcon(symbol: "square.stack.3d.up.fill",
                             active: TTSGroupStore.shared.defaultGroupId != nil)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("TTS 分组")
+                        Text("Voice Groups")
                             .foregroundStyle(MinisTheme.primaryText)
                         Text(groupSubtitle)
                             .font(.caption)
@@ -192,16 +295,23 @@ struct VoiceServicesView: View {
                 }
             }
         } header: {
-            Text("分组")
+            Text("Group")
         } footer: {
-            Text(VoiceServicesCopy.routingNote)
+            Text(LocalizedStringKey(VoiceServicesCopy.routingNote))
         }
     }
 
     private var groupSubtitle: String {
         let store = TTSGroupStore.shared
         if let gid = store.defaultGroupId, let g = store.group(id: gid) {
-            let n = store.candidates(for: g).count
+            // [B09-S02 2026-10-22] "可用"必须和合成链的口径一致：存在 + 启用
+            // + 有 key。之前这里用 candidates(for:) 只算 enabled，缺 key 的
+            // 也算进 N，用户看到"3 个可用"却一个都出不了声。
+            let n = store.usableCandidates(for: g).count
+            let total = store.candidates(for: g).count
+            if n == 0 && total > 0 {
+                return "默认：\(g.name)（\(total) 个服务都缺密钥）"
+            }
             return "默认：\(g.name)（\(n) 个可用服务）"
         }
         return store.groups.isEmpty ? "还没建分组" : "\(store.groups.count) 个分组，未设默认"
@@ -209,7 +319,21 @@ struct VoiceServicesView: View {
 
     private func serviceRow(_ service: TTSServiceOptions) -> some View {
         let isActive = store.selectedServiceId == service.id
+        // [B09-S02 2026-10-22] A service with no stored key can never speak, but
+        // the row used to look perfectly healthy and could be checked — the
+        // failure only surfaced as silence at read-aloud time. Show it, and
+        // refuse the check with a reason instead of a silent dead end.
+        let hasKey = store.hasAPIKey(for: service)
+        let usable = service.enabled && hasKey
         return Button {
+            guard usable else {
+                MinisToast.show(
+                    hasKey
+                        ? AppLocalized("This service is turned off — enable it first")
+                        : AppLocalized("No API key saved for this service — open it and add the key"),
+                    systemImage: "exclamationmark.triangle.fill")
+                return
+            }
             store.setSelectedServiceId(service.id)
         } label: {
             HStack(spacing: 12) {
@@ -221,6 +345,15 @@ struct VoiceServicesView: View {
                         .font(.caption)
                         .foregroundStyle(MinisTheme.secondaryText)
                         .lineLimit(1)
+                    if !hasKey {
+                        Text(AppLocalized("No API key — tap to add one"))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(MinisTheme.destructive)
+                    } else if !service.enabled {
+                        Text(AppLocalized("Turned off"))
+                            .font(.caption2)
+                            .foregroundStyle(MinisTheme.secondaryText)
+                    }
                 }
                 Spacer()
                 trailingControls(system: false, active: isActive, service: service)
@@ -229,7 +362,9 @@ struct VoiceServicesView: View {
         .buttonStyle(.plain)
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                store.remove(id: service.id)
+                // [B09-N11 2026-10-22] Deleting a service also wipes its Keychain
+                // entry — irreversible. Ask first instead of deleting on a swipe.
+                pendingDelete = service
             } label: {
                 Label("Delete", systemImage: "trash")
             }
@@ -304,6 +439,13 @@ struct VoiceServicesView: View {
     @State private var previewing = false
     private func preview(_ service: TTSServiceOptions) {
         guard !previewing else { return }
+        // [B09-S02 2026-10-22] Say what's wrong in the user's language instead of
+        // letting the vendor return a raw 401/403 that gets toasted verbatim.
+        guard store.hasAPIKey(for: service) else {
+            MinisToast.show(AppLocalized("No API key saved for this service — open it and add the key"),
+                            systemImage: "exclamationmark.triangle.fill")
+            return
+        }
         previewing = true
         Task { @MainActor in
             defer { previewing = false }

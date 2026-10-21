@@ -95,6 +95,69 @@ enum AIVoiceMessageComposer {
         return "![voice](\(url)?voice_bubble=1&dur=\(durParam))"
     }
 
+    // MARK: - [B09-S05 2026-10-22] On-disk voice bubbles
+
+    /// Every voice bubble writes `tts-<uuid>.wav|mp3` (+ a `.txt` transcript)
+    /// into the session's attachments folder and NOTHING ever removed them —
+    /// no cap, no cleanup, and they ride along in iCloud backups. This scans
+    /// them so Storage can show a real number and reclaim the old ones.
+    /// A voice file is any attachment whose name starts with "tts-".
+    nonisolated static func voiceFileStats(olderThanDays days: Int? = nil) -> (count: Int, bytes: Int64) {
+        let fm = FileManager.default
+        let base = AIChatViewModel.minisPersistentBase
+        var count = 0
+        var bytes: Int64 = 0
+        let cutoff = days.map { Date().addingTimeInterval(-Double($0) * 86_400) }
+        guard let sessions = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else {
+            return (0, 0)
+        }
+        for sessionDir in sessions {
+            let attach = sessionDir.appendingPathComponent("attachments", isDirectory: true)
+            guard let files = try? fm.contentsOfDirectory(
+                at: attach, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
+            ) else { continue }
+            for f in files where f.lastPathComponent.hasPrefix("tts-") {
+                let vals = try? f.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+                if let cutoff, let m = vals?.contentModificationDate, m > cutoff { continue }
+                count += 1
+                bytes += Int64(vals?.fileSize ?? 0)
+            }
+        }
+        return (count, bytes)
+    }
+
+    /// Delete voice-bubble files older than `days`. The bubble's text survives
+    /// (the message row keeps its text part); only the audio goes, and tapping
+    /// an emptied bubble just shows nothing to play.
+    @discardableResult
+    nonisolated static func clearVoiceFiles(olderThanDays days: Int) -> (count: Int, bytes: Int64) {
+        let fm = FileManager.default
+        let base = AIChatViewModel.minisPersistentBase
+        let cutoff = Date().addingTimeInterval(-Double(days) * 86_400)
+        var count = 0
+        var bytes: Int64 = 0
+        guard let sessions = try? fm.contentsOfDirectory(at: base, includingPropertiesForKeys: nil) else {
+            return (0, 0)
+        }
+        for sessionDir in sessions {
+            let attach = sessionDir.appendingPathComponent("attachments", isDirectory: true)
+            guard let files = try? fm.contentsOfDirectory(
+                at: attach, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
+            ) else { continue }
+            for f in files where f.lastPathComponent.hasPrefix("tts-") {
+                let vals = try? f.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+                guard let m = vals?.contentModificationDate, m < cutoff else { continue }
+                let size = Int64(vals?.fileSize ?? 0)
+                if (try? fm.removeItem(at: f)) != nil {
+                    count += 1
+                    bytes += size
+                }
+            }
+        }
+        logger.info("[AIVoice] cleared \(count) voice file(s), \(bytes) bytes, older than \(days)d")
+        return (count, bytes)
+    }
+
     /// [voice-bubble-tool 2026-10-02] send_voice 专用：voice/group 点名版。
     /// - voice: TTS 服务名（服务的 id 也行），用该服务的音色合成。
     /// - group: TTS 分组名（分组 id 也行），按分组成员顺序 fallback。
@@ -186,7 +249,7 @@ enum AIVoiceMessageComposer {
             guard let grp = matched else {
                 throw VoiceComposeError.groupNotFound(name: g, available: store.groups.map { $0.name })
             }
-            let cands = store.candidates(for: grp)
+            let cands = store.usableCandidates(for: grp)
             guard !cands.isEmpty else {
                 throw VoiceComposeError.groupEmpty(name: grp.name)
             }
@@ -347,7 +410,12 @@ enum AIVoiceMessageComposer {
     /// [tts-groups 2026-10-02] 候选链：默认 TTS 分组成员（按分组顺序）→ 之前选中
     /// 的单个服务（兼容老配置）→ Voice Output 模型分组。没建分组时行为和以前
     /// 完全一致（选中服务 → 模型分组）。
-    private static func synthesizeWithServiceOrGroup(_ text: String) async throws -> (Data, String?) {
+    /// [B09-L01 2026-10-22] Returns `(audio, container)` — the second value is
+    /// the file CONTAINER ("wav"/"mp3"), which is what every return statement
+    /// here already put in it. It used to be typed/read as a service name
+    /// (`serviceName`), so the one place that consumed it would have shown
+    /// "wav" as the voice name. Naming it honestly; callers ignore it today.
+    private static func synthesizeWithServiceOrGroup(_ text: String) async throws -> (Data, container: String) {
         for service in ttsServiceCandidates() {
             if let result = try await synthesizeWithService(service, text) {
                 return result
@@ -384,7 +452,10 @@ enum AIVoiceMessageComposer {
     private static func ttsServiceCandidates() -> [TTSServiceOptions] {
         var out: [TTSServiceOptions] = []
         var seen = Set<String>()
-        for s in TTSGroupStore.shared.defaultGroupCandidates() where seen.insert(s.id).inserted {
+        // [B09-S01 2026-10-22] Keyless members are filtered out up front instead
+        // of being tried and skipped one by one — same order, no wasted round
+        // trip on a service that can never speak.
+        for s in TTSGroupStore.shared.usableDefaultGroupCandidates() where seen.insert(s.id).inserted {
             out.append(s)
         }
         let svcStore = TTSServiceStore.shared

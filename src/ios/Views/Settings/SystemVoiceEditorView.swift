@@ -85,16 +85,16 @@ struct SystemVoiceEditorView: View {
                 }
             }
         }
-        .confirmationDialog("把发声切换为系统语音吗？", isPresented: $showSwitchConfirm, titleVisibility: .visible) {
-            Button("切换为系统语音") {
+        .confirmationDialog("Switch the speaking voice to System?", isPresented: $showSwitchConfirm, titleVisibility: .visible) {
+            Button("Switch to System voice") {
                 switchVoiceToSystem()
                 dismiss()
             }
-            Button("保持当前服务", role: .cancel) {
+            Button("Keep current service", role: .cancel) {
                 dismiss()
             }
         } message: {
-            Text("你选定了系统音色。切换后朗读用系统声音；随时可在 设置 › 语音服务 切回。")
+            Text("You pinned a System voice. Read-aloud will use it; switch back anytime in Settings › Voice Services.")
         }
         .onAppear(perform: loadVoices)
         // Roster refresh via the shared observer (iOS 17+; on older systems the
@@ -109,9 +109,19 @@ struct SystemVoiceEditorView: View {
 
     private var voiceSection: some View {
         Section {
+            // [B09-N10 2026-10-22] Turning this OFF used to do nothing at all:
+            // `selectedVoiceId` was already nil, so the switch snapped straight
+            // back on. OFF now pins the first available voice — an explicit
+            // choice, which is exactly what "not automatic" means.
             Toggle(isOn: Binding(
                 get: { selectedVoiceId == nil },
-                set: { if $0 { selectedVoiceId = nil } }
+                set: { on in
+                    if on {
+                        selectedVoiceId = nil
+                    } else if let first = voices.first?.identifier {
+                        selectedVoiceId = first
+                    }
+                }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Auto by language")
@@ -179,7 +189,7 @@ struct SystemVoiceEditorView: View {
         } header: {
             Text("Tuning")
         } footer: {
-            Text("速度基准：最终播放速度 = 此处 Speed × 语音设置里的播放倍速。")
+            Text("Speed baseline: final playback speed = this Speed × the read-aloud rate in Voice settings.")
         }
     }
 
@@ -237,7 +247,7 @@ struct SystemVoiceEditorView: View {
     /// 确认后切换路由（用户点"切换为系统语音"→ 清除云服务选择）。
     private func switchVoiceToSystem() {
         TTSServiceStore.shared.setSelectedServiceId(nil)
-        MinisToast.show("已切换为系统语音发声", systemImage: "waveform")
+        MinisToast.show(AppLocalized("Switched to System voice"), systemImage: "waveform")
     }
 
     private func runTest() {
@@ -247,7 +257,13 @@ struct SystemVoiceEditorView: View {
         Task { @MainActor in
             defer { testing = false }
             do {
-                let utterance = AVSpeechUtterance(string: "你好，这是系统语音的试听。")
+                // [B09 2026-10-22] Preview sentence follows the pinned voice's
+                // language — an English UI reading Chinese aloud to test an
+                // English voice is just confusing.
+                let sample = (voiceId.flatMap { AVSpeechSynthesisVoice(identifier: $0) }?.language.hasPrefix("zh") ?? true)
+                    ? "你好，这是系统语音的试听。"
+                    : "Hello, this is a preview of the System voice."
+                let utterance = AVSpeechUtterance(string: sample)
                 utterance.rate = rate
                 utterance.pitchMultiplier = pitch
                 utterance.volume = volume

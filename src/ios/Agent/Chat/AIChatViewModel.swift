@@ -433,8 +433,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 if self.speechSynthesizer.isSpeaking {
                     self.speechSynthesizer.stopSpeaking(at: .immediate)
                 }
+                // [B09-N03 2026-10-22] A voice message arriving mid-read-aloud
+                // silently killed the read with nothing said. Say it, and say
+                // it's resumable — the text is still in the chat.
+                let wasReading = self.isReadingAloud
                 self.isReadingAloud = false
                 self.speechPaused = false
+                if wasReading {
+                    MinisToast.show(AppLocalized("AI voice replies took over — read-aloud stopped. Tap the reply again to continue."),
+                                    systemImage: "speaker.slash")
+                }
             }
 
         // [T-system-voice-off 09-12] 修复审查问题4: the cloud TTS queue drained
@@ -1390,10 +1398,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fullText.isEmpty else { return }
 
-        // An explicit replay takes over output. `stopSpeech()` (not the
-        // session-scoped streaming cleanup) clears any queued manual/other-chat
-        // audio too, so tapping a reply never leaves the old voice talking first.
-        stopSpeech()
+        // An explicit replay takes over THIS session's output. [B09-N04
+        // 2026-10-22] Was stopSpeech() → stopAll(), which also wiped another
+        // chat's read-aloud mid-sentence. Per-session now; other chats keep
+        // talking, this one starts fresh.
+        stopSpeechForThisSession()
         // [batch9-voice-1b] 自动朗读已删：手动点读按"本条"语义直接发声，
         // 不再动全局开关，也不再需要解除静音。
         isReadingAloud = true
@@ -1451,6 +1460,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         isReadingAloud = false
         // End the reply-TTS intent (coordinator drops .replyTTS; if nothing else
         // needs audio it deactivates the session).
+        AudioSessionCoordinator.shared.end(.replyTTS)
+        syncSpeechStateToGlobal()
+    }
+
+    /// [B09-N04 2026-10-22] Stop only THIS session's speech, leaving other
+    /// chats' queued read-aloud alone. Used when starting a replay: the old
+    /// stopSpeech() called stopAll(), which wiped another chat's pending speech
+    /// mid-sentence with no explanation. VoiceOutputPlayer already supports
+    /// per-session isolation (stopSession) — the chat path just never used it.
+    private func stopSpeechForThisSession() {
+        speechSynthesizer.stopSpeaking(at: .immediate)
+        // This chat's own queue + any manual "read selection" audio (that path
+        // enqueues under manualOwnerId). Other chats' speech is left alone.
+        VoiceOutputPlayer.shared.stopSession(sessionId ?? "")
+        VoiceOutputPlayer.shared.stopSession(VoiceOutputPlayer.manualOwnerId)
+        speechPaused = false
+        isReadingAloud = false
         AudioSessionCoordinator.shared.end(.replyTTS)
         syncSpeechStateToGlobal()
     }
@@ -1560,7 +1586,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let serviceSelected = selectedService?.enabled == true
             && (selectedService.map { store.hasAPIKey(for: $0) } ?? false)
             && (selectedService.flatMap { TTSProviderBridge.provider(for: $0) } != nil)
+        // [B09-S01 2026-10-22] A usable default TTS group is a cloud engine too.
+        // Read-aloud now leads with the group (VoiceOutputPlayer.pumpPrefetch),
+        // so the engine decision has to agree — otherwise a user whose only
+        // configuration is a group gets routed to AVSpeechSynthesizer whenever
+        // System voice happens to be allowed, and the group is ignored again.
+        let groupSelected = !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty
         return serviceSelected
+            || groupSelected
             || !(VoiceProviderResolver.outputProvider() is SystemVoiceProvider)
             // [T-system-voice-off 09-12] System voice is opt-in: when the
             // resolution IS System but the switch is OFF, force the cloud path
@@ -5306,9 +5339,24 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         message.blocks = kept
     }
 
+    /// [B09-N06 2026-10-22] Did the user explicitly ask to be spoken to in this
+    /// turn? Used to auto-enable the per-session AI-voice switch when the model
+    /// calls send_voice — the switch otherwise defaults off and only flips on
+    /// for voice INPUT, so "念给我听" by typing dead-ended on a settings errand.
+    /// Deliberately strict: only direct requests, never a passing mention.
+    nonisolated static func userAskedForVoice(_ text: String) -> Bool {
+        let t = text.lowercased()
+        let direct = [
+            "发语音", "发条语音", "语音说", "用语音", "念给我", "读出来", "朗读",
+            "说给我听", "亲口", "voice note", "say it out loud", "read it aloud",
+            "read aloud", "speak it", "in your voice",
+        ]
+        return direct.contains { t.contains($0) }
+    }
+
     /// [tts-paper 2026-10-02] agentHistory 里最后一条 user 消息的纯文本
     ///（纸条触发判定用）。没有 user 消息时返回空串——触发判定直接不命中。
-    private static func lastUserText(in history: [AgentMessage]) -> String {
+    static func lastUserText(in history: [AgentMessage]) -> String {
         for msg in history.reversed() where msg.role == .user {
             let t = msg.parts.compactMap { part -> String? in
                 if case .text(let s) = part { return s }

@@ -288,6 +288,16 @@ enum VoiceProviderResolver {
     /// "正在使用"与真实发声方错位。顺序：选中服务 → 播放器运行时（上次真正
     /// 发声的模型）→ 默认 TTS 分组 → 模型组解析。
     static func effectiveVoiceLabel() -> String {
+        // [B09-S01 2026-10-22] Order now MATCHES what actually plays. Read-aloud
+        // leads with the default group's usable members, so the label has to
+        // lead with the group too — it used to name the selected service first
+        // and claim the group only as a fallback, i.e. the exact opposite of the
+        // chain, which is how "分组 · X" ended up on screen while silence came
+        // out of the speaker.
+        let groupStore = TTSGroupStore.shared
+        if let g = groupStore.defaultGroup(), !groupStore.usableDefaultGroupCandidates().isEmpty {
+            return "分组 · \(g.name)"
+        }
         let svcStore = TTSServiceStore.shared
         if let svc = svcStore.selectedService(), svc.enabled,
            svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
@@ -295,10 +305,6 @@ enum VoiceProviderResolver {
         }
         if let instance = VoiceOutputPlayer.shared.activeModelLabel {
             return instance
-        }
-        let groupStore = TTSGroupStore.shared
-        if let g = groupStore.defaultGroup(), !groupStore.defaultGroupCandidates().isEmpty {
-            return "分组 · \(g.name)"
         }
         return outputModelLabel()
     }
@@ -312,7 +318,7 @@ enum VoiceProviderResolver {
            svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
             return false
         }
-        if !TTSGroupStore.shared.defaultGroupCandidates().isEmpty { return false }
+        if !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty { return false }
         guard VoiceOutputPreferences.systemVoiceAllowed else { return false }
         guard let first = resolvedOutputCandidates().first else { return false }
         return isSystemEntry(first.providerInstanceId)

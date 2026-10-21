@@ -68,32 +68,30 @@ struct ProviderInstancesView: View {
                     }
                 }
             }
-            // [T-mimo-shadow-voice] Voice Services = a read-only SHADOW view of any
-            // instance that has audio-modality models, FOLDED by base URL so two
-            // instances on the same host show one row (shares that instance's
-            // credential/endpoint). Tapping opens the shadow detail (voice models
-            // + a "disable this voice row" toggle).
+            // [B09-N14 2026-10-22] The shadow voice rows moved into
+            // Settings › Voice Services. Having a second, differently-behaving
+            // "Voice Services" list inside the Providers page made "where do I
+            // configure my voice" have two answers. The rows themselves are
+            // unchanged; only their home moved.
             let shadows = store.shadowVoiceProviders()
             if !shadows.isEmpty {
-                Section("Voice Services") {
-                    if store.hasFoldedShadowDuplicates() {
-                        // Non-destructive hint: same MiMo service configured twice.
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "info.circle.fill")
+                Section {
+                    NavigationLink {
+                        VoiceServicesView()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "waveform.circle.fill")
                                 .foregroundStyle(MinisTheme.secondaryText)
-                            Text("A voice service is configured more than once. Voice is merged into a single row here; you can delete the extra provider above if you want.",
-                                 comment: "Duplicate voice provider hint")
-                                .font(.caption)
-                                .foregroundStyle(MinisTheme.secondaryText)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Voice Services")
+                                Text("From your providers")
+                                    .font(.caption2)
+                                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
+                            }
                         }
                     }
-                    ForEach(shadows) { shadow in
-                        NavigationLink {
-                            ShadowVoiceProviderDetailView(instanceId: shadow.instanceId)
-                        } label: {
-                            ShadowVoiceRow(shadow: shadow)
-                        }
-                    }
+                } footer: {
+                    Text("Voice providers you already configured here show up in Settings › Voice Services, together with the standalone voice services.")
                 }
             }
 
@@ -476,35 +474,3 @@ private struct InstanceRow: View {
     }
 }
 
-// MARK: - Shadow Voice Row [T-mimo-shadow-voice]
-
-/// A Voice Services row backed by another instance's audio-modality models.
-private struct ShadowVoiceRow: View {
-    let shadow: ProviderConfigStore.ShadowVoiceProvider
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .foregroundStyle(MinisTheme.secondaryText)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(shadow.displayName)
-                    .font(.body)
-                let asr = shadow.inputModels.count
-                let tts = shadow.outputModels.count
-                Text(voiceSummary(asr: asr, tts: tts))
-                    .font(.caption2)
-                    .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
-            }
-            Spacer()
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func voiceSummary(asr: Int, tts: Int) -> String {
-        var parts: [String] = []
-        if asr > 0 { parts.append(AppLocalized("\(asr) speech-to-text", comment: "ASR model count")) }
-        if tts > 0 { parts.append(AppLocalized("\(tts) text-to-speech", comment: "TTS model count")) }
-        return parts.joined(separator: " · ")
-    }
-}

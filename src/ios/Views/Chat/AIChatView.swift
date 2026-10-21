@@ -6951,10 +6951,27 @@ struct ChatVoiceSettingsSheet: View {
                             Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : (noVoiceWarning ? "speaker.slash.fill" : "speaker.wave.2.fill")))
                                 .font(ChatFont.font(16))
                                 .foregroundStyle(isSpeaking ? MinisTheme.accent : MinisTheme.secondaryText)
-                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : (noVoiceWarning ? "无可用语音——去 设置 › 语音服务 检查" : "播报就绪")))
+                            Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : (noVoiceWarning ? "没有可用的声音" : "播报就绪")))
                                 .font(.body.weight(.medium))
                         }
                         Spacer()
+                        // [B09-S02 2026-10-22] "No voice available" used to be a
+                        // dead end that told you to go check a page and find the
+                        // problem yourself. Put the fix one tap away.
+                        if noVoiceWarning && !isSpeaking {
+                            Button {
+                                dismiss()
+                                DeepLinkCoordinator.shared.pendingSettingsTarget = .voiceServices
+                            } label: {
+                                Text("去配置")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(MinisTheme.accent, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                         if isSpeaking || isPaused {
                             Button {
                                 state.togglePause()
@@ -6989,11 +7006,13 @@ struct ChatVoiceSettingsSheet: View {
 
                 Section {
                     // 1. 播放倍速调节
+                    // [B09-N05 2026-10-22] One ladder for both players — the
+                    // steps and the labels are derived, never retyped.
                     Picker("播放倍速", selection: Binding(
                         get: {
                             let cur = VoiceOutputPreferences.speedMultiplier
-                            let steps: [Float] = [1.0, 1.25, 1.5, 2.0]
-                            return steps.min(by: { abs($0 - cur) < abs($1 - cur) }) ?? 1.0
+                            return VoiceOutputPreferences.speedSteps
+                                .min(by: { abs($0 - cur) < abs($1 - cur) }) ?? 1.0
                         },
                         set: { speed in
                             VoiceOutputPreferences.speedMultiplier = speed
@@ -7002,10 +7021,9 @@ struct ChatVoiceSettingsSheet: View {
                             vm.setSpeechSpeed(speed)
                         }
                     )) {
-                        Text("1.0×").tag(Float(1.0))
-                        Text("1.25×").tag(Float(1.25))
-                        Text("1.5×").tag(Float(1.5))
-                        Text("2.0×").tag(Float(2.0))
+                        ForEach(VoiceOutputPreferences.speedSteps, id: \.self) { step in
+                            Text(String(format: "%.2g×", step)).tag(step)
+                        }
                     }
                     .pickerStyle(.segmented)
 
@@ -7057,6 +7075,37 @@ struct ChatVoiceSettingsSheet: View {
                 } footer: {
                     Text("在 设置 › 语音服务 里调整。")
                 }
+
+                // [B09 2026-10-22] The sheet is where users land when a reply
+                // won't speak, so it has to say WHAT will speak and give a
+                // one-tap way to go fix it. Reads the same chain the player
+                // uses (group first), so the answer is never a guess.
+                Section {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("当前会用的声音")
+                                .font(.body.weight(.medium))
+                            Text(voiceSummary)
+                                .font(.caption)
+                                .foregroundColor(voiceSummaryIsBroken ? MinisTheme.destructive : .secondary)
+                        }
+                        Spacer()
+                    }
+                    Button {
+                        dismiss()
+                        DeepLinkCoordinator.shared.pendingSettingsTarget = .voiceServices
+                    } label: {
+                        HStack {
+                            Text("打开语音设置")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(ChatFont.font(13, weight: .semibold))
+                                .foregroundColor(.secondary.opacity(0.6))
+                        }
+                    }
+                } header: {
+                    Text("声音配置")
+                }
             }
             .navigationTitle("语音设置")
             .navigationBarTitleDisplayMode(.inline)
@@ -7067,6 +7116,12 @@ struct ChatVoiceSettingsSheet: View {
             }
             .onAppear {
                 refreshModelLabel()
+                noVoiceWarning = voiceSummaryIsBroken
+            }
+            // [B09-N07 2026-10-22] Actually consume the failure signal the player
+            // publishes — it was incremented in three places and read nowhere.
+            .onReceive(voicePlayer.$synthFailureTick) { tick in
+                if tick > 0 { noVoiceWarning = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: .ttsQueueDrainedSilently)) { _ in
                 // [batch9-voice/3 · VT-F3] 候选全空/合成全败 → 失败态（不再静默回"就绪"）。
@@ -7079,6 +7134,44 @@ struct ChatVoiceSettingsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// [B09 2026-10-22] One line answering "what will actually speak", read
+    /// from the same sources the player resolves (default group → selected
+    /// service → model group → System), so it can't drift from reality.
+    private var voiceSummary: String {
+        let group = TTSGroupStore.shared
+        if let gid = group.defaultGroupId, let g = group.group(id: gid) {
+            let usable = group.usableCandidates(for: g)
+            if !usable.isEmpty {
+                return "分组「\(g.name)」：\(usable.map { $0.name }.joined(separator: " → "))"
+            }
+            let members = group.candidates(for: g)
+            if !members.isEmpty {
+                return "分组「\(g.name)」里 \(members.count) 个服务都缺密钥"
+            }
+        }
+        let store = TTSServiceStore.shared
+        if let s = store.selectedService() {
+            if !store.hasAPIKey(for: s) { return "选中的「\(s.name)」缺 API 密钥" }
+            if !s.enabled { return "选中的「\(s.name)」已停用" }
+            return "服务「\(s.name)」"
+        }
+        if let s = store.services.first(where: { $0.enabled && store.hasAPIKey(for: $0) }) {
+            return "服务「\(s.name)」（未设默认分组，按保存顺序）"
+        }
+        if VoiceOutputPreferences.systemVoiceAllowed { return "系统语音（Apple）" }
+        return "还没有配置任何声音"
+    }
+
+    /// True when nothing can actually speak — the sheet shows this in red and
+    /// surfaces the "go configure" action instead of a dead-end sentence.
+    private var voiceSummaryIsBroken: Bool {
+        if !TTSGroupStore.shared.usableDefaultGroupCandidates().isEmpty { return false }
+        let store = TTSServiceStore.shared
+        if let s = store.selectedService(), s.enabled, store.hasAPIKey(for: s) { return false }
+        if store.services.contains(where: { $0.enabled && store.hasAPIKey(for: $0) }) { return false }
+        return !VoiceOutputPreferences.systemVoiceAllowed
     }
 
     private func refreshModelLabel() {

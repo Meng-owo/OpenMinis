@@ -6951,7 +6951,20 @@ private struct SettingsSheet: View {
                     NavigationLink {
                         VoiceServicesView()
                     } label: {
-                        Label("Voice Services", systemImage: "waveform.circle.fill")
+                        // [B09 2026-10-22] Show WHAT will speak right on the row:
+                        // the settings list used to say only "Voice Services",
+                        // so "why does it sound like that / why is it silent"
+                        // had no answer until you drilled in.
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Voice Services")
+                                Text(VoiceProviderResolver.effectiveVoiceLabel())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "waveform.circle.fill")
+                        }
                     }
                 } header: {
                     Text("Speech")

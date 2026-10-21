@@ -546,6 +546,11 @@ final class TTSServiceStore: @unchecked Sendable {
     func remove(id: String) {
         var list = services
         list.removeAll { $0.id == id }
+        // [B09 2026-10-22] Clear the selection when the selected service is the
+        // one being deleted. Previously the stale id survived: selectedService()
+        // then returned nil and read-aloud silently fell through to the model
+        // group / System path while the list showed nothing checked.
+        if selectedServiceId == id { setSelectedServiceId(nil) }
         setServices(list)
         ProviderKeychainHelper.deleteAPIKey(instanceId: "tts-\(id)", caller: "TTSServiceStore.remove")
     }
@@ -595,6 +600,15 @@ final class TTSServiceStore: @unchecked Sendable {
 
     func saveAPIKey(_ key: String, for service: TTSServiceOptions) {
         ProviderKeychainHelper.saveAPIKey(key, instanceId: service.keychainInstanceId, caller: "TTSServiceStore")
+    }
+
+    /// [B09-L04 2026-10-22] Remove just the credential, keeping the service
+    /// definition (vendor/baseURL/model/voice). Before this the only way to drop
+    /// a key was deleting the whole service and re-entering everything.
+    func deleteAPIKey(for service: TTSServiceOptions) {
+        ProviderKeychainHelper.deleteAPIKey(instanceId: service.keychainInstanceId,
+                                            caller: "TTSServiceStore.deleteAPIKey")
+        NotificationCenter.default.post(name: .ttsServicesChanged, object: nil)
     }
 
     // MARK: Persistence
