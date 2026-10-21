@@ -353,6 +353,10 @@ struct MinisApp: App {
                     // retroactively run, and the insurance notification promised
                     // that opening the app would show what happened.
                     AgentJobRegistry.shared.restorePersistedJobs()
+                    // [T-agent-job-completion-notice] 子代理跑完了要能告诉她。
+                    // finish() 一直在发 .agentJobDidFinish，但之前没有任何 UI
+                    // 收它，后台跑完等于没有回音。
+                    AgentJobCompletionNotice.shared.start()
                     // Register notification delegate for shortcut task tap-to-open
                     ShortcutNotificationDelegate.shared.register()
                     // Register App Shortcuts with the system so Siri and Spotlight discover them
