@@ -83,9 +83,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// nothing reads this for control flow.
     static var diagRequestSeq: UInt64 = 0
 
-    /// If non-nil, this VM is in read-only mode viewing a remote device's session.
-    var remoteDeviceId: String?
-
     /// Short unique ID for this ViewModel instance (for debugging lifecycle).
     let vmInstanceId = UUID().uuidString.prefix(6)
 
@@ -2248,14 +2245,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     ///   then call `send()` normally (`inputText` + `send()`), which still
     ///   consumes them as before.
     func send(overrideText: String? = nil) {
-        // Read-only mode — cannot send messages
-        // [P-03] 静默 return 会让用户以为「按了没反应」。现在界面已经不给输入框，
-        // 这条兜底也要说一句，免得从别处（斜杠、快捷指令）触发时无声无息。
-        guard remoteDeviceId == nil else {
-            transientNotice = AppLocalized("This session is read-only. Fork it from the session list to continue.")
-            return
-        }
-
         // [T-stop-sibling-subagent] The user's own new message re-opens
         // delivery: sub agents muted by their Stop may report again. A
         // programmatic turn (a callback, a scheduled fire) must NOT reopen it —

@@ -669,8 +669,6 @@ enum ScheduledJobRunner {
             return AppLocalized("没跑成：目标会话当时正在压缩上下文，下一次触发会照常。")
         case "context_exhausted":
             return AppLocalized("没跑成：目标会话的上下文已满，腾出空间后会照常。")
-        case "read_only_remote_session":
-            return AppLocalized("没跑成：那是一个只读的远程会话。")
         case "empty_prompt":
             return AppLocalized("没跑成：任务没有可发送的内容。")
         case "attachments_not_ready":

@@ -370,7 +370,7 @@ extension AIChatViewModel {
         guard !isHelper else {
             return reject("depth_limit", "Helpers cannot delegate further (max delegation depth is 1). Do the work yourself.")
         }
-        guard remoteDeviceId == nil, let parentSid = sessionId else {
+        guard let parentSid = sessionId else {
             return reject("no_parent_session", "This session cannot spawn helpers.")
         }
         // [T-sub-agents-queue] Position of this call among the delegations of

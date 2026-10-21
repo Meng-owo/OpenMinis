@@ -12,7 +12,7 @@ import SwiftUI
 /// Foundation-only — the format model has no business knowing about Color.
 ///
 /// The badge is a CIRCLE, matching every other row icon under Settings
-/// (see `settingsIcon` in CloudSyncSettingsView). The backup screens shipped
+/// (see `settingsIcon` in ModelGroupDetailView). The backup screens shipped
 /// with rounded squares, which read as a different kind of control sitting in
 /// the same list.
 /// A circular row badge for a backup ACTION (as opposed to a category).

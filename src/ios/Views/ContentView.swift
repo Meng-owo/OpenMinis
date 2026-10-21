@@ -1022,8 +1022,10 @@ struct ContentView: View {
     // sink closure (crash below). Replaced with a `.task`-driven async loop whose
     // lifetime SwiftUI owns and cancels deterministically — no graph-bound publisher.
     // See migrationSubtitleRefreshInterval / migrationSubtitleLoop.
-    @State private var remoteDeviceSessions: [(device: SyncDevice, sessions: [ChatSession])] = []
     // showSettings consolidated into activeToolSheet (.settings)
+    /// [remote-device-label] deviceId → 显示名，用于在会话行上标出「这条来自哪台设备」。
+    /// 只装远程设备的条目；本地会话不查表。
+    @State private var deviceNamesById: [String: String] = [:]
     @State private var showAlarmList = false
     @State private var hasAlarms = false
     @State private var activeToolSheet: ToolSheet?
@@ -1401,7 +1403,6 @@ struct ContentView: View {
             }
             didInitialLoad = true
             fetchAlarmsIfNeeded()
-            await refreshRemoteDeviceSessions()
         }
         .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidFetchChanges)) { _ in
             // [T-ios-state-publish-offmain-crash] cloud-sync fetch fires off-main;
@@ -2168,41 +2169,33 @@ struct ContentView: View {
                     // replacing the top element in place (menu "New Chat" swaps
                     // [current] → [draft]) would otherwise reuse the old view's
                     // @StateObject vm and nothing visibly changes.
-                    if id.hasPrefix("remote:") {
-                        let parts = id.split(separator: ":", maxSplits: 2)
-                        if parts.count == 3 {
-                            AIChatView(sessionId: String(parts[2]), remoteDeviceId: String(parts[1]))
-                                .id(id)
-                        }
-                    } else {
-                        AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
-                            .id(id)
-                            .onAppear {
-                                if currentStackSessionId != id {
-                                    currentStackSessionId = id
-                                    // [T-ios-stacknav-transition-attributegraph-race]
-                                    // Keep the outgoing-id tracker in lockstep.
-                                    // This branch fires exactly when the two
-                                    // have DIVERGED — the "swallowed push left
-                                    // currentStackSessionId set to a target
-                                    // that never appeared" case documented on
-                                    // the .moveInputToSession handler — and it
-                                    // mounts a chat WITHOUT a navigationPath
-                                    // change, so the observer that normally
-                                    // maintains previousStackSessionId does not
-                                    // run. Left unsynced, the next real
-                                    // transition would suspend whichever id the
-                                    // last observer pass recorded instead of
-                                    // the vm actually on screen: the wrong vm
-                                    // stalls and the real outgoing one keeps
-                                    // publishing into its teardown.
-                                    previousStackSessionId = id
-                                }
-                                SessionBadgeStore.shared.remove(.unread, for: id)
-                                shareLog.info("🔄SESSION stackNav APPEAR id=\(id)")
+                    AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                        .id(id)
+                        .onAppear {
+                            if currentStackSessionId != id {
+                                currentStackSessionId = id
+                                // [T-ios-stacknav-transition-attributegraph-race]
+                                // Keep the outgoing-id tracker in lockstep.
+                                // This branch fires exactly when the two
+                                // have DIVERGED — the "swallowed push left
+                                // currentStackSessionId set to a target
+                                // that never appeared" case documented on
+                                // the .moveInputToSession handler — and it
+                                // mounts a chat WITHOUT a navigationPath
+                                // change, so the observer that normally
+                                // maintains previousStackSessionId does not
+                                // run. Left unsynced, the next real
+                                // transition would suspend whichever id the
+                                // last observer pass recorded instead of
+                                // the vm actually on screen: the wrong vm
+                                // stalls and the real outgoing one keeps
+                                // publishing into its teardown.
+                                previousStackSessionId = id
                             }
-                            .onDisappear { shareLog.info("🔄SESSION stackNav DISAPPEAR id=\(id)") }
-                    }
+                            SessionBadgeStore.shared.remove(.unread, for: id)
+                            shareLog.info("🔄SESSION stackNav APPEAR id=\(id)")
+                        }
+                        .onDisappear { shareLog.info("🔄SESSION stackNav DISAPPEAR id=\(id)") }
                 }
         }
     }
@@ -2926,7 +2919,9 @@ struct ContentView: View {
                                     || subAgentParentIds.contains(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
                                 highlightQuery: isSearching ? searchText : nil,
-                                matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
+                                matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil,
+                                // [remote-device-label] 远程会话标来源设备；本地会话为 nil。
+                                remoteDeviceName: session.remoteDeviceId.flatMap { deviceNamesById[$0] }
                             )
                                 // [T-ios-session-list-equatable-jank] Gate
                                 // parent-driven re-eval on SessionRow's cheap
@@ -3079,7 +3074,9 @@ struct ContentView: View {
                                     || subAgentParentIds.contains(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
                                 highlightQuery: isSearching ? searchText : nil,
-                                matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
+                                matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil,
+                                // [remote-device-label] 远程会话标来源设备；本地会话为 nil。
+                                remoteDeviceName: session.remoteDeviceId.flatMap { deviceNamesById[$0] }
                             )
                                 // [T-ios-session-list-equatable-jank] Gate
                                 // parent-driven re-eval on SessionRow's cheap
@@ -4023,92 +4020,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Remote Device Sessions
-
-    /// [T-ios-session-list-equatable-jank] id→remote ChatSession lookup, keyed
-    /// "deviceId:sessionId". Lets the remote-session rows resolve their model by
-    /// id so the ForEach below diffs `[String]`, not `[ChatSession]`.
-    private var remoteSessionsById: [String: ChatSession] {
-        var d: [String: ChatSession] = [:]
-        for entry in remoteDeviceSessions {
-            for s in entry.sessions { d["\(entry.device.id):\(s.id)"] = s }
-        }
-        return d
-    }
-
-    @ViewBuilder
-    private var remoteDeviceSessionSections: some View {
-        let _ = syncLog.info("[iCloud] remoteDeviceSessionSections evaluated: \(remoteDeviceSessions.count) devices, total sessions=\(remoteDeviceSessions.reduce(0) { $0 + $1.sessions.count })")
-        let byId = remoteSessionsById
-        // [T-ios-session-list-equatable-jank] Project to (deviceId, deviceName,
-        // sessionIds) so SwiftUI diffs id strings instead of deep-comparing the
-        // [ChatSession] value array on every transaction flush — same fix as the
-        // local sidebar list. (This remote section was the path still triggering
-        // Array<ChatSession>.== in the HangDetector stacks after the local-list
-        // fix landed.)
-        let deviceSections: [(deviceId: String, name: String, ids: [String])] =
-            remoteDeviceSessions.map { e in
-                (deviceId: e.device.id, name: e.device.deviceName, ids: e.sessions.map(\.id))
-            }
-        ForEach(deviceSections, id: \.deviceId) { entry in
-            let _ = syncLog.info("[iCloud] rendering section for device=\(entry.deviceId) name=\(entry.name) sessions=\(entry.ids.count)")
-            Section {
-                ForEach(entry.ids, id: \.self) { sessionId in
-                    if let session = byId["\(entry.deviceId):\(sessionId)"] {
-                        NavigationLink(value: "remote:\(entry.deviceId):\(session.id)") {
-                            RemoteSessionRow(session: session)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .contextMenu {
-                            Button {
-                                // [T-ios-state-publish-offmain-crash] @MainActor
-                                // so the @State write stays on the main thread.
-                                let sid = session.id
-                                let deviceId = entry.deviceId
-                                Task { @MainActor in
-                                    if let forked = await SessionForkManager.shared.forkSession(
-                                        remoteSessionId: sid, remoteDeviceId: deviceId
-                                    ) {
-                                        refreshSessionList()
-                                        selectedSessionId = forked.id
-                                    }
-                                }
-                            } label: {
-                                Label("Fork Session", systemImage: "arrow.branch")
-                            }
-                        }
-                    }
-                }
-            } header: {
-                Label(entry.name, systemImage: "iphone")
-            }
-        }
-    }
-
-    // [T-ios-state-publish-offmain-crash] @MainActor: writes `remoteDeviceSessions`
-    // (@State) after several ChatStore (actor) awaits; without this the
-    // continuation could resume off-main and publish state from a background
-    // thread (the [ChatSession] AttributeGraph-compare crash path).
-    @MainActor
-    private func refreshRemoteDeviceSessions() async {
-        let allDevices = await ChatStore.shared.listSyncDevices()
-        let devices = allDevices.filter { $0.id != DeviceIdentity.deviceId }
-        syncLog.info("[RemoteSync] refreshRemoteDeviceSessions: \(allDevices.count) total devices, \(devices.count) remote (self=\(DeviceIdentity.deviceId))")
-        var result: [(device: SyncDevice, sessions: [ChatSession])] = []
-        for device in devices {
-            let remoteSessions = await ChatStore.shared.listRemoteSessions(deviceId: device.id)
-            syncLog.info("[RemoteSync] device \(device.id) (\(device.deviceName)): \(remoteSessions.count) sessions")
-            if !remoteSessions.isEmpty {
-                result.append((device: device, sessions: remoteSessions))
-            }
-        }
-        syncLog.info("[RemoteSync] Final result: \(result.count) devices with sessions")
-        remoteDeviceSessions = result
-    }
-
-    private let syncLog = AppLogger(category: "RemoteSync")
-
     // MARK: - Share Extension Handling
 
     private func processPendingShare() {
@@ -4411,6 +4322,17 @@ struct ContentView: View {
             // never as top-level conversations.
             sessions = await ChatStore.shared.listSessions().filter { !$0.isChild }
             folders = await ChatStore.shared.listFolders()
+            // [remote-device-label] 只有列表里真出现远程会话时才去查设备表，
+            // 单机用户一次多余查询都不做。
+            if sessions.contains(where: { $0.isRemote }) {
+                let devices = await ChatStore.shared.listSyncDevices()
+                let me = DeviceIdentity.deviceId
+                var names: [String: String] = [:]
+                for d in devices where d.id != me { names[d.id] = d.deviceName }
+                if names != deviceNamesById { deviceNamesById = names }
+            } else if !deviceNamesById.isEmpty {
+                deviceNamesById = [:]
+            }
             clearSelectionIfDangling()
             sessionRefreshInFlight = false
             // [T-ios-listsessions-perf] Stamp the COMPLETION instant — the
@@ -6144,7 +6066,7 @@ private struct MenuKey: Equatable {
 
 /// category → (SF Symbol, color) for a session's list icon.
 ///
-/// Single source of truth shared by `SessionRow`, `RemoteSessionRow`, and the
+/// Single source of truth shared by `SessionRow` and the
 /// folder header's composed icon (which stacks the top members' glyphs). It
 /// was previously duplicated as two identical private computed properties on
 /// the row structs; the composed icon made a third copy untenable.
@@ -6271,6 +6193,7 @@ private struct SessionRow: View, Equatable {
             && lhs.isHighlighted == rhs.isHighlighted
             && lhs.highlightQuery == rhs.highlightQuery
             && lhs.matchSnippet == rhs.matchSnippet
+            && lhs.remoteDeviceName == rhs.remoteDeviceName
             && lhs.isActiveOverride == rhs.isActiveOverride
             && lhs.isSuspendedOverride == rhs.isSuspendedOverride
     }
@@ -6284,6 +6207,9 @@ private struct SessionRow: View, Equatable {
     /// title matches keep the highlighted title in the title slot and fall
     /// back to `lastMessage` below. (T-search-highlight 8edb74f2)
     var matchSnippet: String? = nil
+    /// [remote-device-label] 这条会话是从哪台设备同步来的（设备名）。
+    /// nil = 本地会话，或设备记录还没同步过来。不显示占位。
+    var remoteDeviceName: String? = nil
     /// Running / suspended state passed in as VALUES by the sidebar list so a
     /// flip changes this view's value and re-evaluates `body` in place (same
     /// ForEach identity — no cell rebuild / scroll jump). When nil (e.g. the
@@ -6310,13 +6236,15 @@ private struct SessionRow: View, Equatable {
          isActive: Bool? = nil,
          isSuspended: Bool? = nil,
          highlightQuery: String? = nil,
-         matchSnippet: String? = nil) {
+         matchSnippet: String? = nil,
+         remoteDeviceName: String? = nil) {
         self.session = session
         self.isHighlighted = isHighlighted
         self.isActiveOverride = isActive
         self.isSuspendedOverride = isSuspended
         self.highlightQuery = highlightQuery
         self.matchSnippet = matchSnippet
+        self.remoteDeviceName = remoteDeviceName
     }
 
     private var isActive: Bool {
@@ -6467,6 +6395,18 @@ private struct SessionRow: View, Equatable {
                 Text(relativeDate(session.updatedAt))
                     .font(.system(size: fontSettings.scaledApp(13)))
                     .foregroundStyle(MinisThemeList.meta)
+                // [remote-device-label] 来源设备名。放日期下面一行小字，
+                // 不做第二套「按设备浏览」导航 —— 列表里能看出是哪台就够了。
+                if let deviceName = remoteDeviceName, !deviceName.isEmpty, !isVisuallyLocked {
+                    HStack(spacing: 2) {
+                        Image(systemName: "iphone")
+                            .font(.system(size: 8))
+                        Text(deviceName)
+                            .font(.system(size: fontSettings.scaledApp(10)))
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(MinisThemeList.meta.opacity(0.85))
+                }
                 if isVisuallyLocked {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 10))
@@ -6677,69 +6617,6 @@ private struct LockedRowEffect: ViewModifier {
 }
 
 /// Row for a session synced from another device, with an iCloud badge on the icon.
-private struct RemoteSessionRow: View {
-    let session: ChatSession
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
-
-    var body: some View {
-        HStack(spacing: 8) {
-            // Category icon with iCloud badge
-            providerIcon
-                .frame(width: 44, height: 44)
-                .background(iconColor.opacity(0.18))
-                .clipShape(minisListIconClip())
-                .overlay(alignment: .bottomTrailing) {
-                    Image(systemName: "icloud.fill")
-                        .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
-                        .background(MinisTheme.accent)
-                        .clipShape(Circle())
-                        .offset(x: 2, y: 2)
-                }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(session.title ?? "Untitled")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(MinisThemeList.title)
-                    .lineLimit(1)
-                Text(session.updatedAt, style: .relative)
-                    .font(.system(size: 14))
-                    .foregroundStyle(MinisThemeList.subtitle)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 1)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(MinisThemeList.rowFill)
-        .contentShape(Rectangle())
-    }
-
-    private var categoryIcon: (systemName: String, color: Color) {
-        sessionCategoryIcon(for: session.category)
-    }
-
-    private var iconColor: Color { categoryIcon.color }
-
-    @ViewBuilder
-    private var providerIcon: some View {
-        let icon = categoryIcon
-        let key = session.category ?? "other"
-        if let image = AppearanceStudio.shared.categoryImage(for: key) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-        } else {
-            let size: CGFloat = (icon.systemName == "bubble.left.fill" || icon.systemName == "terminal.fill") ? 18 : 20
-            Image(systemName: icon.systemName)
-                .font(.system(size: size, weight: .medium))
-                .foregroundStyle(AppearanceStudio.shared.color(.primaryText, scope: .home))
-        }
-    }
-}
 
 /// A dashed circle ring indicating a session is suspended (waiting for a concurrency slot).
 private struct SuspendedRing: View {

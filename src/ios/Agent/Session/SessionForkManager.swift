@@ -3,78 +3,15 @@ import os.log
 
 private let logger = AppLogger(category: "SessionFork")
 
-/// Handles forking remote sessions (deep copy) and copying remote skills/memories to local device.
+/// Duplicates local sessions (deep copy of messages + media + compact markers).
 @MainActor
 final class SessionForkManager {
     static let shared = SessionForkManager()
     private init() {}
 
-    // MARK: - Fork Remote Session
-
-    /// Fork a remote session into a new local session with deep-copied messages.
-    func forkSession(remoteSessionId: String, remoteDeviceId: String) async -> ChatSession? {
-        let store = ChatStore.shared
-
-        // Load remote session
-        let remoteSessions = await store.listRemoteSessions(deviceId: remoteDeviceId)
-        guard let remoteSession = remoteSessions.first(where: { $0.id == remoteSessionId }) else {
-            logger.error("[Fork] Remote session not found: \(remoteSessionId)")
-            return nil
-        }
-
-        // Create new local session
-        // [S4d] The leading space belongs to the concatenation, not to the
-        // localisation key — a key of " (Fork)" cannot be looked up or reused.
-        let forkTitle = (remoteSession.title ?? AppLocalized("Untitled")) + " " + AppLocalized("(Fork)")
-        let newSession = await store.createSession(modelId: remoteSession.modelId, title: forkTitle)
-
-        // Update category if present
-        if let category = remoteSession.category {
-            await store.updateSessionTitle(newSession.id, title: forkTitle, category: category)
-        }
-
-        // Inherit pin + folder. listRemoteSessions carried both fields,
-        // but createSession starts unpinned/unfiled and nothing copied
-        // them over — a fork of a pinned, filed session silently lost
-        // its place. (A folderId that doesn't exist locally yet just
-        // renders as unfiled until the folder syncs in.)
-        if let pinnedAt = remoteSession.pinnedAt {
-            await store.setSessionPinnedAt(pinnedAt, forSession: newSession.id)
-        }
-        if let folderId = remoteSession.folderId {
-            await store.setFolder(folderId, forSessions: [newSession.id])
-        }
-
-        // Load and deep-copy messages
-        let remoteMessages = await store.loadRemoteMessages(sessionId: remoteSessionId, deviceId: remoteDeviceId)
-        for msg in remoteMessages {
-            let newMsg = RawMessage(
-                id: UUID().uuidString,
-                sessionId: newSession.id,
-                role: msg.role,
-                parts: msg.parts,
-                createdAt: msg.createdAt,
-                tokenUsage: msg.tokenUsage,
-                reasoningContent: msg.reasoningContent,
-                streamInterruptCount: msg.streamInterruptCount,
-                errorInfo: msg.errorInfo,
-                modelId: msg.modelId,
-                modelDisplayName: msg.modelDisplayName,
-                providerType: msg.providerType,
-                providerInstanceId: msg.providerInstanceId
-            )
-            await store.appendMessage(newMsg)
-        }
-
-        logger.info("[Fork] Forked remote session \(remoteSessionId) → \(newSession.id) (\(remoteMessages.count) messages)")
-        NotificationCenter.default.post(name: .sessionDidCreate, object: newSession.id)
-
-        return newSession
-    }
-
     // MARK: - Duplicate Local Session
 
-    /// Duplicate a local session (same as fork but reads from main tables).
+    /// Deep-copy a local session: messages, media tree, compact markers.
     func duplicateSession(sessionId: String) async -> ChatSession? {
         let store = ChatStore.shared
 
@@ -90,7 +27,7 @@ final class SessionForkManager {
             await store.updateSessionTitle(newSession.id, title: dupTitle, category: category)
         }
 
-        // Inherit pin + folder, like forkSession — a duplicate of a
+        // Inherit pin + folder — a duplicate of a
         // pinned, filed session should stay pinned and filed.
         if let pinnedAt = session.pinnedAt {
             await store.setSessionPinnedAt(pinnedAt, forSession: newSession.id)
@@ -223,67 +160,6 @@ final class SessionForkManager {
         NotificationCenter.default.post(name: .sessionDidCreate, object: newSession.id)
 
         return newSession
-    }
-
-    // MARK: - Copy Remote Skill
-
-    /// Copy a remote skill to the local device.
-    func copyRemoteSkill(skillId: String, deviceId: String) async -> Bool {
-        let remoteSkills = await ChatStore.shared.listRemoteSkills(deviceId: deviceId)
-        guard let skill = remoteSkills.first(where: { $0.id == skillId }) else {
-            logger.error("[Fork] Remote skill not found: \(skillId)")
-            return false
-        }
-
-        // Build SKILL.md content from body
-        let content = skill.body.isEmpty ? "---\nname: \(skill.name)\ndescription: \(skill.description)\nversion: \(skill.version)\n---\n" : skill.body
-
-        do {
-            try SkillStore.shared.importSkill(content: content, source: .file)
-            logger.info("[Fork] Copied remote skill: \(skill.name)")
-            return true
-        } catch {
-            logger.error("[Fork] Failed to copy skill: \(error)")
-            return false
-        }
-    }
-
-    // MARK: - Copy Remote Memory
-
-    /// Copy a remote memory file to the local memory directory.
-    func copyRemoteMemory(memoryId: String, deviceId: String) async -> Bool {
-        let remoteMemories = await ChatStore.shared.listRemoteMemories(deviceId: deviceId)
-        guard let memory = remoteMemories.first(where: { $0.id == memoryId }) else {
-            logger.error("[Fork] Remote memory not found: \(memoryId)")
-            return false
-        }
-
-        // fileName comes from the peer device's record, unvalidated. A bare
-        // "SOUL.md" would overwrite the local persona (it lives in this same
-        // directory), and a `../`-bearing name would escape the memory
-        // directory. Only a plain single-segment file name is accepted.
-        let fileName = memory.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let nameIsSafe = !fileName.isEmpty
-            && fileName != "." && fileName != ".."
-            && !fileName.contains("/") && !fileName.contains("\\")
-            && fileName.lowercased() != "soul.md"
-        guard nameIsSafe else {
-            logger.error("[Fork] Refusing remote memory with unsafe fileName: '\(memory.fileName)'")
-            return false
-        }
-
-        let memoryDir = AIChatViewModel.minisMemoryPersistentDir
-        try? FileManager.default.createDirectory(at: memoryDir, withIntermediateDirectories: true)
-
-        let destURL = memoryDir.appendingPathComponent(fileName)
-        do {
-            try memory.content.write(to: destURL, atomically: true, encoding: String.Encoding.utf8)
-            logger.info("[Fork] Copied remote memory: \(memory.fileName)")
-            return true
-        } catch {
-            logger.error("[Fork] Failed to copy memory: \(error)")
-            return false
-        }
     }
 }
 

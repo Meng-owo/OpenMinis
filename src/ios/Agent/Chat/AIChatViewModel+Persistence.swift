@@ -215,12 +215,7 @@ extension AIChatViewModel {
 
         // Phase 1: Load raw messages from DB
         let dbStart = CFAbsoluteTimeGetCurrent()
-        let rawMessages: [RawMessage]
-        if let remoteDeviceId {
-            rawMessages = await ChatStore.shared.loadRemoteMessages(sessionId: sessionId, deviceId: remoteDeviceId)
-        } else {
-            rawMessages = await ChatStore.shared.loadMessages(sessionId: sessionId)
-        }
+        let rawMessages = await ChatStore.shared.loadMessages(sessionId: sessionId)
         let dbElapsed = (CFAbsoluteTimeGetCurrent() - dbStart) * 1000
         // Track the highest sortOrder and count so iCloud sync reload triggers for new or removed messages.
         lastKnownDbSortOrder = rawMessages.last?.sortOrder ?? 0
@@ -434,7 +429,7 @@ extension AIChatViewModel {
         //
         // Fallback chain for legacy markers (no firstKeptMessageId):
         //   firstKeptMessageId → boundaryMessageId → firstKeptSortOrder
-        let compactMarker = remoteDeviceId == nil ? await ChatStore.shared.latestCompactMarker(sessionId: sessionId) : nil
+        let compactMarker = await ChatStore.shared.latestCompactMarker(sessionId: sessionId)
         self.cachedLatestMarker = compactMarker
         if let marker = compactMarker {
             logger.info("[Compact] ━━━ Phase 2.5: restore (Phase B id-first) ━━━")

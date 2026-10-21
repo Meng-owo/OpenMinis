@@ -80,10 +80,6 @@ extension AIChatViewModel {
                                   silent: Bool = true) -> ProgrammaticSubmitOutcome {
         let tag = "📨[Programmatic] origin=\(origin.logLabel) vm=\(vmInstanceId) sid=\(sessionId?.prefix(8) ?? "nil")"
 
-        guard remoteDeviceId == nil else {
-            logger.warning("\(tag) REJECTED — read-only remote session")
-            return .rejected(reason: "read_only_remote_session")
-        }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // [S1-fix] A programmatic prompt no longer rides the composer's staged
         // attachments, so only its text can qualify a submit. (The old check
@@ -723,10 +719,10 @@ extension AIChatViewModel {
                 "detail": "Sub agents cannot resume another sub agent (the maximum depth is 1).",
             ]), false)
         }
-        guard remoteDeviceId == nil, let parentSid = sessionId else {
+        guard let parentSid = sessionId else {
             return (Self.delegateJSON([
                 "ok": false, "status": "rejected", "reason": "no_parent_session",
-                "detail": "This conversation cannot resume a sub agent (read-only remote session, or no session yet).",
+                "detail": "This conversation cannot resume a sub agent (no session yet).",
             ]), false)
         }
         let registry = AgentJobRegistry.shared
@@ -893,8 +889,8 @@ extension AIChatViewModel {
         guard !isSubAgentChild else {
             return reject("depth_limit", "Sub agents cannot delegate further (the maximum depth is 1). Do the work yourself.")
         }
-        guard remoteDeviceId == nil, let parentSid = sessionId else {
-            return reject("no_parent_session", "This conversation cannot start a sub agent (read-only remote session, or no session yet).")
+        guard let parentSid = sessionId else {
+            return reject("no_parent_session", "This conversation cannot start a sub agent (no session yet).")
         }
 
         // Which sub agent runs this. Omitted = the built-in general one.

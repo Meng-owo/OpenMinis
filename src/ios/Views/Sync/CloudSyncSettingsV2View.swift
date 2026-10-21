@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// V2 iCloud Sync settings page. Replaces the v1 CloudSyncSettingsView
-/// when v2 is enabled. Drives:
+/// V2 iCloud Sync settings page. Replaced the retired v1 CloudSyncSettingsView
+/// (deleted 10-21 along with its remote-device browsing views). Drives:
 /// - Master enable/disable
 /// - This device's friendly name
 /// - Per-category upload toggles (Chat / SessionFiles / Skills / Providers / Env)
@@ -215,6 +215,10 @@ struct CloudSyncSettingsV2View: View {
                     Text("Other Devices")
                 } footer: {
                     Text("Devices that are signed in to the same iCloud account and have sync enabled. Last seen reflects the most recent push from that device.")
+                        .font(.caption)
+                    // [remote-device-label] 会话不再按设备分区浏览 —— 同步来的会话
+                    // 直接进会话列表，行尾标设备名。这里只说清去哪找。
+                    Text("Sessions from those devices show up in your session list, labelled with the device name.")
                         .font(.caption)
                 }
 

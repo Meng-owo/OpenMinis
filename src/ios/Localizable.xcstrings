@@ -1,6 +1,65 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Sessions from those devices show up in your session list, labelled with the device name.": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Sessions from those devices show up in your session list, labelled with the device name."
+        }
+      },
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "这些设备的会话会直接出现在会话列表里，并标出设备名。"
+        }
+      },
+      "zh-Hant": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "這些裝置的會話會直接出現在會話清單裡，並標出裝置名稱。"
+        }
+      },
+      "ja": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "これらのデバイスのセッションはセッション一覧に直接表示され、デバイス名が付きます。"
+        }
+      },
+      "ko": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "이 기기의 세션은 세션 목록에 바로 표시되며 기기 이름이 함께 표시됩니다."
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Las sesiones de esos dispositivos aparecen directamente en tu lista de sesiones, con el nombre del dispositivo."
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Les sessions de ces appareils apparaissent directement dans votre liste de sessions, avec le nom de l'appareil."
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Sitzungen dieser Geräte erscheinen direkt in deiner Sitzungsliste, mit dem Gerätenamen versehen."
+        }
+      },
+      "ru": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Сеансы с этих устройств отображаются прямо в списке сеансов с названием устройства."
+        }
+      }
+    }
+  },
     "经验" : {
       "extractionState" : "manual",
       "localizations" : {

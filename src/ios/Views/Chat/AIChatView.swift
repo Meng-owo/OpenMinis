@@ -127,8 +127,6 @@ struct AIChatView: View {
     var sessionId: String? = nil
     /// The draft ID from the parent (e.g. "__new__<UUID>") for notification correlation.
     var draftId: String? = nil
-    /// If non-nil, this is a read-only view of a remote device's session.
-    var remoteDeviceId: String? = nil
     /// Model group to bind when creating a new session (from long-press FAB).
     var initialGroupId: String? = nil
     @EnvironmentObject var shareCoordinator: ShareCoordinator
@@ -140,9 +138,6 @@ struct AIChatView: View {
     /// so SwiftUI observes changes through `cached`.
     private var vm: AIChatViewModel { cached.vm }
 
-    /// Whether this view is in read-only mode (remote session).
-    private var isReadOnly: Bool { remoteDeviceId != nil }
-
     /// Binding to vm.inputText, routed through the stable @StateObject.
     private var inputTextBinding: Binding<String> {
         Binding(
@@ -151,10 +146,9 @@ struct AIChatView: View {
         )
     }
 
-    init(sessionId: String? = nil, draftId: String? = nil, remoteDeviceId: String? = nil, initialGroupId: String? = nil) {
+    init(sessionId: String? = nil, draftId: String? = nil, initialGroupId: String? = nil) {
         self.sessionId = sessionId
         self.draftId = draftId
-        self.remoteDeviceId = remoteDeviceId
         self.initialGroupId = initialGroupId
         // [T-ios-aichatview-eager-cachedvm] Build the CachedViewModel INSIDE the
         // StateObject autoclosure so SwiftUI only constructs it the first time
@@ -610,24 +604,7 @@ struct AIChatView: View {
                                     }
                                 }
                         }
-                        VStack(spacing: 0) {
-                            #if DEBUG
-                            if isReadOnly {
-                                forkBanner
-                            } else {
-                                inputBar
-                            }
-                            #else
-                            // [P-03] Release 里原来直接露 inputBar —— 远程会话
-                            // 只读链没接通，输入框能打字、按发送什么都不发生。
-                            // 现在统一显示只读横幅（frozen 版本，无 DEBUG 专属按钮）。
-                            if isReadOnly {
-                                readOnlyBanner
-                            } else {
-                                inputBar
-                            }
-                            #endif
-                        }
+                        inputBar
                         inputPopupOverlay
                             .padding(.bottom, inputBarHeight)
                     }
@@ -1344,7 +1321,6 @@ struct AIChatView: View {
             AppLogger(category: "InputBarLayout").info("inputBarHeight re-arm seed on appear (was \(inputBarHeight))")
             vm.sessionId = sessionId
             vm.draftId = draftId
-            vm.remoteDeviceId = remoteDeviceId
             vm.initialGroupId = initialGroupId
             // Snapshot total session count once so the New-Chat onboarding
             // grid only appears for first-time users (no prior sessions).
@@ -3013,65 +2989,6 @@ struct AIChatView: View {
         }
     }
 
-    // MARK: - Fork Banner (Read-Only Mode)
-
-    /// [P-03] Release 版的只读横幅：不露输入框，也不含 DEBUG 专属的 fork 按钮。
-    /// fork 入口在会话列表的长按菜单里（ContentView 的 "Fork Session"）。
-    private var readOnlyBanner: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                Image(systemName: "eye")
-                    .foregroundStyle(MinisTheme.secondaryText)
-                Text(AppLocalized("Read-only session from another device"))
-                    .font(.subheadline)
-                    .foregroundStyle(MinisTheme.secondaryText)
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-        }
-    }
-
-    #if DEBUG
-    private var forkBanner: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                Image(systemName: "eye")
-                    .foregroundStyle(MinisTheme.secondaryText)
-                Text("Read-only session from another device")
-                    .font(.subheadline)
-                    .foregroundStyle(MinisTheme.secondaryText)
-                Spacer()
-                Button {
-                    guard let sid = sessionId, let devId = remoteDeviceId else { return }
-                    Task {
-                        if let forked = await SessionForkManager.shared.forkSession(
-                            remoteSessionId: sid, remoteDeviceId: devId
-                        ) {
-                            // Navigate to the forked session
-                            NotificationCenter.default.post(
-                                name: .sessionDidCreate,
-                                object: forked.id,
-                                userInfo: ["navigate": true]
-                            )
-                        }
-                    }
-                } label: {
-                    Label("Fork to Continue", systemImage: "arrow.branch")
-                        .font(.subheadline.weight(.medium))
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(.ultraThinMaterial)
-        }
-    }
-    #endif
 
     // MARK: - Input Bar
 
