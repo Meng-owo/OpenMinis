@@ -2,15 +2,19 @@ import SwiftUI
 
 /// Lists all model groups with default badges, and allows creating new groups.
 struct ModelGroupsView: View {
+    private enum GroupSheet: String, Identifiable {
+        case addAgentModels
+        case addAgentGroups
+        var id: String { rawValue }
+    }
+
     @ObservedObject private var store = ProviderConfigStore.shared
     @State private var showCreateGroup = false
     @State private var newGroupName = ""
-    @State private var showAddAgentModels = false
-    @State private var showAddAgentGroups = false
+    @State private var activeSheet: GroupSheet?
     @State private var forceSyncToast: String?
-    /// [T-provider-group-swipe-actions] Swipe-to-edit / swipe-to-delete targets.
-    /// Edit pushes the same detail screen the row taps into; delete is held here
-    /// until the confirmation alert is answered.
+    /// [T-provider-group-swipe-actions] Swipe-to-edit target. Edit pushes the
+    /// same detail screen the row taps into.
     @State private var editingGroupId: String?
     @State private var pendingDeleteGroup: ModelGroup?
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
@@ -174,27 +178,41 @@ struct ModelGroupsView: View {
             }
 
             // Agent Loop Models
-            AgentLoopModelsSection(showAddModels: $showAddAgentModels,
-                                   showAddGroups: $showAddAgentGroups)
+            AgentLoopModelsSection(
+                showAddModels: Binding(
+                    get: { activeSheet == .addAgentModels },
+                    set: { if $0 { activeSheet = .addAgentModels } }
+                ),
+                showAddGroups: Binding(
+                    get: { activeSheet == .addAgentGroups },
+                    set: { if $0 { activeSheet = .addAgentGroups } }
+                )
+            )
         }
         .navigationTitle("Model Groups")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showAddAgentModels) {
-            NavigationStack {
-                UnifiedModelPicker(config: .agentLoopAddModels())
-            }
-        }
-        .sheet(isPresented: $showAddAgentGroups) {
-            NavigationStack {
-                AddAgentLoopGroupsSheet()
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .addAgentModels:
+                NavigationStack {
+                    UnifiedModelPicker(config: .agentLoopAddModels())
+                }
+            case .addAgentGroups:
+                NavigationStack {
+                    AddAgentLoopGroupsSheet()
+                }
             }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        showCreateGroup = true
-                        newGroupName = ""
+                        // [K-3] Menu dismissal + alert presentation in one
+                        // transaction loses the alert. Yield one runloop.
+                        DispatchQueue.main.async {
+                            newGroupName = ""
+                            showCreateGroup = true
+                        }
                     } label: {
                         Label(AppLocalized("New Group"), systemImage: "plus")
                     }
@@ -235,33 +253,54 @@ struct ModelGroupsView: View {
         .swipeEditDestination(item: $editingGroupId) { id in
             ModelGroupDetailView(groupId: id)
         }
-        // Names the group and spells out the consequence the store actually
-        // has: removeGroup clears any default / voice / vision pointer aimed
-        // at it, which is not obvious from "delete a group".
-        .alert(
-            AppLocalized("Delete Group"),
-            isPresented: Binding(
-                get: { pendingDeleteGroup != nil },
-                set: { if !$0 { pendingDeleteGroup = nil } }
-            ),
-            presenting: pendingDeleteGroup
-        ) { group in
-            Button("Delete", role: .destructive) {
-                store.removeGroup(group.id)
+        // [K-3] ONE alert for both actions.
+        //
+        // There used to be two `.alert` modifiers on this same `List`. iOS
+        // honours a single presentation per view level, so one of them was
+        // always dead — and the dead one was the one fired from the toolbar
+        // `Menu` ("New Group"), which is exactly what the user reported as
+        // "点了没反应". One modifier, branch on which state is set.
+        .alert(dialogTitle, isPresented: isDialogPresented) {
+            if showCreateGroup {
+                TextField("Group name", text: $newGroupName)
+                Button("Create") {
+                    createGroup()
+                    showCreateGroup = false
+                }
+            } else if let group = pendingDeleteGroup {
+                Button("Delete", role: .destructive) {
+                    store.removeGroup(group.id)
+                    pendingDeleteGroup = nil
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                showCreateGroup = false
                 pendingDeleteGroup = nil
             }
-            Button("Cancel", role: .cancel) { pendingDeleteGroup = nil }
-        } message: { group in
-            Text("Delete \"\(group.name)\"? Any default, voice, or vision selection pointing at this group will be cleared. The models themselves are not deleted.")
-        }
-        .alert("New Group", isPresented: $showCreateGroup) {
-            TextField("Group name", text: $newGroupName)
-            Button("Create") { createGroup() }
-            Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Enter a name for the new model group.")
+            if showCreateGroup {
+                Text("Enter a name for the new model group.")
+            } else if let group = pendingDeleteGroup {
+                Text("Delete \"\(group.name)\"? Any default, voice, or vision selection pointing at this group will be cleared. The models themselves are not deleted.")
+            }
         }
         .settingsPage()
+    }
+
+    /// [K-3] One flag for the shared alert; it clears whichever action was armed.
+    private var isDialogPresented: Binding<Bool> {
+        Binding(
+            get: { showCreateGroup || pendingDeleteGroup != nil },
+            set: { presented in
+                guard !presented else { return }
+                showCreateGroup = false
+                pendingDeleteGroup = nil
+            }
+        )
+    }
+
+    private var dialogTitle: String {
+        showCreateGroup ? "New Group" : AppLocalized("Delete Group")
     }
 
     // MARK: - Actions

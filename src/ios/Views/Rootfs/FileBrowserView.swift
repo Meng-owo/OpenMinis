@@ -1324,8 +1324,19 @@ class FileBrowserViewModel: ObservableObject {
         let fm = FileManager.default
         let destDir = currentPath.resolvingSymlinksInPath()
         var failCount = 0
+        // [K-7] "Failed to import 3 file(s)." told the user nothing they could
+        // act on — the usual cause is a read-only mount or a file provider
+        // that has not downloaded the item yet, and both come with a usable
+        // reason. Keep the first one and show it.
+        var firstFailure: String?
         for url in urls {
-            guard url.startAccessingSecurityScopedResource() else { failCount += 1; continue }
+            guard url.startAccessingSecurityScopedResource() else {
+                failCount += 1
+                if firstFailure == nil {
+                    firstFailure = AppLocalized("Could not access the file. Pick it again from the Files app.")
+                }
+                continue
+            }
             defer { url.stopAccessingSecurityScopedResource() }
             let destURL = destDir.appendingPathComponent(url.lastPathComponent)
             // [R3-034] Preserve the file being replaced until the new copy
@@ -1350,6 +1361,9 @@ class FileBrowserViewModel: ObservableObject {
                 }
             } catch {
                 failCount += 1
+                if firstFailure == nil {
+                    firstFailure = error.localizedDescription
+                }
                 // Roll back: drop any partial copy, then put the original back.
                 if let stashURL {
                     if fm.fileExists(atPath: destURL.path) {
@@ -1364,7 +1378,9 @@ class FileBrowserViewModel: ObservableObject {
             }
         }
         if failCount > 0 {
-            errorMessage = "Failed to import \(failCount) file(s)."
+            // [K-7] Name the reason, not just the count.
+            let countText = String(format: AppLocalized("Failed to import %d file(s)."), failCount)
+            errorMessage = firstFailure.map { "\(countText)\n\($0)" } ?? countText
             showError = true
         }
         loadItems()

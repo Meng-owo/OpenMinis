@@ -558,12 +558,32 @@ struct HelperBlockView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(HelperAccent.color.opacity(0.35), lineWidth: 0.8)
+                // [K-6] `pulse` was set on appear and never read: the running
+                // state had a spinner but the card itself was static. Use it
+                // for what it was named after — a slow breathing outline while
+                // the sub agent is working, so a card sitting in a long
+                // transcript still reads as alive.
+                .stroke(HelperAccent.color.opacity(info.isRunning ? (pulse ? 0.85 : 0.3) : 0.35),
+                        lineWidth: 0.8)
         )
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { detailBlock = block }
-        .onAppear { pulse = true }
+        .onAppear { startPulseIfNeeded() }
+        .onChange(of: info.isRunning) { _ in startPulseIfNeeded() }
         .accessibilityIdentifier("assistantDelegateBlock")
+    }
+
+    /// [K-6] Drive `pulse` only while the block is actually running; stop the
+    /// repeating animation otherwise so a finished card goes still.
+    private func startPulseIfNeeded() {
+        guard info.isRunning else {
+            withAnimation(.easeOut(duration: 0.2)) { pulse = false }
+            return
+        }
+        pulse = false
+        withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+            pulse = true
+        }
     }
 
     @ViewBuilder

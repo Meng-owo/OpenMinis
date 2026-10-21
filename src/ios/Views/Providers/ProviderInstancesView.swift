@@ -4,9 +4,21 @@ import UniformTypeIdentifiers
 /// Lists all configured provider instances grouped by provider type.
 /// Replaces the old ProvidersView for the new multi-instance model.
 struct ProviderInstancesView: View {
+    /// [K-3] One presentation modifier, dispatched by an enum.
+    ///
+    /// This page used to hang TWO `.sheet` modifiers on the same `List` and
+    /// trigger both from a `Menu`. iOS keeps one presentation per view level,
+    /// so the second one silently lost — and the trigger being inside a menu
+    /// swallowed the first tap on top of that. The pattern below is the one
+    /// `ContentView` already uses (`activeToolSheet`).
+    private enum ProviderSheet: String, Identifiable {
+        case add
+        case importFile
+        var id: String { rawValue }
+    }
+
     @ObservedObject private var store = ProviderConfigStore.shared
-    @State private var showAddProvider = false
-    @State private var showImportFile = false
+    @State private var activeSheet: ProviderSheet?
     @State private var importMessage: String?
     @State private var showImportResult = false
     @State private var forceSyncToast: String?
@@ -124,12 +136,22 @@ struct ProviderInstancesView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        showAddProvider = true
+                        // [K-3] Menu dismiss + presentation in one transaction
+                        // loses the presentation on iOS. Yield one runloop.
+                        DispatchQueue.main.async {
+                            // Clear the previous result so a cancelled picker
+                            // cannot re-show last time's message.
+                            importMessage = nil
+                            activeSheet = .add
+                        }
                     } label: {
                         Label(AppLocalized("Add Provider"), systemImage: "plus")
                     }
                     Button {
-                        showImportFile = true
+                        DispatchQueue.main.async {
+                            importMessage = nil
+                            activeSheet = .importFile
+                        }
                     } label: {
                         Label(AppLocalized("Import Provider"), systemImage: "square.and.arrow.down")
                     }
@@ -147,32 +169,40 @@ struct ProviderInstancesView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddProvider) {
-            NavigationStack {
-                AddProviderView()
-            }
-        }
-        .sheet(isPresented: $showImportFile) {
-            // [T-sideload-fileimport] copy-mode picker: resigned builds
-            // silently fail open-in-place security-scope grants.
-            DocumentCopyPicker(contentTypes: [.json], allowsMultipleSelection: false) { urls in
-                guard let url = urls.first else { return }
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                guard let data = try? Data(contentsOf: url),
-                      let json = String(data: data, encoding: .utf8) else {
-                    importMessage = AppLocalized("Failed to read file.")
-                    showImportResult = true
-                    return
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .add:
+                NavigationStack {
+                    AddProviderView()
                 }
-                if let label = store.importInstanceJSON(json) {
-                    importMessage = AppLocalized("Imported provider \"\(label)\" successfully.")
-                } else {
-                    importMessage = AppLocalized("Invalid provider configuration file.")
+            case .importFile:
+                // [T-sideload-fileimport] copy-mode picker: resigned builds
+                // silently fail open-in-place security-scope grants.
+                DocumentCopyPicker(contentTypes: [.json], allowsMultipleSelection: false) { urls in
+                    guard let url = urls.first else { return }
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    guard let data = try? Data(contentsOf: url),
+                          let json = String(data: data, encoding: .utf8) else {
+                        importMessage = AppLocalized("Failed to read file.")
+                        return
+                    }
+                    if let label = store.importInstanceJSON(json) {
+                        importMessage = AppLocalized("Imported provider \"\(label)\" successfully.")
+                    } else {
+                        importMessage = AppLocalized("Invalid provider configuration file.")
+                    }
+                } onDone: {
+                    activeSheet = nil
+                    // [K-3] The result alert has to wait for this sheet to
+                    // finish dismissing — an alert presented while a sheet is
+                    // still on screen is dropped, which is how "import
+                    // succeeded" used to vanish.
+                    guard importMessage != nil else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showImportResult = true
+                    }
                 }
-                showImportResult = true
-            } onDone: {
-                showImportFile = false
             }
         }
         // [T-provider-group-swipe-actions] Swipe-Edit lands on the very screen
@@ -195,26 +225,28 @@ struct ProviderInstancesView: View {
         // Same wording and same call (`store.removeInstance`) as the Delete
         // button inside ProviderInstanceDetailView — the swipe is a shortcut to
         // the existing flow, not a second deletion path with its own semantics.
-        .alert(
-            AppLocalized("Delete Provider"),
-            isPresented: Binding(
-                get: { pendingDeleteInstance != nil },
-                set: { if !$0 { pendingDeleteInstance = nil } }
-            ),
-            presenting: pendingDeleteInstance
-        ) { instance in
-            Button("Delete", role: .destructive) {
-                store.removeInstance(instance.id)
-                pendingDeleteInstance = nil
+        // [K-3] ONE alert for both messages. Two `.alert` modifiers on the same
+        // `List` means iOS only ever honours one of them; the import result
+        // ("Imported provider X successfully") would have been the dead one.
+        .alert(alertTitle, isPresented: isAlertPresented) {
+            if pendingDeleteInstance != nil {
+                Button("Delete", role: .destructive) {
+                    if let instance = pendingDeleteInstance {
+                        store.removeInstance(instance.id)
+                    }
+                    pendingDeleteInstance = nil
+                }
             }
-            Button("Cancel", role: .cancel) { pendingDeleteInstance = nil }
-        } message: { _ in
-            Text("This will remove the provider and all its model entries. API keys will be deleted from the Keychain.")
-        }
-        .alert(AppLocalized("Import"), isPresented: $showImportResult) {
-            Button("OK") {}
+            Button(pendingDeleteInstance != nil ? "Cancel" : "OK") {
+                pendingDeleteInstance = nil
+                showImportResult = false
+            }
         } message: {
-            if let msg = importMessage { Text(msg) }
+            if pendingDeleteInstance != nil {
+                Text("This will remove the provider and all its model entries. API keys will be deleted from the Keychain.")
+            } else if let msg = importMessage {
+                Text(msg)
+            }
         }
         .overlay(alignment: .top) {
             if let msg = forceSyncToast {
@@ -230,6 +262,24 @@ struct ProviderInstancesView: View {
         }
         .settingsPage()
         .animation(.spring(response: 0.3), value: forceSyncToast)
+    }
+
+    /// [K-3] Shared alert state for the two message types this page can show.
+    private var isAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteInstance != nil || showImportResult },
+            set: { presented in
+                guard !presented else { return }
+                pendingDeleteInstance = nil
+                showImportResult = false
+            }
+        )
+    }
+
+    private var alertTitle: String {
+        pendingDeleteInstance != nil
+            ? AppLocalized("Delete Provider")
+            : AppLocalized("Import")
     }
 
     @available(iOS 17.0, *)

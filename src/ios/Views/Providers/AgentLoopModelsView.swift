@@ -42,13 +42,15 @@ struct AgentLoopModelsSection: View {
 
             Menu {
                 Button {
-                    showAddModels = true
+                    // [K-3] A Menu button that presents in the same update
+                    // transaction loses the presentation. One runloop turn.
+                    DispatchQueue.main.async { showAddModels = true }
                 } label: {
                     Label("Add Models", systemImage: "cpu")
                 }
                 if !availableGroups.isEmpty {
                     Button {
-                        showAddGroups = true
+                        DispatchQueue.main.async { showAddGroups = true }
                     } label: {
                         Label("Add Group", systemImage: "square.stack.3d.up")
                     }

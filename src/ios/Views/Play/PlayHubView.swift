@@ -177,6 +177,28 @@ struct PlayHubView: View {
             guard !newValue.isEmpty else { return }
             Task { await handleUploadPicks() }
         }
+        // [K-6] Importing N photos used to be completely silent — no spinner,
+        // no disabled state, nothing for several seconds. `importing` was
+        // written but never read anywhere.
+        .overlay {
+            if importing {
+                ZStack {
+                    Color.black.opacity(0.18).ignoresSafeArea()
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(AppLocalized("正在导入…"))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(MinisThemeList.title)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(studio.color(.raised, scope: .home), in: Capsule())
+                }
+                .transition(.opacity)
+                .allowsHitTesting(true)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: importing)
     }
 
     // MARK: - 头图（背景 + 头像 + 名字）
@@ -231,13 +253,18 @@ struct PlayHubView: View {
             // 落盘后按扩展名自动进对应桶。
             Menu {
                 Button {
-                    showPhotoPicker = true
+                    // [K-1] A Menu button that sets a presentation flag in the
+                    // same update transaction as the menu's dismissal loses the
+                    // presentation on iOS — the first tap looked dead.
+                    DispatchQueue.main.async { showPhotoPicker = true }
                 } label: {
                     Label("从相册导入（图片/视频）", systemImage: "photo.on.rectangle")
                 }
                 Button {
-                    currentFileTypes = [.item]
-                    showFileImporter = true
+                    DispatchQueue.main.async {
+                        currentFileTypes = [.item]
+                        showFileImporter = true
+                    }
                 } label: {
                     Label("从文件导入（音频/文档/任意）", systemImage: "folder.fill")
                 }

@@ -17,11 +17,29 @@ struct MCPIntegrationsView: View {
 
     @ObservedObject private var store = MCPStore.shared
 
-    @State private var editingServer: MCPServerConfig?
-    @State private var showAddForm = false
-    @State private var showJSONImport = false
-    /// [T-mcp-tools-refresh] Server whose tools sheet is presented.
-    @State private var toolsServer: MCPServerConfig?
+    /// [K-3] One sheet modifier, dispatched by this enum.
+    ///
+    /// Four `.sheet` modifiers used to hang off the same `List`; iOS honours a
+    /// single presentation per view level, so only the last one could ever
+    /// appear. "Add Server" and "Import JSON" are both fired from the toolbar
+    /// `Menu`, which made the dead ones look like dead buttons.
+    private enum MCPSheet: Identifiable {
+        case add
+        case importJSON
+        case edit(MCPServerConfig)
+        case tools(MCPServerConfig)
+
+        var id: String {
+            switch self {
+            case .add: return "add"
+            case .importJSON: return "importJSON"
+            case .edit(let s): return "edit_\(s.id)"
+            case .tools(let s): return "tools_\(s.id)"
+            }
+        }
+    }
+
+    @State private var activeSheet: MCPSheet?
     /// One-shot consumption of initialEditServerId.
     @State private var consumedInitialEdit = false
 
@@ -32,7 +50,7 @@ struct MCPIntegrationsView: View {
             } else {
                 ForEach(store.servers) { server in
                     Button {
-                        editingServer = server
+                        activeSheet = .edit(server)
                     } label: {
                         row(for: server)
                     }
@@ -41,14 +59,14 @@ struct MCPIntegrationsView: View {
                     // sheet, which force-reconnects + re-pulls tools/list.
                     .contextMenu {
                         Button {
-                            toolsServer = server
+                            activeSheet = .tools(server)
                         } label: {
                             Label(AppLocalized("Refresh Tools"), systemImage: "arrow.clockwise")
                         }
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
-                            toolsServer = server
+                            activeSheet = .tools(server)
                         } label: {
                             Label(AppLocalized("Tools"), systemImage: "arrow.clockwise")
                         }
@@ -77,7 +95,7 @@ struct MCPIntegrationsView: View {
                 consumedInitialEdit = true
                 if let server = store.servers.first(where: { $0.id == id }) {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        editingServer = server
+                        activeSheet = .edit(server)
                     }
                 }
             }
@@ -86,12 +104,12 @@ struct MCPIntegrationsView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        showAddForm = true
+                        DispatchQueue.main.async { activeSheet = .add }
                     } label: {
                         Label(AppLocalized("Add Server"), systemImage: "plus")
                     }
                     Button {
-                        showJSONImport = true
+                        DispatchQueue.main.async { activeSheet = .importJSON }
                     } label: {
                         Label(AppLocalized("Import JSON"), systemImage: "doc.text")
                     }
@@ -100,17 +118,17 @@ struct MCPIntegrationsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddForm) {
-            MCPFormSheet(server: nil)
-        }
-        .sheet(item: $editingServer) { server in
-            MCPFormSheet(server: server)
-        }
-        .sheet(isPresented: $showJSONImport) {
-            MCPJSONImportSheet()
-        }
-        .sheet(item: $toolsServer) { server in
-            MCPToolsSheet(serverName: server.id)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .add:
+                MCPFormSheet(server: nil)
+            case .importJSON:
+                MCPJSONImportSheet()
+            case .edit(let server):
+                MCPFormSheet(server: server)
+            case .tools(let server):
+                MCPToolsSheet(serverName: server.id)
+            }
         }
         .settingsPage()
     }

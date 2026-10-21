@@ -39,32 +39,50 @@ struct RootfsResetButton: View {
             }
         }
         .disabled(isProcessing)
-        .alert("Reset Rootfs?", isPresented: $showResetAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Reset", role: .destructive) {
-                performReset(keepBackup: false)
+        // [K-3] Two `.alert` modifiers on one view means iOS only honours one
+        // of them; whichever was declared last won. "Reset & Backup" could be
+        // dead depending on order. One alert, branch on which flag is set.
+        .alert(showBackupAlert ? "Reset with Backup?" : "Reset Rootfs?",
+               isPresented: Binding(
+                   get: { showResetAlert || showBackupAlert },
+                   set: { presented in
+                       guard !presented else { return }
+                       showResetAlert = false
+                       showBackupAlert = false
+                   }
+               )) {
+            Button("Cancel", role: .cancel) {
+                showResetAlert = false
+                showBackupAlert = false
+            }
+            if showBackupAlert {
+                Button("Reset & Backup", role: .destructive) {
+                    showBackupAlert = false
+                    performReset(keepBackup: true)
+                }
+            } else {
+                Button("Reset", role: .destructive) {
+                    showResetAlert = false
+                    performReset(keepBackup: false)
+                }
             }
         } message: {
-            Text("This will delete the entire rootfs. All data will be lost. The app will need to restart.")
-        }
-        .alert("Reset with Backup?", isPresented: $showBackupAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Reset & Backup", role: .destructive) {
-                performReset(keepBackup: true)
+            if showBackupAlert {
+                Text("This will backup /root directory before resetting. You can restore it later.")
+            } else {
+                Text("This will delete the entire rootfs. All data will be lost. The app will need to restart.")
             }
-        } message: {
-            Text("This will backup /root directory before resetting. You can restore it later.")
         }
     }
 
     private var compactButton: some View {
         Menu {
-            Button(action: { showResetAlert = true }) {
+            Button(action: { DispatchQueue.main.async { showResetAlert = true } }) {
                 Label("Reset All", systemImage: "trash")
             }
 
             if showBackupOption {
-                Button(action: { showBackupAlert = true }) {
+                Button(action: { DispatchQueue.main.async { showBackupAlert = true } }) {
                     Label("Reset & Backup", systemImage: "archivebox")
                 }
             }
@@ -77,12 +95,12 @@ struct RootfsResetButton: View {
 
     private var normalButton: some View {
         Menu {
-            Button(action: { showResetAlert = true }) {
+            Button(action: { DispatchQueue.main.async { showResetAlert = true } }) {
                 Label("Reset All", systemImage: "trash")
             }
 
             if showBackupOption {
-                Button(action: { showBackupAlert = true }) {
+                Button(action: { DispatchQueue.main.async { showBackupAlert = true } }) {
                     Label("Reset & Backup", systemImage: "archivebox")
                 }
             }
@@ -94,7 +112,7 @@ struct RootfsResetButton: View {
 
     private var prominentButton: some View {
         VStack(spacing: 12) {
-            Button(action: { showResetAlert = true }) {
+            Button(action: { DispatchQueue.main.async { showResetAlert = true } }) {
                 Label("Reset Rootfs", systemImage: "arrow.clockwise")
                     .font(.headline)
                     .padding()
@@ -105,7 +123,7 @@ struct RootfsResetButton: View {
             }
 
             if showBackupOption {
-                Button(action: { showBackupAlert = true }) {
+                Button(action: { DispatchQueue.main.async { showBackupAlert = true } }) {
                     Label("Reset & Backup", systemImage: "archivebox")
                         .font(.headline)
                         .padding()

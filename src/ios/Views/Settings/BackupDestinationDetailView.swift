@@ -109,6 +109,26 @@ struct BackupDestinationDetailView: View {
         } message: {
             Text("Backups already on the server are not deleted.")
         }
+        // [K-6] Deleting one package on a server (or a mounted folder that has
+        // to be woken) takes seconds. `isDeleting` was set and never read, so
+        // the screen looked frozen and there was no sign the tap landed.
+        .overlay {
+            if isDeleting {
+                ZStack {
+                    Color.black.opacity(0.15).ignoresSafeArea()
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(AppLocalized("正在删除…"))
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
+                    .background(.regularMaterial, in: Capsule())
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: isDeleting)
         // [T-backup-remote-delete] Deleting the FILE, not the destination.
         // `item:` rather than a bool so the message can name the package —
         // a list of `backup-<date>-<hex>.minisbak` all look alike, and the

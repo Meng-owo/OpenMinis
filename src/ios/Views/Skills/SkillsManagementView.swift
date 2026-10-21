@@ -132,12 +132,12 @@ struct SkillsManagementView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        showImportSheet = true
+                        DispatchQueue.main.async { showImportSheet = true }
                     } label: {
                         Label(AppLocalized("Import Skill"), systemImage: "square.and.arrow.down")
                     }
                     Button {
-                        showSkillsBrowser = true
+                        DispatchQueue.main.async { showSkillsBrowser = true }
                     } label: {
                         Label(AppLocalized("嘟嘟 Skills"), systemImage: "globe")
                     }

@@ -81,7 +81,7 @@ struct GlobalRegexRulesView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Button {
-                        showImporter = true
+                        DispatchQueue.main.async { showImporter = true }
                     } label: {
                         Label("导入 ST 正则包", systemImage: "square.and.arrow.down")
                     }

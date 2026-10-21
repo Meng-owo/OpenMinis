@@ -197,6 +197,12 @@ struct AIChatView: View {
     /// dismissal. Long enough for the keyboard's own animation to finish
     /// driving the bottom inset, short enough to still read as one gesture.
     static let keyboardDismissLead: TimeInterval = 0.24
+    /// [K-2] Delay before a drawer tile may present anything. The drawer's own
+    /// exit animation is 250ms; presenting while it is still in the tree makes
+    /// SwiftUI drop the presentation. Deliberately longer than the animation
+    /// and longer than `keyboardDismissLead` — this is about the drawer, not
+    /// the keyboard.
+    static let drawerExitLead: TimeInterval = 0.3
     /// [T-voice-inputbar-anim-tail] The most recent ON-SCREEN composer height
     /// reported by onGeometryChange. The debounced commit reads THIS instead of
     /// the height captured when its 300ms timer was armed: the panel's
@@ -289,6 +295,10 @@ struct AIChatView: View {
     @State private var showAttachmentMenu = false
     @State private var showPlusPanel = false
     @State private var showStickerPanel = false
+    /// [K-2] The tile the user tapped, while the drawer is still animating out
+    /// and the sheet has not been asked for yet. Non-nil = a tap is in flight,
+    /// so another tap must not arm a second presentation for the same runloop.
+    @State private var pendingPanelAction: PlusPanelItemType?
     @State private var showVoiceSettingsSheet = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
@@ -1953,6 +1963,13 @@ struct AIChatView: View {
     // MARK: - 加号功能面板动作分发
 
     private func handlePlusPanelAction(_ item: PlusPanelItemType) {
+        // [K-2] A second tap while the first one is still in flight used to arm
+        // a SECOND presentation for the same runloop, and SwiftUI keeps only
+        // one of them — often the wrong one, so the drawer closed and nothing
+        // ever appeared. One pending action at a time.
+        guard pendingPanelAction == nil else { return }
+        pendingPanelAction = item
+
         if item != .sticker {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showPlusPanel = false
@@ -1962,15 +1979,19 @@ struct AIChatView: View {
         // [batch7-fix] The drawer is conditionally rendered, so removing it and
         // presenting a sheet in the SAME update transaction made SwiftUI drop
         // the presentation: every tile that opened a sheet went dead while the
-        // sticker branch (which keeps the drawer mounted) kept working. Yield
-        // one runloop turn so the drawer leaves the tree first. The sticker
-        // branch is exempt — it swaps drawers in place and must stay instant.
+        // sticker branch (which keeps the drawer mounted) kept working.
+        //
+        // [K-2] One runloop turn (~16ms) was not enough: the drawer's own
+        // exit animation is 250ms, so the presentation request still landed
+        // while the drawer was in the tree. Wait for the drawer to leave.
         if item != .sticker {
-            DispatchQueue.main.async {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.drawerExitLead) {
+                pendingPanelAction = nil
                 performPlusPanelAction(item)
             }
             return
         }
+        pendingPanelAction = nil
         performPlusPanelAction(item)
     }
 
@@ -3442,9 +3463,31 @@ struct AIChatView: View {
     }
 
     /// Speech language badge shown only while recording.
+    ///
+    /// [K-5] This button existed but nothing ever mounted it, and
+    /// `showLanguagePicker` had no sheet attached — so the language was
+    /// effectively unchangeable. A `Menu` rather than a sheet on purpose:
+    /// AIChatView already carries 39 presentation modifiers, and a menu needs
+    /// none, so this adds no presentation pressure to an 8400-line body.
     private var languageBadgeButton: some View {
-        Button {
-            speechManager.showLanguagePicker = true
+        Menu {
+            ForEach(speechManager.availableLocales, id: \.identifier) { loc in
+                Button {
+                    speechManager.setLanguage(loc)
+                    // The recogniser cannot be restarted while the menu is
+                    // still dismissing; wait for it to leave the screen.
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        speechManager.restartRecordingIfPending()
+                    }
+                } label: {
+                    if loc.identifier == speechManager.locale.identifier {
+                        Label(speechManager.displayName(for: loc), systemImage: "checkmark")
+                    } else {
+                        Text(speechManager.displayName(for: loc))
+                    }
+                }
+            }
         } label: {
             Text(speechManager.languageLabel)
                 .font(ChatFont.font(12, weight: .semibold))
@@ -3454,6 +3497,7 @@ struct AIChatView: View {
                 .clipShape(Circle())
                 .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
         }
+        .accessibilityLabel(AppLocalized("识别语言"))
     }
 
     /// Mic button plus the attached language-picker sheet.
@@ -3547,9 +3591,15 @@ struct AIChatView: View {
             // min(measured, cap).
             let transcriptMaxHeight: CGFloat = 100
             let waveform = VStack(spacing: 6) {
-                AudioWaveformView(levels: speechManager.audioLevels)
-                    .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 8)
+                // [K-5] Mount the language badge here — this is the only state
+                // in which it means anything (a recording is in progress), and
+                // it is the one place the recogniser's language can matter.
+                HStack(spacing: 8) {
+                    languageBadgeButton
+                    AudioWaveformView(levels: speechManager.audioLevels)
+                        .frame(maxWidth: .infinity)
+                }
+                .padding(.horizontal, 8)
                 if !speechManager.recognizedText.isEmpty {
                     ScrollViewReader { proxy in
                         ScrollView(.vertical, showsIndicators: true) {
@@ -6509,7 +6559,10 @@ struct ChatStickerPanel: View {
                         }
 
                         Button {
-                            showPhotosPicker = true
+                            // [K-1] Menu dismissal and the presentation used to
+                            // land in the same update transaction, and SwiftUI
+                            // dropped the presentation — first tap did nothing.
+                            DispatchQueue.main.async { showPhotosPicker = true }
                         } label: {
                             Label("批量导入相册表情", systemImage: "square.and.arrow.down.on.square.fill")
                         }
@@ -6589,7 +6642,9 @@ struct ChatStickerPanel: View {
 
                     // 添加表情包按钮 (多选或单选选图)
                     Button {
-                        showPhotosPicker = true
+                        // [K-1] The panel is conditionally rendered; the picker
+                        // needs one runloop turn to get a live host.
+                        DispatchQueue.main.async { showPhotosPicker = true }
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 20))
@@ -6608,7 +6663,7 @@ struct ChatStickerPanel: View {
                     // 第一个格子：微信式「+ 添加/批量」卡片 (非管理模式时显示)
                     if !isManageMode {
                         Button {
-                            showPhotosPicker = true
+                            DispatchQueue.main.async { showPhotosPicker = true }
                         } label: {
                             VStack(spacing: 4) {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -6636,7 +6691,10 @@ struct ChatStickerPanel: View {
                                 Label("手动登记表情包", systemImage: "pencil.and.list.clipboard")
                             }
                             Button {
-                                showFileImporter = true
+                                // [K-1] Same menu-transaction swallow as the
+                                // "功能" menu: a contextMenu button that sets a
+                                // presentation flag needs one runloop turn.
+                                DispatchQueue.main.async { showFileImporter = true }
                             } label: {
                                 Label("从文件导入动图/表情", systemImage: "folder.fill")
                             }
@@ -6751,6 +6809,17 @@ struct ChatStickerPanel: View {
         .contentShape(Rectangle())
         .onTapGesture {
             // 阻断内部点击穿透到底层收起手势
+        }
+        // [K-1b] The panel is conditionally rendered (`bottomDrawerSection`),
+        // and the composer closes it when the keyboard takes focus. If that
+        // happens while a picker is up, the picker's host is torn out of the
+        // tree and SwiftUI never writes the flag back to false — after which
+        // the picker refuses to open again for the rest of the session. Clear
+        // both flags whenever this panel leaves the screen.
+        .onDisappear {
+            showPhotosPicker = false
+            showFileImporter = false
+            selectedPhotoItems = []
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images)
         .fileImporter(

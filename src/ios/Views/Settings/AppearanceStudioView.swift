@@ -51,19 +51,33 @@ struct AppearanceStudioView: View {
     @AppStorage("chat.autoExpandThinking") private var autoExpandThinking: Bool = true
 
     // 图片
-    @State private var wallpaperItem: PhotosPickerItem?
+    /// [K-4] Every image picker in this page goes through ONE
+    /// `.photosPicker` modifier attached to the page root, dispatched by this
+    /// enum.
+    ///
+    /// Why: the seven `PhotosPicker` *components* used to sit inside the
+    /// sub-page content, which lives inside a `ScrollView` that the navigation
+    /// stack recycles. A presentation host inside scrolling content is not
+    /// stable on iOS 17+ — the picker opened in the middle of the screen or
+    /// not at all, which is the "上传文件出 bug" the user reported. Seven
+    /// separate modifiers at one level would hit the same
+    /// one-presentation-per-level limit that killed K-3, so it is one
+    /// modifier plus a switch.
+    private enum AppearancePicker: String, Identifiable {
+        case wallpaper, userAvatar, assistantAvatar, thinkingCard, inputBar, icon, categoryImage, characterArt
+        var id: String { rawValue }
+    }
+
+    /// [K-4] What the next picked image is for. Kept SEPARATE from the
+    /// presentation flag: SwiftUI writes the `isPresented` binding back to
+    /// false when the picker closes, which can land before `onChange` reads
+    /// the item — sharing one variable loses the destination.
+    @State private var pickerTarget: AppearancePicker?
+    @State private var isPickerPresented = false
+    @State private var pickedPhoto: PhotosPickerItem?
     @State private var wallpaperScope: AppearanceScope = .global
-    @State private var userAvatarItem: PhotosPickerItem?
-    @State private var assistantAvatarItem: PhotosPickerItem?
-    // [10-19 醒醒] 视觉小说模式的角色立绘
-    @State private var characterArtItem: PhotosPickerItem?
-    @State private var showCharacterArtPicker = false
     @State private var iconPickSlot: QuietIconSlot?
-    @State private var iconItem: PhotosPickerItem?
-    @State private var thinkingCardItem: PhotosPickerItem?
-    @State private var inputBarItem: PhotosPickerItem?
     @State private var categoryImageKey: String?
-    @State private var categoryImageItem: PhotosPickerItem?
 
     // 高级
     @State private var showAdvanced = false
@@ -128,72 +142,131 @@ struct AppearanceStudioView: View {
         .appearancePage(.settings)
         .navigationTitle(AppLocalized("外观"))
         .navigationBarTitleDisplayMode(.large)
-        .alert(AppLocalized("出错了"), isPresented: $showError) {
-            Button(AppLocalized("知道了"), role: .cancel) {}
+        // [K-4] THREE `.alert` modifiers used to sit here (error / reset
+        // confirm / import result). iOS honours one presentation per view
+        // level, so two of them were dead — "导入完成" never appeared and the
+        // reset confirmation could silently lose. One alert, branch on state.
+        .alert(alertTitle, isPresented: isAlertPresented) {
+            if showResetConfirm {
+                Button(AppLocalized("取消"), role: .cancel) { showResetConfirm = false }
+                Button(AppLocalized("恢复"), role: .destructive) {
+                    studio.resetThemePack()
+                    showResetConfirm = false
+                }
+            } else {
+                Button(AppLocalized("知道了"), role: .cancel) {
+                    showError = false
+                    showSTWarnings = false
+                }
+            }
         } message: {
-            Text(errorText ?? "")
-        }
-        .alert(AppLocalized("恢复默认装扮？"), isPresented: $showResetConfirm) {
-            Button(AppLocalized("取消"), role: .cancel) {}
-            Button(AppLocalized("恢复"), role: .destructive) { studio.resetThemePack() }
-        } message: {
-            Text(AppLocalized("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。"))
+            Text(alertMessage)
         }
         .fullScreenCover(isPresented: $showFullPreview) { fullPreviewSheet }
-        .alert(AppLocalized("导入完成"), isPresented: $showSTWarnings) {
-            Button(AppLocalized("知道了"), role: .cancel) {}
-        } message: {
-            Text(stWarnings.joined(separator: "\n"))
-        }
         .onChange(of: appearanceMode) { _ in applyAppearanceMode() }
-        .onChange(of: wallpaperItem) { item in
-            guard let item else { return }
-            Task {
-                let dark = colorScheme == .dark
-                await importImage(item, downsampleTo: 2200) {
-                    studio.setWallpaper($0, for: wallpaperScope, dark: dark)
-                }
-            }
-        }
-        .onChange(of: userAvatarItem) { item in
-            guard let item else { return }
-            Task { await importImage(item, downsampleTo: 512) { studio.setUserAvatar($0) } }
-        }
-        .onChange(of: assistantAvatarItem) { item in
-            guard let item else { return }
-            Task {
-                await importImage(item, downsampleTo: 512) { image in
-                    do { try studio.setAssistantAvatar(image) }
-                    catch { fail(error.localizedDescription) }
-                }
-            }
-        }
-        .onChange(of: iconItem) { item in
-            guard let item, let slot = iconPickSlot else { return }
-            Task {
-                await importImage(item, downsampleTo: 512) { studio.setIcon($0, for: slot.id) }
-                iconItem = nil
-                iconPickSlot = nil
-            }
-        }
-        .onChange(of: thinkingCardItem) { item in
-            guard let item else { return }
-            Task { await importImage(item, downsampleTo: 1400) { studio.setThinkingCardImage($0) } }
-        }
-        .onChange(of: inputBarItem) { item in
-            guard let item else { return }
-            Task { await importImage(item, downsampleTo: 1400) { studio.setInputBarImage($0) } }
-        }
-        .onChange(of: categoryImageItem) { item in
-            guard let item, let key = categoryImageKey else { return }
-            Task {
-                await importImage(item, downsampleTo: 256) { studio.setCategoryImage($0, for: key) }
-                categoryImageItem = nil
-                categoryImageKey = nil
-            }
+        // [K-4] The ONE image picker for this page.
+        //
+        // Eight `PhotosPicker` components used to live inside the sub-page
+        // content, which sits inside a `ScrollView` the navigation stack
+        // recycles — an unstable presentation host, so the picker opened in
+        // the middle of the screen or not at all ("装扮页上传出 bug"). Here it
+        // hangs off the page root, which stays mounted whichever sub-page is
+        // open, and the trigger only records WHAT is being picked.
+        //
+        // The `.fileImporter` for ST theme packs stays on the sub-page
+        // (`pageContent`) instead of joining this one: it was moved there on
+        // 10-19 because cross-layer presentation is unreliable, and that part
+        // was right — it only needed to get out of the ScrollView's content.
+        .photosPicker(isPresented: $isPickerPresented,
+                      selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) { item in
+            guard let item, let picker = pickerTarget else { return }
+            Task { await applyPickedPhoto(item, for: picker) }
         }
     }
 
+    /// [K-4] One flag for the shared alert.
+    private var isAlertPresented: Binding<Bool> {
+        Binding(
+            get: { showError || showResetConfirm || showSTWarnings },
+            set: { presented in
+                guard !presented else { return }
+                showError = false
+                showResetConfirm = false
+                showSTWarnings = false
+            }
+        )
+    }
+
+    private var alertTitle: String {
+        if showResetConfirm { return AppLocalized("恢复默认装扮？") }
+        if showSTWarnings { return AppLocalized("导入完成") }
+        return AppLocalized("出错了")
+    }
+
+    private var alertMessage: String {
+        if showResetConfirm {
+            return AppLocalized("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。")
+        }
+        if showSTWarnings {
+            return stWarnings.joined(separator: "\n")
+        }
+        return errorText ?? ""
+    }
+
+    /// [K-4] Load one picked image and route it to whichever row asked for it.
+    @MainActor
+    private func applyPickedPhoto(_ item: PhotosPickerItem, for picker: AppearancePicker) async {
+        let maxEdge: CGFloat
+        switch picker {
+        case .wallpaper: maxEdge = 2200
+        case .userAvatar, .assistantAvatar, .icon: maxEdge = 512
+        case .thinkingCard, .inputBar: maxEdge = 1400
+        case .categoryImage: maxEdge = 256
+        case .characterArt: maxEdge = 1600
+        }
+        // Read the row identity BEFORE clearing it: `iconPickSlot` /
+        // `categoryImageKey` say which row was tapped.
+        let slot = iconPickSlot
+        let categoryKey = categoryImageKey
+        defer {
+            pickedPhoto = nil
+            pickerTarget = nil
+            iconPickSlot = nil
+            categoryImageKey = nil
+        }
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = ThumbnailCache.downsampledImage(from: data, maxEdge: maxEdge) else {
+            fail(AppLocalized("选中的图读不出来。"))
+            return
+        }
+        switch picker {
+        case .wallpaper:
+            let dark = colorScheme == .dark
+            studio.setWallpaper(image, for: wallpaperScope, dark: dark)
+        case .userAvatar:
+            studio.setUserAvatar(image)
+        case .assistantAvatar:
+            do { try studio.setAssistantAvatar(image) }
+            catch { fail(error.localizedDescription) }
+        case .icon:
+            guard let slot else { return }
+            studio.setIcon(image, for: slot.id)
+        case .thinkingCard:
+            studio.setThinkingCardImage(image)
+        case .inputBar:
+            studio.setInputBarImage(image)
+        case .categoryImage:
+            guard let categoryKey else { return }
+            studio.setCategoryImage(image, for: categoryKey)
+        case .characterArt:
+            guard let jpeg = image.jpegData(compressionQuality: 0.82) else {
+                fail(AppLocalized("选中的图读不出来。"))
+                return
+            }
+            studio.setCharacterArt(jpeg.base64EncodedString())
+        }
+    }
     private func fail(_ message: String) {
         errorText = message
         showError = true
@@ -254,6 +327,25 @@ struct AppearanceStudioView: View {
             .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
+        // [K-4] The ST theme-pack importer used to hang off `libraryPage`,
+        // which lives INSIDE this ScrollView's content. A presentation
+        // modifier attached to a view that the scroll container recycles has
+        // no stable hosting controller, and on iOS 17+ the importer simply
+        // never appears ("点了没反应"). One level out — on the ScrollView
+        // itself, still inside the NavigationLink destination — is a stable
+        // host. The 10-19 note moved it from the root List into this page
+        // because cross-layer presentation was unreliable; this keeps it in
+        // the page, just outside the scrolling content.
+        .fileImporter(isPresented: $showSTImporter,
+                      allowedContentTypes: [.json, .plainText, .data, .item],
+                      allowsMultipleSelection: false) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first { importSillyTavern(url) }
+            case .failure(let error):
+                fail(error.localizedDescription)
+            }
+        }
         .background(MinisTheme.color(.canvas, scope: .settings))
     }
 
@@ -869,12 +961,17 @@ struct AppearanceStudioView: View {
                         .stroke(studio.color(.border, scope: wallpaperScope).opacity(0.4), lineWidth: 0.5)
                 )
 
-                PhotosPicker(selection: $wallpaperItem, matching: .images) {
+                // [K-4] Component → Button + one shared picker modifier.
+                Button {
+                    pickerTarget = .wallpaper
+                    isPickerPresented = true
+                } label: {
                     Label(studio.hasOwnWallpaper(wallpaperScope)
                           ? AppLocalized("换这张") : AppLocalized("选一张"),
                           systemImage: "photo")
                         .font(.system(size: 13))
                 }
+                .buttonStyle(.plain)
 
                 if studio.hasOwnWallpaper(wallpaperScope) {
                     Button(AppLocalized("改用继承的背景")) { studio.removeWallpaper(wallpaperScope) }
@@ -924,20 +1021,28 @@ struct AppearanceStudioView: View {
             }
             .padding(.vertical, 8)
 
-            PhotosPicker(selection: $userAvatarItem, matching: .images) {
+            Button {
+                pickerTarget = .userAvatar
+                isPickerPresented = true
+            } label: {
                 Label(AppLocalized("选我的头像"), systemImage: "person.crop.square").font(.system(size: 13))
             }
+            .buttonStyle(.plain)
             if !studio.userAvatar.isEmpty {
                 Button(AppLocalized("去掉我的头像")) { studio.removeUserAvatar() }
                     .font(.system(size: 12))
                     .foregroundStyle(studio.color(.destructive, variant: variant))
             }
 
-            PhotosPicker(selection: $assistantAvatarItem, matching: .images) {
+            Button {
+                pickerTarget = .assistantAvatar
+                isPickerPresented = true
+            } label: {
                 Label(String(format: AppLocalized("选%@的头像"), aiName),
                       systemImage: "sparkles.rectangle.stack")
                     .font(.system(size: 13))
             }
+            .buttonStyle(.plain)
             if !SoulStore.cachedMetadata.icon.isEmpty {
                 Button(String(format: AppLocalized("去掉%@的头像"), aiName)) {
                     do { try studio.removeAssistantAvatar() }
@@ -968,15 +1073,21 @@ struct AppearanceStudioView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
                         Spacer()
-                        PhotosPicker(selection: Binding(
-                            get: { iconPickSlot == slot ? iconItem : nil },
-                            set: { iconPickSlot = slot; iconItem = $0 }
-                        ), matching: .images) {
+                        Button {
+                            // [K-4] Which row was tapped has to be remembered
+                            // BEFORE the picker opens: the binding the old
+                            // component used wrote it on selection, which is
+                            // the reason a cancelled picker left a stale slot.
+                            iconPickSlot = slot
+                            pickerTarget = .icon
+                            isPickerPresented = true
+                        } label: {
                             Text(studio.customIcon(for: slot.id) == nil
                                  ? AppLocalized("上传") : AppLocalized("更换"))
                                 .font(.system(size: 12))
                                 .foregroundStyle(studio.color(.accent, variant: variant))
                         }
+                        .buttonStyle(.plain)
                         if studio.customIcon(for: slot.id) != nil {
                             Button(AppLocalized("还原")) { studio.removeIcon(for: slot.id) }
                                 .font(.system(size: 11))
@@ -999,12 +1110,14 @@ struct AppearanceStudioView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("贴图"))
 
-                // [10-19 醒醒] 她说"贴图菜单浮在中间挡住内容"。
-                // `PhotosPicker` 直接当按钮用时，系统会把它弹在屏幕中间，
-                // 盖住下面的东西。改成普通 Button + `.photosPicker` 修饰器，
-                // 弹出位置跟触发点绑定，行为跟系统设置页一致。
-                // 同时把两行排成 iOS 列表行样式（图标 + 文字 + 箭头位）。
-                PhotosPicker(selection: $thinkingCardItem, matching: .images) {
+                // [K-4] Was a `PhotosPicker` component inside this scrolling
+                // content. Component-style pickers present from the middle of
+                // the screen and need a stable host, which scrolling content
+                // does not give them. Button + the page-level modifier.
+                Button {
+                    pickerTarget = .thinkingCard
+                    isPickerPresented = true
+                } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 13))
@@ -1042,7 +1155,10 @@ struct AppearanceStudioView: View {
 
                 hairline
 
-                PhotosPicker(selection: $inputBarItem, matching: .images) {
+                Button {
+                    pickerTarget = .inputBar
+                    isPickerPresented = true
+                } label: {
                     HStack(spacing: 10) {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 13))
@@ -1106,15 +1222,17 @@ struct AppearanceStudioView: View {
                     .font(.system(size: 12.5))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Spacer()
-                PhotosPicker(selection: Binding(
-                    get: { categoryImageKey == key ? categoryImageItem : nil },
-                    set: { categoryImageKey = key; categoryImageItem = $0 }
-                ), matching: .images) {
+                Button {
+                    categoryImageKey = key
+                    pickerTarget = .categoryImage
+                    isPickerPresented = true
+                } label: {
                     Text(studio.categoryImage(for: key) == nil
                          ? AppLocalized("贴图") : AppLocalized("换图"))
                         .font(.system(size: 11))
                         .foregroundStyle(studio.color(.accent, variant: variant))
                 }
+                .buttonStyle(.plain)
                 if studio.categoryImage(for: key) != nil {
                     Button(AppLocalized("还原")) { studio.removeCategoryImage(for: key) }
                         .font(.system(size: 10))
@@ -1237,19 +1355,6 @@ struct AppearanceStudioView: View {
                 }
             }
             .modifier(StudioCard(variant: variant))
-        }
-        // [10-19 醒醒] fileImporter 原来挂在最外层 List 上，而按钮在
-        // NavigationLink 的子页里 —— iOS 上跨层 fileImporter 经常弹不出来，
-        // 或者弹出后文件是灰的（她报的"选不了"）。挪到触发它的这一层。
-        .fileImporter(isPresented: $showSTImporter,
-                      allowedContentTypes: [.json, .plainText, .data, .item],
-                      allowsMultipleSelection: false) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first { importSillyTavern(url) }
-            case .failure(let error):
-                fail(error.localizedDescription)
-            }
         }
     }
 
@@ -1643,7 +1748,8 @@ struct AppearanceStudioView: View {
                     Spacer()
 
                     Button {
-                        showCharacterArtPicker = true
+                        pickerTarget = .characterArt
+                        isPickerPresented = true
                     } label: {
                         Text(studio.currentThemePack().characterArtBase64 == nil ? "选择" : "更换")
                             .font(.system(size: 13, weight: .medium))
@@ -1663,22 +1769,6 @@ struct AppearanceStudioView: View {
             }
         }
         .modifier(StudioCard(variant: variant))
-        .photosPicker(isPresented: $showCharacterArtPicker,
-                      selection: $characterArtItem,
-                      matching: .images)
-        .onChange(of: characterArtItem) { item in
-            guard let item else { return }
-            Task {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let img = UIImage(data: data),
-                   let jpeg = img.jpegData(compressionQuality: 0.82) {
-                    await MainActor.run {
-                        studio.setCharacterArt(jpeg.base64EncodedString())
-                        characterArtItem = nil
-                    }
-                }
-            }
-        }
     }
     private var rowBackgroundBinding: Binding<Color> {
         Binding(
@@ -1759,26 +1849,6 @@ struct AppearanceStudioView: View {
         } catch {
             fail(error.localizedDescription)
         }
-    }
-
-    @MainActor
-    private func importImage(_ item: PhotosPickerItem,
-                             downsampleTo maxEdge: CGFloat,
-                             apply: @escaping @MainActor (UIImage) -> Void) async {
-        defer {
-            wallpaperItem = nil
-            userAvatarItem = nil
-            assistantAvatarItem = nil
-            thinkingCardItem = nil
-            inputBarItem = nil
-            categoryImageItem = nil
-        }
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = ThumbnailCache.downsampledImage(from: data, maxEdge: maxEdge) else {
-            fail(AppLocalized("选中的图读不出来。"))
-            return
-        }
-        apply(image)
     }
 }
 
