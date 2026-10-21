@@ -374,8 +374,6 @@ struct AIChatView: View {
     @State private var topSafeAreaInset: CGFloat = 59
     @Environment(\.horizontalSizeClass) private var hSizeClass
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
 
     // MARK: - [T-ipad-composer-resize] Draggable composer height (iPad only)
 
@@ -3355,7 +3353,6 @@ struct AIChatView: View {
     /// 加号展开按钮（收纳所有功能为宫格抽屉，实体可爱图标 + CSS全局变量驱动）
     @ViewBuilder
     private var attachmentMenuButton: some View {
-        let isDark = colorScheme == .dark
         let isPanelOpen = (showPlusPanel || showStickerPanel)
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -3399,19 +3396,19 @@ struct AIChatView: View {
         } label: {
             Image(systemName: "plus")
                 .font(ChatFont.font(18, weight: .semibold))
-                .foregroundStyle(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                .foregroundStyle(isPanelOpen ? CSSThemeVariables.accent() : CSSThemeVariables.textMain())
                 .rotationEffect(.degrees(isPanelOpen ? 45 : 0))
                 // [T-composer-polish] 36 → 34，和麦克风、发送键同一尺寸，
                 // 三个圆排一排不再一大两小。
                 .frame(width: 34, height: 34)
-                .background(isPanelOpen ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.optionBg(isDark: isDark))
+                .background(isPanelOpen ? CSSThemeVariables.accentSoft() : CSSThemeVariables.optionBg())
                 .clipShape(Circle())
                 .overlay(
                     Circle()
-                        .strokeBorder(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark).opacity(0.35) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                        .strokeBorder(isPanelOpen ? CSSThemeVariables.accent().opacity(0.35) : CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                 )
                 .shadow(
-                    color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06),
+                    color: CSSThemeVariables.sheetShadow().opacity(0.06),
                     radius: 4, x: 0, y: 1
                 )
         }
@@ -3475,7 +3472,6 @@ struct AIChatView: View {
 
     /// [Edit Header] 编辑模式提示栏（贴在输入框右上方，AnyView-erased 不增加泛型深度，不挤占单行输入条宽度）
     private var editingModeHeader: AnyView {
-        let isDark = colorScheme == .dark
         let view = HStack {
             HStack(spacing: 4) {
                 Image(systemName: "pencil.line")
@@ -3483,7 +3479,7 @@ struct AIChatView: View {
                 Text("正在编辑已有消息")
                     .font(ChatFont.font(11, weight: .medium))
             }
-            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+            .foregroundStyle(CSSThemeVariables.accent())
             Spacer()
             editExitButton
         }
@@ -3499,7 +3495,6 @@ struct AIChatView: View {
         guard let sticker = vm.pendingSticker, let img = StickerStore.shared.image(for: sticker) else {
             return AnyView(EmptyView())
         }
-        let isDark = colorScheme == .dark
         let view = HStack(spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 StickerAnimatedImageView(image: img)
@@ -3507,7 +3502,7 @@ struct AIChatView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1)
+                            .stroke(CSSThemeVariables.accent().opacity(0.35), lineWidth: 1)
                     )
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -3522,11 +3517,11 @@ struct AIChatView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(sticker.shortDesc.isEmpty ? sticker.title : sticker.shortDesc)
                     .font(ChatFont.font(12, weight: .medium))
-                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textDim())
                     .lineLimit(1)
                 Text("将随消息一同发送")
                     .font(ChatFont.font(10))
-                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
+                    .foregroundStyle(CSSThemeVariables.textDim().opacity(0.7))
             }
             Spacer()
         }
@@ -3559,7 +3554,6 @@ struct AIChatView: View {
 
     /// "Exit Edit Mode" capsule shown while editing a past message.
     private var editExitButton: some View {
-        let isDark = colorScheme == .dark
         return Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             vm.cancelEdit()
@@ -3570,13 +3564,13 @@ struct AIChatView: View {
                 Text("退出编辑")
                     .font(ChatFont.font(11, weight: .medium))
             }
-            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+            .foregroundStyle(CSSThemeVariables.textDim())
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
-            .background(CSSThemeVariables.optionBg(isDark: isDark))
+            .background(CSSThemeVariables.optionBg())
             .clipShape(Capsule())
             .overlay(
-                Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
             )
         }
     }
@@ -6294,14 +6288,12 @@ public struct PlusPanelTileButton: View {
     @ObservedObject var fontSettings = FontSettings.shared
     @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let item: PlusPanelItemType
-    let isDark: Bool
     /// 开关型磁贴（快速模式 / 增强缓存）的当前状态；其余磁贴恒为 nil。
     var isOn: Bool? = nil
     let onTap: () -> Void
 
-    public init(item: PlusPanelItemType, isDark: Bool, isOn: Bool? = nil, onTap: @escaping () -> Void) {
+    public init(item: PlusPanelItemType, isOn: Bool? = nil, onTap: @escaping () -> Void) {
         self.item = item
-        self.isDark = isDark
         self.isOn = isOn
         self.onTap = onTap
     }
@@ -6315,29 +6307,29 @@ public struct PlusPanelTileButton: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .fill(isOn == true
-                              ? CSSThemeVariables.accentSoft(isDark: isDark)
-                              : CSSThemeVariables.optionBg(isDark: isDark))
+                              ? CSSThemeVariables.accentSoft()
+                              : CSSThemeVariables.optionBg())
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .strokeBorder(isOn == true
-                                              ? CSSThemeVariables.accent(isDark: isDark).opacity(0.45)
-                                              : CSSThemeVariables.optionBorder(isDark: isDark),
+                                              ? CSSThemeVariables.accent().opacity(0.45)
+                                              : CSSThemeVariables.optionBorder(),
                                               lineWidth: 1.0)
                         )
                         .shadow(
-                            color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06),
+                            color: CSSThemeVariables.sheetShadow().opacity(0.06),
                             radius: 6, x: 0, y: 2
                         )
                         .frame(width: 58, height: 58)
 
                     Image(systemName: item.systemImageName)
                         .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.accent())
                 }
 
                 Text(item.title)
                     .font(ChatFont.font(12, weight: .regular))
-                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain())
                     .lineLimit(1)
                     // [P-06] 最大字号下标题会撑出磁贴宽度，允许压到 80%。
                     .minimumScaleFactor(0.8)
@@ -6365,7 +6357,6 @@ public struct ChatPlusPanel: View {
     /// 开关型磁贴的当前状态，由调用方注入。
     var fastModeOn: Bool = false
     var enhancedCacheOn: Bool = false
-    @Environment(\.colorScheme) private var colorScheme
     @State private var currentPage: Int = 0
 
     private func onState(for item: PlusPanelItemType) -> Bool? {
@@ -6376,7 +6367,6 @@ public struct ChatPlusPanel: View {
         }
     }
 
-    private var isDark: Bool { colorScheme == .dark }
 
     // 三页分页：8 + 8 + 5
     private let page1Items: [PlusPanelItemType] = [
@@ -6422,7 +6412,7 @@ public struct ChatPlusPanel: View {
         VStack(spacing: 0) {
             // 顶部分割线
             Rectangle()
-                .fill(CSSThemeVariables.divider(isDark: isDark))
+                .fill(CSSThemeVariables.divider())
                 .frame(height: 1)
 
             // 三页横向翻页 TabView
@@ -6430,7 +6420,7 @@ public struct ChatPlusPanel: View {
                 // Page 1
                 LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page1Items) { item in
-                        PlusPanelTileButton(item: item, isDark: isDark) {
+                        PlusPanelTileButton(item: item) {
                             onItemTap(item)
                         }
                     }
@@ -6443,7 +6433,7 @@ public struct ChatPlusPanel: View {
                 // Page 2
                 LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page2Items) { item in
-                        PlusPanelTileButton(item: item, isDark: isDark) {
+                        PlusPanelTileButton(item: item) {
                             onItemTap(item)
                         }
                     }
@@ -6456,7 +6446,7 @@ public struct ChatPlusPanel: View {
                 // Page 3
                 LazyVGrid(columns: columns, spacing: 22) {
                     ForEach(page3Items) { item in
-                        PlusPanelTileButton(item: item, isDark: isDark, isOn: onState(for: item)) {
+                        PlusPanelTileButton(item: item, isOn: onState(for: item)) {
                             onItemTap(item)
                         }
                     }
@@ -6478,7 +6468,7 @@ public struct ChatPlusPanel: View {
             HStack(spacing: 8) {
                 ForEach(0..<3, id: \.self) { idx in
                     Capsule()
-                        .fill(currentPage == idx ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.divider(isDark: isDark))
+                        .fill(currentPage == idx ? CSSThemeVariables.accent() : CSSThemeVariables.divider())
                         .frame(width: currentPage == idx ? 20 : 7, height: 7)
                         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: currentPage)
                 }
@@ -6487,7 +6477,7 @@ public struct ChatPlusPanel: View {
             .padding(.bottom, 12)
         }
         .frame(height: panelHeight)
-        .background(CSSThemeVariables.card(isDark: isDark))
+        .background(CSSThemeVariables.card())
     }
 }
 
@@ -6517,7 +6507,6 @@ struct ChatStickerPanel: View {
     @ObservedObject var vm: AIChatViewModel
     var onBackToPlus: () -> Void
     @ObservedObject private var store = StickerStore.shared
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var selectedCategory: String = "全部"
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
@@ -6527,7 +6516,6 @@ struct ChatStickerPanel: View {
     @State private var isManageMode: Bool = false
     @State private var selectedStickerIds: Set<String> = []
 
-    private var isDark: Bool { colorScheme == .dark }
 
     /// [P-20] 与加号面板同高，两个抽屉切换时不跳。
     private var panelHeight: CGFloat { 232 }
@@ -6570,7 +6558,7 @@ struct ChatStickerPanel: View {
         VStack(spacing: 0) {
             // 顶部分割线
             Rectangle()
-                .fill(CSSThemeVariables.divider(isDark: isDark))
+                .fill(CSSThemeVariables.divider())
                 .frame(height: 1)
 
             // 顶部分类与功能操作栏
@@ -6591,15 +6579,15 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(CSSThemeVariables.accent(isDark: isDark))
-                        .foregroundStyle(CSSThemeVariables.accentFg(isDark: isDark))
+                        .background(CSSThemeVariables.accent())
+                        .foregroundStyle(CSSThemeVariables.accentFg())
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
 
                     Text("已选 \(selectedStickerIds.count) 项")
                         .font(ChatFont.font(12, weight: .medium))
-                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textMain())
 
                     Spacer()
 
@@ -6617,10 +6605,10 @@ struct ChatStickerPanel: View {
                             .font(ChatFont.font(12, weight: .medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
-                            .background(CSSThemeVariables.optionBg(isDark: isDark))
-                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            .background(CSSThemeVariables.optionBg())
+                            .foregroundStyle(CSSThemeVariables.textMain())
                             .overlay(
-                                Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                             )
                             .clipShape(Capsule())
                     }
@@ -6647,10 +6635,10 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(CSSThemeVariables.optionBg(isDark: isDark))
-                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                        .background(CSSThemeVariables.optionBg())
+                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim() : CSSThemeVariables.textMain())
                         .overlay(
-                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                         )
                         .clipShape(Capsule())
                     }
@@ -6672,10 +6660,10 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
-                        .background(selectedStickerIds.isEmpty ? Color.clear : CSSThemeVariables.dangerSoft(isDark: isDark))
-                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : CSSThemeVariables.danger(isDark: isDark))
+                        .background(selectedStickerIds.isEmpty ? Color.clear : CSSThemeVariables.dangerSoft())
+                        .foregroundStyle(selectedStickerIds.isEmpty ? CSSThemeVariables.textDim() : CSSThemeVariables.danger())
                         .overlay(
-                            Capsule().strokeBorder(selectedStickerIds.isEmpty ? CSSThemeVariables.optionBorder(isDark: isDark) : CSSThemeVariables.danger(isDark: isDark).opacity(0.35), lineWidth: 1.0)
+                            Capsule().strokeBorder(selectedStickerIds.isEmpty ? CSSThemeVariables.optionBorder() : CSSThemeVariables.danger().opacity(0.35), lineWidth: 1.0)
                         )
                         .clipShape(Capsule())
                     }
@@ -6701,10 +6689,10 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
-                        .background(CSSThemeVariables.optionBg(isDark: isDark))
-                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                        .background(CSSThemeVariables.optionBg())
+                        .foregroundStyle(CSSThemeVariables.textMain())
                         .overlay(
-                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                         )
                         .clipShape(Capsule())
                     }
@@ -6755,10 +6743,10 @@ struct ChatStickerPanel: View {
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                        .background(CSSThemeVariables.accentSoft())
+                        .foregroundStyle(CSSThemeVariables.accent())
                         .overlay(
-                            Capsule().strokeBorder(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1.0)
+                            Capsule().strokeBorder(CSSThemeVariables.accent().opacity(0.35), lineWidth: 1.0)
                         )
                         .clipShape(Capsule())
                     }
@@ -6777,19 +6765,19 @@ struct ChatStickerPanel: View {
                                         .padding(.vertical, 5)
                                         .background(
                                             selectedCategory == cat
-                                                ? CSSThemeVariables.accent(isDark: isDark)
-                                                : CSSThemeVariables.optionBg(isDark: isDark)
+                                                ? CSSThemeVariables.accent()
+                                                : CSSThemeVariables.optionBg()
                                         )
                                         .foregroundStyle(
                                             selectedCategory == cat
-                                                ? CSSThemeVariables.accentFg(isDark: isDark)
-                                                : CSSThemeVariables.textMain(isDark: isDark)
+                                                ? CSSThemeVariables.accentFg()
+                                                : CSSThemeVariables.textMain()
                                         )
                                         .overlay(
                                             Capsule().strokeBorder(
                                                 selectedCategory == cat
                                                     ? Color.clear
-                                                    : CSSThemeVariables.optionBorder(isDark: isDark),
+                                                    : CSSThemeVariables.optionBorder(),
                                                 lineWidth: 1.0
                                             )
                                         )
@@ -6806,7 +6794,7 @@ struct ChatStickerPanel: View {
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.accent())
                     }
                     .buttonStyle(.plain)
                 }
@@ -6828,16 +6816,16 @@ struct ChatStickerPanel: View {
                                     .strokeBorder(
                                         style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
                                     )
-                                    .foregroundStyle(CSSThemeVariables.accent(isDark: isDark).opacity(0.45))
+                                    .foregroundStyle(CSSThemeVariables.accent().opacity(0.45))
                                     .frame(height: 72)
                                     .overlay(
                                         Image(systemName: "plus")
                                             .font(.system(size: 22, weight: .semibold))
-                                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                            .foregroundStyle(CSSThemeVariables.accent())
                                     )
                                 Text("添加/批量")
                                     .font(ChatFont.font(11, weight: .regular))
-                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                    .foregroundStyle(CSSThemeVariables.textDim())
                             }
                             .contentShape(Rectangle())
                         }
@@ -6886,14 +6874,14 @@ struct ChatStickerPanel: View {
                                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                                     .stroke(
                                                         isManageMode && selectedStickerIds.contains(sticker.id)
-                                                            ? CSSThemeVariables.accent(isDark: isDark)
-                                                            : CSSThemeVariables.optionBorder(isDark: isDark),
+                                                            ? CSSThemeVariables.accent()
+                                                            : CSSThemeVariables.optionBorder(),
                                                         lineWidth: isManageMode && selectedStickerIds.contains(sticker.id) ? 2.0 : 0.5
                                                     )
                                             )
                                     } else {
                                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(CSSThemeVariables.optionBg(isDark: isDark))
+                                            .fill(CSSThemeVariables.optionBg())
                                             .frame(height: 72)
                                     }
 
@@ -6901,15 +6889,15 @@ struct ChatStickerPanel: View {
                                     if isManageMode {
                                         ZStack {
                                             Circle()
-                                                .fill(selectedStickerIds.contains(sticker.id) ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.scrim(isDark: isDark))
+                                                .fill(selectedStickerIds.contains(sticker.id) ? CSSThemeVariables.accent() : CSSThemeVariables.scrim())
                                                 .frame(width: 22, height: 22)
                                             if selectedStickerIds.contains(sticker.id) {
                                                 Image(systemName: "checkmark")
                                                     .font(ChatFont.font(11, weight: .bold))
-                                                    .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
+                                                    .foregroundColor(CSSThemeVariables.accentFg())
                                             } else {
                                                 Circle()
-                                                    .strokeBorder(CSSThemeVariables.accentFg(isDark: isDark), lineWidth: 1.5)
+                                                    .strokeBorder(CSSThemeVariables.accentFg(), lineWidth: 1.5)
                                                     .frame(width: 18, height: 18)
                                             }
                                         }
@@ -6920,7 +6908,7 @@ struct ChatStickerPanel: View {
                                 Text(sticker.title)
                                     .font(ChatFont.font(11, weight: .regular))
                                     .lineLimit(1)
-                                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                    .foregroundStyle(CSSThemeVariables.textMain())
                             }
                         }
                         .buttonStyle(.plain)
@@ -6960,7 +6948,7 @@ struct ChatStickerPanel: View {
             .frame(height: gridHeight)
         }
         .frame(height: panelHeight)
-        .background(CSSThemeVariables.card(isDark: isDark))
+        .background(CSSThemeVariables.card())
         .contentShape(Rectangle())
         .onTapGesture {
             // 阻断内部点击穿透到底层收起手势

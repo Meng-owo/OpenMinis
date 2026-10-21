@@ -9,7 +9,8 @@
 import SwiftUI
 
 struct ScheduledTaskDetailSheet: View {
-    @Environment(\.colorScheme) private var colorScheme
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var registry = AgentJobRegistry.shared
 
@@ -19,14 +20,13 @@ struct ScheduledTaskDetailSheet: View {
     @State private var confirmDelete = false
 
     @ObservedObject private var fontSettings = FontSettings.shared
-    private var isDark: Bool { colorScheme == .dark }
     private var job: AgentJob? { registry.job(id: jobId) }
 
     var body: some View {
         VStack(spacing: 0) {
             // Drag grabber
             Capsule()
-                .fill(CSSThemeVariables.divider(isDark: isDark))
+                .fill(CSSThemeVariables.divider())
                 .frame(width: 36, height: 5)
                 .padding(.top, 10)
                 .padding(.bottom, 14)
@@ -36,15 +36,15 @@ struct ScheduledTaskDetailSheet: View {
                 HStack(alignment: .center, spacing: 12) {
                     Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
                         .font(.system(size: fontSettings.scaledApp(22), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.accent())
                         .frame(width: 44, height: 44)
-                        .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                        .background(CSSThemeVariables.accentSoft())
                         .clipShape(Circle())
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(job.title)
                             .font(.system(size: fontSettings.scaledApp(17), weight: .bold))
-                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textMain())
                             .lineLimit(1)
 
                         HStack(spacing: 6) {
@@ -52,8 +52,8 @@ struct ScheduledTaskDetailSheet: View {
                                 .font(.system(size: fontSettings.scaledApp(11), weight: .medium))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                .background(CSSThemeVariables.accentSoft())
+                                .foregroundStyle(CSSThemeVariables.accent())
                                 .clipShape(Capsule())
 
                             statusBadge(for: job)
@@ -67,9 +67,9 @@ struct ScheduledTaskDetailSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
                             .frame(width: 30, height: 30)
-                            .background(CSSThemeVariables.optionBg(isDark: isDark))
+                            .background(CSSThemeVariables.optionBg())
                             .clipShape(Circle())
                     }
                 }
@@ -77,7 +77,7 @@ struct ScheduledTaskDetailSheet: View {
                 .padding(.bottom, 16)
 
                 Divider()
-                    .overlay(CSSThemeVariables.divider(isDark: isDark))
+                    .overlay(CSSThemeVariables.divider())
 
                 // Scrollable Content
                 ScrollView {
@@ -91,7 +91,7 @@ struct ScheduledTaskDetailSheet: View {
                                 HStack(spacing: 6) {
                                     if isRunningNow {
                                         ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: CSSThemeVariables.accentFg(isDark: isDark)))
+                                            .progressViewStyle(CircularProgressViewStyle(tint: CSSThemeVariables.accentFg()))
                                             .scaleEffect(0.8)
                                     } else {
                                         Image(systemName: job.isPulse ? "hand.tap.fill" : "play.fill")
@@ -102,8 +102,8 @@ struct ScheduledTaskDetailSheet: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(CSSThemeVariables.accent(isDark: isDark))
-                                .foregroundStyle(CSSThemeVariables.accentFg(isDark: isDark))
+                                .background(CSSThemeVariables.accent())
+                                .foregroundStyle(CSSThemeVariables.accentFg())
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
                             .disabled(isRunningNow)
@@ -129,11 +129,11 @@ struct ScheduledTaskDetailSheet: View {
                                 }
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 12)
-                                .background(CSSThemeVariables.optionBg(isDark: isDark))
-                                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                .background(CSSThemeVariables.optionBg())
+                                .foregroundStyle(CSSThemeVariables.textMain())
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                                        .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
                                 )
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
@@ -148,11 +148,11 @@ struct ScheduledTaskDetailSheet: View {
                                     .font(.system(size: fontSettings.scaledApp(14)))
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 12)
-                                    .background(CSSThemeVariables.optionBg(isDark: isDark))
-                                    .foregroundStyle(CSSThemeVariables.danger(isDark: isDark))
+                                    .background(CSSThemeVariables.optionBg())
+                                    .foregroundStyle(CSSThemeVariables.danger())
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                                            .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
                                     )
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             }
@@ -175,17 +175,17 @@ struct ScheduledTaskDetailSheet: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "terminal.fill")
                                             .font(.system(size: fontSettings.scaledApp(12)))
-                                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                            .foregroundStyle(CSSThemeVariables.accent())
                                         Text("预填命令")
                                             .font(.system(size: fontSettings.scaledApp(12), weight: .semibold))
-                                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                            .foregroundStyle(CSSThemeVariables.textDim())
                                     }
                                     Text(cmd)
                                         .font(.system(size: fontSettings.scaledApp(12), design: .monospaced))
-                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                        .foregroundStyle(CSSThemeVariables.textMain())
                                         .padding(8)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                                        .background(CSSThemeVariables.optionBg())
                                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 }
                             }
@@ -194,26 +194,26 @@ struct ScheduledTaskDetailSheet: View {
                                     HStack(spacing: 6) {
                                         Image(systemName: "text.bubble")
                                             .font(.system(size: fontSettings.scaledApp(12)))
-                                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                            .foregroundStyle(CSSThemeVariables.accent())
                                         Text("提示词内容")
                                             .font(.system(size: fontSettings.scaledApp(12), weight: .semibold))
-                                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                            .foregroundStyle(CSSThemeVariables.textDim())
                                     }
                                     Text(p)
                                         .font(.system(size: fontSettings.scaledApp(13)))
-                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                        .foregroundStyle(CSSThemeVariables.textMain())
                                         .padding(10)
                                         .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(CSSThemeVariables.optionBg(isDark: isDark))
+                                        .background(CSSThemeVariables.optionBg())
                                         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 }
                             }
                         }
                         .padding(16)
-                        .background(CSSThemeVariables.card(isDark: isDark))
+                        .background(CSSThemeVariables.card())
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                                .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
@@ -221,12 +221,12 @@ struct ScheduledTaskDetailSheet: View {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("运行记录 (最新 \(runsList.count) 条)")
                                 .font(.system(size: fontSettings.scaledApp(14), weight: .semibold))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textDim())
 
                             if runsList.isEmpty {
                                 Text("暂无触发记录")
                                     .font(.system(size: fontSettings.scaledApp(13)))
-                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
+                                    .foregroundStyle(CSSThemeVariables.textDim().opacity(0.7))
                                     .padding(.vertical, 12)
                                     .frame(maxWidth: .infinity, alignment: .center)
                             } else {
@@ -234,17 +234,17 @@ struct ScheduledTaskDetailSheet: View {
                                     HStack(spacing: 10) {
                                         Image(systemName: run.ok ? "checkmark.circle.fill" : "xmark.circle.fill")
                                             .font(.system(size: fontSettings.scaledApp(14)))
-                                            .foregroundStyle(run.ok ? CSSThemeVariables.success(isDark: isDark)
-                                                : CSSThemeVariables.danger(isDark: isDark))
+                                            .foregroundStyle(run.ok ? CSSThemeVariables.success()
+                                                : CSSThemeVariables.danger())
 
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(ScheduledTimeText.past(run.firedAt) + " · " + ScheduledTimeText.clockText(run.firedAt))
                                                 .font(.system(size: fontSettings.scaledApp(12), weight: .medium))
-                                                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                                .foregroundStyle(CSSThemeVariables.textMain())
                                             if let prev = run.preview {
                                                 Text(prev)
                                                     .font(.system(size: fontSettings.scaledApp(11)))
-                                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                                    .foregroundStyle(CSSThemeVariables.textDim())
                                                     .lineLimit(1)
                                             }
                                         }
@@ -256,22 +256,22 @@ struct ScheduledTaskDetailSheet: View {
                                                 .font(.system(size: fontSettings.scaledApp(10), design: .monospaced))
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2)
-                                                .background(CSSThemeVariables.optionBg(isDark: isDark))
-                                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                                .background(CSSThemeVariables.optionBg())
+                                                .foregroundStyle(CSSThemeVariables.textDim())
                                                 .clipShape(RoundedRectangle(cornerRadius: 4))
                                         }
                                     }
                                     .padding(10)
-                                    .background(CSSThemeVariables.optionBg(isDark: isDark))
+                                    .background(CSSThemeVariables.optionBg())
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 }
                             }
                         }
                         .padding(16)
-                        .background(CSSThemeVariables.card(isDark: isDark))
+                        .background(CSSThemeVariables.card())
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                                .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     }
@@ -282,16 +282,16 @@ struct ScheduledTaskDetailSheet: View {
                 VStack(spacing: 12) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: fontSettings.scaledApp(32)))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim())
                     Text("未找到该任务或任务已结束")
                         .font(.system(size: fontSettings.scaledApp(14)))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim())
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
             }
         }
-        .background(CSSThemeVariables.bg(isDark: isDark))
+        .background(CSSThemeVariables.bg())
         .alert("删除这个任务？", isPresented: $confirmDelete) {
             Button("取消", role: .cancel) { }
             Button("删除", role: .destructive) { deleteJob() }
@@ -326,19 +326,19 @@ struct ScheduledTaskDetailSheet: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: fontSettings.scaledApp(12)))
-                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.accent())
                 .frame(width: 16, alignment: .leading)
                 .padding(.top, 2)
 
             Text(label)
                 .font(.system(size: fontSettings.scaledApp(13), weight: .medium))
-                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.textDim())
 
             Spacer()
 
             Text(value)
                 .font(.system(size: fontSettings.scaledApp(13)))
-                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                .foregroundStyle(CSSThemeVariables.textMain())
                 .multilineTextAlignment(.trailing)
         }
     }

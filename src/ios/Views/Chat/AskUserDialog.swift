@@ -9,6 +9,19 @@ import SwiftUI
 // 4. 全局 CSS 变量系统驱动色彩与样式，零硬编码色。
 
 // MARK: - CSS 全局色彩变量定义
+//
+// [T-dynamic-color] 这套变量的每个成员都是**动态色**：同一份 `Color` 同时
+// 携带浅色和深色的值，由 UIKit 在解析时按当前 trait collection 选。
+//
+// 所以这里不再收 `isDark: Bool`。以前每个函数都要调用方传
+// `colorScheme == .dark`，而 `AppearanceStudio` 内部又用 `appearanceMode`
+// 自己判一次 —— 两个判定源。用户在设置里强制浅色、系统是深色时，两者给出
+// 相反答案，同一屏的卡片和文字就分成两套配色。现在只有 trait collection
+// 一个源，`preferredColorScheme` 改的也正是它，不可能再打架。
+//
+// 顺带：切系统外观不用重建视图，UIKit 自己重解析；也不再需要
+// `@ObservedObject var appearanceStudio` 才能刷新颜色（改色仍然需要它，
+// 因为那是换值不是换明暗）。
 
 @MainActor
 /// Colours as CSS-style variables.
@@ -21,86 +34,124 @@ enum CSSThemeVariables {
 
     /// --color-card / var(--dudu-card)
     /// [4-1 醒醒] 背景卡接入全局 surface 角色，支持壁纸透明度
-    static func card(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
+    static func card(scope: AppearanceScope = .chat) -> Color {
+        let surface = studio.color(.surface, scope: scope)
         if studio.hasWallpaper(scope) {
-            return studio.color(.surface, scope: scope, variant: isDark ? .dark : .light).opacity(studio.surfaceOpacity)
+            return surface.opacity(studio.surfaceOpacity)
         }
-        return studio.color(.surface, scope: scope, variant: isDark ? .dark : .light)
+        return surface
     }
 
     /// --color-bg / var(--dudu-cream)
     /// [4-1 醒醒] 背景底衬接入全局 canvas 角色
-    static func bg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.canvas, scope: scope, variant: isDark ? .dark : .light)
+    static func bg(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.canvas, scope: scope)
     }
 
     /// --color-text-main / var(--dudu-brown)
     /// [4-1 醒醒] 主文字接入全局 primaryText 角色
-    static func textMain(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.primaryText, scope: scope, variant: isDark ? .dark : .light)
+    static func textMain(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.primaryText, scope: scope)
     }
 
     /// --color-text-dim / var(--dudu-text-dim)
     /// [4-1 醒醒] 次文字接入全局 secondaryText 角色
-    static func textDim(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.secondaryText, scope: scope, variant: isDark ? .dark : .light)
+    static func textDim(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.secondaryText, scope: scope)
     }
 
     /// --color-divider / var(--dudu-divider)
     /// [4-1 醒醒] 分隔线接入全局 border 角色
-    static func divider(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.border, scope: scope, variant: isDark ? .dark : .light)
+    static func divider(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.border, scope: scope)
     }
 
     /// --color-accent-soft / var(--dudu-pink-soft)
     /// [4-1 醒醒] 柔和强调色由 accent 角色动态派生
-    static func accentSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.accent, scope: scope, variant: isDark ? .dark : .light).opacity(0.18)
+    static func accentSoft(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.accent, scope: scope).opacity(0.18)
     }
 
     /// --color-accent / var(--dudu-pink)
     /// [4-1 醒醒] 强调色接入全局 accent 角色
-    static func accent(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.accent, scope: scope, variant: isDark ? .dark : .light)
+    static func accent(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.accent, scope: scope)
     }
 
-    /// --color-accent-fg
-    /// [4-1 醒醒] 强调色前景字（按钮等）
-    static func accentFg(isDark: Bool) -> Color {
-        Color.white
+    /// --color-accent-fg / 强调色上的前景字（按钮标题、图标）
+    ///
+    /// [T-dynamic-color] 原来硬写 `Color.white`。强调色是用户自己挑的，
+    /// 挑成浅黄、浅粉、米白时白字直接看不见。现在按 WCAG 对比度在黑白之间
+    /// 选更好的那个，逐明暗各算一遍。
+    static func accentFg(scope: AppearanceScope = .chat) -> Color {
+        Color(uiColor: accentFgUIColor(scope: scope))
+    }
+
+    /// `accentFg` 的 UIKit 形式。动态色闭包里算对比度，所以不用调用方告诉
+    /// 它现在是深还是浅。
+    static func accentFgUIColor(scope: AppearanceScope = .chat) -> UIColor {
+        UIColor { trait in
+            let variant: AppearanceVariant = trait.userInterfaceStyle == .dark ? .dark : .light
+            let accentHex = AppearanceStudio.snapshotHex(.accent, scope: scope, variant: variant)
+            return UIColor(hex: Self.bestForegroundHex(on: accentHex))
+        }
+    }
+
+    /// 在白和黑之间挑对比度更高的那个。同分时选白（浅色强调色上白字更常见）。
+    ///
+    /// 抽出来是因为它有两个调用方（SwiftUI 的 Color 和 UIKit 的 UIColor），
+    /// 而对比度算法只该有一份。`nonisolated`：它要能在 `UIColor` 的动态色闭包
+    /// 里被调用，那个闭包不在主线程隔离域内。
+    nonisolated static func bestForegroundHex(on backgroundHex: String) -> String {
+        let white = "FFFFFF"
+        let black = "000000"
+        let onWhite = AppearanceContrast.ratio(white, on: backgroundHex)
+        let onBlack = AppearanceContrast.ratio(black, on: backgroundHex)
+        return onWhite >= onBlack ? white : black
     }
 
     /// --color-option-bg (输入框/未选中胶囊底色)
     /// [10-15 1-3 醒醒] 输入框与选项底色接入全局 input 角色（同族统一，不再硬编码 hex）
-    static func optionBg(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.field, scope: scope, variant: isDark ? .dark : .light)
+    static func optionBg(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.field, scope: scope)
     }
 
     /// --color-option-border (输入框/未选中胶囊边框)
     /// [10-15 1-3 醒醒] 输入框与选项边线接入全局 border 角色
-    static func optionBorder(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.border, scope: scope, variant: isDark ? .dark : .light)
+    static func optionBorder(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.border, scope: scope)
     }
 
-    /// --color-scrim / rgba(42, 42, 46, 0.28)
-    static func scrim(isDark: Bool) -> Color {
-        isDark ? Color.black.opacity(0.65) : Color(hex: "#2A2A2E").opacity(0.28)
+    /// --color-scrim / 遮罩层
+    ///
+    /// 不是主题角色（遮罩永远是暗的，不跟用户配色），但明暗两套值不同，
+    /// 所以同样做成动态色。
+    static func scrim() -> Color {
+        Color(uiColor: UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor.black.withAlphaComponent(0.65)
+                : UIColor(hex: "2A2A2E").withAlphaComponent(0.28)
+        })
     }
 
-    /// --color-sheet-shadow / rgba(139, 115, 108, 0.16)
-    static func sheetShadow(isDark: Bool) -> Color {
-        isDark ? Color.black.opacity(0.45) : Color(hex: "#8B736C").opacity(0.16)
+    /// --color-sheet-shadow / 弹窗投影
+    static func sheetShadow() -> Color {
+        Color(uiColor: UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor.black.withAlphaComponent(0.45)
+                : UIColor(hex: "8B736C").withAlphaComponent(0.16)
+        })
     }
 
     /// --color-danger
     /// [4-1 醒醒] 危险操作接入全局 destructive 角色
-    static func danger(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.destructive, scope: scope, variant: isDark ? .dark : .light)
+    static func danger(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.destructive, scope: scope)
     }
 
     /// --color-danger-soft
-    static func dangerSoft(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.destructive, scope: scope, variant: isDark ? .dark : .light).opacity(0.18)
+    static func dangerSoft(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.destructive, scope: scope).opacity(0.18)
     }
 
     /// --color-success
@@ -108,15 +159,14 @@ enum CSSThemeVariables {
     /// [AUD-18] Delegates to the theme role instead of another pair of hex
     /// literals: `AppearanceStudio.color(_:)` already resolves per
     /// appearance, so this variable follows the user's theme and its dark
-    /// variant for free. `isDark` stays in the signature because every other
-    /// variable here takes it and the call sites pass it uniformly.
-    static func success(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.success, scope: scope, variant: isDark ? .dark : .light)
+    /// variant for free.
+    static func success(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.success, scope: scope)
     }
 
     /// --color-warning
-    static func warning(isDark: Bool, scope: AppearanceScope = .chat) -> Color {
-        studio.color(.warning, scope: scope, variant: isDark ? .dark : .light)
+    static func warning(scope: AppearanceScope = .chat) -> Color {
+        studio.color(.warning, scope: scope)
     }
 }
 
@@ -174,12 +224,10 @@ struct AskUserDialogModifier: ViewModifier {
 // MARK: - 提问小抽屉 Overlay
 
 private struct AskUserDrawerOverlay: View {
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let request: SuspendedRequest
     @ObservedObject var vm: AIChatViewModel
-
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == darkColorScheme }
-    private let darkColorScheme = ColorScheme.dark
 
     @State private var states: [QuestionAnswerState] = []
     @State private var activeQuestionIndex: Int = 0
@@ -224,7 +272,7 @@ private struct AskUserDrawerOverlay: View {
 
             ZStack(alignment: .bottom) {
                 // 背景半透明遮罩 (Scrim)
-                CSSThemeVariables.scrim(isDark: isDark)
+                CSSThemeVariables.scrim()
                     .ignoresSafeArea()
                     .onTapGesture {
                         dismiss()
@@ -234,7 +282,7 @@ private struct AskUserDrawerOverlay: View {
                 VStack(spacing: 0) {
                     // 顶部抓手条 (Grabber)
                     Capsule()
-                        .fill(CSSThemeVariables.divider(isDark: isDark))
+                        .fill(CSSThemeVariables.divider())
                         .frame(width: 40, height: 5)
                         .padding(.top, 8)
                         .padding(.bottom, 2)
@@ -245,18 +293,18 @@ private struct AskUserDrawerOverlay: View {
                             Text(displayTitle)
                                 .font(.system(size: 15, weight: .semibold))
                                 .tracking(1)
-                                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                                .foregroundColor(CSSThemeVariables.textMain())
                                 .multilineTextAlignment(.center)
                                 .lineLimit(3)
 
                             if questions.count > 1 {
                                 Text("问题 \(activeQuestionIndex + 1) / \(questions.count)")
                                     .font(.system(size: 11))
-                                    .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                                    .foregroundColor(CSSThemeVariables.textDim())
                             } else if isRestored {
                                 Text("之前未答完的问题，答完后继续")
                                     .font(.system(size: 11))
-                                    .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                                    .foregroundColor(CSSThemeVariables.textDim())
                             }
                         }
                         .frame(maxWidth: .infinity)
@@ -268,9 +316,9 @@ private struct AskUserDrawerOverlay: View {
                         Button(action: dismiss) {
                             Image(systemName: "xmark")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                                .foregroundColor(CSSThemeVariables.textMain())
                                 .frame(width: 40, height: 40)
-                                .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                                .background(CSSThemeVariables.accentSoft())
                                 .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -311,7 +359,7 @@ private struct AskUserDrawerOverlay: View {
                                     }
                                 }
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                                .foregroundColor(CSSThemeVariables.textDim())
                                 .padding(.leading, 18)
                             }
 
@@ -322,7 +370,7 @@ private struct AskUserDrawerOverlay: View {
                                     }
                                 }
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                                .foregroundColor(CSSThemeVariables.accent())
                                 .padding(.leading, activeQuestionIndex == 0 ? 18 : 0)
                             }
                         }
@@ -334,9 +382,9 @@ private struct AskUserDrawerOverlay: View {
                             Text("发送")
                                 .font(.system(size: 15, weight: .semibold))
                                 .tracking(2)
-                                .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
+                                .foregroundColor(CSSThemeVariables.accentFg())
                                 .frame(minWidth: 120, minHeight: 46)
-                                .background(CSSThemeVariables.accent(isDark: isDark))
+                                .background(CSSThemeVariables.accent())
                                 .clipShape(Capsule())
                         }
                         .disabled(!canSubmit || !isSessionReady)
@@ -348,10 +396,10 @@ private struct AskUserDrawerOverlay: View {
                 }
                 .padding(.bottom, max(bottomInset, 16))
                 .background(
-                    CSSThemeVariables.card(isDark: isDark)
+                    CSSThemeVariables.card()
                         .clipShape(AskRoundedCorner(radius: 24, corners: [.topLeft, .topRight]))
                 )
-                .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark), radius: 24, x: 0, y: -8)
+                .shadow(color: CSSThemeVariables.sheetShadow(), radius: 24, x: 0, y: -8)
                 .transition(.move(edge: .bottom))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -381,7 +429,7 @@ private struct AskUserDrawerOverlay: View {
                     HStack(spacing: 12) {
                         Text(option)
                             .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
-                            .foregroundColor(isSelected ? CSSThemeVariables.textMain(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                            .foregroundColor(CSSThemeVariables.textMain())
                             .multilineTextAlignment(.leading)
                             .lineLimit(3)
 
@@ -391,11 +439,11 @@ private struct AskUserDrawerOverlay: View {
                             if isSelected {
                                 Image(systemName: isMulti ? "checkmark.square.fill" : "checkmark.circle.fill")
                                     .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(CSSThemeVariables.accent(isDark: isDark))
+                                    .foregroundColor(CSSThemeVariables.accent())
                                     .transition(.scale.combined(with: .opacity))
                             } else {
                                 Circle()
-                                    .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.5)
+                                    .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.5)
                                     .frame(width: 18, height: 18)
                             }
                         }
@@ -404,11 +452,11 @@ private struct AskUserDrawerOverlay: View {
                     .frame(minHeight: 46)
                     .background(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(isSelected ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.optionBg(isDark: isDark))
+                            .fill(isSelected ? CSSThemeVariables.accentSoft() : CSSThemeVariables.optionBg())
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(isSelected ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: isSelected ? 1.5 : 1.0)
+                            .strokeBorder(isSelected ? CSSThemeVariables.accent() : CSSThemeVariables.optionBorder(), lineWidth: isSelected ? 1.5 : 1.0)
                     )
                     .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
@@ -420,7 +468,7 @@ private struct AskUserDrawerOverlay: View {
             HStack(spacing: 10) {
                 Image(systemName: "pencil.line")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(hasCustomText ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textDim(isDark: isDark))
+                    .foregroundColor(hasCustomText ? CSSThemeVariables.accent() : CSSThemeVariables.textDim())
 
                 TextField("自填回答…", text: Binding(
                     get: {
@@ -439,7 +487,7 @@ private struct AskUserDrawerOverlay: View {
                     }
                 ))
                 .font(.system(size: 14))
-                .foregroundColor(CSSThemeVariables.textMain(isDark: isDark))
+                .foregroundColor(CSSThemeVariables.textMain())
                 .submitLabel(.send)
                 .onSubmit {
                     if canSubmit && isSessionReady {
@@ -453,7 +501,7 @@ private struct AskUserDrawerOverlay: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundColor(CSSThemeVariables.textDim())
                     }
                     .buttonStyle(.plain)
                 }
@@ -462,11 +510,11 @@ private struct AskUserDrawerOverlay: View {
             .frame(minHeight: 46)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(CSSThemeVariables.optionBg(isDark: isDark))
+                    .fill(CSSThemeVariables.optionBg())
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(hasCustomText ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: hasCustomText ? 1.5 : 1.0)
+                    .strokeBorder(hasCustomText ? CSSThemeVariables.accent() : CSSThemeVariables.optionBorder(), lineWidth: hasCustomText ? 1.5 : 1.0)
             )
         }
     }

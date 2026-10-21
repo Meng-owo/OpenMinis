@@ -148,9 +148,10 @@ struct MessageActionBar: View {
 // 100% 对齐 feedback-demo_2.html 原型规范与 CSSThemeVariables 全局色彩驱动。
 
 struct ChatFeedbackSheet: View {
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let onSendFeedback: (String) -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var feedbackText: String = ""
     @State private var sendAsSystem: Bool = false
@@ -161,13 +162,12 @@ struct ChatFeedbackSheet: View {
     @State private var isThumbUp: Bool = false
     @State private var isThumbDown: Bool = false
 
-    private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
         VStack(spacing: 0) {
             // 顶部抓手条
             Capsule()
-                .fill(CSSThemeVariables.divider(isDark: isDark))
+                .fill(CSSThemeVariables.divider())
                 .frame(width: 40, height: 5)
                 .padding(.top, 10)
                 .padding(.bottom, 4)
@@ -176,7 +176,7 @@ struct ChatFeedbackSheet: View {
             ZStack {
                 Text("反馈这条回复")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                    .foregroundStyle(CSSThemeVariables.textMain())
 
                 HStack {
                     Spacer()
@@ -186,9 +186,9 @@ struct ChatFeedbackSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textMain())
                             .frame(width: 32, height: 32)
-                            .background(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .background(CSSThemeVariables.accentSoft())
                             .clipShape(Circle())
                     }
                     .buttonStyle(.plain)
@@ -203,7 +203,7 @@ struct ChatFeedbackSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("快捷")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
 
                         HStack(spacing: 12) {
                             Button {
@@ -228,14 +228,14 @@ struct ChatFeedbackSheet: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(isThumbUp ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
-                                .foregroundStyle(isThumbUp ? CSSThemeVariables.accentFg(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                                .background(isThumbUp ? CSSThemeVariables.accent() : CSSThemeVariables.card())
+                                .foregroundStyle(isThumbUp ? CSSThemeVariables.accentFg() : CSSThemeVariables.textMain())
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(isThumbUp ? Color.clear : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                        .strokeBorder(isThumbUp ? Color.clear : CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                                 )
-                                .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06), radius: 6, x: 0, y: 2)
+                                .shadow(color: CSSThemeVariables.sheetShadow().opacity(0.06), radius: 6, x: 0, y: 2)
                             }
                             .buttonStyle(.plain)
 
@@ -261,14 +261,14 @@ struct ChatFeedbackSheet: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 48)
-                                .background(isThumbDown ? CSSThemeVariables.dangerSoft(isDark: isDark) : CSSThemeVariables.card(isDark: isDark))
-                                .foregroundStyle(isThumbDown ? CSSThemeVariables.danger(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
+                                .background(isThumbDown ? CSSThemeVariables.dangerSoft() : CSSThemeVariables.card())
+                                .foregroundStyle(isThumbDown ? CSSThemeVariables.danger() : CSSThemeVariables.textMain())
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .strokeBorder(isThumbDown ? CSSThemeVariables.danger(isDark: isDark).opacity(0.35) : CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                        .strokeBorder(isThumbDown ? CSSThemeVariables.danger().opacity(0.35) : CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                                 )
-                                .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.06), radius: 6, x: 0, y: 2)
+                                .shadow(color: CSSThemeVariables.sheetShadow().opacity(0.06), radius: 6, x: 0, y: 2)
                             }
                             .buttonStyle(.plain)
                         }
@@ -278,7 +278,7 @@ struct ChatFeedbackSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("快捷标签")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
 
                         FeedbackFlowLayout(hSpacing: 8, vSpacing: 8) {
                             tagButton("太长", systemMsg: "<system_runtime_feedback tag=\"brevity_control\">\n  <directive>Previous response was flagged as verbose. Compress subsequent responses to be concise and punchy.</directive>\n</system_runtime_feedback>")
@@ -293,17 +293,17 @@ struct ChatFeedbackSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("自定义指令")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
 
                         TextField("输入给模型的客户端指令/调整要求…", text: $feedbackText, axis: .vertical)
                             .lineLimit(3...5)
                             .font(.system(size: 14))
                             .padding(12)
-                            .background(CSSThemeVariables.optionBg(isDark: isDark))
+                            .background(CSSThemeVariables.optionBg())
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                    .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                             )
 
                         HStack(alignment: .top, spacing: 5) {
@@ -312,7 +312,7 @@ struct ChatFeedbackSheet: View {
                             Text("隐身生效：反馈作为独立系统指令注入模型上下文，不在你的气泡中发出；AI 下轮静默执行。")
                                 .font(.system(size: 11))
                         }
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim())
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 2)
                     }
@@ -321,7 +321,7 @@ struct ChatFeedbackSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("常用模板")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
 
                         FeedbackFlowLayout(hSpacing: 8, vSpacing: 8) {
                             ForEach(templates, id: \.self) { tpl in
@@ -333,11 +333,11 @@ struct ChatFeedbackSheet: View {
                                         .font(.system(size: 12, weight: .medium))
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 8)
-                                        .background(CSSThemeVariables.card(isDark: isDark))
-                                        .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                        .background(CSSThemeVariables.card())
+                                        .foregroundStyle(CSSThemeVariables.textMain())
                                         .clipShape(Capsule())
                                         .overlay(
-                                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                                            Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                                         )
                                 }
                                 .buttonStyle(.plain)
@@ -364,10 +364,10 @@ struct ChatFeedbackSheet: View {
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(Color.clear)
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textDim())
                                 .overlay(
                                     Capsule().strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.5))
+                                        .foregroundStyle(CSSThemeVariables.textDim().opacity(0.5))
                                 )
                                 .clipShape(Capsule())
                             }
@@ -396,8 +396,8 @@ struct ChatFeedbackSheet: View {
                         .font(.system(size: 14, weight: .semibold))
                         .frame(minWidth: 100)
                         .padding(.vertical, 12)
-                        .background(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? CSSThemeVariables.optionBg(isDark: isDark) : CSSThemeVariables.accent(isDark: isDark))
-                        .foregroundStyle(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? CSSThemeVariables.textDim(isDark: isDark) : CSSThemeVariables.accentFg(isDark: isDark))
+                        .background(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? CSSThemeVariables.optionBg() : CSSThemeVariables.accent())
+                        .foregroundStyle(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? CSSThemeVariables.textDim() : CSSThemeVariables.accentFg())
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -409,7 +409,7 @@ struct ChatFeedbackSheet: View {
         }
         .presentationDetents([.fraction(0.82), .large])
         .presentationDragIndicator(.hidden)
-        .background(CSSThemeVariables.card(isDark: isDark).ignoresSafeArea())
+        .background(CSSThemeVariables.card().ignoresSafeArea())
     }
 
     private func tagButton(_ title: String, systemMsg: String) -> some View {
@@ -423,11 +423,11 @@ struct ChatFeedbackSheet: View {
                 .font(.system(size: 12, weight: .regular))
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
-                .background(CSSThemeVariables.optionBg(isDark: isDark))
-                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                .background(CSSThemeVariables.optionBg())
+                .foregroundStyle(CSSThemeVariables.textMain())
                 .clipShape(Capsule())
                 .overlay(
-                    Capsule().strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1.0)
+                    Capsule().strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                 )
         }
         .buttonStyle(.plain)
@@ -446,11 +446,11 @@ struct ChatFeedbackSheet: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .background(CSSThemeVariables.accentSoft(isDark: isDark))
-            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+            .background(CSSThemeVariables.accentSoft())
+            .foregroundStyle(CSSThemeVariables.accent())
             .clipShape(Capsule())
             .overlay(
-                Capsule().strokeBorder(CSSThemeVariables.accent(isDark: isDark).opacity(0.35), lineWidth: 1.0)
+                Capsule().strokeBorder(CSSThemeVariables.accent().opacity(0.35), lineWidth: 1.0)
             )
         }
         .buttonStyle(.plain)

@@ -147,17 +147,17 @@ enum ScheduledJobStatusText {
         }
     }
 
-    static func style(for job: AgentJob, isDark: Bool) -> (label: String, color: Color) {
+    static func style(for job: AgentJob) -> (label: String, color: Color) {
         let color: Color
         switch job.state {
-        case .failed:    color = CSSThemeVariables.danger(isDark: isDark)
-        case .timeout:   color = CSSThemeVariables.warning(isDark: isDark)
-        case .cancelled: color = CSSThemeVariables.textDim(isDark: isDark)
-        case .done:      color = CSSThemeVariables.accent(isDark: isDark)
-        case .running:   color = job.isEnabled ? CSSThemeVariables.success(isDark: isDark)
-                                               : CSSThemeVariables.warning(isDark: isDark)
-        case .pending:   color = job.isEnabled ? CSSThemeVariables.accent(isDark: isDark)
-                                               : CSSThemeVariables.warning(isDark: isDark)
+        case .failed:    color = CSSThemeVariables.danger()
+        case .timeout:   color = CSSThemeVariables.warning()
+        case .cancelled: color = CSSThemeVariables.textDim()
+        case .done:      color = CSSThemeVariables.accent()
+        case .running:   color = job.isEnabled ? CSSThemeVariables.success()
+                                               : CSSThemeVariables.warning()
+        case .pending:   color = job.isEnabled ? CSSThemeVariables.accent()
+                                               : CSSThemeVariables.warning()
         }
         return (label(for: job), color)
     }
@@ -167,11 +167,12 @@ enum ScheduledJobStatusText {
 struct ScheduledJobStatusBadge: View {
     let job: AgentJob
 
-    @Environment(\.colorScheme) private var colorScheme
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @ObservedObject private var fontSettings = FontSettings.shared
 
     var body: some View {
-        let styled = ScheduledJobStatusText.style(for: job, isDark: colorScheme == .dark)
+        let styled = ScheduledJobStatusText.style(for: job)
         Text(styled.label)
             .font(.system(size: fontSettings.scaledApp(11), weight: .medium))
             .padding(.horizontal, 6)
@@ -193,14 +194,14 @@ struct ScheduledJobStatusBadge: View {
 /// to wire it somewhere (the tasks list draws its own rows) or to delete it, and
 /// removing a surface the user asked for is her call, not a cleanup pass's.
 struct ScheduledTaskCard: View {
-    @Environment(\.colorScheme) private var colorScheme
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var registry = AgentJobRegistry.shared
 
     let jobId: String
     @State private var showingDetail = false
 
     @ObservedObject private var fontSettings = FontSettings.shared
-    private var isDark: Bool { colorScheme == .dark }
     private var job: AgentJob? { registry.job(id: jobId) }
 
     var body: some View {
@@ -214,12 +215,12 @@ struct ScheduledTaskCard: View {
                     // Left Icon
                     ZStack {
                         Circle()
-                            .fill(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .fill(CSSThemeVariables.accentSoft())
                             .frame(width: 38, height: 38)
 
                         Image(systemName: job.isPulse ? "waveform.path.ecg" : "clock.arrow.circlepath")
                             .font(.system(size: fontSettings.scaledApp(17), weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.accent())
                     }
 
                     // Middle Info
@@ -227,27 +228,27 @@ struct ScheduledTaskCard: View {
                         HStack(spacing: 6) {
                             Text(job.title)
                                 .font(.system(size: fontSettings.scaledApp(14), weight: .semibold))
-                                .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textMain())
                                 .lineLimit(1)
 
                             Text(job.isPulse ? "脉搏" : "定时")
                                 .font(.system(size: fontSettings.scaledApp(10), weight: .bold))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 1.5)
-                                .background(CSSThemeVariables.accentSoft(isDark: isDark))
-                                .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                                .background(CSSThemeVariables.accentSoft())
+                                .foregroundStyle(CSSThemeVariables.accent())
                                 .clipShape(Capsule())
                         }
 
                         HStack(spacing: 8) {
                             Text(job.trigger.humanLabel)
                                 .font(.system(size: fontSettings.scaledApp(12)))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textDim())
 
                             if let next = job.nextFireAt {
                                 Text("下次: \(formatNext(next))")
                                     .font(.system(size: fontSettings.scaledApp(11)))
-                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                                    .foregroundStyle(CSSThemeVariables.textDim().opacity(0.8))
                             }
                         }
                     }
@@ -257,24 +258,24 @@ struct ScheduledTaskCard: View {
                     // Right Status & Chevron
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(job.isEnabled ? CSSThemeVariables.success(isDark: isDark)
-                                : CSSThemeVariables.warning(isDark: isDark))
+                            .fill(job.isEnabled ? CSSThemeVariables.success()
+                                : CSSThemeVariables.warning())
                             .frame(width: 7, height: 7)
 
                         Image(systemName: "chevron.right")
                             .font(.system(size: fontSettings.scaledApp(12), weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textDim())
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(CSSThemeVariables.card(isDark: isDark))
+                .background(CSSThemeVariables.card())
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                        .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.04), radius: 4, x: 0, y: 2)
+                .shadow(color: CSSThemeVariables.sheetShadow().opacity(0.04), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(PlainButtonStyle())
             .sheet(isPresented: $showingDetail) {
@@ -294,7 +295,8 @@ struct ScheduledTaskCard: View {
 /// 普通定时任务仍然完全隐身（不打扰），只有「脉搏」——小梦主动想找醒醒——
 /// 才会留下这个痕迹，且体积小、无边框噪音。点一下即可看到完整详情与运行记录。
 struct ScheduledPulseCardView: View {
-    @Environment(\.colorScheme) private var colorScheme
+    /// [T-dynamic-color] 观察主题，改色立刻重绘（明暗由动态色自己跟 trait）。
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var registry = AgentJobRegistry.shared
     let jobId: String
     let title: String
@@ -312,7 +314,6 @@ struct ScheduledPulseCardView: View {
     @State private var showingDetail = false
 
     @ObservedObject private var fontSettings = FontSettings.shared
-    private var isDark: Bool { colorScheme == .dark }
 
     /// [AUD-16] Whose pulse this is — the persona's own name from SOUL,
     /// not a literal. Falls back to the plain noun when nothing is set.
@@ -338,33 +339,33 @@ struct ScheduledPulseCardView: View {
                 HStack(spacing: 10) {
                     ZStack {
                         Circle()
-                            .fill(CSSThemeVariables.accentSoft(isDark: isDark))
+                            .fill(CSSThemeVariables.accentSoft())
                             .frame(width: 30, height: 30)
                         Image(systemName: "waveform.path.ecg")
                             .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.accent())
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(pulseHeadline)
                             .font(.system(size: fontSettings.scaledApp(13), weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
+                            .foregroundStyle(CSSThemeVariables.textMain())
                             .lineLimit(1)
 
                         HStack(spacing: 6) {
                             Text(title)
                                 .font(.system(size: fontSettings.scaledApp(11)))
-                                .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                                .foregroundStyle(CSSThemeVariables.textDim())
                                 .lineLimit(1)
                             if let f = fireIndex {
                                 Text("· 第\(f)次")
                                     .font(.system(size: fontSettings.scaledApp(11)))
-                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                                    .foregroundStyle(CSSThemeVariables.textDim().opacity(0.8))
                             }
                             if let r = remaining, r > 0 {
                                 Text("· 剩\(r)")
                                     .font(.system(size: fontSettings.scaledApp(11)))
-                                    .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                                    .foregroundStyle(CSSThemeVariables.textDim().opacity(0.8))
                             }
                         }
                     }
@@ -373,7 +374,7 @@ struct ScheduledPulseCardView: View {
 
                     Image(systemName: "chevron.right")
                         .font(.system(size: fontSettings.scaledApp(11), weight: .semibold))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.8))
+                        .foregroundStyle(CSSThemeVariables.textDim().opacity(0.8))
                 }
                 .contentShape(Rectangle())
             }
@@ -395,7 +396,7 @@ struct ScheduledPulseCardView: View {
                 } label: {
                     Image(systemName: isLive ? "pause.circle" : "play.circle")
                         .font(.system(size: fontSettings.scaledApp(16), weight: .regular))
-                        .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
+                        .foregroundStyle(CSSThemeVariables.textDim())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(isLive ? AppLocalized("Pause") : AppLocalized("Resume"))
@@ -404,13 +405,13 @@ struct ScheduledPulseCardView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
         .frame(height: Self.cardHeight)
-        .background(CSSThemeVariables.card(isDark: isDark))
+        .background(CSSThemeVariables.card())
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(CSSThemeVariables.optionBorder(isDark: isDark), lineWidth: 1)
+                .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: CSSThemeVariables.sheetShadow(isDark: isDark).opacity(0.05), radius: 4, x: 0, y: 2)
+        .shadow(color: CSSThemeVariables.sheetShadow().opacity(0.05), radius: 4, x: 0, y: 2)
         .padding(.vertical, 3)
         .sheet(isPresented: $showingDetail) {
             ScheduledTaskDetailSheet(jobId: jobId)

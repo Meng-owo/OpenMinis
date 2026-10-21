@@ -335,10 +335,27 @@ final class AppearanceStudio: ObservableObject {
         }
     }
 
+    /// 取一个语义色。
+    ///
+    /// [T-dynamic-color] 不传 `variant` 时返回的是**动态色**：它同时带着
+    /// 浅色和深色两套值，由 UIKit 在解析时按当前 trait collection 选。
+    ///
+    /// 为什么要这样：原来这个函数用 `activeVariant` 自己判明暗（读
+    /// `appearanceMode` + `UITraitCollection.current`），而 `CSSThemeVariables`
+    /// 又让调用方传 `colorScheme == .dark` 进来 —— 两个判定源。用户在设置里
+    /// 强制浅色、系统是深色时，两者给出相反的答案，同一屏的卡片和文字就分成
+    /// 两种配色。
+    ///
+    /// 动态色只有一个判定源：`preferredColorScheme` 改的就是 trait
+    /// collection，所以"跟随系统"和"强制浅/深"走的是同一条路，不可能打架。
+    /// 顺带：切系统外观不用重建视图，UIKit 自己重解析。
+    ///
+    /// 传了 `variant` 的调用方（主题包预览、对比度体检）要的就是一个确定的
+    /// 值，原样返回静态色。
     func color(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
                variant: AppearanceVariant? = nil) -> Color {
-        let resolved = variant ?? activeVariant
-        return Color(hex: hex(role, scope: scope, variant: resolved))
+        if let variant { return Color(hex: hex(role, scope: scope, variant: variant)) }
+        return Color(uiColor: uiColor(role, scope: scope))
     }
 
     /// 一整页所有角色的当前值。对比度体检用。
@@ -351,9 +368,25 @@ final class AppearanceStudio: ObservableObject {
         return out
     }
 
+    /// 语义色的 UIKit 形式，同样是动态色。
+    ///
+    /// `UIColor(dynamicProvider:)` 的闭包在每次 trait 变化时被调用，闭包里读
+    /// `trait.userInterfaceStyle` —— 这是 UIKit 唯一认可的判定源，和
+    /// `preferredColorScheme` 是同一条链。
+    ///
+    /// 不用 `UITraitCollection.current`：它在后台线程是未定义值，动态色的
+    /// 闭包恰好可能被非主线程调用。闭包给的 `trait` 永远是本次解析对应的
+    /// 那一套。
     func uiColor(_ role: AppearanceColorRole, scope: AppearanceScope = .global,
                  variant: AppearanceVariant? = nil) -> UIColor {
-        UIColor(hex: hex(role, scope: scope, variant: variant ?? activeVariant))
+        if let variant {
+            return UIColor(hex: hex(role, scope: scope, variant: variant))
+        }
+        return UIColor { trait in
+            let resolved: AppearanceVariant = trait.userInterfaceStyle == .dark ? .dark : .light
+            // 闭包可能不在主线程跑，走快照而不是 @MainActor 的 self。
+            return UIColor(hex: AppearanceStudio.snapshotHex(role, scope: scope, variant: resolved))
+        }
     }
 
     var activeVariant: AppearanceVariant {
@@ -504,12 +537,21 @@ final class AppearanceStudio: ObservableObject {
             if mode == 2 { return .dark }
             return UITraitCollection.current.userInterfaceStyle == .dark ? .dark : .light
         }()
+        return UIColor(hex: snapshotHex(role, scope: scope, variant: variant))
+    }
+
+    /// 快照解析：给非主线程和 UIKit 动态色闭包用的纯函数。
+    ///
+    /// 和 `hex(_:scope:variant:)` 必须保持同一套回退规则（自己的键 → 老键 →
+    /// 全局 → 内置），否则同一块颜色在主线程和快照路径会不一样。老键回退
+    /// 那条注释就是上一轮踩出来的，别删。
+    nonisolated static func snapshotHex(_ role: AppearanceColorRole,
+                                        scope: AppearanceScope = .global,
+                                        variant: AppearanceVariant) -> String {
         let snap = colorSnapshot
         let scoped = "\(scope.rawValue).\(variant.rawValue).\(role.rawValue)"
         let global = "\(AppearanceScope.global.rawValue).\(variant.rawValue).\(role.rawValue)"
         // 老键回退：field 接 input/searchField，surface 接 toolCard。
-        // 快照是给 UIKit / 非主线程读的，必须和主解析路径保持同一套兼容规则，
-        // 否则同一块颜色在主线程和快照路径会不一样。
         func legacy(_ raw: String) -> String? {
             let s = "\(scope.rawValue).\(variant.rawValue).\(raw)"
             let g = "\(AppearanceScope.global.rawValue).\(variant.rawValue).\(raw)"
@@ -522,10 +564,9 @@ final class AppearanceStudio: ObservableObject {
             default: return nil
             }
         }()
-        let hex = snap[scoped] ?? snap[global] ?? legacyValue
+        return snap[scoped] ?? snap[global] ?? legacyValue
             ?? (variant == .light ? AppearancePaletteBook.light : AppearancePaletteBook.dark)[role]
             ?? "808080"
-        return UIColor(hex: hex)
     }
 
     // MARK: Wallpaper
