@@ -5340,8 +5340,10 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
 
 private struct MoveToSessionSheet: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    // 不能加 private：private 存储属性会把成员逐一初始化器一起压成 private，
+    // 而这个结构体是在同文件的 AIChatView 里构造的。
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let currentSessionId: String?
     let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -5574,8 +5576,10 @@ private extension UIView {
 // guard region on iOS 26.
 private struct SessionLockGateOverlay: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    // 不能加 private：private 存储属性会把成员逐一初始化器一起压成 private，
+    // 而这个结构体是在同文件的 AIChatView 里构造的。
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let sessionId: String?
 
     @ObservedObject private var store = SessionLockStore.shared
@@ -5732,8 +5736,10 @@ private struct SessionLockGateOverlay: View {
 /// Press highlight is provided via GestureState.
 private struct MicButton: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    // 不能加 private：private 存储属性会把成员逐一初始化器一起压成 private，
+    // 而这个结构体是在同文件的 AIChatView 里构造的。
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var speechManager: SpeechRecognitionManager
     @Binding var inputFocused: Bool
     /// Opens the voice-input (VAD) panel. The mic button no longer drives the
@@ -5805,8 +5811,8 @@ private struct MicButton: View {
 
 struct CompactSummarySheet: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let summary: String
     /// Optional revert action. When provided, a "Revert Compact" button is shown
     /// below the summary; tapping it invokes the closure (typically wired to
@@ -6023,8 +6029,10 @@ private struct StatRow: View {
 /// when either side changes.
 private struct EmptyChatDirectoryTimeline: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    // 不能加 private：private 存储属性会把成员逐一初始化器一起压成 private，
+    // 而这个结构体是在同文件的 AIChatView 里构造的。
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     var onBrowse: () -> Void
 
     var body: some View {
@@ -6283,8 +6291,8 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
 
 public struct PlusPanelTileButton: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let item: PlusPanelItemType
     let isDark: Bool
     /// 开关型磁贴（快速模式 / 增强缓存）的当前状态；其余磁贴恒为 nil。
@@ -6487,8 +6495,8 @@ public struct ChatPlusPanel: View {
 
 struct ChatStickerPanel: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     enum ActivePanelSheet: Identifiable {
         case add(initialData: Data?)
         case edit(StickerItem)
@@ -7086,8 +7094,8 @@ struct ChatStickerPanel: View {
 
 struct ChatVoiceSettingsSheet: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var vm: AIChatViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -8121,8 +8129,8 @@ public struct StickerThumbnailView: View {
 
 public struct StickerDeletedPlaceholderView: View {
     // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject var fontSettings = FontSettings.shared
+    @ObservedObject var appearanceStudio = AppearanceStudio.shared
     public init() {}
 
     public var body: some View {

@@ -253,9 +253,6 @@ private struct VideoLoadingChip: View {
 // MARK: - Attachment Chip
 
 private struct AttachmentChip: View {
-    // [P-06] 观察字号/主题字体，设置里一改立刻重绘。
-    @ObservedObject private var fontSettings = FontSettings.shared
-    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let attachment: InputAttachment
     let onRemove: () -> Void
     @State private var showPreview = false

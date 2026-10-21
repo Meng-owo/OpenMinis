@@ -1,6 +1,6 @@
 import Combine
+import Darwin.Mach
 import SwiftUI
-import Darwin
 
 // MARK: - System Resource Monitor
 //
