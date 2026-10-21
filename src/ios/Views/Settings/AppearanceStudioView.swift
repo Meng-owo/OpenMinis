@@ -1280,12 +1280,12 @@ struct AppearanceStudioView: View {
                 Picker("", selection: $launchScreen) {
                     Text(AppLocalized("自动")).tag(0)
                     Text(AppLocalized("上次会话")).tag(1)
-                    Text(AppLocalized("新对话")).tag(2)
+                    Text(AppLocalized("新会话")).tag(2)
                     Text(AppLocalized("首页")).tag(3)
                 }
                 .pickerStyle(.menu)
                 .tint(studio.color(.accent, variant: variant))
-                Text(AppLocalized("打开 App 时显示什么。「自动」会在上次会话超过 15 分钟时开新对话。"))
+                Text(AppLocalized("打开 App 时显示什么。「自动」会在上次会话超过 15 分钟时开新会话。"))
                     .font(.system(size: 10.5))
                     .lineSpacing(1.5)
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
@@ -1632,7 +1632,7 @@ struct AppearanceStudioView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("角色立绘")
+                        Text("人设立绘")
                             .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
                         Text("竖图最好，底部对齐铺满。不传就用头像放大。")

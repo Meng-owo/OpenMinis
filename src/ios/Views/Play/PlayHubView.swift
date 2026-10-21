@@ -287,7 +287,7 @@ struct PlayHubView: View {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) { selection = tab }
                 } label: {
-                    Text(tab.title)
+                    Text(LocalizedStringKey(tab.title))
                         .font(.system(size: 13, weight: selection == tab ? .semibold : .regular))
                         .foregroundStyle(selection == tab ? MinisThemeList.title : MinisThemeList.subtitle)
                         .frame(maxWidth: .infinity)
@@ -506,7 +506,7 @@ struct PlayHubView: View {
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Text(category.label)
+                    Text(LocalizedStringKey(category.label))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(MinisThemeList.title)
                     Text("\(items.count)")

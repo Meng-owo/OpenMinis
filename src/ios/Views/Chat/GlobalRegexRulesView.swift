@@ -55,7 +55,7 @@ struct GlobalRegexRulesView: View {
                     }
                 }
             } footer: {
-                Text("规则按顺序应用于生成的内容，对所有角色生效。可用于清洗思考标签、特定角色前缀或格式修正。")
+                Text("规则按顺序应用于生成的内容，对所有会话生效。可用于清洗思考标签、特定前缀或格式修正。")
             }
         }
         .listStyle(.insetGrouped)
@@ -119,7 +119,7 @@ struct GlobalRegexRulesView: View {
             Text("暂无正则替换规则")
                 .font(.subheadline)
                 .foregroundStyle(MinisTheme.secondaryText)
-            Text("点击右上角「+」可添加清洗思考标签、特定角色前缀或格式修正规则。")
+            Text("点击右上角「+」可添加清洗思考标签、特定前缀或格式修正规则。")
                 .font(.caption)
                 .foregroundStyle(MinisTheme.secondaryText.opacity(0.7))
                 .multilineTextAlignment(.center)

@@ -2089,7 +2089,7 @@ struct AIChatView: View {
 
     private func exportCurrentConversation() {
         guard !vm.messages.isEmpty else {
-            MinisToast.show(AppLocalized("当前还没有对话记录可导出"), systemImage: "info.circle.fill")
+            MinisToast.show(AppLocalized("当前还没有会话记录可导出"), systemImage: "info.circle.fill")
             return
         }
         var text = "# OpenMinis 对话记录导出\n\n"
@@ -2623,7 +2623,7 @@ struct AIChatView: View {
                 .resizable()
                 .frame(width: 6, height: 6)
                 .opacity(level.isEnabled ? 1.0 : 0.4)
-            Text(level.displayName)
+            Text(LocalizedStringKey(level.displayName))
                 .font(ChatFont.font(8, weight: .medium))
         }
         .foregroundStyle(ChatColors.secondaryText)
@@ -4742,7 +4742,7 @@ struct AIChatView: View {
                     let isHighlighted = isExactMatch || isClampedHighlight
 
                     HStack(spacing: 1) {
-                        Text(level.displayName)
+                        Text(LocalizedStringKey(level.displayName))
                             .font(ChatFont.font(11, weight: isHighlighted ? .bold : .regular))
                         if isClampedHighlight {
                             Image(systemName: "arrow.up")
@@ -6235,7 +6235,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .sticker: return "表情包"
         case .voice: return "语音设置"
         case .sparkles: return "模型切换"
-        case .newChat: return "新建对话"
+        case .newChat: return "新建会话"
         case .slash: return "斜杠指令"
         case .skills: return "会话技能"
         case .mcps: return "MCP工具"
@@ -6244,9 +6244,9 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .browser: return "浏览器"
         case .files: return "会话文件"
         case .gauge: return "Token用量"
-        case .share: return "导出对话"
+        case .share: return "导出会话"
         case .compact: return "压缩历史"
-        case .clear: return "清空对话"
+        case .clear: return "清空会话"
         case .moveTo: return "移动到…"
         case .fastMode: return "快速模式"
         case .enhancedCache: return "增强缓存"
@@ -6327,7 +6327,9 @@ public struct PlusPanelTileButton: View {
                         .foregroundStyle(CSSThemeVariables.accent())
                 }
 
-                Text(item.title)
+                // [T-dynamic-color] `item.title` 是 String，直接塞进 Text 会走
+                // 不查表的那个初始化器 —— 切到英文后磁贴标题还是中文。
+                Text(LocalizedStringKey(item.title))
                     .font(ChatFont.font(12, weight: .regular))
                     .foregroundStyle(CSSThemeVariables.textMain())
                     .lineLimit(1)
@@ -6337,7 +6339,7 @@ public struct PlusPanelTileButton: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(TilePressButtonStyle())
-        .accessibilityLabel(Text(item.title))
+        .accessibilityLabel(Text(LocalizedStringKey(item.title)))
         .accessibilityValue(isOn == nil ? Text("") : Text(isOn == true ? "已开启" : "已关闭"))
     }
 }

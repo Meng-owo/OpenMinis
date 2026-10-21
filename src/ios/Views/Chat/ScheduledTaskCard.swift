@@ -173,7 +173,8 @@ struct ScheduledJobStatusBadge: View {
 
     var body: some View {
         let styled = ScheduledJobStatusText.style(for: job)
-        Text(styled.label)
+        // [T-dynamic-color] String 直接进 Text 不查表，切英文后状态标签还是中文。
+        Text(LocalizedStringKey(styled.label))
             .font(.system(size: fontSettings.scaledApp(11), weight: .medium))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
