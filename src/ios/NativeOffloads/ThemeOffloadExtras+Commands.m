@@ -135,15 +135,21 @@ int theme_extra_wallpaper(int argc, char **argv, int stdout_fd, BOOL compact, BO
 }
 
 int theme_extra_color(int argc, char **argv, int stdout_fd, BOOL compact, BOOL quiet) {
+    NSString *scope = noff_find_arg(argc, argv, "--scope") ?: @"global";
+    // [T-theme-color-read] `--list` 是读，不需要 --role。放在最前面，
+    // 否则下面那条 --role 必填会把它挡掉。
+    if (noff_has_flag(argc, argv, "--list")) {
+        return theme_extra_emit([ThemeOffloadExtras listColors:scope], @"color",
+                                stdout_fd, compact, quiet);
+    }
     NSString *role = noff_find_arg(argc, argv, "--role");
     if (role.length == 0) {
         NSDictionary *err = noff_json_error(
             EXTRA_TOOL_NAME, @"color", NOFF_ERR_INVALID_ARGS,
-            @"--role <role> is required (canvas, surface, accent, …).");
+            @"--role <role> is required (canvas, surface, accent, …). Use `minis-theme color --list` to see them all with their current values.");
         noff_emit_json(stdout_fd, err, compact, quiet);
         return NOFF_EXIT_INVALID_ARGS;
     }
-    NSString *scope = noff_find_arg(argc, argv, "--scope") ?: @"global";
     NSString *variant = noff_find_arg(argc, argv, "--variant") ?: @"light";
     NSDictionary *raw;
     if (noff_has_flag(argc, argv, "--clear")) {

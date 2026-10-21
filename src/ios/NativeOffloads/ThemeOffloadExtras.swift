@@ -200,4 +200,36 @@ import UIKit
                     "cleared": true]
         }
     }
+
+    /// [T-theme-color-read] 把每个语义角色现在的取值列出来。
+    ///
+    /// 在这之前 `minis-theme color` 只能写不能读：AI 想「把主文字调深一档」时
+    /// 无从知道它现在是哪个值，只能先 `get` 整包再从 JSON 里翻，或者干脆猜一个
+    /// 覆盖掉。`get` 回的是**主题包**（26 个字段、不含全部角色），和角色表不是
+    /// 一回事，所以那条路也不通。
+    ///
+    /// 每个角色给三样东西：浅色值、深色值、以及有没有被用户手动覆盖过。
+    /// 有覆盖才有资格 `--clear`，没覆盖说明它是内置默认值。
+    @objc public static func listColors(scope: String) -> NSDictionary {
+        guard let parsedScope = AppearanceScope(rawValue: scope) else {
+            return fail("bad_scope",
+                        "scope must be one of: \(AppearanceScope.allCases.map(\.rawValue).joined(separator: ", ")).") as NSDictionary
+        }
+        return onMain {
+            let studio = AppearanceStudio.shared
+            let roles = AppearanceColorRole.allCases.map { role -> [String: Any] in
+                [
+                    "role": role.rawValue,
+                    "title": role.title,
+                    "hint": role.hint,
+                    "light": studio.hex(role, scope: parsedScope, variant: .light),
+                    "dark": studio.hex(role, scope: parsedScope, variant: .dark),
+                    "customLight": studio.hasOverride(role, scope: parsedScope, variant: .light),
+                    "customDark": studio.hasOverride(role, scope: parsedScope, variant: .dark),
+                ]
+            }
+            return ["ok": true, "scope": parsedScope.rawValue,
+                    "count": roles.count, "roles": roles]
+        }
+    }
 }

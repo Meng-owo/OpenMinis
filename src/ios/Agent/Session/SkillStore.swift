@@ -454,6 +454,25 @@ description: 设计并贴上 嘟嘟 分身的 AI 主题包。当用户说做主�
 4. 不确定当前皮：`minis-theme get`。
 5. 还原：`minis-theme reset`。
 
+## 只想改一个颜色
+
+`minis-theme get` 回的是**主题包**（26 个字段），不是全部角色表——想「把主文字
+调深一档」这类活，先查现在的值：
+
+```
+minis-theme color --list --scope chat
+```
+
+每个角色给 `light` / `dark` 两个值和 `customLight` / `customDark`（有没有被手动
+覆盖过）。然后：
+
+```
+minis-theme color --role primaryText --hex 2E2724 --scope chat --variant light
+minis-theme color --role primaryText --clear --scope chat --variant light
+```
+
+`--clear` 只对覆盖过的角色有意义，没覆盖的就是内置默认值。
+
 装扮页「AI 主题包」也能剪贴板导入。工房里的色板、形状、贴图和 JSON 是同一套。
 
 ## JSON 骨架
