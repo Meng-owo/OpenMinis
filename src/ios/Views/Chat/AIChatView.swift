@@ -2626,7 +2626,7 @@ struct AIChatView: View {
                 .frame(width: 6, height: 6)
                 .opacity(level.isEnabled ? 1.0 : 0.4)
             Text(level.displayName)
-                .font(.system(size: 8, weight: .medium))
+                .font(ChatFont.font(8, weight: .medium))
         }
         .foregroundStyle(ChatColors.secondaryText)
         .padding(.horizontal, 4)
