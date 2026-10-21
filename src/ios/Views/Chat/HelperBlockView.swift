@@ -3,9 +3,8 @@ import SwiftUI
 // [T-p2-helper-block-render] Dedicated rendering for a `delegate_task` block.
 // The generic tool capsule / thumbnail / live sheet all print `block.content`,
 // which for a helper is the live progress line and then the result JSON —
-// correct data, wrong presentation. This file owns the three surfaces:
+// correct data, wrong presentation. This file owns the two surfaces:
 //   • `HelperBlockView`      — the inline block in the parent transcript
-//   • `HelperThumbnailView`  — the floating tool bar's 100×65 preview
 //   • `HelperDetailCard`     — the tool live sheet's content area
 // All three read `HelperBlockInfo`, the single parser for both content shapes.
 
@@ -681,84 +680,6 @@ struct HelperBlockView: View {
 
 // MARK: - Floating bar thumbnail (100×65)
 
-struct HelperThumbnailView: View {
-    @ObservedObject var block: AssistantBlock
-
-    var body: some View {
-        let info = HelperBlockInfo.parse(block)
-        // [T-agent-model-identity] One extra 6 pt line — "tier · model" —
-        // in every phase; the title gives up its second line to make room,
-        // so the 100×65 frame never clips.
-        let modelLine: String? = {
-            var parts: [String] = []
-            if let t = HelperBlockInfo.tierLabel(info.model, fallback: { if case .finished(_, let tier, _, _, _, _, _, _) = info.phase { return tier }; return nil }()) {
-                parts.append(t)
-            }
-            // A long tier ("sub → primary") leaves less room: shorten the
-            // model itself rather than let the whole line truncate mid-tier.
-            let tierLen = parts.first?.count ?? 0
-            if let m = info.model?.thumbnailLine(max: tierLen > 8 ? 11 : 16) { parts.append(m) }
-            return parts.isEmpty ? nil : parts.joined(separator: " · ")
-        }()
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 3) {
-                Image(systemName: HelperAccent.glyph).font(.system(size: 7, weight: .bold))
-                Text(AppLocalized("Agent")).font(.system(size: 6, weight: .bold))
-            }
-            .foregroundStyle(HelperAccent.color)
-            Text(info.title).font(.system(size: 7, weight: .semibold)).foregroundStyle(.white)
-                .lineLimit(modelLine == nil ? 2 : 1)
-            Spacer(minLength: 0)
-            switch info.phase {
-            case .starting:
-                Text(AppLocalized("starting")).font(.system(size: 6)).foregroundStyle(.white.opacity(0.7))
-            case .running(let tool, let activity, let clock):
-                if let tool {
-                    HStack(spacing: 2) {
-                        Image(systemName: HelperAccent.symbol(forTool: tool)).font(.system(size: 6, weight: .bold))
-                        Text(HelperAccent.displayName(forTool: tool)).font(.system(size: 6, weight: .semibold))
-                    }
-                    .foregroundStyle(HelperAccent.color)
-                    .lineLimit(1)
-                }
-                Text([activity, clock].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.system(size: 6)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-            case .finished(let status, _, _, let elapsed, _, _, _, _):
-                Text([info.statusText, elapsed.map(HelperBlockInfo.elapsedLabel) ?? ""]
-                        .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.system(size: 6, weight: .semibold)).foregroundStyle(HelperBlockInfo.statusColor(status))
-                    .lineLimit(1)
-            }
-            if let modelLine {
-                // [T-subagent-ui-honesty] A pinned group that could not be
-                // routed gets a glyph here: at 6 pt there is no room for words,
-                // and the model name alone made an ignored pin look like a
-                // working one. The detail sheet carries the sentence.
-                HStack(spacing: 2) {
-                    if info.model?.modelGroupUnavailable == true {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 6, weight: .bold))
-                            .foregroundStyle(.yellow.opacity(0.9))
-                    }
-                    Text(modelLine)
-                        .font(.system(size: 6, design: .monospaced))
-                        .foregroundStyle(info.model?.hasEffective == true ? .white.opacity(0.85) : .white.opacity(0.6))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(
-                    info.model?.modelGroupUnavailable == true
-                        ? "\(modelLine) — " + AppLocalized("Pinned group unavailable — ran on the conversation's model")
-                        : modelLine
-                )
-            }
-        }
-        .padding(5)
-        .frame(width: 100, height: 65, alignment: .topLeading)
-        .background(Color(white: 0.12))
-    }
-}
 
 // MARK: - Tool live sheet content
 

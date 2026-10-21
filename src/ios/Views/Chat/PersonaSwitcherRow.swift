@@ -33,31 +33,3 @@ struct PersonaAvatarView: View {
         .clipShape(Circle())
     }
 }
-
-// MARK: - PersonaSwitcherRow
-//
-// 侧边栏顶部的人设切换行：点一下弹出人设列表。
-// v1 只做最小可用：显示当前人设头像+名字。
-
-struct PersonaSwitcherRow: View {
-    @ObservedObject var store: PersonaStore
-    var onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 10) {
-                PersonaAvatarView(iconRef: store.current.avatar, size: 30)
-                Text(store.current.name)
-                    .font(.headline)
-                    .lineLimit(1)
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(MinisTheme.secondaryText)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        .buttonStyle(.plain)
-    }
-}

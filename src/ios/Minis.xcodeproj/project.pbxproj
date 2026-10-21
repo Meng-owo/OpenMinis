@@ -57,7 +57,6 @@
 		52F76965817EDFB2E37E8220 /* InlineVoiceInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D1A2B7331C508B0D3E77D28 /* InlineVoiceInputView.swift */; };
 		57E63023C8A9A3C505DF411B /* VoiceActivityDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7E2CB0D0D63E6D6FDB45568 /* VoiceActivityDetector.swift */; };
 		5EF8347C1EAA0066EFF631F8 /* GroupVoiceModelsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */; };
-		77BB9741AB0EFC449FDBDFED /* VoiceWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16FF3462D09402F14B610CD6 /* VoiceWaveformView.swift */; };
 		7A49962E84F115865D41B933 /* AudioSessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */; };
 		891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */; };
 		A11Y0001 /* ChatAccessibilityAnnouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11Y0002 /* ChatAccessibilityAnnouncer.swift */; };
@@ -766,7 +765,6 @@
 		E5PCV0011 /* PersonaContactsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "PersonaContactsView.swift"; path = "Views/Chat/PersonaContactsView.swift"; sourceTree = SOURCE_ROOT; };
 		0ED149397BEA7E0408C92688 /* GroupVoiceModelsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupVoiceModelsView.swift; sourceTree = "<group>"; };
 		0F5379380323FA8C6477708C /* GroupSlotPicker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GroupSlotPicker.swift; sourceTree = "<group>"; };
-		16FF3462D09402F14B610CD6 /* VoiceWaveformView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceWaveformView.swift; sourceTree = "<group>"; };
 		28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceLog.swift; sourceTree = "<group>"; };
 		2BB45FC87D39AE9AB4495BE9 /* VoiceProvider+Vendors.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "VoiceProvider+Vendors.swift"; sourceTree = "<group>"; };
 		424510790AF3FB2452D3CCE3 /* VoiceOutputPlayer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceOutputPlayer.swift; sourceTree = "<group>"; };
@@ -1559,7 +1557,6 @@
 		A44D403A6D05BD06BBADC1CF /* Voice */ = {
 			isa = PBXGroup;
 			children = (
-				16FF3462D09402F14B610CD6 /* VoiceWaveformView.swift */,
 				E8AB343B6D865C37CC5E9EDB /* VoiceInputPanel.swift */,
 				4D1A2B7331C508B0D3E77D28 /* InlineVoiceInputView.swift */,
 			);
@@ -3646,7 +3643,6 @@
 				F1T00046 /* TTSPaper.swift in Sources */,
 				F1T00048 /* TTSGroupsView.swift in Sources */,
 				F1T00030 /* SystemVoiceEditorView.swift in Sources */,
-				77BB9741AB0EFC449FDBDFED /* VoiceWaveformView.swift in Sources */,
 				38F28509AFBC2153A7C85E85 /* VoiceInputPanel.swift in Sources */,
 				30390D7AA90818BD4BDCE784 /* VoiceProviderTemplate.swift in Sources */,
 				5EF8347C1EAA0066EFF631F8 /* GroupVoiceModelsView.swift in Sources */,
