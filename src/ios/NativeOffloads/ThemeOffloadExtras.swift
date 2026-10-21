@@ -210,7 +210,10 @@ import UIKit
     ///
     /// 每个角色给三样东西：浅色值、深色值、以及有没有被用户手动覆盖过。
     /// 有覆盖才有资格 `--clear`，没覆盖说明它是内置默认值。
-    @objc public static func listColors(scope: String) -> NSDictionary {
+    /// 参数不带标签：ObjC 侧的选择器就是 `listColors:`，和同文件其它
+    /// 命令（`setColor:hex:scope:variant:`）的写法一致。带标签会生成
+    /// `listColorsWithScope:`，C 那边调不到。
+    @objc public static func listColors(_ scope: String) -> NSDictionary {
         guard let parsedScope = AppearanceScope(rawValue: scope) else {
             return fail("bad_scope",
                         "scope must be one of: \(AppearanceScope.allCases.map(\.rawValue).joined(separator: ", ")).") as NSDictionary
