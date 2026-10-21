@@ -11,6 +11,9 @@ private let pasteLog = AppLogger(category: "PastableTV")
 
 private let minisLogger = AppLogger(category: "MinisURL")
 struct SwipeToSendHint: View {
+    // [P-06] 观察字号/主题字体，设置里一改立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let progress: CGFloat
     let armFraction: CGFloat
     let location: CGPoint
@@ -18,6 +21,15 @@ struct SwipeToSendHint: View {
     /// "Release to send" — used while the agent is mid-stream and the
     /// gesture will be routed through `performEnqueue()`.
     var isEnqueue: Bool = false
+
+    /// [P-06] private 的 @ObservedObject 会把成员逐一初始化器压成 private，
+    /// 而它在 AIChatView 里跨文件构造，所以显式写一个 internal 的。
+    init(progress: CGFloat, armFraction: CGFloat, location: CGPoint, isEnqueue: Bool = false) {
+        self.progress = progress
+        self.armFraction = armFraction
+        self.location = location
+        self.isEnqueue = isEnqueue
+    }
 
     var body: some View {
         if progress > 0 {
@@ -43,7 +55,7 @@ struct SwipeToSendHint: View {
                 Text(isEnqueue
                      ? AppLocalized("Release to queue")
                      : AppLocalized("Release to send"))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ChatFont.font(13, weight: .semibold))
                     .foregroundStyle(chipFg)
                     .padding(.horizontal, 14)
                     .frame(height: 34)
@@ -241,6 +253,9 @@ private struct VideoLoadingChip: View {
 // MARK: - Attachment Chip
 
 private struct AttachmentChip: View {
+    // [P-06] 观察字号/主题字体，设置里一改立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let attachment: InputAttachment
     let onRemove: () -> Void
     @State private var showPreview = false

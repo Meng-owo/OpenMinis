@@ -216,6 +216,34 @@ final class FontSettings: ObservableObject {
 
 // MARK: - View extension for app-wide font scaling
 
+// MARK: - Chat font tokens
+
+/// [P-06] 聊天页的字号统一入口。
+///
+/// 原来聊天页里 80 处 `.system(size: 11)` 这种**固定字号**，完全不吃
+/// 「设置 → 字号」：`dynamicTypeSize` 只对语义字号（`.caption`/`.body`）生效，
+/// 对写死的 `.system(size:)` 一点用都没有。所以用户调字号时只有消息气泡
+/// （走 `scaledMessage`）变大，输入框、面板、抽屉、工具栏纹丝不动。
+///
+/// 这里把两件事绑在一起：
+/// 1. 尺寸乘 `FontSettings.scaledApp`（设置里的「整体字号」）
+/// 2. 字体族取装扮页的主题字体（`MinisThemeShape.fontFamily`）
+///
+/// 调用方都持有 `@ObservedObject fontSettings` 与 `@ObservedObject appearanceStudio`，
+/// 两者变化都会重算 body，字体跟着刷新。
+@MainActor
+enum ChatFont {
+    static func font(_ size: CGFloat,
+                     weight: Font.Weight = .regular,
+                     design: Font.Design? = nil) -> Font {
+        let scaled = FontSettings.shared.scaledApp(size)
+        if let design {
+            return .system(size: scaled, weight: weight, design: design)
+        }
+        return MinisThemeShape.fontFamily.font(size: scaled, weight: weight)
+    }
+}
+
 /// Applies app-base font scaling via `dynamicTypeSize`.
 /// Use on sheet content and any view that doesn't inherit the root environment.
 ///

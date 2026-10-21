@@ -121,85 +121,6 @@ enum ChatColors {
     static var sendButtonDisabled: Color { studio.color(.secondaryText, scope: .chat).opacity(0.4) }
 }
 
-// MARK: - System Resource Monitor
-
-class SystemResourceMonitor: ObservableObject {
-    @Published var cpuUsage: Double = 0     // 0-100
-    @Published var memUsed: UInt64 = 0      // bytes
-    @Published var memTotal: UInt64 = 0     // bytes
-    private var timer: Timer?
-    private var prevCPUTicks: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
-
-    func start() {
-        sampleCPU() // prime the previous ticks
-        updateMemory()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.sampleCPU()
-                self?.updateMemory()
-            }
-        }
-    }
-
-    func stop() {
-        timer?.invalidate()
-        timer = nil
-    }
-
-    private func sampleCPU() {
-        var loadInfo = host_cpu_load_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info_data_t>.size / MemoryLayout<integer_t>.size)
-        let result = withUnsafeMutablePointer(to: &loadInfo) { ptr in
-            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, intPtr, &count)
-            }
-        }
-        guard result == KERN_SUCCESS else { return }
-
-        let cur = (user: loadInfo.cpu_ticks.0, system: loadInfo.cpu_ticks.1, idle: loadInfo.cpu_ticks.2, nice: loadInfo.cpu_ticks.3)
-        if let prev = prevCPUTicks {
-            let userD = Double(cur.user &- prev.user)
-            let sysD = Double(cur.system &- prev.system)
-            let idleD = Double(cur.idle &- prev.idle)
-            let niceD = Double(cur.nice &- prev.nice)
-            let total = userD + sysD + idleD + niceD
-            if total > 0 {
-                cpuUsage = ((userD + sysD + niceD) / total) * 100
-            }
-        }
-        prevCPUTicks = cur
-    }
-
-    private func updateMemory() {
-        // App memory: internal + compressed (excludes external mappings like mmap/IOKit)
-        // This matches Xcode's Memory Gauge more closely than phys_footprint
-        var info = task_vm_info_data_t()
-        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
-        let result = withUnsafeMutablePointer(to: &info) { ptr in
-            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), intPtr, &count)
-            }
-        }
-        if result == KERN_SUCCESS {
-            memUsed = UInt64(info.internal) + UInt64(info.compressed)
-        }
-        memTotal = ProcessInfo.processInfo.physicalMemory
-    }
-
-    var formattedCPU: String {
-        String(format: "CPU %2.0f%%", cpuUsage)
-    }
-
-    func formattedMem(compact: Bool = false) -> String {
-        let usedGB = Double(memUsed) / 1_073_741_824
-        if compact {
-            return String(format: "MEM %.1fG", usedGB)
-        }
-        let totalGB = Double(memTotal) / 1_073_741_824
-        return String(format: "MEM %.1f/%.1f GB", usedGB, totalGB)
-    }
-}
-
 // MARK: - Main View
 
 struct AIChatView: View {
@@ -600,7 +521,7 @@ struct AIChatView: View {
                     // elision). Auto-dismisses after ~4s.
                     if let notice = vm.transientNotice {
                         Text(notice)
-                            .font(.system(size: 12))
+                            .font(ChatFont.font(12))
                             .foregroundStyle(ChatColors.primaryText)
                             .padding(.horizontal, 12).padding(.vertical, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2473,7 +2394,7 @@ struct AIChatView: View {
                     //                 naturally has breathing room above
                     //                 and below.
                     // iOS 26 path unchanged (16pt works inside liquid-glass).
-                    .font(.system(size: legacyLayout ? 13 : 16, weight: .semibold))
+                    .font(ChatFont.font(legacyLayout ? 13 : 16, weight: .semibold))
                     .minimumScaleFactor(legacyLayout ? 0.85 : 1.0)
                     .foregroundStyle(ChatColors.primaryText)
                     .lineLimit(1)
@@ -2578,7 +2499,7 @@ struct AIChatView: View {
                             showModelPicker = true
                         } label: {
                             Text("\(detail.providerLabel) · \(detail.modelName)")
-                                .font(.system(size: 9))
+                                .font(ChatFont.font(9))
                                 .foregroundStyle(ChatColors.secondaryText)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -3068,7 +2989,7 @@ struct AIChatView: View {
     /// the original scroll-to-bottom button look.
     private func scrollFloatingButtonLabel(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 14, weight: .semibold))
+            .font(ChatFont.font(14, weight: .semibold))
             .foregroundStyle(MinisTheme.secondaryText)
             .frame(width: 36, height: 36)
             .background { ScrollToBottomBackground().clipShape(Circle()) }
@@ -3477,7 +3398,7 @@ struct AIChatView: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 18, weight: .semibold))
+                .font(ChatFont.font(18, weight: .semibold))
                 .foregroundStyle(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
                 .rotationEffect(.degrees(isPanelOpen ? 45 : 0))
                 // [T-composer-polish] 36 → 34，和麦克风、发送键同一尺寸，
@@ -3558,9 +3479,9 @@ struct AIChatView: View {
         let view = HStack {
             HStack(spacing: 4) {
                 Image(systemName: "pencil.line")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ChatFont.font(11, weight: .semibold))
                 Text("正在编辑已有消息")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ChatFont.font(11, weight: .medium))
             }
             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
             Spacer()
@@ -3593,18 +3514,18 @@ struct AIChatView: View {
                     vm.pendingSticker = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(ChatFont.font(16))
                         .foregroundStyle(Color.white, Color.black.opacity(0.6))
                 }
                 .offset(x: 5, y: -5)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(sticker.shortDesc.isEmpty ? sticker.title : sticker.shortDesc)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(ChatFont.font(12, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                     .lineLimit(1)
                 Text("将随消息一同发送")
-                    .font(.system(size: 10))
+                    .font(ChatFont.font(10))
                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark).opacity(0.7))
             }
             Spacer()
@@ -3626,7 +3547,7 @@ struct AIChatView: View {
             }
         } label: {
             Text("/")
-                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .font(ChatFont.font(18, weight: .semibold, design: .rounded))
                 .italic()
                 .foregroundStyle(ChatColors.secondaryText)
                 .frame(width: 34, height: 34)
@@ -3645,9 +3566,9 @@ struct AIChatView: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(ChatFont.font(10, weight: .bold))
                 Text("退出编辑")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(ChatFont.font(11, weight: .medium))
             }
             .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
             .padding(.horizontal, 9)
@@ -3666,7 +3587,7 @@ struct AIChatView: View {
             speechManager.showLanguagePicker = true
         } label: {
             Text(speechManager.languageLabel)
-                .font(.system(size: 12, weight: .semibold))
+                .font(ChatFont.font(12, weight: .semibold))
                 .foregroundStyle(ChatColors.secondaryText)
                 .frame(width: 34, height: 34)
                 .background(ChatColors.inputIconBg)
@@ -3960,7 +3881,7 @@ struct AIChatView: View {
                     ProgressView()
                         .tint(ChatColors.warning)
                     Text("Waiting for other tasks to complete...")
-                        .font(.system(size: 13))
+                        .font(ChatFont.font(13))
                         .foregroundStyle(MinisTheme.secondaryText)
                 }
                 .padding(.vertical, 8)
@@ -4552,7 +4473,7 @@ struct AIChatView: View {
                             Text(FileMentionIndex.shared.isScanning
                                  ? AppLocalized("Scanning files…")
                                  : AppLocalized("No matching files"))
-                                .font(.system(size: 13))
+                                .font(ChatFont.font(13))
                                 .foregroundStyle(ChatColors.secondaryText)
                             Spacer()
                         }
@@ -4606,7 +4527,7 @@ struct AIChatView: View {
                         HStack(spacing: 6) {
                             ProgressView().scaleEffect(0.6)
                             Text("Scanning more locations…")
-                                .font(.system(size: 11))
+                                .font(ChatFont.font(11))
                                 .foregroundStyle(ChatColors.secondaryText)
                             Spacer()
                         }
@@ -4659,23 +4580,23 @@ struct AIChatView: View {
         var body: some View {
             HStack(spacing: 10) {
                 Image(systemName: iconName)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(ChatFont.font(14, weight: .medium))
                     .foregroundStyle(isSelected ? ChatColors.primaryText : ChatColors.secondaryText)
                     .frame(width: 20)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(entry.basename)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(ChatFont.font(13, weight: .medium))
                         .foregroundStyle(ChatColors.primaryText)
                         .lineLimit(1)
                     Text(entry.displayPath)
-                        .font(.system(size: 11))
+                        .font(ChatFont.font(11))
                         .foregroundStyle(isSelected ? ChatColors.primaryText.opacity(0.75) : ChatColors.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
                 Spacer()
                 Text(entry.mountName ?? entry.scope.displayLabel)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(ChatFont.font(10, weight: .medium))
                     .foregroundStyle(isSelected ? ChatColors.primaryText.opacity(0.9) : ChatColors.secondaryText)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -4750,7 +4671,7 @@ struct AIChatView: View {
                                 .frame(width: 16, height: 16)
                         } else {
                             Image(systemName: cmd.icon)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(ChatFont.font(14, weight: .medium))
                         }
                     }
                     .foregroundStyle(thinkingIconColor)
@@ -4771,12 +4692,12 @@ struct AIChatView: View {
                         // height past 60pt, which then snowballed into a
                         // multi-screen picker.
                         Text("/\(cmd.title.lowercased())")
-                            .font(.system(size: 13, weight: .medium))
+                            .font(ChatFont.font(13, weight: .medium))
                             .foregroundStyle(titleColor)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Text(subtitleText)
-                            .font(.system(size: 11))
+                            .font(ChatFont.font(11))
                             .foregroundStyle(subtitleColor)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -4791,7 +4712,7 @@ struct AIChatView: View {
                     // give it the on/off meaning in words instead of letting
                     // VoiceOver read "checkmark circle fill" / "slash circle".
                     Image(systemName: memoryEnabled ? "checkmark.circle.fill" : "slash.circle")
-                        .font(.system(size: 16))
+                        .font(ChatFont.font(16))
                         .foregroundStyle(memoryEnabled ? (isSelected ? ChatColors.primaryText : ChatColors.success) : (isSelected ? ChatColors.primaryText.opacity(0.6) : ChatColors.secondaryText))
                         .accessibilityLabel(Text(
                             memoryEnabled
@@ -4828,7 +4749,7 @@ struct AIChatView: View {
 
                     HStack(spacing: 1) {
                         Text(level.displayName)
-                            .font(.system(size: 11, weight: isHighlighted ? .bold : .regular))
+                            .font(ChatFont.font(11, weight: isHighlighted ? .bold : .regular))
                         if isClampedHighlight {
                             Image(systemName: "arrow.up")
                                 .font(.system(size: 8, weight: .bold))
@@ -4884,7 +4805,8 @@ struct AIChatView: View {
 
     /// Whether the composer actually holds something worth moving to another
     /// session — non-blank text or at least one attachment. Gates the
-    /// "Move to…" pill so it never appears over an empty composer.
+    /// "移动到…" tile in the plus panel, so an empty composer gets a toast
+    /// instead of opening a picker that would move nothing.
     private var hasMovableShareContent: Bool {
         !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !vm.attachments.isEmpty
@@ -5417,6 +5339,9 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
 // MARK: - Move To Session Sheet
 
 private struct MoveToSessionSheet: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let currentSessionId: String?
     let onSelect: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -5471,13 +5396,13 @@ private struct MoveToSessionSheet: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     highlightedText(
                                         session.title ?? AppLocalized("New Chat"),
-                                        font: .system(size: 16, weight: .semibold),
+                                        font: ChatFont.font(16, weight: .semibold),
                                         color: AppearanceStudio.shared.color(.primaryText, scope: .chat)
                                     )
                                     .lineLimit(1)
                                     highlightedText(
                                         session.lastMessage ?? AppLocalized("No messages yet"),
-                                        font: .system(size: 14),
+                                        font: ChatFont.font(14),
                                         color: AppearanceStudio.shared.color(.secondaryText, scope: .chat)
                                     )
                                     .lineLimit(1)
@@ -5485,11 +5410,11 @@ private struct MoveToSessionSheet: View {
                                 Spacer(minLength: 1)
                                 VStack(alignment: .trailing, spacing: 2) {
                                     Text(relativeDate(session.updatedAt))
-                                        .font(.system(size: 13))
+                                        .font(ChatFont.font(13))
                                         .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.7))
                                     if showAllPersonas, let owner = personaName(for: session) {
                                         Text(owner)
-                                            .font(.system(size: 11))
+                                            .font(ChatFont.font(11))
                                             .foregroundStyle(AppearanceStudio.shared.color(.secondaryText, scope: .chat).opacity(0.6))
                                     }
                                 }
@@ -5648,6 +5573,9 @@ private extension UIView {
 // metadata recursion and crashed with EXC_BAD_ACCESS at the stack
 // guard region on iOS 26.
 private struct SessionLockGateOverlay: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let sessionId: String?
 
     @ObservedObject private var store = SessionLockStore.shared
@@ -5715,12 +5643,12 @@ private struct SessionLockGateOverlay: View {
                     .foregroundStyle(MinisTheme.secondaryText)
 
                 Text("This session is locked")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(ChatFont.font(18, weight: .semibold))
 
                 Text(attemptFailed
                      ? "Authentication failed. Tap to try again."
                      : "Tap to unlock with \(BiometricAuth.biometryDisplayName)")
-                    .font(.system(size: 14))
+                    .font(ChatFont.font(14))
                     .foregroundStyle(MinisTheme.secondaryText)
                     .multilineTextAlignment(.center)
 
@@ -5731,7 +5659,7 @@ private struct SessionLockGateOverlay: View {
                           ? AppLocalized("Try again")
                           : AppLocalized("Unlock"),
                           systemImage: "faceid")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(ChatFont.font(16, weight: .semibold))
                         .padding(.horizontal, 22).padding(.vertical, 10)
                         .background(ChatColors.accent, in: Capsule())
                         .foregroundStyle(ChatColors.primaryText)
@@ -5803,6 +5731,9 @@ private struct SessionLockGateOverlay: View {
 /// Mic button that triggers on touch-release (finger lift) to avoid accidental activation.
 /// Press highlight is provided via GestureState.
 private struct MicButton: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var speechManager: SpeechRecognitionManager
     @Binding var inputFocused: Bool
     /// Opens the voice-input (VAD) panel. The mic button no longer drives the
@@ -5828,7 +5759,7 @@ private struct MicButton: View {
         // In voice mode: a keyboard glyph = switch back to text input. The keyboard
         // glyph is wider than the mic, so render it ~4pt smaller for parity.
         Image(systemName: isVoiceActive ? "keyboard" : "mic")
-            .font(.system(size: isVoiceActive ? 15 : 18, weight: .medium))
+            .font(ChatFont.font(isVoiceActive ? 15 : 18, weight: .medium))
             .foregroundStyle(ChatColors.secondaryText)
             .frame(width: Self.diameter, height: Self.diameter)
             .background(ChatColors.inputIconBg)
@@ -5873,6 +5804,9 @@ private struct MicButton: View {
 // MARK: - Compact Summary Sheet
 
 struct CompactSummarySheet: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let summary: String
     /// Optional revert action. When provided, a "Revert Compact" button is shown
     /// below the summary; tapping it invokes the closure (typically wired to
@@ -5881,6 +5815,14 @@ struct CompactSummarySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var copied = false
     @State private var showRevertConfirm = false
+
+    /// [P-06] 上面多了 private 的 @ObservedObject，成员逐一初始化器会跟着变 private，
+    /// 而这个结构体在 ChatMessageViews / CollectionViewMessageListV3 里跨文件构造，
+    /// 所以显式写一个 internal 的初始化器。
+    init(summary: String, onRevert: (() -> Void)? = nil) {
+        self.summary = summary
+        self.onRevert = onRevert
+    }
 
     var body: some View {
         NavigationStack {
@@ -5897,7 +5839,7 @@ struct CompactSummarySheet: View {
                             Image(systemName: "arrow.uturn.backward")
                             Text("Revert Compact")
                         }
-                        .font(.system(size: 15, weight: .medium))
+                        .font(ChatFont.font(15, weight: .medium))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
                     }
@@ -6080,24 +6022,27 @@ private struct StatRow: View {
 /// directory listing (`Shared directory /var/minis/ ...`). Keep them aligned
 /// when either side changes.
 private struct EmptyChatDirectoryTimeline: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     var onBrowse: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "lightbulb")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ChatFont.font(11, weight: .semibold))
                     .foregroundStyle(ChatColors.secondaryText)
                 Text("Workspace layout")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ChatFont.font(12, weight: .semibold))
                     .foregroundStyle(ChatColors.secondaryText)
             }
             Text("Each chat gets its own **workspace**, **attachments**, **offloads**, and **browser** folders — wiped when the session ends.")
-                .font(.system(size: 12))
+                .font(ChatFont.font(12))
                 .foregroundStyle(ChatColors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
             Text("All chats share **shared**, **skills**, **memory**, and **mounts** — persistent across sessions.")
-                .font(.system(size: 12))
+                .font(ChatFont.font(12))
                 .foregroundStyle(ChatColors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {
@@ -6105,9 +6050,9 @@ private struct EmptyChatDirectoryTimeline: View {
                 Button(action: onBrowse) {
                     HStack(spacing: 4) {
                         Image(systemName: "folder.fill")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(ChatFont.font(10, weight: .semibold))
                         Text("Browse Chat Files")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(ChatFont.font(11, weight: .semibold))
                     }
                     .foregroundStyle(ChatColors.primaryText)
                     .padding(.horizontal, 10)
@@ -6337,6 +6282,9 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
 // MARK: - 单个功能按钮磁贴组件 (PlusPanelTileButton)
 
 public struct PlusPanelTileButton: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     let item: PlusPanelItemType
     let isDark: Bool
     /// 开关型磁贴（快速模式 / 增强缓存）的当前状态；其余磁贴恒为 nil。
@@ -6380,9 +6328,11 @@ public struct PlusPanelTileButton: View {
                 }
 
                 Text(item.title)
-                    .font(.system(size: 12, weight: .regular))
+                    .font(ChatFont.font(12, weight: .regular))
                     .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                     .lineLimit(1)
+                    // [P-06] 最大字号下标题会撑出磁贴宽度，允许压到 80%。
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
         }
@@ -6420,7 +6370,7 @@ public struct ChatPlusPanel: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    // 三页分页：8 + 8 + 4
+    // 三页分页：8 + 8 + 5
     private let page1Items: [PlusPanelItemType] = [
         .photo, .camera, .doc, .sticker,
         .voice, .sparkles, .newChat, .slash
@@ -6446,6 +6396,7 @@ public struct ChatPlusPanel: View {
     /// 两行 = 82*2 + 22 = 186；上下内边距 16 + 6 = 22 → 内容 208。
     /// 指示点区 4 + 7 + 12 = 23，分隔线 1 → 总高 ≈ 232。
     /// 原来 295 在小屏上把消息区压到 106pt，现在按内容给，不多占。
+    /// [P-06] 字号调大后标题靠 `.minimumScaleFactor(0.8)` 收住，高度不用跟着长。
     private var panelHeight: CGFloat { 232 }
 
     /// 三页 TabView 的高度 = 面板高 − 指示点区 − 分隔线
@@ -6535,6 +6486,9 @@ public struct ChatPlusPanel: View {
 // MARK: - 微信式表情包底栏抽屉面板 (ChatStickerPanel)
 
 struct ChatStickerPanel: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     enum ActivePanelSheet: Identifiable {
         case add(initialData: Data?)
         case edit(StickerItem)
@@ -6623,9 +6577,9 @@ struct ChatStickerPanel: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ChatFont.font(11, weight: .bold))
                             Text("完成")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(ChatFont.font(12, weight: .semibold))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -6636,7 +6590,7 @@ struct ChatStickerPanel: View {
                     .buttonStyle(.plain)
 
                     Text("已选 \(selectedStickerIds.count) 项")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(ChatFont.font(12, weight: .medium))
                         .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
 
                     Spacer()
@@ -6652,7 +6606,7 @@ struct ChatStickerPanel: View {
                         }
                     } label: {
                         Text(selectedStickerIds.count == currentStickers.count && !currentStickers.isEmpty ? "取消全选" : "全选")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(ChatFont.font(12, weight: .medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 5)
                             .background(CSSThemeVariables.optionBg(isDark: isDark))
@@ -6679,9 +6633,9 @@ struct ChatStickerPanel: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "folder.fill")
-                                .font(.system(size: 11))
+                                .font(ChatFont.font(11))
                             Text("移至抽屉")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ChatFont.font(12, weight: .medium))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -6704,9 +6658,9 @@ struct ChatStickerPanel: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "trash.fill")
-                                .font(.system(size: 11))
+                                .font(ChatFont.font(11))
                             Text("删除")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ChatFont.font(12, weight: .medium))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 5)
@@ -6733,9 +6687,9 @@ struct ChatStickerPanel: View {
                     } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "chevron.left")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(ChatFont.font(11, weight: .bold))
                             Image(systemName: "square.grid.2x2")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(ChatFont.font(12, weight: .semibold))
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
@@ -6787,9 +6741,9 @@ struct ChatStickerPanel: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "sparkles")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(ChatFont.font(12, weight: .semibold))
                             Text("功能")
-                                .font(.system(size: 12, weight: .medium))
+                                .font(ChatFont.font(12, weight: .medium))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -6810,7 +6764,7 @@ struct ChatStickerPanel: View {
                                     selectedCategory = cat
                                 } label: {
                                     Text(cat)
-                                        .font(.system(size: 13, weight: selectedCategory == cat ? .semibold : .regular))
+                                        .font(ChatFont.font(13, weight: selectedCategory == cat ? .semibold : .regular))
                                         .padding(.horizontal, 11)
                                         .padding(.vertical, 5)
                                         .background(
@@ -6874,7 +6828,7 @@ struct ChatStickerPanel: View {
                                             .foregroundStyle(CSSThemeVariables.accent(isDark: isDark))
                                     )
                                 Text("添加/批量")
-                                    .font(.system(size: 11, weight: .regular))
+                                    .font(ChatFont.font(11, weight: .regular))
                                     .foregroundStyle(CSSThemeVariables.textDim(isDark: isDark))
                             }
                             .contentShape(Rectangle())
@@ -6943,7 +6897,7 @@ struct ChatStickerPanel: View {
                                                 .frame(width: 22, height: 22)
                                             if selectedStickerIds.contains(sticker.id) {
                                                 Image(systemName: "checkmark")
-                                                    .font(.system(size: 11, weight: .bold))
+                                                    .font(ChatFont.font(11, weight: .bold))
                                                     .foregroundColor(CSSThemeVariables.accentFg(isDark: isDark))
                                             } else {
                                                 Circle()
@@ -6956,7 +6910,7 @@ struct ChatStickerPanel: View {
                                 }
 
                                 Text(sticker.title)
-                                    .font(.system(size: 11, weight: .regular))
+                                    .font(ChatFont.font(11, weight: .regular))
                                     .lineLimit(1)
                                     .foregroundStyle(CSSThemeVariables.textMain(isDark: isDark))
                             }
@@ -7131,6 +7085,9 @@ struct ChatStickerPanel: View {
 // [10-15 5-1 醒醒] 彻底收口悬浮播放器所有调节与状态展示，无悬浮遮挡
 
 struct ChatVoiceSettingsSheet: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     @ObservedObject var vm: AIChatViewModel
     @Environment(\.dismiss) private var dismiss
 
@@ -7197,7 +7154,7 @@ struct ChatVoiceSettingsSheet: View {
                     HStack {
                         HStack(spacing: 8) {
                             Image(systemName: isSpeaking && !isPaused ? "waveform" : (isPaused ? "pause.circle.fill" : (noVoiceWarning ? "speaker.slash.fill" : "speaker.wave.2.fill")))
-                                .font(.system(size: 16))
+                                .font(ChatFont.font(16))
                                 .foregroundStyle(isSpeaking ? MinisTheme.accent : MinisTheme.secondaryText)
                             Text(isSpeaking && !isPaused ? "正在朗读..." : (isPaused ? "播报已暂停" : (noVoiceWarning ? "无可用语音——去 设置 › 语音服务 检查" : "播报就绪")))
                                 .font(.body.weight(.medium))
@@ -7276,7 +7233,7 @@ struct ChatVoiceSettingsSheet: View {
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(ChatFont.font(13, weight: .semibold))
                                 .foregroundColor(.secondary.opacity(0.6))
                         }
                     }
@@ -8163,12 +8120,15 @@ public struct StickerThumbnailView: View {
 }
 
 public struct StickerDeletedPlaceholderView: View {
+    // [P-06] 观察字号/主题字体，设置里一改这里立刻重绘。
+    @ObservedObject private var fontSettings = FontSettings.shared
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
     public init() {}
 
     public var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "photo.badge.exclamationmark")
-                .font(.system(size: 13))
+                .font(ChatFont.font(13))
                 .foregroundColor(.secondary)
             Text("已删除表情包")
                 .font(.caption)

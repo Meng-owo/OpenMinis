@@ -211,6 +211,7 @@
 		E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AT00011 /* AudioTogglePlaybackIntent.swift */; };
 		E5BADGE001 /* SessionBadgeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BADGE011 /* SessionBadgeStore.swift */; };
 		E5BRM0001 /* BrowserResourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRM0011 /* BrowserResourceMonitor.swift */; };
+		E5SRM0001 /* SystemResourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SRM0011 /* SystemResourceMonitor.swift */; };
 		E5BSH0001 /* BashismDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0011 /* BashismDetector.swift */; };
 		E5BSH0002 /* BashismReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0012 /* BashismReminder.swift */; };
 		E5BSH0003 /* OnDemandBash.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0013 /* OnDemandBash.swift */; };
@@ -987,6 +988,7 @@
 		E5AT00011 /* AudioTogglePlaybackIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTogglePlaybackIntent.swift; sourceTree = "<group>"; };
 		E5BADGE011 /* SessionBadgeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBadgeStore.swift; sourceTree = "<group>"; };
 		E5BRM0011 /* BrowserResourceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserResourceMonitor.swift; sourceTree = "<group>"; };
+		E5SRM0011 /* SystemResourceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemResourceMonitor.swift; sourceTree = "<group>"; };
 		E5BSH0011 /* BashismDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashismDetector.swift; sourceTree = "<group>"; };
 		E5BSH0012 /* BashismReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashismReminder.swift; sourceTree = "<group>"; };
 		E5BSH0013 /* OnDemandBash.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDemandBash.swift; sourceTree = "<group>"; };
@@ -2049,6 +2051,7 @@
 			isa = PBXGroup;
 			children = (
 				E5BRM0011 /* BrowserResourceMonitor.swift */,
+				E5SRM0011 /* SystemResourceMonitor.swift */,
 				E5CR00012 /* CrashReporter.swift */,
 				E5CR00014 /* CrashSignalHandler.h */,
 				E5CR00013 /* CrashSignalHandler.m */,
@@ -3310,6 +3313,7 @@
 				E5F000002 /* MinisFsRouter.swift in Sources */,
 				E5CR00001 /* ShellCommandRingBuffer.swift in Sources */,
 				E5BRM0001 /* BrowserResourceMonitor.swift in Sources */,
+				E5SRM0001 /* SystemResourceMonitor.swift in Sources */,
 				E5CR00002 /* CrashReporter.swift in Sources */,
 				E5CR00003 /* CrashSignalHandler.m in Sources */,
 				E5KVC0003 /* SafeKVCSetTrue.m in Sources */,
