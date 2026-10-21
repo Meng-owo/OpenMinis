@@ -2135,6 +2135,15 @@ struct AIChatView: View {
             vm.compactAll()
         case .clear:
             showClearChatConfirm = true
+        case .moveTo:
+            // [T-ios-moveto-overlaps-send] 从输入条浮层搬进加号面板。
+            // 输入框空着时搬过去没意义，先拦一下并说清原因。
+            guard hasMovableShareContent else {
+                MinisToast.show(AppLocalized("先输入内容或添加附件，再移动到别的会话"),
+                                systemImage: "arrow.right.circle")
+                return
+            }
+            showMoveToSheet = true
         case .fastMode:
             guard activeModelSupportsFastMode else {
                 MinisToast.show(AppLocalized("当前模型不支持快速模式"), systemImage: "info.circle")
@@ -3468,10 +3477,12 @@ struct AIChatView: View {
             }
         } label: {
             Image(systemName: "plus")
-                .font(.system(size: 19, weight: .semibold))
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(isPanelOpen ? CSSThemeVariables.accent(isDark: isDark) : CSSThemeVariables.textMain(isDark: isDark))
                 .rotationEffect(.degrees(isPanelOpen ? 45 : 0))
-                .frame(width: 36, height: 36)
+                // [T-composer-polish] 36 → 34，和麦克风、发送键同一尺寸，
+                // 三个圆排一排不再一大两小。
+                .frame(width: 34, height: 34)
                 .background(isPanelOpen ? CSSThemeVariables.accentSoft(isDark: isDark) : CSSThemeVariables.optionBg(isDark: isDark))
                 .clipShape(Circle())
                 .overlay(
@@ -3534,8 +3545,10 @@ struct AIChatView: View {
 
             sendButton
         }
+        // [T-composer-polish] 上下内边距原来只有 bottom 6，文字贴顶。
+        // 改成上下各 6，单行时整条垂直居中。
         .padding(.horizontal, 10)
-        .padding(.bottom, 6)
+        .padding(.vertical, 6)
         return AnyView(row)
     }
 
@@ -3979,6 +3992,10 @@ struct AIChatView: View {
                         editingModeHeader
                     }
 
+                    // [T-ios-moveto-overlaps-send] 「移动到…」不再挂在输入区右上角。
+                    // 它原来是 overlay，打字时胶囊正好压在发送键上，把发送键盖掉。
+                    // 现在入口收进加号面板（.moveTo），输入条上不再有任何浮层。
+
                     // 微信式单行聊天输入条 (AnyView 类型擦除，杜绝深层泛型栈溢出)
                     singleLineInputRow
                 }
@@ -3995,25 +4012,6 @@ struct AIChatView: View {
                     vm.inputText += delta
                 }
                 lastRecognizedLength = newLength
-            }
-            .overlay(alignment: .topTrailing) {
-                // [T-ios-moveto-empty-content] 只在输入区真有东西可搬时才显示。
-                // [P-14] 原来还要求 hasInjectedShareContent（只有从系统分享进来
-                // 才为 true），用户自己打一半的字永远看不到这个入口。现在只要有
-                // 可搬的内容就显示；那个标志只写不读，已删。
-                if hasMovableShareContent {
-                    Button { showMoveToSheet = true } label: {
-                        Label("Move to…", systemImage: "arrow.right.circle")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(ChatColors.secondaryText)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                    }
-                    .padding(.top, 6)
-                    .padding(.trailing, 10)
-                }
             }
             .modifier(ComposerSurface())
             .frame(maxWidth: maxContentWidth)
@@ -6276,6 +6274,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     // Page 3: 会话管理与特殊模式
     case compact = "compact"     // 压缩历史
     case clear = "clear"         // 清空对话
+    case moveTo = "moveTo"       // 移动到别的会话
     case fastMode = "fastMode"   // 快速模式 (Codex)
     case enhancedCache = "enhancedCache" // 增强缓存 (Anthropic)
 
@@ -6301,6 +6300,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "导出对话"
         case .compact: return "压缩历史"
         case .clear: return "清空对话"
+        case .moveTo: return "移动到…"
         case .fastMode: return "快速模式"
         case .enhancedCache: return "增强缓存"
         }
@@ -6327,6 +6327,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "square.and.arrow.up.fill"
         case .compact: return "arrow.down.right.and.arrow.up.left"
         case .clear: return "trash.fill"
+        case .moveTo: return "arrow.right.circle.fill"
         case .fastMode: return "bolt.fill"
         case .enhancedCache: return "clock.badge.checkmark.fill"
         }
@@ -6429,7 +6430,8 @@ public struct ChatPlusPanel: View {
         .browser, .files, .gauge, .share
     ]
     private let page3Items: [PlusPanelItemType] = [
-        .compact, .clear, .fastMode, .enhancedCache
+        .compact, .clear, .moveTo, .fastMode,
+        .enhancedCache
     ]
 
     private let columns = [
@@ -6499,9 +6501,9 @@ public struct ChatPlusPanel: View {
                             onItemTap(item)
                         }
                     }
-                    // 占位保持4列对齐（4项 + 4占位 = 8格，满两行）。
+                    // 占位保持4列对齐（5项 + 3占位 = 8格，满两行）。
                     // [P-31] 不写死 82：字号一变就会错位，让网格自己算行高。
-                    ForEach(0..<4, id: \.self) { _ in
+                    ForEach(0..<3, id: \.self) { _ in
                         Color.clear.frame(maxHeight: .infinity)
                     }
                 }

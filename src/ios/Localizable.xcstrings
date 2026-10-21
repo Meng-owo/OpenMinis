@@ -1,6 +1,23 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "先输入内容或添加附件，再移动到别的会话" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type something or attach a file first, then move it to another chat."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "先输入内容或添加附件，再移动到别的会话"
+          }
+        }
+      }
+    },
     "Show chats from all personas" : {
       "extractionState" : "manual",
       "localizations" : {
