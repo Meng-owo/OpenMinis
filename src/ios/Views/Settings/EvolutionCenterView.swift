@@ -211,7 +211,13 @@ struct EvolutionCenterView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(inj.injectedAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.callout)
-                Text("经验 \(inj.lessonId.prefix(8)) · \(inj.tokenCost) token\(inj.sessionId.map { " · 会话 \($0.prefix(6))" } ?? "")")
+                // [T-dynamic-color] 原来整串塞在一个 Text 里，含 `.map` 闭包，
+                // 没法静态化成 key，切英文后这一行还是中文。拆成「固定部分走
+                // 查表 + 可选后缀单独拼」。
+                Text(
+                    "\(AppLocalized("经验")) \(inj.lessonId.prefix(8)) · \(inj.tokenCost) token"
+                    + (inj.sessionId.map { " · " + AppLocalized("会话") + " \($0.prefix(6))" } ?? "")
+                )
                     .font(.caption2)
                     .foregroundStyle(MinisTheme.secondaryText)
             }
