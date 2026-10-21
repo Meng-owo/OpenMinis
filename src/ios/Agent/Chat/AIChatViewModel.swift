@@ -896,17 +896,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
-    /// Whether the Enhanced Cache toggle should be visible. Only Anthropic
-    /// official API (no custom base URL) supports the cache TTL protocol.
-    var showEnhancedCacheToggle: Bool {
-        guard let entry = resolveCurrentEntry(),
-              let inst = ProviderConfigStore.shared.instance(for: entry.providerInstanceId)
-        else { return false }
-        guard inst.providerType == .anthropic else { return false }
-        if let url = inst.customBaseURL, !url.isEmpty { return false }
-        return true
-    }
-
     // MARK: - Compact State
     /// Whether the slash command menu should be shown.
     @Published var showSlashMenu = false
@@ -7144,6 +7133,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// "Clear Chat?" confirmation alert. The view mirrors this into its
     /// local @State and resets the flag back to false on observation.
     @Published var clearChatConfirmRequested = false
+
+    /// [slash-move] 斜杠命令 `/move` 的执行结果：请视图打开「移动到…」选择器。
+    /// 和 clearChatConfirmRequested 一样，视图读到后立刻置回 false。
+    @Published var moveToRequested = false
 
     /// Text saved before showing slash menu over existing input.
     /// When non-nil, the menu was opened via the "/" button while text existed —

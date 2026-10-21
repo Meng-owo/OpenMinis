@@ -323,13 +323,10 @@ struct AIChatView: View {
     }
     @StateObject private var voiceVM = VoiceInputViewModel()
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
-    /// [T-codex-fast-mode] Codex Fast Mode toggle ("..." menu, OpenAI OAuth
-    /// only). Same key OpenAIProvider reads at request-build time; @AppStorage
-    /// so the toolbar (menu checkmark + nav bolt badge) re-renders on flip.
+    /// [T-codex-fast-mode] 快速模式。开关本体在模型选择页
+    /// （SessionModelPicker），这里只观察同一个键，用来给标题上的 ⚡ 角标
+    /// 和工具栏重绘用。
     @AppStorage(OpenAIProvider.fastModeDefaultsKey) private var codexFastModeEnabled: Bool = false
-    /// [P-21] 增强缓存开关。视图自己观察这个键，才能在别的会话/别处改动后
-    /// 立刻重绘；VM 上那份只是转发到同一个键。
-    @AppStorage(AIChatViewModel.enhancedCacheDefaultsKey) private var enhancedCacheEnabledStored: Bool = false
     // Observe the in-app language so the view's body re-runs the moment
     // the user switches it. Without this, parts of the chat surface that
     // hold UIKit-bridged strings (PastableTextView placeholder, etc.)
@@ -346,7 +343,6 @@ struct AIChatView: View {
     @State private var showSessionSkills = false
     @State private var showSessionMCPs = false
     @State private var showSessionMemory = false
-    @State private var showEnhancedCacheAlert = false
     /// [P-05] 内核启动失败页的「看日志」开关。
     @State private var showKernelLogs = false
     @State private var showTokenUsage = false
@@ -783,15 +779,6 @@ struct AIChatView: View {
                 }
             }
         }
-        .alert("Enhanced Cache", isPresented: $showEnhancedCacheAlert) {
-            Button("Enable") {
-                UserDefaults.standard.set(true, forKey: "enhancedCacheConfirmed")
-                cached.vm.enhancedCacheEnabled = true
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Enhanced cache extends the cache TTL from 5 minutes to 1 hour. Cache writes cost more (2x vs 1.25x base price), but cache reads remain cheap (0.1x). Recommended for long coding sessions where request gaps may exceed 5 minutes.")
-        }
         .alert(AppLocalized("Context Near Capacity"), isPresented: Binding(get: { vm.showCompactBeforeSendPrompt }, set: { vm.showCompactBeforeSendPrompt = $0 })) {
             Button(AppLocalized("Compact & Send")) {
                 vm.compactAndSend()
@@ -876,6 +863,18 @@ struct AIChatView: View {
                 showClearChatConfirm = true
                 vm.clearChatConfirmRequested = false
             }
+        }
+        // [slash-move] /move 走和磁贴同一条路：输入框空着就说清原因，
+        // 有内容就开选择器。搬完之后内容会落在目标会话的输入框里。
+        .onChange(of: vm.moveToRequested) { requested in
+            guard requested else { return }
+            vm.moveToRequested = false
+            guard hasMovableShareContent else {
+                MinisToast.show(AppLocalized("先输入内容或添加附件，再移动到别的会话"),
+                                systemImage: "arrow.right.circle")
+                return
+            }
+            showMoveToSheet = true
         }
         .onChange(of: inputFocused) { focused in
             if focused && (showPlusPanel || showStickerPanel) {
@@ -1953,20 +1952,7 @@ struct AIChatView: View {
     /// get a confirm first (stopping the task is destructive); idle sessions go
     // MARK: - 加号功能面板动作分发
 
-    /// 开关型磁贴：点一下只翻状态，不收起面板，也不弹任何 sheet。
-    /// 用户要能立刻看到磁贴变成「已开启」。
-    private func isToggleTile(_ item: PlusPanelItemType) -> Bool {
-        switch item {
-        case .fastMode, .enhancedCache: return true
-        default: return false
-        }
-    }
-
     private func handlePlusPanelAction(_ item: PlusPanelItemType) {
-        if isToggleTile(item) {
-            performPlusPanelAction(item)
-            return
-        }
         if item != .sticker {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 showPlusPanel = false
@@ -2026,40 +2012,6 @@ struct AIChatView: View {
             showTokenUsage = true
         case .share:
             exportCurrentConversation()
-        case .compact:
-            vm.compactAll()
-        case .clear:
-            showClearChatConfirm = true
-        case .moveTo:
-            // [T-ios-moveto-overlaps-send] 从输入条浮层搬进加号面板。
-            // 输入框空着时搬过去没意义，先拦一下并说清原因。
-            guard hasMovableShareContent else {
-                MinisToast.show(AppLocalized("先输入内容或添加附件，再移动到别的会话"),
-                                systemImage: "arrow.right.circle")
-                return
-            }
-            showMoveToSheet = true
-        case .fastMode:
-            guard activeModelSupportsFastMode else {
-                MinisToast.show(AppLocalized("当前模型不支持快速模式"), systemImage: "info.circle")
-                return
-            }
-            codexFastModeEnabled.toggle()
-            MinisToast.show(codexFastModeEnabled ? AppLocalized("快速模式已开") : AppLocalized("快速模式已关"), systemImage: "bolt.fill")
-        case .enhancedCache:
-            guard cached.vm.showEnhancedCacheToggle else {
-                MinisToast.show(AppLocalized("当前模型不支持增强缓存"), systemImage: "info.circle")
-                return
-            }
-            if enhancedCacheEnabledStored {
-                cached.vm.enhancedCacheEnabled = false
-                MinisToast.show(AppLocalized("增强缓存已关"), systemImage: "clock")
-            } else if !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
-                showEnhancedCacheAlert = true
-            } else {
-                cached.vm.enhancedCacheEnabled = true
-                MinisToast.show(AppLocalized("增强缓存已开"), systemImage: "clock.badge.checkmark.fill")
-            }
         }
     }
 
@@ -2214,11 +2166,10 @@ struct AIChatView: View {
             hasSession: vm.sessionId != nil,
             isForcePulling: isForcePulling,
             iCloudSyncEnabled: iCloudSyncEnabled,
-            memoryEnabled: vm.memoryEnabled,
-            showEnhancedCacheToggle: cached.vm.showEnhancedCacheToggle,
-            enhancedCacheEnabled: enhancedCacheEnabledStored,
-            showFastModeToggle: activeModelSupportsFastMode,
-            fastModeEnabled: codexFastModeEnabled
+            memoryEnabled: vm.memoryEnabled
+            // [plus-panel-two-pages] 快速模式/增强缓存搬进模型选择页后，
+            // 工具栏不再显示它们（trailing 本来就是 EmptyView），
+            // 对应的 key 字段一起删掉了，别让不存在的 UI 拖着重绘判定。
         )
     }
 
@@ -3336,9 +3287,7 @@ struct AIChatView: View {
     private var bottomDrawerSection: AnyView {
         if showPlusPanel {
             let panel = ChatPlusPanel(
-                onItemTap: { item in handlePlusPanelAction(item) },
-                fastModeOn: codexFastModeEnabled,
-                enhancedCacheOn: enhancedCacheEnabledStored
+                onItemTap: { item in handlePlusPanelAction(item) }
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
             return AnyView(panel)
@@ -3824,9 +3773,10 @@ struct AIChatView: View {
                         editingModeHeader
                     }
 
-                    // [T-ios-moveto-overlaps-send] 「移动到…」不再挂在输入区右上角。
-                    // 它原来是 overlay，打字时胶囊正好压在发送键上，把发送键盖掉。
-                    // 现在入口收进加号面板（.moveTo），输入条上不再有任何浮层。
+                    // [T-ios-moveto-overlaps-send] 「移动到…」不挂在输入区上。
+                    // 它原来是 overlay，打字时胶囊正好压在发送键上把发送键盖掉。
+                    // 现在入口是斜杠命令 /move（见 AIChatViewModel+SlashCommands），
+                    // 输入条上不再有任何浮层。
 
                     // 微信式单行聊天输入条 (AnyView 类型擦除，杜绝深层泛型栈溢出)
                     singleLineInputRow
@@ -5169,11 +5119,6 @@ private struct ChatToolbarKey: Equatable {
     let isForcePulling: Bool
     let iCloudSyncEnabled: Bool
     let memoryEnabled: Bool
-    let showEnhancedCacheToggle: Bool
-    let enhancedCacheEnabled: Bool
-    /// [T-codex-fast-mode] Menu row shown only for Codex OAuth models.
-    let showFastModeToggle: Bool
-    let fastModeEnabled: Bool
 }
 
 /// [T-ios-navbar-toolbar-host] Zero-footprint host that owns the navigation
@@ -5220,10 +5165,6 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
             if lhs.key.isForcePulling != rhs.key.isForcePulling { diffs.append("isForcePulling") }
             if lhs.key.iCloudSyncEnabled != rhs.key.iCloudSyncEnabled { diffs.append("iCloudSyncEnabled") }
             if lhs.key.memoryEnabled != rhs.key.memoryEnabled { diffs.append("memoryEnabled") }
-            if lhs.key.showEnhancedCacheToggle != rhs.key.showEnhancedCacheToggle { diffs.append("showEnhancedCacheToggle") }
-            if lhs.key.enhancedCacheEnabled != rhs.key.enhancedCacheEnabled { diffs.append("enhancedCacheEnabled") }
-            if lhs.key.showFastModeToggle != rhs.key.showFastModeToggle { diffs.append("showFastModeToggle") }
-            if lhs.key.fastModeEnabled != rhs.key.fastModeEnabled { diffs.append("fastModeEnabled") }
             NavbarEvalStats.logger.info("[NavbarEval] host == FALSE diffs=[\(diffs.joined(separator: ","))]")
         }
         #endif
@@ -6135,13 +6076,6 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     case gauge = "gauge"         // Token用量
     case share = "share"         // 导出对话
 
-    // Page 3: 会话管理与特殊模式
-    case compact = "compact"     // 压缩历史
-    case clear = "clear"         // 清空对话
-    case moveTo = "moveTo"       // 移动到别的会话
-    case fastMode = "fastMode"   // 快速模式 (Codex)
-    case enhancedCache = "enhancedCache" // 增强缓存 (Anthropic)
-
     public var id: String { rawValue }
 
     public var title: String {
@@ -6162,11 +6096,6 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "会话文件"
         case .gauge: return "Token用量"
         case .share: return "导出会话"
-        case .compact: return "压缩历史"
-        case .clear: return "清空会话"
-        case .moveTo: return "移动到…"
-        case .fastMode: return "快速模式"
-        case .enhancedCache: return "增强缓存"
         }
     }
 
@@ -6189,11 +6118,6 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "folder.fill"
         case .gauge: return "gauge.with.needle.fill"
         case .share: return "square.and.arrow.up.fill"
-        case .compact: return "arrow.down.right.and.arrow.up.left"
-        case .clear: return "trash.fill"
-        case .moveTo: return "arrow.right.circle.fill"
-        case .fastMode: return "bolt.fill"
-        case .enhancedCache: return "clock.badge.checkmark.fill"
         }
     }
 }
@@ -6205,13 +6129,10 @@ public struct PlusPanelTileButton: View {
     @ObservedObject var fontSettings = FontSettings.shared
     @ObservedObject var appearanceStudio = AppearanceStudio.shared
     let item: PlusPanelItemType
-    /// 开关型磁贴（快速模式 / 增强缓存）的当前状态；其余磁贴恒为 nil。
-    var isOn: Bool? = nil
     let onTap: () -> Void
 
-    public init(item: PlusPanelItemType, isOn: Bool? = nil, onTap: @escaping () -> Void) {
+    public init(item: PlusPanelItemType, onTap: @escaping () -> Void) {
         self.item = item
-        self.isOn = isOn
         self.onTap = onTap
     }
 
@@ -6223,15 +6144,10 @@ public struct PlusPanelTileButton: View {
             VStack(spacing: 8) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(isOn == true
-                              ? CSSThemeVariables.accentSoft()
-                              : CSSThemeVariables.optionBg())
+                        .fill(CSSThemeVariables.optionBg())
                         .overlay(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .strokeBorder(isOn == true
-                                              ? CSSThemeVariables.accent().opacity(0.45)
-                                              : CSSThemeVariables.optionBorder(),
-                                              lineWidth: 1.0)
+                                .strokeBorder(CSSThemeVariables.optionBorder(), lineWidth: 1.0)
                         )
                         .shadow(
                             color: CSSThemeVariables.sheetShadow().opacity(0.06),
@@ -6257,7 +6173,6 @@ public struct PlusPanelTileButton: View {
         }
         .buttonStyle(TilePressButtonStyle())
         .accessibilityLabel(Text(LocalizedStringKey(item.title)))
-        .accessibilityValue(isOn == nil ? Text("") : Text(isOn == true ? "已开启" : "已关闭"))
     }
 }
 
@@ -6273,21 +6188,13 @@ private struct TilePressButtonStyle: ButtonStyle {
 
 public struct ChatPlusPanel: View {
     let onItemTap: (PlusPanelItemType) -> Void
-    /// 开关型磁贴的当前状态，由调用方注入。
-    var fastModeOn: Bool = false
-    var enhancedCacheOn: Bool = false
     @State private var currentPage: Int = 0
 
-    private func onState(for item: PlusPanelItemType) -> Bool? {
-        switch item {
-        case .fastMode: return fastModeOn
-        case .enhancedCache: return enhancedCacheOn
-        default: return nil
-        }
-    }
-
-
-    // 三页分页：8 + 8 + 5
+    // 两页分页：8 + 8
+    // [plus-panel-two-pages] 第三页原先是「压缩历史 / 清空会话 / 移动到… /
+    // 快速模式 / 增强缓存」。前两项斜杠菜单里本来就有，后两项按模型能力
+    // 决定要不要出现、点不支持时只弹一句「不支持」——都不该占磁贴。
+    // 快速模式/增强缓存搬进模型选择页，移动到…改成 /move 斜杠命令。
     private let page1Items: [PlusPanelItemType] = [
         .photo, .camera, .doc, .sticker,
         .voice, .sparkles, .newChat, .slash
@@ -6296,11 +6203,6 @@ public struct ChatPlusPanel: View {
         .skills, .mcps, .memory, .terminal,
         .browser, .files, .gauge, .share
     ]
-    private let page3Items: [PlusPanelItemType] = [
-        .compact, .clear, .moveTo, .fastMode,
-        .enhancedCache
-    ]
-
     private let columns = [
         GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10),
@@ -6316,15 +6218,11 @@ public struct ChatPlusPanel: View {
     /// [P-06] 字号调大后标题靠 `.minimumScaleFactor(0.8)` 收住，高度不用跟着长。
     private var panelHeight: CGFloat { 232 }
 
-    /// 三页 TabView 的高度 = 面板高 − 指示点区 − 分隔线
+    /// TabView 的高度 = 面板高 − 指示点区 − 分隔线
     private var tabViewHeight: CGFloat { panelHeight - 24 }
 
-    public init(onItemTap: @escaping (PlusPanelItemType) -> Void,
-                fastModeOn: Bool = false,
-                enhancedCacheOn: Bool = false) {
+    public init(onItemTap: @escaping (PlusPanelItemType) -> Void) {
         self.onItemTap = onItemTap
-        self.fastModeOn = fastModeOn
-        self.enhancedCacheOn = enhancedCacheOn
     }
 
     public var body: some View {
@@ -6334,7 +6232,7 @@ public struct ChatPlusPanel: View {
                 .fill(CSSThemeVariables.divider())
                 .frame(height: 1)
 
-            // 三页横向翻页 TabView
+            // 两页横向翻页 TabView
             TabView(selection: $currentPage) {
                 // Page 1
                 LazyVGrid(columns: columns, spacing: 22) {
@@ -6361,31 +6259,13 @@ public struct ChatPlusPanel: View {
                 .padding(.top, 16)
                 .padding(.bottom, 6)
                 .tag(1)
-
-                // Page 3
-                LazyVGrid(columns: columns, spacing: 22) {
-                    ForEach(page3Items) { item in
-                        PlusPanelTileButton(item: item, isOn: onState(for: item)) {
-                            onItemTap(item)
-                        }
-                    }
-                    // 占位保持4列对齐（5项 + 3占位 = 8格，满两行）。
-                    // [P-31] 不写死 82：字号一变就会错位，让网格自己算行高。
-                    ForEach(0..<3, id: \.self) { _ in
-                        Color.clear.frame(maxHeight: .infinity)
-                    }
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 16)
-                .padding(.bottom, 6)
-                .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: tabViewHeight)
 
-            // 底部指示小圆点 (支持3页)
+            // 底部指示小圆点 (两页)
             HStack(spacing: 8) {
-                ForEach(0..<3, id: \.self) { idx in
+                ForEach(0..<2, id: \.self) { idx in
                     Capsule()
                         .fill(currentPage == idx ? CSSThemeVariables.accent() : CSSThemeVariables.divider())
                         .frame(width: currentPage == idx ? 20 : 7, height: 7)

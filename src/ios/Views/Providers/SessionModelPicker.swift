@@ -10,6 +10,13 @@ struct SessionModelPicker: View {
     @ObservedObject private var store = ProviderConfigStore.shared
     @Environment(\.dismiss) private var dismiss
     @State private var pendingNonTextOutput: PendingSelection?
+    /// [picker-model-tuning] 快速模式 / 增强缓存搬到这里：只有当前模型真支持
+    /// 才出现那一行，不再是加号面板里点了只弹「不支持」的磁贴。
+    @AppStorage(OpenAIProvider.fastModeDefaultsKey) private var codexFastModeEnabled: Bool = false
+    @AppStorage(AIChatViewModel.enhancedCacheDefaultsKey) private var enhancedCacheEnabled: Bool = false
+    @State private var showEnhancedCacheAlert = false
+    /// 刚点过的那条模型。列表点完不会立刻关页，开关区要跟着手上这条走。
+    @State private var tuningProbe: ModelEntry?
 
     private struct PendingSelection: Identifiable {
         let id = UUID()
@@ -54,8 +61,21 @@ struct SessionModelPicker: View {
             currentGroupId: { [self] in currentGroupId },
             onSelect: { entry in handleEntryTap(entry) },
             onSelectGroup: { group in handleGroupTap(group) },
-            onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) }
+            onSelectInGroup: { entry, group in handleEntryTap(entry, inGroup: group) },
+            extraSection: { AnyView(modelTuningSection) }
         ))
+        .alert(
+            "Enhanced Cache",
+            isPresented: $showEnhancedCacheAlert
+        ) {
+            Button(AppLocalized("Enable")) {
+                UserDefaults.standard.set(true, forKey: "enhancedCacheConfirmed")
+                enhancedCacheEnabled = true
+            }
+            Button(AppLocalized("Cancel"), role: .cancel) {}
+        } message: {
+            Text("Enhanced cache extends the cache TTL from 5 minutes to 1 hour. Cache writes cost more (2x vs 1.25x base price), but cache reads remain cheap (0.1x). Recommended for long coding sessions where request gaps may exceed 5 minutes.")
+        }
         .alert(
             AppLocalized("This model may not work as an Agent"),
             isPresented: Binding(
@@ -83,6 +103,79 @@ struct SessionModelPicker: View {
         }
     }
 
+    // MARK: - Model tuning (fast mode / enhanced cache)
+
+    private var activeInstanceAndModel: (instance: ProviderInstance, modelId: String)? {
+        // 刚在列表里点过的那条优先：点完不一定马上关页（dismissOnSelect=false），
+        // 开关区得跟着手上选的模型走，而不是还盯着旧绑定。
+        if let probe = tuningProbe,
+           let instance = store.instance(for: probe.providerInstanceId) {
+            return (instance, probe.model.id)
+        }
+        return SessionModelDisplay(store: store).resolvedInstanceAndModel(for: sessionId)
+    }
+
+    /// 快速模式 = 给请求加 `service_tier: priority`。只对 gpt 系 + Responses
+    /// 接口（或 OAuth 直连 OpenAI）有效，别的模型发了也是白花。
+    private var supportsFastMode: Bool {
+        guard let (instance, modelId) = activeInstanceAndModel else { return false }
+        guard modelId.lowercased().contains("gpt") else { return false }
+        if instance.providerType == .openAIResponses { return true }
+        return instance.providerType == .openAI
+            && instance.credentialType == .oauth
+            && (instance.customBaseURL?.isEmpty ?? true)
+    }
+
+    /// 增强缓存 = 提示词缓存 TTL 从 5 分钟延到 1 小时。只对 Anthropic 官方
+    /// 直连有效，自建中转不走这套协议。
+    private var supportsEnhancedCache: Bool {
+        guard let (instance, _) = activeInstanceAndModel else { return false }
+        guard instance.providerType == .anthropic else { return false }
+        if let url = instance.customBaseURL, !url.isEmpty { return false }
+        return true
+    }
+
+    /// 只在当前模型支持时出现对应行；两个都不支持就整块不显示，
+    /// 不留一个点不动的空壳。
+    @ViewBuilder
+    private var modelTuningSection: some View {
+        if supportsFastMode || supportsEnhancedCache {
+            Section {
+                if supportsFastMode {
+                    Toggle(isOn: $codexFastModeEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(AppLocalized("Fast Mode"), systemImage: "bolt.fill")
+                            Text("Sends service_tier: priority so this model answers sooner. Costs more per request.")
+                                .font(.caption)
+                                .foregroundStyle(MinisTheme.secondaryText)
+                        }
+                    }
+                }
+                if supportsEnhancedCache {
+                    Toggle(isOn: Binding(
+                        get: { enhancedCacheEnabled },
+                        set: { on in
+                            if on && !UserDefaults.standard.bool(forKey: "enhancedCacheConfirmed") {
+                                showEnhancedCacheAlert = true
+                            } else {
+                                enhancedCacheEnabled = on
+                            }
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(AppLocalized("Enhanced Cache"), systemImage: "clock.badge.checkmark.fill")
+                            Text("Keeps the prompt cache alive for 1 hour instead of 5 minutes. Cache writes cost more, reads stay cheap.")
+                                .font(.caption)
+                                .foregroundStyle(MinisTheme.secondaryText)
+                        }
+                    }
+                }
+            } header: {
+                Text("Model Options")
+            }
+        }
+    }
+
     // MARK: - Non-text output guard
 
     private func nonTextOutputLabel(for model: LLMModel) -> String? {
@@ -94,6 +187,7 @@ struct SessionModelPicker: View {
     }
 
     private func handleEntryTap(_ entry: ModelEntry, inGroup group: ModelGroup? = nil) {
+        tuningProbe = entry
         if let label = nonTextOutputLabel(for: entry.model) {
             pendingNonTextOutput = PendingSelection(entry: entry, group: group, modalityLabel: label, isGroupBind: false)
             return
@@ -108,6 +202,7 @@ struct SessionModelPicker: View {
             bindToGroup(group)
             return
         }
+        tuningProbe = resolvedEntry
         if let label = nonTextOutputLabel(for: resolvedEntry.model) {
             pendingNonTextOutput = PendingSelection(entry: resolvedEntry, group: group, modalityLabel: label, isGroupBind: true)
             return

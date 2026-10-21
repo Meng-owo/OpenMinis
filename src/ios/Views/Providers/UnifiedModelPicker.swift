@@ -150,6 +150,11 @@ struct ModelPickerConfig {
     /// `onSelect` when nil.
     var onSelectInGroup: (@MainActor (ModelEntry, ModelGroup) -> Void)?
     var onAddMulti: (@MainActor (Set<String>) -> Void)?
+    /// 调用方自带的额外分区，渲染在模型列表最底部。
+    /// [picker-extra-section] 会话模型选择页用它挂「快速模式 / 增强缓存」——
+    /// 这两个开关只对特定模型有效，放在这里天然贴着「当前选的是哪个模型」，
+    /// 也不用在加号面板里给不支持它们的模型摆一个点了只弹提示的磁贴。
+    var extraSection: (@MainActor () -> AnyView)?
 
     enum Mode { case single, multi }
     enum GroupScope {
@@ -579,6 +584,12 @@ struct UnifiedModelPicker: View {
 
             if visibleGroups.isEmpty && filteredEntriesByInstance.isEmpty {
                 emptySection
+            }
+
+            // [picker-extra-section] 调用方自带的分区直接插在列表底部，
+            // 由它自己包 Section —— 这里再包一层会把多行挤成一行。
+            if let extraSection = config.extraSection {
+                extraSection()
             }
 
             if config.showCreateGroup {

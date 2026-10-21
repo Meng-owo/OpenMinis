@@ -37,6 +37,10 @@ extension AIChatViewModel {
         SlashCommand(id: "compact", icon: "arrow.down.right.and.arrow.up.left", title: "Compact", subtitle: "Compress conversation history into summary"),
         SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "Toggle memory writes on/off (reads unaffected)"),
         SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "Toggle deep thinking mode on/off"),
+        // [slash-move] 原来在加号面板第三页当一个磁贴，可它只对「输入框里
+        // 有内容」有意义，空着点它只能弹提示。斜杠命令天然带条件：
+        // 先写要搬的内容，再 /move。
+        SlashCommand(id: "move", icon: "arrow.right.circle", title: "Move", subtitle: "Move what's in the composer to another session"),
     ]
 
     /// Show slash menu without replacing existing input text.
@@ -409,6 +413,8 @@ extension AIChatViewModel {
             appendSystemInfo("Memory writes \(status). Reads are unaffected.", icon: "brain.head.profile")
         case "clear":
             clearChatConfirmRequested = true
+        case "move":
+            moveToRequested = true
         default:
             break
         }
