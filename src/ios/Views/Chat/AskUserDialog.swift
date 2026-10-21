@@ -97,17 +97,27 @@ enum CSSThemeVariables {
         }
     }
 
-    /// 在白和黑之间挑对比度更高的那个。同分时选白（浅色强调色上白字更常见）。
+    /// 强调色上的前景字。
     ///
-    /// 抽出来是因为它有两个调用方（SwiftUI 的 Color 和 UIKit 的 UIColor），
-    /// 而对比度算法只该有一份。`nonisolated`：它要能在 `UIColor` 的动态色闭包
-    /// 里被调用，那个闭包不在主线程隔离域内。
+    /// [T-dynamic-color] 原来硬写 `Color.white`。强调色是用户自己挑的，挑成
+    /// 浅黄、浅米白时白字直接看不见，所以要有兜底。
+    ///
+    /// 但**不是简单比黑白哪个对比度高**：内置的粉色强调色上，黑字对比度
+    /// 6.8 比白字 3.1 高，纯比大小会把整个 App 的按钮文字从白翻成黑——
+    /// 那是视觉大改，没人要求。
+    ///
+    /// 门槛取 2.0，刻意低于 WCAG 的 3.0：内置两套配色的白字对比度是
+    /// 3.08 / 2.41，用 3.0 会让深色模式也跟着翻黑。这里的目的是「白字
+    /// 真的看不见时兜底」，不是「把现有配色校正到达标」——后者会改动
+    /// 所有既有观感。用户挑浅黄（1.5）这类极端色时才换黑。
     nonisolated static func bestForegroundHex(on backgroundHex: String) -> String {
         let white = "FFFFFF"
         let black = "000000"
         let onWhite = AppearanceContrast.ratio(white, on: backgroundHex)
+        guard onWhite < 2.0 else { return white }
+        // 白字真的看不见了，看黑字能不能救；黑字也不行就取对比度高的那个。
         let onBlack = AppearanceContrast.ratio(black, on: backgroundHex)
-        return onWhite >= onBlack ? white : black
+        return onBlack >= onWhite ? black : white
     }
 
     /// --color-option-bg (输入框/未选中胶囊底色)
