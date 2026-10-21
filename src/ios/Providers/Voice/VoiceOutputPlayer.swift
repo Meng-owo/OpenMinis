@@ -687,7 +687,9 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         synthCache[k] = (audio, candidate.key)
         synthCacheOrder.append(k)
         trimSynthCacheIfNeeded()
-        TTSDiskCache.store(key: k, data: audio)
+        // [B09-R9 2026-10-22] Off the main thread — this runs once per
+        // synthesized unit, and the sync write + LRU prune was a visible hitch.
+        TTSDiskCache.storeAsync(key: k, data: audio)
     }
 
     /// [AUD8-15] Shared LRU trim — the store path and the disk-hit refill must
@@ -730,17 +732,23 @@ final class VoiceOutputPlayer: NSObject, ObservableObject {
         // and set it as default heard nothing while the UI said "分组 · X".
         var out: [Candidate] = []
         var seen = Set<String>()
-        for service in TTSGroupStore.shared.usableDefaultGroupCandidates()
-        where seen.insert(service.id).inserted {
-            guard let provider = TTSProviderBridge.provider(for: service) else { continue }
-            out.append(candidate(for: service, provider: provider))
-        }
+        // [B09-R2 2026-10-22] EXPLICIT SELECTION WINS, the group is the fallback.
+        // The first attempt put the group first, which made the checkmark in the
+        // services list decorative: tap a service, see it checked, and read-aloud
+        // still used the group. A tick means "use this one" — so it goes first.
+        // The group still gets used whenever nothing usable is selected, which is
+        // what S-01 was actually about (the group was ignored ENTIRELY before).
         let store = TTSServiceStore.shared
         if let service = store.selectedService(),
            service.enabled,
-           seen.insert(service.id).inserted,
            store.hasAPIKey(for: service),
            let provider = TTSProviderBridge.provider(for: service) {
+            seen.insert(service.id)
+            out.append(candidate(for: service, provider: provider))
+        }
+        for service in TTSGroupStore.shared.usableDefaultGroupCandidates()
+        where seen.insert(service.id).inserted {
+            guard let provider = TTSProviderBridge.provider(for: service) else { continue }
             out.append(candidate(for: service, provider: provider))
         }
         return out

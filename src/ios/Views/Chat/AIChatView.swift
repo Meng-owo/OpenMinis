@@ -6891,6 +6891,8 @@ struct ChatVoiceSettingsSheet: View {
     /// [batch9-voice/3 · VT-F3] 本弹窗会话内发生过"无可用语音"（队列无候选而
     /// 排出）——状态行给出失败态，而不是静默回"就绪"。
     @State private var noVoiceWarning = false
+    /// [B09-R1] Last failure counter this sheet already reacted to.
+    @State private var lastSeenFailureTick = 0
     /// [batch9-voice/3 · VT-F2] 系统语音闸门回显（权威在 设置 › 语音服务）。
     @AppStorage("voice.output.systemVoiceAllowed") private var systemVoiceAllowed = false
     @State private var showModelSelector: Bool = false
@@ -7116,12 +7118,28 @@ struct ChatVoiceSettingsSheet: View {
             }
             .onAppear {
                 refreshModelLabel()
+                // [B09-R1 2026-10-22] `$synthFailureTick` is a CurrentValueSubject:
+                // it replays its CURRENT value on subscribe, and that counter only
+                // ever grows for the life of the process. So "tick > 0" meant one
+                // failure this launch painted EVERY later visit to this sheet red,
+                // forever, even after the voice was configured properly. Seed the
+                // baseline on appear and only react to NEW failures.
+                lastSeenFailureTick = voicePlayer.synthFailureTick
                 noVoiceWarning = voiceSummaryIsBroken
             }
-            // [B09-N07 2026-10-22] Actually consume the failure signal the player
-            // publishes — it was incremented in three places and read nowhere.
+            // [B09-N07 2026-10-22] Consume the failure signal the player publishes
+            // (it was incremented in three places and read nowhere) — but only
+            // when it actually advances past what this sheet has already seen.
             .onReceive(voicePlayer.$synthFailureTick) { tick in
-                if tick > 0 { noVoiceWarning = true }
+                guard tick != lastSeenFailureTick else { return }
+                lastSeenFailureTick = tick
+                noVoiceWarning = true
+            }
+            // Configuration changed while the sheet is open (came back from
+            // Settings) → re-evaluate instead of leaving a stale red line.
+            .onReceive(NotificationCenter.default.publisher(for: .ttsServicesChanged)) { _ in
+                refreshModelLabel()
+                if !voiceSummaryIsBroken { noVoiceWarning = false }
             }
             .onReceive(NotificationCenter.default.publisher(for: .ttsQueueDrainedSilently)) { _ in
                 // [batch9-voice/3 · VT-F3] 候选全空/合成全败 → 失败态（不再静默回"就绪"）。
@@ -7139,29 +7157,36 @@ struct ChatVoiceSettingsSheet: View {
     /// [B09 2026-10-22] One line answering "what will actually speak", read
     /// from the same sources the player resolves (default group → selected
     /// service → model group → System), so it can't drift from reality.
+    /// [B09-R6 2026-10-22] Every branch goes through AppLocalized so the line
+    /// follows the in-app language. These were Chinese interpolated Strings fed
+    /// to `Text(String)`, which bypasses the String Catalog entirely.
     private var voiceSummary: String {
+        let store = TTSServiceStore.shared
+        // Same order the player resolves: explicit selection, then the group.
+        if let s = store.selectedService() {
+            if !store.hasAPIKey(for: s) { return AppLocalized("Selected service \(s.name) has no API key") }
+            if !s.enabled { return AppLocalized("Selected service \(s.name) is turned off") }
+            return AppLocalized("Service: \(s.name)")
+        }
         let group = TTSGroupStore.shared
         if let gid = group.defaultGroupId, let g = group.group(id: gid) {
             let usable = group.usableCandidates(for: g)
             if !usable.isEmpty {
-                return "分组「\(g.name)」：\(usable.map { $0.name }.joined(separator: " → "))"
+                // Interpolation is split out: a nested closure inside a
+                // localized literal makes the key unextractable.
+                let names = usable.map { $0.name }.joined(separator: " → ")
+                return AppLocalized("Group \(g.name): \(names)")
             }
             let members = group.candidates(for: g)
             if !members.isEmpty {
-                return "分组「\(g.name)」里 \(members.count) 个服务都缺密钥"
+                return AppLocalized("Group \(g.name): all \(members.count) services are missing an API key")
             }
         }
-        let store = TTSServiceStore.shared
-        if let s = store.selectedService() {
-            if !store.hasAPIKey(for: s) { return "选中的「\(s.name)」缺 API 密钥" }
-            if !s.enabled { return "选中的「\(s.name)」已停用" }
-            return "服务「\(s.name)」"
-        }
         if let s = store.services.first(where: { $0.enabled && store.hasAPIKey(for: $0) }) {
-            return "服务「\(s.name)」（未设默认分组，按保存顺序）"
+            return AppLocalized("Service: \(s.name) (no default group, saved order)")
         }
-        if VoiceOutputPreferences.systemVoiceAllowed { return "系统语音（Apple）" }
-        return "还没有配置任何声音"
+        if VoiceOutputPreferences.systemVoiceAllowed { return AppLocalized("System voice (Apple)") }
+        return AppLocalized("No voice configured yet")
     }
 
     /// True when nothing can actually speak — the sheet shows this in red and

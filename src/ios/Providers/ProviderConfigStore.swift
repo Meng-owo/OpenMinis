@@ -2742,18 +2742,6 @@ final class ProviderConfigStore: ObservableObject {
         return result.sorted { ($0.displayName, $0.id) < ($1.displayName, $1.id) }
     }
 
-    /// True when ≥2 enabled instances share a normalized base URL AND have voice
-    /// models — the migration/dup case (场景 B). UI shows a non-destructive hint.
-    func hasFoldedShadowDuplicates() -> Bool {
-        var seen = Set<String>()
-        for inst in config.instances where inst.isEnabled && hasVoiceModels(for: inst.id) {
-            let key = Self.normalizedShadowKey(inst.effectiveCustomBaseURL)
-            guard !key.isEmpty else { continue }
-            if !seen.insert(key).inserted { return true }
-        }
-        return false
-    }
-
     // MARK: - Model Refresh
 
     /// Manual refresh: fetch models from the API (with models.dev fallback) and merge into entries.

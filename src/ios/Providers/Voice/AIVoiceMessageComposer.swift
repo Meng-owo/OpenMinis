@@ -116,7 +116,8 @@ enum AIVoiceMessageComposer {
             guard let files = try? fm.contentsOfDirectory(
                 at: attach, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
             ) else { continue }
-            for f in files where f.lastPathComponent.hasPrefix("tts-") {
+            for f in files where f.lastPathComponent.hasPrefix("tts-")
+            && f.pathExtension.lowercased() != "txt" {
                 let vals = try? f.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
                 if let cutoff, let m = vals?.contentModificationDate, m > cutoff { continue }
                 count += 1
@@ -144,7 +145,11 @@ enum AIVoiceMessageComposer {
             guard let files = try? fm.contentsOfDirectory(
                 at: attach, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]
             ) else { continue }
-            for f in files where f.lastPathComponent.hasPrefix("tts-") {
+            // [B09-R5 2026-10-22] Keep the .txt sidecar. The bubble's 转文字 reads
+            // that file, so deleting it along with the audio made the transcript
+            // button go blank — while the storage copy promised "their text stays".
+            for f in files where f.lastPathComponent.hasPrefix("tts-")
+            && f.pathExtension.lowercased() != "txt" {
                 let vals = try? f.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
                 guard let m = vals?.contentModificationDate, m < cutoff else { continue }
                 let size = Int64(vals?.fileSize ?? 0)
@@ -154,7 +159,11 @@ enum AIVoiceMessageComposer {
                 }
             }
         }
-        logger.info("[AIVoice] cleared \(count) voice file(s), \(bytes) bytes, older than \(days)d")
+        // [B09-R7 2026-10-22] This function is `nonisolated` and runs off the main
+        // actor; the shared `logger` belongs to the @MainActor enum. Route the
+        // line through VoiceLog.problem, which owns its own logger and is the
+        // Release-visible channel anyway.
+        VoiceLog.problem("cleared \(count) voice file(s), \(bytes) bytes, older than \(days)d")
         return (count, bytes)
     }
 
@@ -455,11 +464,14 @@ enum AIVoiceMessageComposer {
         // [B09-S01 2026-10-22] Keyless members are filtered out up front instead
         // of being tried and skipped one by one — same order, no wasted round
         // trip on a service that can never speak.
-        for s in TTSGroupStore.shared.usableDefaultGroupCandidates() where seen.insert(s.id).inserted {
+        // [B09-R2 2026-10-22] Selected service first, group as fallback — the
+        // tick in the services list has to mean something.
+        let svcStore = TTSServiceStore.shared
+        if let s = svcStore.selectedService(), s.enabled,
+           svcStore.hasAPIKey(for: s), seen.insert(s.id).inserted {
             out.append(s)
         }
-        let svcStore = TTSServiceStore.shared
-        if let s = svcStore.selectedService(), s.enabled, seen.insert(s.id).inserted {
+        for s in TTSGroupStore.shared.usableDefaultGroupCandidates() where seen.insert(s.id).inserted {
             out.append(s)
         }
         return out

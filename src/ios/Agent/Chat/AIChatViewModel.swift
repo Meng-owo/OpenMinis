@@ -440,7 +440,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 self.isReadingAloud = false
                 self.speechPaused = false
                 if wasReading {
-                    MinisToast.show(AppLocalized("AI voice replies took over — read-aloud stopped. Tap the reply again to continue."),
+                    MinisToast.show(AppLocalized("AI voice replies took over — read-aloud stopped."),
                                     systemImage: "speaker.slash")
                 }
             }
@@ -1464,21 +1464,37 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal()
     }
 
-    /// [B09-N04 2026-10-22] Stop only THIS session's speech, leaving other
-    /// chats' queued read-aloud alone. Used when starting a replay: the old
-    /// stopSpeech() called stopAll(), which wiped another chat's pending speech
-    /// mid-sentence with no explanation. VoiceOutputPlayer already supports
-    /// per-session isolation (stopSession) — the chat path just never used it.
+    /// [B09-R3 2026-10-22] Explicit "read this reply" is a TAKEOVER, and it has
+    /// to be a whole one.
+    ///
+    /// The first attempt used stopSession() + end(.replyTTS) to "leave other
+    /// chats alone". It didn't: stopSession only touches the player when the
+    /// playing unit belongs to that session, so a reply playing in chat A kept
+    /// playing, the new reply in B queued up BEHIND it, and then end(.replyTTS)
+    /// deactivated the audio session and muted A anyway — A silenced, B waiting
+    /// on a dead player. Worse than the original.
+    ///
+    /// Taking over the speaker is what the tap means, so: stop everything, then
+    /// say so if something else was actually playing. Only the audio-session
+    /// intent is ended when nothing is left playing.
     private func stopSpeechForThisSession() {
         speechSynthesizer.stopSpeaking(at: .immediate)
-        // This chat's own queue + any manual "read selection" audio (that path
-        // enqueues under manualOwnerId). Other chats' speech is left alone.
-        VoiceOutputPlayer.shared.stopSession(sessionId ?? "")
-        VoiceOutputPlayer.shared.stopSession(VoiceOutputPlayer.manualOwnerId)
+        let wasPlayingSomething = VoiceOutputPlayer.shared.isPlaying
+            || VoiceOutputPlayer.shared.isSynthesizing
+        VoiceOutputPlayer.shared.stopAll()
         speechPaused = false
         isReadingAloud = false
-        AudioSessionCoordinator.shared.end(.replyTTS)
+        // stopAll() releases the session when the queue is empty; only end the
+        // intent here if that did not happen (defensive, keeps the coordinator
+        // and the player from disagreeing).
+        if !VoiceOutputPlayer.shared.isPlaying {
+            AudioSessionCoordinator.shared.end(.replyTTS)
+        }
         syncSpeechStateToGlobal()
+        if wasPlayingSomething {
+            MinisToast.show(AppLocalized("Switched to this reply — the previous read-aloud stopped."),
+                            systemImage: "speaker.wave.2.fill")
+        }
     }
 
     /// Speak text aloud for an explicit user request. Interrupts current speech.

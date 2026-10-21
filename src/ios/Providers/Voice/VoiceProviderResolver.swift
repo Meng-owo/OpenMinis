@@ -294,14 +294,16 @@ enum VoiceProviderResolver {
         // and claim the group only as a fallback, i.e. the exact opposite of the
         // chain, which is how "分组 · X" ended up on screen while silence came
         // out of the speaker.
-        let groupStore = TTSGroupStore.shared
-        if let g = groupStore.defaultGroup(), !groupStore.usableDefaultGroupCandidates().isEmpty {
-            return "分组 · \(g.name)"
-        }
+        // [B09-R2 2026-10-22] Same order the player resolves: an explicit
+        // selection beats the default group, and the group is the fallback.
         let svcStore = TTSServiceStore.shared
         if let svc = svcStore.selectedService(), svc.enabled,
            svcStore.hasAPIKey(for: svc), TTSProviderBridge.provider(for: svc) != nil {
             return svc.name
+        }
+        let groupStore = TTSGroupStore.shared
+        if let g = groupStore.defaultGroup(), !groupStore.usableDefaultGroupCandidates().isEmpty {
+            return "分组 · \(g.name)"
         }
         if let instance = VoiceOutputPlayer.shared.activeModelLabel {
             return instance

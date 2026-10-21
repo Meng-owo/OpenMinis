@@ -315,14 +315,16 @@ struct LabeledTextField: View {
     var keyboardType: UIKeyboardType = .default
 
     var body: some View {
+        // [B09-L07 2026-10-22] Label above the field, and no duplicate placeholder
+        // — it used to read "My voice / Name" stacked bottom-up, i.e. backwards.
         VStack(alignment: .leading, spacing: 4) {
-            TextField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(MinisTheme.secondaryText))
-                .keyboardType(keyboardType)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(MinisTheme.secondaryText)
+            TextField(label, text: $text, prompt: Text(placeholder).foregroundColor(MinisTheme.secondaryText))
+                .keyboardType(keyboardType)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
         }
         // [B09-N08 2026-10-22] Was a static surface color; every other voice
         // page uses the theme-scoped dynamic role, so a custom light/dark theme
@@ -344,13 +346,14 @@ struct SecureLabeledTextField: View {
     var footnote: String? = nil
 
     var body: some View {
+        // [B09-L07 2026-10-22] Same fix as LabeledTextField: label first.
         VStack(alignment: .leading, spacing: 4) {
-            SecureField(placeholder, text: $text, prompt: Text(placeholder).foregroundColor(MinisTheme.secondaryText))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(MinisTheme.secondaryText)
+            SecureField(label, text: $text, prompt: Text(placeholder).foregroundColor(MinisTheme.secondaryText))
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
         }
         // [B09-N08 2026-10-22] Was a static surface color; every other voice
         // page uses the theme-scoped dynamic role, so a custom light/dark theme

@@ -32,10 +32,6 @@ enum TTSDiskCache {
         return directory.appendingPathComponent(safe.isEmpty ? "empty" : safe, isDirectory: false)
     }
 
-    static func load(key: String) -> Data? {
-        queue.sync { loadLocked(key: key) }
-    }
-
     /// [B09-N13 2026-10-22] Non-blocking load for the read-aloud hot path.
     /// `load` uses `queue.sync`, and the caller (VoiceOutputPlayer.cachedAudio)
     /// runs on the MainActor — so every cache probe on every candidate did a
@@ -56,9 +52,12 @@ enum TTSDiskCache {
         return data
     }
 
-    static func store(key: String, data: Data) {
+    /// [B09-R9 2026-10-22] Non-blocking write for the synthesis hot path. The
+    /// synchronous `store` blocks the MainActor on file IO + prune for every
+    /// synthesized unit.
+    static func storeAsync(key: String, data: Data) {
         guard !data.isEmpty, data.count <= maxBytes else { return }
-        queue.sync {
+        queue.async {
             let fm = FileManager.default
             try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
             try? data.write(to: fileURL(for: key), options: .atomic)

@@ -8,7 +8,7 @@ enum VoiceServicesCopy {
     /// [B09-N01 2026-10-22] English source string (the xcstrings key), same as
     /// every other string in this layer — the old Chinese literal was shown
     /// verbatim to every language. Call sites wrap it in LocalizedStringKey.
-    static let routingNote = "Who speaks: the default voice group's services in order, then the single selected service, then the voice model group. The built-in System voice only joins when it is allowed below."
+    static let routingNote = "Who speaks: the service you ticked, then the default voice group's services in order, then the voice model group. The built-in System voice only joins when it is allowed below."
 }
 
 // MARK: - Voice Services (kelivo-style TTS service list)
@@ -301,6 +301,9 @@ struct VoiceServicesView: View {
         }
     }
 
+    /// [B09-R6 2026-10-22] Localized at the source. These were Chinese
+    /// interpolated Strings shown through `Text(String)`, which does NOT consult
+    /// the String Catalog — so an English UI printed "默认：X（3 个可用服务）".
     private var groupSubtitle: String {
         let store = TTSGroupStore.shared
         if let gid = store.defaultGroupId, let g = store.group(id: gid) {
@@ -310,11 +313,13 @@ struct VoiceServicesView: View {
             let n = store.usableCandidates(for: g).count
             let total = store.candidates(for: g).count
             if n == 0 && total > 0 {
-                return "默认：\(g.name)（\(total) 个服务都缺密钥）"
+                return AppLocalized("Default: \(g.name) — all \(total) services are missing an API key")
             }
-            return "默认：\(g.name)（\(n) 个可用服务）"
+            return AppLocalized("Default: \(g.name) — \(n) usable service(s)")
         }
-        return store.groups.isEmpty ? "还没建分组" : "\(store.groups.count) 个分组，未设默认"
+        return store.groups.isEmpty
+            ? AppLocalized("No group yet")
+            : AppLocalized("\(store.groups.count) group(s), no default set")
     }
 
     private func serviceRow(_ service: TTSServiceOptions) -> some View {

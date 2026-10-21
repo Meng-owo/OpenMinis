@@ -249,8 +249,12 @@ extension AIChatViewModel {
                 // [voice-bubble-tool 2026-10-02] 点名音色/分组（TTS 施工员转交）。
                 // voice = TTS 服务名（服务自带音色配置）；group = TTS 分组名（按成员顺序 fallback）。
                 // 名字在 TTS 能力纸条里列着，别自己编。都不传 = 默认 TTS 分组。
-                "voice": AgentToolParam(type: .string, description: "可选：点名用哪个 TTS 服务的声音（服务名，见 TTS 能力纸条里列的）。不传就用默认 TTS 分组。"),
-                "group": AgentToolParam(type: .string, description: "可选：点名用哪个 TTS 分组（分组名，见 TTS 能力纸条里列的），按分组成员顺序自动 fallback。不传就用默认分组。voice 和 group 同时传时，以 group 为准。"),
+                // [B09-S03 2026-10-22] The paper that lists the names is only
+                // injected when the user's message matches a voice keyword — so
+                // "见纸条里列的" pointed at something that might not be in the
+                // prompt at all. Tell the model what to do in that case instead.
+                "voice": AgentToolParam(type: .string, description: "可选：点名用哪个 TTS 服务的声音（服务名，原样照抄 TTS 能力纸条里列出的名字）。不传就用默认顺序。如果纸条不在上下文里，说明当前配置还没被列出——这时不要编名字，直接不传这个参数。"),
+                "group": AgentToolParam(type: .string, description: "可选：点名用哪个 TTS 分组（分组名，原样照抄纸条里列出的名字），按分组成员顺序自动 fallback。不传就用默认分组。voice 和 group 同时传时以 group 为准。纸条不在上下文里时不要猜名字，直接不传。"),
             ],
             required: ["text"],
             propertyOrdering: ["tool_title", "text", "voice", "group"]

@@ -493,23 +493,14 @@ final class TTSServiceStore: @unchecked Sendable {
         return _services
     }
 
-    /// The enabled service currently in use, or nil to fall back to the
-    /// legacy Model-Group path / System voice.
-    var activeService: TTSServiceOptions? {
-        lock.lock(); defer { lock.unlock() }
-        if let id = _selectedId, let s = _services.first(where: { $0.id == id }), s.enabled {
-            return s
-        }
-        return _services.first { $0.enabled }
-    }
-
     var selectedServiceId: String? {
         lock.lock(); defer { lock.unlock() }
         return _selectedId
     }
 
     /// The service the user explicitly picked (nil when "System" is selected).
-    /// Unlike `activeService`, no implicit fall-forward to the first enabled.
+    /// No implicit fall-forward to the first enabled service — the read-aloud
+    /// chain decides fallback order explicitly.
     func selectedService() -> TTSServiceOptions? {
         lock.lock(); defer { lock.unlock() }
         guard let id = _selectedId else { return nil }
@@ -544,15 +535,23 @@ final class TTSServiceStore: @unchecked Sendable {
     }
 
     func remove(id: String) {
-        var list = services
+        // [B09-R10 2026-10-22] One write, not two. Clearing the selection via
+        // setSelectedServiceId() persisted the OLD list with no selection, then
+        // setServices() persisted the new list — two UserDefaults writes and two
+        // change notifications for one deletion, plus a window where the service
+        // still existed but nothing was selected.
+        lock.lock()
+        var list = _services
         list.removeAll { $0.id == id }
-        // [B09 2026-10-22] Clear the selection when the selected service is the
-        // one being deleted. Previously the stale id survived: selectedService()
-        // then returned nil and read-aloud silently fell through to the model
-        // group / System path while the list showed nothing checked.
-        if selectedServiceId == id { setSelectedServiceId(nil) }
-        setServices(list)
+        let previousSelected = _selectedId
+        let keepSelected = (previousSelected == id) ? nil : previousSelected
+        _services = list
+        _selectedId = keepSelected
+        lock.unlock()
+        persist(list, selected: keepSelected)
         ProviderKeychainHelper.deleteAPIKey(instanceId: "tts-\(id)", caller: "TTSServiceStore.remove")
+        invalidateKeyPresence(forServiceId: id)
+        // persist() already posts .ttsServicesChanged — no second post here.
     }
 
     func setSelectedServiceId(_ id: String?) {
@@ -587,8 +586,34 @@ final class TTSServiceStore: @unchecked Sendable {
         ProviderKeychainHelper.loadAPIKey(instanceId: service.keychainInstanceId, caller: "TTSServiceStore")
     }
 
+    /// [B09-R8 2026-10-22] Presence cache. `hasAPIKey` is now asked on every
+    /// render (list rows, group subtitle, summary, the chat sheet), and each miss
+    /// was a synchronous Keychain IPC call on the main thread — a settings page
+    /// refresh could do a dozen of them. Presence is cached per service id and
+    /// invalidated whenever a key is saved, deleted or the service list changes;
+    /// the KEY itself is still read fresh, only "is there one" is cached.
+    private var keyPresence: [String: Bool] = [:]
+    private let keyPresenceLock = NSLock()
+
     func hasAPIKey(for service: TTSServiceOptions) -> Bool {
-        (apiKey(for: service)?.isEmpty == false)
+        keyPresenceLock.lock()
+        if let cached = keyPresence[service.id] {
+            keyPresenceLock.unlock()
+            return cached
+        }
+        keyPresenceLock.unlock()
+        let present = (apiKey(for: service)?.isEmpty == false)
+        keyPresenceLock.lock()
+        keyPresence[service.id] = present
+        keyPresenceLock.unlock()
+        return present
+    }
+
+    /// Drop the cached presence for one service (or all of them).
+    func invalidateKeyPresence(forServiceId id: String? = nil) {
+        keyPresenceLock.lock()
+        if let id { keyPresence.removeValue(forKey: id) } else { keyPresence.removeAll() }
+        keyPresenceLock.unlock()
     }
 
     /// [T-capsule-service-picker 09-12] Id-keyed convenience for picker rows,
@@ -600,6 +625,7 @@ final class TTSServiceStore: @unchecked Sendable {
 
     func saveAPIKey(_ key: String, for service: TTSServiceOptions) {
         ProviderKeychainHelper.saveAPIKey(key, instanceId: service.keychainInstanceId, caller: "TTSServiceStore")
+        invalidateKeyPresence(forServiceId: service.id)
     }
 
     /// [B09-L04 2026-10-22] Remove just the credential, keeping the service
@@ -608,6 +634,7 @@ final class TTSServiceStore: @unchecked Sendable {
     func deleteAPIKey(for service: TTSServiceOptions) {
         ProviderKeychainHelper.deleteAPIKey(instanceId: service.keychainInstanceId,
                                             caller: "TTSServiceStore.deleteAPIKey")
+        invalidateKeyPresence(forServiceId: service.id)
         NotificationCenter.default.post(name: .ttsServicesChanged, object: nil)
     }
 
