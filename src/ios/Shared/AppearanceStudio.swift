@@ -18,14 +18,14 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .global: return "全部页面"
-        case .home: return "首页"
-        case .bottomBar: return "底部栏"
-        case .chat: return "聊天"
-        case .settings: return "设置"
-        case .browser: return "浏览器"
-        case .files: return "文件"
-        case .terminal: return "终端"
+        case .global: return AppLocalized("全部页面")
+        case .home: return AppLocalized("首页")
+        case .bottomBar: return AppLocalized("底部栏")
+        case .chat: return AppLocalized("聊天")
+        case .settings: return AppLocalized("Settings")
+        case .browser: return AppLocalized("浏览器")
+        case .files: return AppLocalized("文件")
+        case .terminal: return AppLocalized("终端")
         }
     }
 
@@ -42,7 +42,10 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
 enum AppearanceVariant: String, CaseIterable, Identifiable {
     case light, dark
     var id: String { rawValue }
-    var title: String { self == .light ? "浅色" : "深色" }
+    var title: String {
+        // [B28 E-1] 三元里的裸中文 Text() 也查不到表。
+        self == .light ? AppLocalized("Light") : AppLocalized("Dark")
+    }
 }
 
 enum AppearanceColorRole: String, CaseIterable, Identifiable {
@@ -74,22 +77,22 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .canvas: return "页面背景"
-        case .surface: return "卡片"
-        case .raised: return "浮层"
-        case .mutedSurface: return "浅底"
-        case .primaryText: return "主文字"
-        case .secondaryText: return "次文字"
-        case .accent: return "强调色"
-        case .userBubble: return "我的气泡"
-        case .assistantBubble: return "AI 气泡"
-        case .border: return "边线"
-        case .field: return "输入框"
-        case .iconTile: return "图标底"
-        case .chip: return "胶囊底"
-        case .success: return "成功"
-        case .warning: return "警告"
-        case .destructive: return "危险"
+        case .canvas: return AppLocalized("页面背景")
+        case .surface: return AppLocalized("卡片")
+        case .raised: return AppLocalized("浮层")
+        case .mutedSurface: return AppLocalized("浅底")
+        case .primaryText: return AppLocalized("主文字")
+        case .secondaryText: return AppLocalized("次文字")
+        case .accent: return AppLocalized("强调色")
+        case .userBubble: return AppLocalized("我的气泡")
+        case .assistantBubble: return AppLocalized("AI 气泡")
+        case .border: return AppLocalized("边线")
+        case .field: return AppLocalized("输入框")
+        case .iconTile: return AppLocalized("图标底")
+        case .chip: return AppLocalized("胶囊底")
+        case .success: return AppLocalized("Success")
+        case .warning: return AppLocalized("警告")
+        case .destructive: return AppLocalized("危险")
         }
     }
 
@@ -97,22 +100,22 @@ enum AppearanceColorRole: String, CaseIterable, Identifiable {
     /// mapping is unambiguous ("调色的时候对应的地方准确一点").
     var hint: String {
         switch self {
-        case .canvas: return "每页底衬，卡片间隙和空区透出"
-        case .surface: return "大块卡片：设置卡片、会话列表、工具卡"
-        case .raised: return "浮层：弹窗、菜单、悬浮面板"
-        case .mutedSurface: return "浅底小组件：图片占位、次要底块"
-        case .primaryText: return "主文字：标题、正文"
-        case .secondaryText: return "次文字：说明、时间戳"
-        case .accent: return "强调色：按钮、选中、开关"
-        case .userBubble: return "你的聊天气泡"
-        case .assistantBubble: return "AI 聊天气泡"
-        case .border: return "分隔线、卡片描边"
-        case .field: return "输入框、搜索栏"
-        case .iconTile: return "小方块图标底：消息操作栏、输入栏图标"
-        case .chip: return "胶囊底：用量、状态、标签"
-        case .success: return "成功状态（绿）"
-        case .warning: return "警告状态（黄）"
-        case .destructive: return "危险操作（红）"
+        case .canvas: return AppLocalized("每页底衬，卡片间隙和空区透出")
+        case .surface: return AppLocalized("大块卡片：设置卡片、会话列表、工具卡")
+        case .raised: return AppLocalized("浮层：弹窗、菜单、悬浮面板")
+        case .mutedSurface: return AppLocalized("浅底小组件：图片占位、次要底块")
+        case .primaryText: return AppLocalized("主文字：标题、正文")
+        case .secondaryText: return AppLocalized("次文字：说明、时间戳")
+        case .accent: return AppLocalized("强调色：按钮、选中、开关")
+        case .userBubble: return AppLocalized("你的聊天气泡")
+        case .assistantBubble: return AppLocalized("AI 聊天气泡")
+        case .border: return AppLocalized("分隔线、卡片描边")
+        case .field: return AppLocalized("输入框、搜索栏")
+        case .iconTile: return AppLocalized("小方块图标底：消息操作栏、输入栏图标")
+        case .chip: return AppLocalized("胶囊底：用量、状态、标签")
+        case .success: return AppLocalized("成功状态（绿）")
+        case .warning: return AppLocalized("警告状态（黄）")
+        case .destructive: return AppLocalized("危险操作（红）")
         }
     }
 }
@@ -140,24 +143,24 @@ enum AppearanceColorRoleGroup: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .text: return "文字"
-        case .backgrounds: return "背景与卡片"
-        case .controls: return "控件"
-        case .accentGroup: return "强调"
-        case .chat: return "聊天"
-        case .status: return "状态"
+        case .text: return AppLocalized("文字")
+        case .backgrounds: return AppLocalized("背景与卡片")
+        case .controls: return AppLocalized("控件")
+        case .accentGroup: return AppLocalized("强调")
+        case .chat: return AppLocalized("聊天")
+        case .status: return AppLocalized("Status")
         }
     }
 
     /// 这一组管什么，写在分组标题下面，省得再猜。
     var hint: String {
         switch self {
-        case .text: return "标题、正文、说明、时间戳——所有字"
-        case .backgrounds: return "页面底衬、大块卡片、弹窗浮层、次要底块"
-        case .controls: return "图标底、胶囊底、输入框、边线——小零件"
-        case .accentGroup: return "按钮、开关、选中态"
-        case .chat: return "聊天气泡、工具卡"
-        case .status: return "成功、警告、危险"
+        case .text: return AppLocalized("标题、正文、说明、时间戳——所有字")
+        case .backgrounds: return AppLocalized("页面底衬、大块卡片、弹窗浮层、次要底块")
+        case .controls: return AppLocalized("图标底、胶囊底、输入框、边线——小零件")
+        case .accentGroup: return AppLocalized("按钮、开关、选中态")
+        case .chat: return AppLocalized("聊天气泡、工具卡")
+        case .status: return AppLocalized("成功、警告、危险")
         }
     }
 
@@ -819,8 +822,26 @@ final class AppearanceStudio: ObservableObject {
         Self.customIconFileURL(for: id)
     }
 
+    /// [B28 A-2] `id` 拼路径前必须消毒。
+    ///
+    /// 原来直接 `appendingPathComponent("\(id).png")`，而 CLI 侧
+    /// `minis-theme icon --slot ../../x` 接受任意字符串 —— 能写出
+    /// `Application Support/AppearanceStudio/icons/` 之外。UI 侧是枚举所以
+    /// 安全，两条入口共用一个不消毒的函数，防的只有一条路。
+    ///
+    /// 照 `SoulStore.storedName` 的做法：只留字母数字，截断 64。
+    static func sanitizedIconID(_ id: String) -> String {
+        let allowed = id.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }
+        let cleaned = String(String.UnicodeScalarView(allowed))
+        return String(cleaned.prefix(64))
+    }
+
     private static func customIconFileURL(for id: String) -> URL {
-        customIconsDirectoryURL.appendingPathComponent("\(id).png")
+        let safe = sanitizedIconID(id)
+        // 全被滤掉（例如 `../../`）时不能拼出 `".png"`，那会撞到目录里的
+        // 同名文件；给一个不可能来自枚举的名字。
+        let name = safe.isEmpty ? "_invalid" : safe
+        return customIconsDirectoryURL.appendingPathComponent(name + ".png")
     }
 
     private static let customIconsMigratedKey = "appearanceStudio.customIconsMigrated.v1"
@@ -932,9 +953,9 @@ enum AppearancePreset: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .warmPaper: return "暖纸"
-        case .cleanAir: return "清气"
-        case .nightCocoa: return "夜可可"
+        case .warmPaper: return AppLocalized("暖纸")
+        case .cleanAir: return AppLocalized("清气")
+        case .nightCocoa: return AppLocalized("夜可可")
         }
     }
     var colors: AppearancePalette {
@@ -1294,33 +1315,33 @@ enum QuietIconSlot: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .decorate: return "装扮"
-        case .appearance: return "外观"
-        case .skills: return "技能"
+        case .decorate: return AppLocalized("装扮")
+        case .appearance: return AppLocalized("Appearance")
+        case .skills: return AppLocalized("技能")
         case .soul: return "Soul"
-        case .memory: return "记忆"
+        case .memory: return AppLocalized("记忆")
         case .mcp: return "MCP"
-        case .env: return "环境变量"
-        case .storage: return "存储"
-        case .shared: return "共享文件夹"
-        case .mounts: return "外部文件夹"
-        case .icloud: return "iCloud 同步"
-        case .backup: return "备份与恢复"
-        case .permissions: return "权限"
-        case .lock: return "锁定"
-        case .logs: return "日志"
-        case .about: return "关于"
-        case .privacy: return "隐私政策"
-        case .feedback: return "反馈"
-        case .manual: return "手册"
-        case .terminal: return "终端"
-        case .rootfs: return "Rootfs 管理"
-        case .browser: return "浏览器"
-        case .bridgeRelay: return "桥·对外连接"
-        case .webSearch: return "联网搜索"
-        case .scheduled: return "定时任务与脉搏"
-        case .subAgents: return "子代理"
-        case .agentTools: return "工具开关"
+        case .env: return AppLocalized("Environment Variables")
+        case .storage: return AppLocalized("Storage")
+        case .shared: return AppLocalized("Shared folders")
+        case .mounts: return AppLocalized("外部文件夹")
+        case .icloud: return AppLocalized("iCloud Sync")
+        case .backup: return AppLocalized("Backup & Restore")
+        case .permissions: return AppLocalized("Permissions")
+        case .lock: return AppLocalized("锁定")
+        case .logs: return AppLocalized("Logs")
+        case .about: return AppLocalized("About")
+        case .privacy: return AppLocalized("Privacy Policy")
+        case .feedback: return AppLocalized("反馈")
+        case .manual: return AppLocalized("手册")
+        case .terminal: return AppLocalized("终端")
+        case .rootfs: return AppLocalized("Rootfs Management")
+        case .browser: return AppLocalized("浏览器")
+        case .bridgeRelay: return AppLocalized("桥·对外连接")
+        case .webSearch: return AppLocalized("联网搜索")
+        case .scheduled: return AppLocalized("定时任务与脉搏")
+        case .subAgents: return AppLocalized("Sub agent")
+        case .agentTools: return AppLocalized("工具开关")
         }
     }
     var systemName: String {

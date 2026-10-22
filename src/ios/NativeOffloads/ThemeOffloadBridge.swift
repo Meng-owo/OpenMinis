@@ -17,6 +17,10 @@ import UIKit
         Task { @MainActor in
             let pack = AppearanceStudio.shared.exportThemePack(includeWallpaper: false)
             var out = pack.asJSONObject()
+            // [B28 A-1] 立绘整张 base64 不再吐给 AI：几百 KB 能把上下文吃满。
+            // 想看有没有，读 `hasCharacterArt`。
+            out.removeValue(forKey: "characterArtBase64")
+            out["hasCharacterArt"] = AppearanceStudio.shared.hasCharacterArt
             out["ok"] = true
             result = out
             sem.signal()
@@ -77,6 +81,8 @@ import UIKit
             out["ok"] = true
             out["applied"] = true
             out.removeValue(forKey: "wallpaperJPEGBase64")
+            out.removeValue(forKey: "characterArtBase64")
+            out["hasCharacterArt"] = AppearanceStudio.shared.hasCharacterArt
             result = out
             sem.signal()
         }
@@ -96,6 +102,11 @@ import UIKit
         Task { @MainActor in
             let pack = AppearanceStudio.shared.exportThemePack(includeWallpaper: includeWallpaper)
             var out = pack.asJSONObject()
+            // [B28 A-1] 默认不吐立绘；只有 `--wallpaper` 明确要整包时才带。
+            if !includeWallpaper {
+                out.removeValue(forKey: "characterArtBase64")
+                out["hasCharacterArt"] = AppearanceStudio.shared.hasCharacterArt
+            }
             out["ok"] = true
             result = out
             sem.signal()

@@ -66,18 +66,18 @@ enum AppearanceScaleStep: Int, CaseIterable, Identifiable {
 
     var useCase: String {
         switch self {
-        case .appBackground: return "页面底"
-        case .subtleBackground: return "卡片、微弱组件底"
-        case .elementBackground: return "组件默认态"
-        case .elementHover: return "悬停"
-        case .elementActive: return "按下、选中"
-        case .subtleBorder: return "分隔线、卡片描边"
-        case .elementBorder: return "交互组件边框、焦点环"
-        case .elementBorderHover: return "悬停时的边框"
-        case .solid: return "实心填充（最纯）"
-        case .solidHover: return "实心填充悬停"
-        case .lowContrastText: return "次要文字"
-        case .highContrastText: return "主文字"
+        case .appBackground: return AppLocalized("页面底")
+        case .subtleBackground: return AppLocalized("卡片、微弱组件底")
+        case .elementBackground: return AppLocalized("组件默认态")
+        case .elementHover: return AppLocalized("悬停")
+        case .elementActive: return AppLocalized("按下、选中")
+        case .subtleBorder: return AppLocalized("分隔线、卡片描边")
+        case .elementBorder: return AppLocalized("交互组件边框、焦点环")
+        case .elementBorderHover: return AppLocalized("悬停时的边框")
+        case .solid: return AppLocalized("实心填充（最纯）")
+        case .solidHover: return AppLocalized("实心填充悬停")
+        case .lowContrastText: return AppLocalized("次要文字")
+        case .highContrastText: return AppLocalized("主文字")
         }
     }
 }
@@ -432,10 +432,10 @@ enum AppearanceAvatarShape: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .circle: return "圆"
-        case .square: return "方"
-        case .roundedSquare: return "圆角方"
-        case .rectangle: return "竖矩形"
+        case .circle: return AppLocalized("圆")
+        case .square: return AppLocalized("方")
+        case .roundedSquare: return AppLocalized("圆角方")
+        case .rectangle: return AppLocalized("竖矩形")
         }
     }
 
@@ -482,17 +482,17 @@ enum AppearanceChatDisplay: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .flat: return "平铺"
-        case .bubbles: return "气泡"
-        case .document: return "文稿"
+        case .flat: return AppLocalized("平铺")
+        case .bubbles: return AppLocalized("气泡")
+        case .document: return AppLocalized("文稿")
         }
     }
 
     var hint: String {
         switch self {
-        case .flat: return "不要气泡底色，靠留白分开，像聊天记录"
-        case .bubbles: return "左右两边的气泡"
-        case .document: return "不要头像和气泡，正文铺满，像读信"
+        case .flat: return AppLocalized("不要气泡底色，靠留白分开，像聊天记录")
+        case .bubbles: return AppLocalized("左右两边的气泡")
+        case .document: return AppLocalized("不要头像和气泡，正文铺满，像读信")
         }
     }
 
@@ -531,17 +531,17 @@ enum AppearanceNovelMode: String, CaseIterable, Identifiable, Codable {
 
     var title: String {
         switch self {
-        case .off: return "关"
-        case .stage: return "立绘"
-        case .galgame: return "对话框"
+        case .off: return AppLocalized("关")
+        case .stage: return AppLocalized("立绘")
+        case .galgame: return AppLocalized("对话框")
         }
     }
 
     var hint: String {
         switch self {
-        case .off: return "正常聊天，不改变消息显示"
-        case .stage: return "全屏角色立绘，聊天窗压到底部，上滑展开"
-        case .galgame: return "底部半透明对话框，一次一句，点一下往下推"
+        case .off: return AppLocalized("正常聊天，不改变消息显示")
+        case .stage: return AppLocalized("全屏角色立绘，聊天窗压到底部，上滑展开")
+        case .galgame: return AppLocalized("底部半透明对话框，一次一句，点一下往下推")
         }
     }
 

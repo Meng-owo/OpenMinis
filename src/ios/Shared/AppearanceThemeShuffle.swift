@@ -39,11 +39,11 @@ enum AppearanceThemeShuffle {
         var id: String { rawValue }
         var title: String {
             switch self {
-            case .soft: return "软糯"
-            case .airy: return "清透"
-            case .calm: return "沉静"
-            case .warm: return "暖阳"
-            case .night: return "夜"
+            case .soft: return AppLocalized("软糯")
+            case .airy: return AppLocalized("清透")
+            case .calm: return AppLocalized("沉静")
+            case .warm: return AppLocalized("暖阳")
+            case .night: return AppLocalized("夜")
             }
         }
 

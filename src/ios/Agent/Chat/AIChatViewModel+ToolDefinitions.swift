@@ -614,6 +614,18 @@ public final class ToolCatalogRouter: @unchecked Sendable {
                 quickSyntax: "minis-model-use run --model <id> --input <json>",
                 docRef: "minis-model-use --help"
             ),
+            // [B28 C-2 / F-1] `minis-theme` 一直没进能力目录，而这份目录是
+            // 唯一告诉模型"你会什么"的清单 —— 用户说"帮我做套粉色主题"，
+            // 模型根本想不到有这个能力。技能正文里提过它，但技能注入要过
+            // 人设白名单和条数上限，靠不住。
+            CatalogItem(
+                id: "minis-theme",
+                name: "minis-theme",
+                category: .system,
+                synopsis: "Read or change the app's look: colors per role/scope, bubble shapes, wallpapers, fonts, theme library.",
+                quickSyntax: "minis-theme get | apply --file <json> | color --list --scope chat | list | use --id <id>",
+                docRef: "minis-theme --help (get/apply/export/reset/undo/avatar/icon/wallpaper/color/save/list/use/rename/delete)"
+            ),
             CatalogItem(
                 id: "open_terminal",
                 name: "Interactive Terminal",

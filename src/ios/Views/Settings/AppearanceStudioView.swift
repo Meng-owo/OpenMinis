@@ -37,6 +37,12 @@ struct AppearanceStudioView: View {
     @ObservedObject private var fontSettings = FontSettings.shared
 
     @State private var variant: AppearanceVariant = .light
+    /// [B28 E-2] `variant` 原来写死 `.light`，全文件没有一处从
+    /// `studio.activeVariant` 同步 —— 深色用户一进来看到白底预览、浅色
+    /// hex 值、按浅色算的对比度结论，而真机界面是深色。
+    ///
+    /// 这个标记管住"用户自己点过浅/深"：点过之后就不再用系统明暗覆盖他。
+    @State private var variantPinnedByUser = false
     @State private var page: AppearanceStudioPage = .palette
 
     // 行为设置
@@ -95,6 +101,10 @@ struct AppearanceStudioView: View {
 
     // 杂项
     @State private var saveName: String = ""
+    /// [B28 B-2] 待删的那一套。非 nil 就弹确认框。
+    @State private var pendingDeleteTheme: AppearanceSavedTheme?
+    /// [B28 B-2] 删完还能撤销：pack 文件进回收站，整条元数据留在内存里。
+    @State private var deletedThemeUndo: AppearanceSavedTheme?
     @State private var errorText: String?
     @State private var showError = false
     @State private var showResetConfirm = false
@@ -137,7 +147,7 @@ struct AppearanceStudioView: View {
                     }
                 }
             } header: {
-                Text(AppLocalized("外观"))
+                Text(AppLocalized("Appearance"))
             } footer: {
                 Text(AppLocalized("改完立刻生效，聊天页、列表、设置页都跟着变。"))
             }
@@ -158,7 +168,7 @@ struct AppearanceStudioView: View {
         }
         .listStyle(.insetGrouped)
         .appearancePage(.settings)
-        .navigationTitle(AppLocalized("外观"))
+        .navigationTitle(AppLocalized("Appearance"))
         .navigationBarTitleDisplayMode(.large)
         // [K-4] THREE `.alert` modifiers used to sit here (error / reset
         // confirm / import result). iOS honours one presentation per view
@@ -171,6 +181,12 @@ struct AppearanceStudioView: View {
                     studio.resetThemePack()
                     showResetConfirm = false
                 }
+            } else if let pending = pendingDeleteTheme {
+                Button("Cancel", role: .cancel) { pendingDeleteTheme = nil }
+                Button("Delete", role: .destructive) {
+                    deleteTheme(pending)
+                    pendingDeleteTheme = nil
+                }
             } else {
                 Button("OK", role: .cancel) {
                     showError = false
@@ -181,7 +197,13 @@ struct AppearanceStudioView: View {
             Text(alertMessage)
         }
         .fullScreenCover(isPresented: $showFullPreview) { fullPreviewSheet }
-        .onChange(of: appearanceMode) { _ in applyAppearanceMode() }
+        .onAppear { syncVariantFromSystem() }
+        .onChange(of: appearanceMode) { _ in
+            applyAppearanceMode()
+            // [B28 E-2] 明暗设置变了，预览的浅/深也得跟着换 —— 但用户自己
+            // 点过就尊重他，不再覆盖。
+            syncVariantFromSystem()
+        }
         // [K-4] The ONE image picker for this page.
         //
         // Eight `PhotosPicker` components used to live inside the sub-page
@@ -207,12 +229,13 @@ struct AppearanceStudioView: View {
     /// [K-4] One flag for the shared alert.
     private var isAlertPresented: Binding<Bool> {
         Binding(
-            get: { showError || showResetConfirm || showSTWarnings },
+            get: { showError || showResetConfirm || showSTWarnings || pendingDeleteTheme != nil },
             set: { presented in
                 guard !presented else { return }
                 showError = false
                 showResetConfirm = false
                 showSTWarnings = false
+                pendingDeleteTheme = nil
             }
         )
     }
@@ -226,10 +249,16 @@ struct AppearanceStudioView: View {
     private var alertTitle: LocalizedStringKey {
         if showResetConfirm { return "Reset appearance?" }
         if showSTWarnings { return "Import finished" }
+        // [B28 B-2] 删主题现在要二次确认。原来点一下行就没了，没确认、
+        // 没撤销、也没说删的是不是正在用的那套。
+        if pendingDeleteTheme != nil { return "Delete this theme?" }
         return "Something went wrong"
     }
 
     private var alertMessage: String {
+        if let pending = pendingDeleteTheme {
+            return String(format: AppLocalized("“%@” will be removed from the library."), pending.name)
+        }
         if showResetConfirm {
             return AppLocalized("Colors, bubble shapes, and stickers go back to default. Wallpaper and couple avatars stay.")
         }
@@ -287,16 +316,68 @@ struct AppearanceStudioView: View {
             guard let categoryKey else { return }
             studio.setCategoryImage(image, for: categoryKey)
         case .characterArt:
-            guard let jpeg = image.jpegData(compressionQuality: 0.82) else {
-                fail(AppLocalized("选中的图读不出来。"))
-                return
-            }
-            studio.setCharacterArt(jpeg.base64EncodedString())
+            // [B28 A-1] 直接落文件，不再绕 base64 进 defaults。
+            studio.setCharacterArtImage(image)
         }
     }
     private func fail(_ message: String) {
         errorText = message
         showError = true
+    }
+
+    /// [B28 E-2] 用户手动点浅/深时用这个绑定，顺手打上"别自动覆盖我"的标记。
+    /// 自动同步走 `variant` 本身，不经过这里。
+    private var variantBinding: Binding<AppearanceVariant> {
+        Binding(
+            get: { variant },
+            set: { newValue in
+                variantPinnedByUser = true
+                variant = newValue
+            }
+        )
+    }
+
+    /// [B28 E-2] 没被用户手动钉住时，跟着系统/设置的明暗走。
+    private func syncVariantFromSystem() {
+        guard !variantPinnedByUser else { return }
+        variant = studio.activeVariant
+    }
+
+    /// [B28 B-2 / D-3] 删一套主题。pack 文件进回收站，撤销条在列表顶部停着，
+    /// 直到用户点撤销、点了别的主题、或者离开这一页。
+    private func deleteTheme(_ item: AppearanceSavedTheme) {
+        guard studio.deleteSavedTheme(id: item.id) else {
+            MinisToast.show(AppLocalized("Couldn't delete this theme."),
+                            systemImage: "exclamationmark.triangle.fill")
+            return
+        }
+        deletedThemeUndo = item
+    }
+
+    /// [B28 B-2] 撤销条。删除不是不可逆的 —— 主题库里的东西是用户自己
+    /// 攒的，点错一下不该没。
+    @ViewBuilder
+    private var undoDeleteBanner: some View {
+        if let undo = deletedThemeUndo {
+            HStack(spacing: 10) {
+                Image(systemName: "trash")
+                    .font(.system(size: 12))
+                Text(String(format: AppLocalized("Deleted “%@”"), undo.name))
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                Spacer()
+                Button(AppLocalized("Undo")) {
+                    _ = studio.restoreSavedTheme(undo)
+                    deletedThemeUndo = nil
+                }
+                .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundStyle(studio.color(.primaryText, variant: variant))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(studio.color(.raised, variant: variant))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
     }
 
     /// 明暗覆盖。原来在外观页里，逻辑没动，只是搬过来。
@@ -421,7 +502,7 @@ struct AppearanceStudioView: View {
 
                 Spacer()
 
-                Picker("", selection: $variant) {
+                Picker("", selection: variantBinding) {
                     ForEach(AppearanceVariant.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -443,7 +524,7 @@ struct AppearanceStudioView: View {
                     .foregroundStyle(studio.color(.accent, variant: variant))
             }
         } header: {
-            Text(AppLocalized("预览"))
+            Text(AppLocalized("Preview"))
         } footer: {
             Text(AppLocalized("展开可以看到真实的聊天气泡、头像和壁纸。改任何设置这里立刻跟着变。"))
         }
@@ -456,11 +537,11 @@ struct AppearanceStudioView: View {
             AppearanceBackdrop(scope: .global).ignoresSafeArea()
             VStack(spacing: 16) {
                 HStack {
-                    Text(AppLocalized("预览"))
+                    Text(AppLocalized("Preview"))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(studio.color(.primaryText, variant: variant))
                     Spacer()
-                    Picker("", selection: $variant) {
+                    Picker("", selection: variantBinding) {
                         ForEach(AppearanceVariant.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
@@ -748,7 +829,7 @@ struct AppearanceStudioView: View {
                 HStack(spacing: 9) {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 11, weight: .medium))
-                    Text(AppLocalized("高级"))
+                    Text(AppLocalized("Advanced"))
                         .font(.system(size: 13, weight: .medium))
                     Spacer()
                     Image(systemName: "chevron.down")
@@ -1138,7 +1219,7 @@ struct AppearanceStudioView: View {
                         }
                         .buttonStyle(.plain)
                         if studio.customIcon(for: slot.id) != nil {
-                            Button(AppLocalized("还原")) { studio.removeIcon(for: slot.id) }
+                            Button(AppLocalized("Revert")) { studio.removeIcon(for: slot.id) }
                                 .font(.system(size: 11))
                                 .foregroundStyle(studio.color(.destructive, variant: variant))
                         }
@@ -1283,7 +1364,7 @@ struct AppearanceStudioView: View {
                 }
                 .buttonStyle(.plain)
                 if studio.categoryImage(for: key) != nil {
-                    Button(AppLocalized("还原")) { studio.removeCategoryImage(for: key) }
+                    Button(AppLocalized("Revert")) { studio.removeCategoryImage(for: key) }
                         .font(.system(size: 10))
                         .foregroundStyle(studio.color(.destructive, variant: variant))
                 }
@@ -1314,8 +1395,11 @@ struct AppearanceStudioView: View {
                     .textInputAutocapitalization(.never)
                     .font(.system(size: 13))
                 Button {
-                    _ = studio.saveCurrentTheme(name: saveName.isEmpty ? "未命名" : saveName)
+                    // [B28 D-3] 返回值不再丢：存成功给一句 toast，带名字。
+                    let label = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let item = studio.saveCurrentTheme(name: label.isEmpty ? AppLocalized("Untitled") : label)
                     saveName = ""
+                    MinisToast.show(String(format: AppLocalized("Saved “%@”"), item.name))
                 } label: {
                     Text(AppLocalized("存进主题库"))
                         .font(.system(size: 13, weight: .medium))
@@ -1327,6 +1411,8 @@ struct AppearanceStudioView: View {
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
             }
             .modifier(StudioCard(variant: variant))
+
+            undoDeleteBanner
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("主题库"))
@@ -1347,10 +1433,20 @@ struct AppearanceStudioView: View {
                                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
                             }
                             Spacer()
-                            Button(AppLocalized("应用")) { _ = studio.applySavedTheme(id: item.id) }
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(studio.color(.accent, variant: variant))
-                            Button(AppLocalized("删")) { _ = studio.deleteSavedTheme(id: item.id) }
+                            Button(AppLocalized("Apply")) {
+                                // [B28 D-3] 点了「应用」原来什么都不发生，用户
+                                // 以为没生效。现在成功/失败都有一句话。
+                                if studio.applySavedTheme(id: item.id) {
+                                    MinisToast.show(String(format: AppLocalized("Applied “%@”"), item.name))
+                                } else {
+                                    MinisToast.show(AppLocalized("Couldn't apply this theme."),
+                                                    systemImage: "exclamationmark.triangle.fill")
+                                }
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(studio.color(.accent, variant: variant))
+                            // [B28 B-2] 删改成先弹确认，确认后还能撤销。
+                            Button(AppLocalized("删")) { pendingDeleteTheme = item }
                                 .font(.system(size: 11))
                                 .foregroundStyle(studio.color(.destructive, variant: variant))
                         }
@@ -1418,9 +1514,9 @@ struct AppearanceStudioView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("明暗"))
                 Picker("", selection: $appearanceMode) {
-                    Text(AppLocalized("跟随系统")).tag(0)
-                    Text(AppLocalized("浅色")).tag(1)
-                    Text(AppLocalized("深色")).tag(2)
+                    Text(AppLocalized("Follows system")).tag(0)
+                    Text(AppLocalized("Light")).tag(1)
+                    Text(AppLocalized("Dark")).tag(2)
                 }
                 .pickerStyle(.segmented)
                 Text(AppLocalized("覆盖系统外观。选「跟随系统」就跟着手机走。"))
@@ -1430,10 +1526,10 @@ struct AppearanceStudioView: View {
             .modifier(StudioCard(variant: variant))
 
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle(AppLocalized("启动会话"))
+                sectionTitle(AppLocalized("Launch Session"))
                 Picker("", selection: $launchScreen) {
-                    Text(AppLocalized("自动")).tag(0)
-                    Text(AppLocalized("上次会话")).tag(1)
+                    Text(AppLocalized("Auto")).tag(0)
+                    Text(AppLocalized("Last Session")).tag(1)
                     Text(AppLocalized("新会话")).tag(2)
                     Text(AppLocalized("首页")).tag(3)
                 }
@@ -1448,9 +1544,9 @@ struct AppearanceStudioView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("字号"))
-                FontScaleRow(label: AppLocalized("聊天输入"), level: $fontSettings.chatInputScale)
-                FontScaleRow(label: AppLocalized("消息文本"), level: $fontSettings.messageBaseScale)
-                FontScaleRow(label: AppLocalized("应用基础"), level: $fontSettings.appBaseScale)
+                FontScaleRow(label: AppLocalized("Chat Input"), level: $fontSettings.chatInputScale)
+                FontScaleRow(label: AppLocalized("Message Text"), level: $fontSettings.messageBaseScale)
+                FontScaleRow(label: AppLocalized("App Base"), level: $fontSettings.appBaseScale)
                 if fontSettings.isModified {
                     Button(AppLocalized("恢复默认字号")) { fontSettings.resetToDefaults() }
                         .font(.system(size: 12))
@@ -1464,9 +1560,9 @@ struct AppearanceStudioView: View {
             .modifier(StudioCard(variant: variant))
 
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle(AppLocalized("输入"))
-                Picker(AppLocalized("回车键"), selection: $returnKeyBehavior) {
-                    Text(AppLocalized("换行")).tag(0)
+                sectionTitle(AppLocalized("Input"))
+                Picker(AppLocalized("Return Key"), selection: $returnKeyBehavior) {
+                    Text(AppLocalized("Newline")).tag(0)
                     Text(AppLocalized("发送")).tag(1)
                 }
                 .pickerStyle(.segmented)
@@ -1477,7 +1573,7 @@ struct AppearanceStudioView: View {
 
                 hairline.padding(.leading, 0).padding(.vertical, 4)
 
-                Toggle(AppLocalized("回复后自动聚焦输入框"), isOn: $autoFocusAfterReply)
+                Toggle(AppLocalized("Auto-Focus Input After Reply"), isOn: $autoFocusAfterReply)
                     .tint(studio.color(.accent, variant: variant))
                 Text(AppLocalized("模型回复完自动弹出键盘，方便接着问。不想被键盘打断就关掉。"))
                     .font(.system(size: 10.5))
@@ -1488,7 +1584,7 @@ struct AppearanceStudioView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("聊天行为"))
-                Toggle(AppLocalized("流式输出时展开思考"), isOn: $autoExpandThinking)
+                Toggle(AppLocalized("Expand Thinking While Streaming"), isOn: $autoExpandThinking)
                     .tint(studio.color(.accent, variant: variant))
                 Text(AppLocalized("开着时，模型推理中的思考块自动展开，完成后收起。关掉就保持折叠，点一下才看。"))
                     .font(.system(size: 10.5))
@@ -1497,7 +1593,7 @@ struct AppearanceStudioView: View {
 
                 hairline.padding(.leading, 0).padding(.vertical, 4)
 
-                Toggle(AppLocalized("自动分组"), isOn: autoGroupingBinding)
+                Toggle(AppLocalized("Auto-Grouping"), isOn: autoGroupingBinding)
                     .tint(studio.color(.accent, variant: variant))
                 Text(AppLocalized("首次生成会话标题时，顺便归进匹配的分组。每个会话只做一次，只用你已经建好的分组。"))
                     .font(.system(size: 10.5))
@@ -1506,7 +1602,7 @@ struct AppearanceStudioView: View {
 
                 hairline.padding(.leading, 0).padding(.vertical, 4)
 
-                Toggle(AppLocalized("屏幕常亮"), isOn: $keepScreenAwakeDuringTasks)
+                Toggle(AppLocalized("Keep Screen Awake"), isOn: $keepScreenAwakeDuringTasks)
                     .tint(studio.color(.accent, variant: variant))
                 Text(AppLocalized("有会话在跑任务时不熄屏。会更费电。"))
                     .font(.system(size: 10.5))
@@ -1523,7 +1619,7 @@ struct AppearanceStudioView: View {
                         .frame(width: 32, height: 32)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(studio.currentThemePack().rowBackgroundHex == nil
-                             ? AppLocalized("跟随卡片色") : AppLocalized("自定义"))
+                             ? AppLocalized("跟随卡片色") : AppLocalized("Custom"))
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(studio.color(.primaryText, variant: variant))
                         Text(AppLocalized("设置页每一行的底色。不选就跟卡片走。"))
@@ -1532,7 +1628,7 @@ struct AppearanceStudioView: View {
                     }
                     Spacer()
                     if studio.currentThemePack().rowBackgroundHex != nil {
-                        Button(AppLocalized("还原")) { studio.setRowBackground(nil) }
+                        Button(AppLocalized("Revert")) { studio.setRowBackground(nil) }
                             .font(.system(size: 11))
                             .foregroundStyle(studio.color(.destructive, variant: variant))
                     }
@@ -1591,7 +1687,7 @@ struct AppearanceStudioView: View {
             .modifier(StudioCard(variant: variant))
 
             VStack(alignment: .leading, spacing: 12) {
-                sectionTitle(AppLocalized("语言"))
+                sectionTitle(AppLocalized("Language"))
                 ForEach(studioLanguages) { lang in
                     Button {
                         // 写 reopen 标记再翻语言——根视图会因 .id(appLanguage)
@@ -1766,9 +1862,7 @@ struct AppearanceStudioView: View {
                 hairline.padding(.leading, 0).padding(.vertical, 2)
 
                 HStack(spacing: 12) {
-                    if let b64 = studio.currentThemePack().characterArtBase64,
-                       let data = Data(base64Encoded: b64),
-                       let img = UIImage(data: data) {
+                    if let img = studio.characterArtImage() {
                         Image(uiImage: img)
                             .resizable()
                             .scaledToFill()
@@ -1800,17 +1894,17 @@ struct AppearanceStudioView: View {
                         pickerTarget = .characterArt
                         isPickerPresented = true
                     } label: {
-                        Text(studio.currentThemePack().characterArtBase64 == nil ? "选择" : "更换")
+                        Text(studio.hasCharacterArt ? AppLocalized("Change") : AppLocalized("Select"))
                             .font(.system(size: 13, weight: .medium))
                     }
                     .buttonStyle(.borderless)
                 }
 
-                if studio.currentThemePack().characterArtBase64 != nil {
+                if studio.hasCharacterArt {
                     Button(role: .destructive) {
-                        studio.setCharacterArt(nil)
+                        studio.removeCharacterArt()
                     } label: {
-                        Text("移除立绘")
+                        Text(AppLocalized("移除立绘"))
                             .font(.system(size: 12))
                     }
                     .buttonStyle(.borderless)
@@ -1933,15 +2027,19 @@ enum AppearanceStudioPage: String, CaseIterable, Identifiable {
         }
     }
     /// 子页标题下的一句话说明，跟系统设置里那些 footer 一个用法。
+    ///
+    /// [B28 E-1] 这里原来返回裸中文，而调用点是 `Text(item.subtitle)` ——
+    /// `Text(String)` 不查表，所以这七条在九语种里只有 en/zh-Hans 两条有键、
+    /// 其他语言全显示中文。现在走 AppLocalized，键是英文。
     var subtitle: String {
         switch self {
-        case .palette: return "颜色、对比度、摇一套"
-        case .bubbles: return "气泡形状、消息形态、视觉小说"
-        case .backdrop: return "壁纸与遮罩"
-        case .avatars: return "你和 AI 的头像"
-        case .icons: return "App 图标与列表图标"
-        case .library: return "保存、导入、导出主题"
-        case .behaviour: return "语言、字号、输入"
+        case .palette: return AppLocalized("Colors, contrast, roll a palette")
+        case .bubbles: return AppLocalized("Bubble shape, message style, visual novel")
+        case .backdrop: return AppLocalized("Wallpaper & shade")
+        case .avatars: return AppLocalized("Your avatar and the AI's")
+        case .icons: return AppLocalized("App icon and list icons")
+        case .library: return AppLocalized("Save, import and export themes")
+        case .behaviour: return AppLocalized("Language, text size, input")
         }
     }
 }
@@ -2270,7 +2368,7 @@ private struct AppearanceLivePreview: View {
 
                 // 状态三色
                 HStack(spacing: 6 * scale) {
-                    chipSwatch(.success, AppLocalized("成功"))
+                    chipSwatch(.success, AppLocalized("Success"))
                     chipSwatch(.warning, AppLocalized("警告"))
                     chipSwatch(.destructive, AppLocalized("危险"))
                     Spacer(minLength: 0)

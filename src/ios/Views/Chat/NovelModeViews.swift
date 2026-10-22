@@ -21,10 +21,10 @@ struct NovelStageBackdrop: View {
     let personaID: String?
     @ObservedObject private var studio = AppearanceStudio.shared
 
+    /// [B28 A-1] 立绘改成落文件，不再从 pack 的 base64 解码。
+    /// 老 pack 里的整张 base64 在 `loadStoredPackUnlocked` 里已经搬成文件了。
     private var artImage: UIImage? {
-        guard let b64 = studio.currentThemePack().characterArtBase64,
-              let data = Data(base64Encoded: b64) else { return nil }
-        return UIImage(data: data)
+        studio.characterArtImage()
     }
 
     var body: some View {

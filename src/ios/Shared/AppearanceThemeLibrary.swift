@@ -127,14 +127,66 @@ extension AppearanceStudio {
         return true
     }
 
+    /// [B28 B-2] 删掉一套。pack 文件不真删，挪进 `trash/` 留着撤销。
+    ///
+    /// 原来直接 `removeItem` —— 点错一下这套就没了，没有二次确认、没有
+    /// 撤销、也没有提示。
     func deleteSavedTheme(id: String) -> Bool {
         var list = savedThemes()
         let before = list.count
         list.removeAll { $0.id == id }
         guard list.count != before else { return false }
-        try? FileManager.default.removeItem(at: libraryPackURL(id))
+        let src = libraryPackURL(id)
+        let dst = trashedPackURL(id)
+        if FileManager.default.fileExists(atPath: src.path) {
+            try? FileManager.default.createDirectory(at: trashDirectory(),
+                                                     withIntermediateDirectories: true)
+            try? FileManager.default.removeItem(at: dst)
+            try? FileManager.default.moveItem(at: src, to: dst)
+        }
+        pruneTrash()
         persistLibrary(list)
         return true
+    }
+
+    /// [B28 B-2] 撤销删除：文件搬回 library/，元数据插回列表最前面。
+    func restoreSavedTheme(_ item: AppearanceSavedTheme) -> Bool {
+        let src = trashedPackURL(item.id)
+        guard FileManager.default.fileExists(atPath: src.path) else { return false }
+        try? FileManager.default.removeItem(at: libraryPackURL(item.id))
+        try? FileManager.default.moveItem(at: src, to: libraryPackURL(item.id))
+        var list = savedThemes()
+        if !list.contains(where: { $0.id == item.id }) {
+            list.insert(item, at: 0)
+        }
+        persistLibrary(Array(list.prefix(AppearanceSavedTheme.limit)))
+        return true
+    }
+
+    private func trashDirectory() -> URL {
+        libraryDirectory().appendingPathComponent("trash", isDirectory: true)
+    }
+
+    private func trashedPackURL(_ id: String) -> URL {
+        trashDirectory().appendingPathComponent("\(id).json")
+    }
+
+    /// 回收站只留最近 5 套，免得删过的主题永远堆在磁盘上。
+    private func pruneTrash() {
+        let dir = trashDirectory()
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]) else { return }
+        let sorted = files.sorted { a, b in
+            let da = (try? a.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate) ?? .distantPast
+            let db = (try? b.resourceValues(forKeys: [.contentModificationDateKey])
+                .contentModificationDate) ?? .distantPast
+            return da > db
+        }
+        for extra in sorted.dropFirst(5) {
+            try? FileManager.default.removeItem(at: extra)
+        }
     }
 
     private func readLibraryPack(id: String) -> AppearanceThemePack? {

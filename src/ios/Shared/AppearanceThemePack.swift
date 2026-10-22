@@ -111,9 +111,12 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
         userBubbleRadius: 18,
         assistantBubbleRadius: 16,
         thinkingRadius: 12,
-        thinkingFillHex: "D4778B",
-        thinkingStrokeHex: "D4778B",
-        thinkingAccentHex: "D4778B",
+        // [B28 B-3] 空串 = "没设过，跟 accent 走"。老版本这三个字段是 accent
+        // 的副本；写死一个 hex 会把新装用户钉在旧主色上（D4778B 是 10-18
+        // 改配色之前的主色）。
+        thinkingFillHex: "",
+        thinkingStrokeHex: "",
+        thinkingAccentHex: "",
         userBubbleStyle: AppearanceBubbleStyle.rounded.rawValue,
         assistantBubbleStyle: AppearanceBubbleStyle.rounded.rawValue,
         thinkingCardJPEGBase64: nil,
@@ -269,9 +272,9 @@ struct AppearanceThemePack: Equatable, Codable, Identifiable {
             userBubbleRadius: clampRadius(num("userBubbleRadius", fallback: base.userBubbleRadius)),
             assistantBubbleRadius: clampRadius(num("assistantBubbleRadius", fallback: base.assistantBubbleRadius)),
             thinkingRadius: clampRadius(num("thinkingRadius", fallback: base.thinkingRadius)),
-            thinkingFillHex: normalizeHex(str("thinkingFillHex", fallback: base.thinkingFillHex)),
-            thinkingStrokeHex: normalizeHex(str("thinkingStrokeHex", fallback: base.thinkingStrokeHex)),
-            thinkingAccentHex: normalizeHex(str("thinkingAccentHex", fallback: base.thinkingAccentHex)),
+            thinkingFillHex: normalizeOptionalHex(str("thinkingFillHex", fallback: base.thinkingFillHex)),
+            thinkingStrokeHex: normalizeOptionalHex(str("thinkingStrokeHex", fallback: base.thinkingStrokeHex)),
+            thinkingAccentHex: normalizeOptionalHex(str("thinkingAccentHex", fallback: base.thinkingAccentHex)),
             userBubbleStyle: AppearanceBubbleStyle.parse(str("userBubbleStyle", fallback: base.userBubbleStyle)).rawValue,
             assistantBubbleStyle: AppearanceBubbleStyle.parse(str("assistantBubbleStyle", fallback: base.assistantBubbleStyle)).rawValue,
             thinkingCardJPEGBase64: raw["thinkingCardJPEGBase64"] as? String,
@@ -329,9 +332,9 @@ enum AppearanceListIconShape: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .circle: return "圆"
-        case .squircle: return "方圆"
-        case .rounded: return "圆角方"
+        case .circle: return AppLocalized("圆")
+        case .squircle: return AppLocalized("方圆")
+        case .rounded: return AppLocalized("圆角方")
         }
     }
     static func parse(_ raw: String) -> AppearanceListIconShape {
@@ -356,10 +359,10 @@ enum AppearanceFontFamily: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .system: return "系统"
-        case .rounded: return "圆体"
-        case .serif: return "衬线"
-        case .mono: return "等宽"
+        case .system: return AppLocalized("系统")
+        case .rounded: return AppLocalized("圆体")
+        case .serif: return AppLocalized("衬线")
+        case .mono: return AppLocalized("等宽")
         }
     }
     var design: Font.Design {
@@ -409,11 +412,11 @@ enum AppearanceBubbleStyle: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .rounded: return "圆角"
-        case .squircle: return "连续圆角"
-        case .pill: return "胶囊"
-        case .tail: return "小尾巴"
-        case .sharp: return "方一点"
+        case .rounded: return AppLocalized("圆角")
+        case .squircle: return AppLocalized("连续圆角")
+        case .pill: return AppLocalized("胶囊")
+        case .tail: return AppLocalized("小尾巴")
+        case .sharp: return AppLocalized("方一点")
         }
     }
     static func parse(_ raw: String) -> AppearanceBubbleStyle {
@@ -423,6 +426,13 @@ enum AppearanceBubbleStyle: String, CaseIterable, Identifiable {
 
 fileprivate func clampRadius(_ value: Double) -> Double {
     min(32, max(4, value))
+}
+
+/// [B28 B-3] 三个 thinking 字段允许空串，表示"跟 accent 走"。
+/// `normalizeHex("")` 会回落到 808080 灰，所以这几个字段单独走这里。
+fileprivate func normalizeOptionalHex(_ raw: String) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "" : normalizeHex(trimmed)
 }
 
 fileprivate func normalizeHex(_ raw: String) -> String {
@@ -531,6 +541,19 @@ extension AppearanceStudio {
            let upgraded = try? JSONSerialization.data(withJSONObject: pack.asJSONObject()) {
             UserDefaults.standard.set(upgraded, forKey: Self.packKey)
         }
+        // [B28 A-1] 老 pack 把立绘整张 base64 存在这里。搬到文件、字段置 nil，
+        // 顺手把 defaults 里那份也重写掉 —— 否则每次读还是把几百 KB 搬进内存。
+        // 只在字段非空时跑一次，之后永远为 nil。
+        if let inline = pack.characterArtBase64, !inline.isEmpty,
+           let art = Data(base64Encoded: inline) {
+            writeEncodedImage(art, to: characterArtURL(), maxEdge: 1600, quality: 0.82)
+            var cleaned = pack
+            cleaned.characterArtBase64 = nil
+            if let data = try? JSONSerialization.data(withJSONObject: cleaned.asJSONObject()) {
+                UserDefaults.standard.set(data, forKey: Self.packKey)
+            }
+            return cleaned
+        }
         return pack
     }
 
@@ -561,6 +584,11 @@ extension AppearanceStudio {
         stored.wallpaperJPEGBase64 = nil
         stored.thinkingCardJPEGBase64 = nil
         stored.inputBarJPEGBase64 = nil
+        // [B28 A-1] 立绘也不再进 defaults：落成文件，字段置 nil。
+        if let b64 = pack.characterArtBase64, let data = Data(base64Encoded: b64) {
+            writeEncodedImage(data, to: characterArtURL(), maxEdge: 1600, quality: 0.82)
+        }
+        stored.characterArtBase64 = nil
         // Keep markers for category images the caller did not mention.
         // applyCategoryImages below reconciles the rest against disk.
         let mentioned = Set(pack.categoryImages.keys)
@@ -597,10 +625,10 @@ extension AppearanceStudio {
         pack.colorsDark = exportColors(variant: .dark)
         pack.surfaceOpacity = surfaceOpacity
         pack.wallpaperShade = wallpaperShade
-        let accentHex = hex(.accent, scope: .chat, variant: activeVariant)
-        pack.thinkingAccentHex = accentHex
-        pack.thinkingFillHex = accentHex
-        pack.thinkingStrokeHex = accentHex
+        // [B28 B-3] 三个字段以前被硬写成 accent 的副本 —— 导出一次，用户
+        // 自己设的 thinking 颜色就被抹平，而且导出/应用来回一趟就把「跟 accent
+        // 走」永久钉死成当时那个 hex。现在不写：空串就是「跟 accent 走」，
+        // 设过的原样带出去。
         // [T-theme-reexport-inflate] Export used to re-encode every image from
         // its decoded UIImage at a fixed quality. A pack that went
         // export → apply → export came back ~3x larger (340B → 1005B, and
@@ -634,6 +662,13 @@ extension AppearanceStudio {
                       let data = image.jpegData(compressionQuality: 0.82) {
                 pack.inputBarJPEGBase64 = data.base64EncodedString()
             }
+        }
+        // [B28 A-1] 立绘跟壁纸同一条路：`includeWallpaper: true` 才带整张图，
+        // 平时（`minis-theme get`）字段是 nil，AI 不会吃进几百 KB base64。
+        if includeWallpaper, let data = originalImageData(fileName: "character-art.jpg") {
+            pack.characterArtBase64 = data.base64EncodedString()
+        } else {
+            pack.characterArtBase64 = nil
         }
         if includeWallpaper {
             var images: [String: String] = [:]
@@ -705,7 +740,8 @@ extension AppearanceStudio {
             }
         }
         for (name, src) in [("thinking-card.jpg", thinkingCardURL()),
-                            ("input-bar.jpg", inputBarImageURL())] {
+                            ("input-bar.jpg", inputBarImageURL()),
+                            ("character-art.jpg", characterArtURL())] {
             if FileManager.default.fileExists(atPath: src.path) {
                 try? FileManager.default.copyItem(at: src, to: scratch.appendingPathComponent(name))
             }
@@ -757,7 +793,8 @@ extension AppearanceStudio {
             }
         }
         for (name, dst) in [("thinking-card.jpg", thinkingCardURL()),
-                            ("input-bar.jpg", inputBarImageURL())] {
+                            ("input-bar.jpg", inputBarImageURL()),
+                            ("character-art.jpg", characterArtURL())] {
             let src = dir.appendingPathComponent(name)
             if FileManager.default.fileExists(atPath: src.path) {
                 try? FileManager.default.removeItem(at: dst)
@@ -774,6 +811,9 @@ extension AppearanceStudio {
         UserDefaults.standard.removeObject(forKey: Self.packKey)
         try? FileManager.default.removeItem(at: thinkingCardURL())
         try? FileManager.default.removeItem(at: inputBarImageURL())
+        // [B28 A-1] 立绘也是 pack 里的图，跟 thinking 卡片/输入栏一样回默认。
+        try? FileManager.default.removeItem(at: characterArtURL())
+        ThumbnailCache.shared.removeThumbnail(for: characterArtURL().path)
         wipeCategoryImageFiles()
         themePackLock.lock()
         cachedThemePack = .default
@@ -838,9 +878,57 @@ extension AppearanceStudio {
     }
 
     /// 立绘图。传 nil 清掉。
+    ///
+    /// [B28 A-1] 立绘以前是唯一一张"图片却当普通字段存"的资源：整张
+    /// base64（1600px JPEG，几百 KB）进 pack JSON → UserDefaults → 每次拖
+    /// 任何滑杆都重写一遍 → 还进备份。其余三张图早就走"落文件、字段置 nil"。
+    ///
+    /// 现在立绘也落文件（`character-art.jpg`）。pack 里的字段只作为
+    /// 一次性的搬运工存在：apply 时解码落盘，然后立刻置 nil。
     func setCharacterArt(_ base64: String?) {
         var pack = currentThemePack()
         pack.characterArtBase64 = base64
+        if let base64, let data = Data(base64Encoded: base64) {
+            writeEncodedImage(data, to: characterArtURL(), maxEdge: 1600, quality: 0.82)
+            pack.characterArtBase64 = nil
+        } else if base64 == nil {
+            removeCharacterArt()
+            return
+        }
+        persistPack(pack)
+    }
+
+    /// [B28 A-1] 直接从 UIImage 落盘。UI 走这条，不经过 base64。
+    func setCharacterArtImage(_ image: UIImage) {
+        writeDownscaledJPEG(image, to: characterArtURL(), maxEdge: 1600, quality: 0.82)
+        var pack = currentThemePack()
+        pack.characterArtBase64 = nil
+        persistPack(pack)
+    }
+
+    private func characterArtURL() -> URL {
+        appearanceDirectory.appendingPathComponent("character-art.jpg")
+    }
+
+    /// 立绘原图。没有就返回 nil（渲染层会退回"头像放大"占位）。
+    func characterArtImage() -> UIImage? {
+        let path = characterArtURL().path
+        if let hit = ThumbnailCache.shared.cachedThumbnail(for: path) { return hit }
+        guard let image = UIImage(contentsOfFile: path) else { return nil }
+        ThumbnailCache.shared.store(image, for: path)
+        return image
+    }
+
+    /// 有没有立绘。UI 和 CLI 都该看这个，而不是看 pack 字段。
+    var hasCharacterArt: Bool {
+        FileManager.default.fileExists(atPath: characterArtURL().path)
+    }
+
+    func removeCharacterArt() {
+        try? FileManager.default.removeItem(at: characterArtURL())
+        ThumbnailCache.shared.removeThumbnail(for: characterArtURL().path)
+        var pack = currentThemePack()
+        pack.characterArtBase64 = nil
         persistPack(pack)
     }
 
@@ -1191,9 +1279,35 @@ enum MinisThemeShape {
     static var userBubbleRadius: CGFloat { pack.radius(.userBubble) }
     static var assistantBubbleRadius: CGFloat { pack.radius(.assistantBubble) }
     static var thinkingRadius: CGFloat { pack.radius(.thinking) }
-    static var thinkingFill: Color { AppearanceStudio.shared.color(.accent, scope: .chat).opacity(0.06) }
-    static var thinkingStroke: Color { AppearanceStudio.shared.color(.accent, scope: .chat).opacity(0.15) }
-    static var thinkingAccent: Color { AppearanceStudio.shared.color(.accent, scope: .chat) }
+    /// [B28 B-3] 三个 thinking 颜色字段原来写了不生效：`MinisThemeShape`
+    /// 直接取 `AppearanceStudio.color(.accent, scope: .chat)`，而 pack 里的
+    /// `thinkingFillHex / thinkingStrokeHex / thinkingAccentHex` 只有序列化，
+    /// 零读取。导出还把三个都硬写成 accent，AI 写这三个字段会以为生效了。
+    ///
+    /// 现在真读。空串回落到 accent —— 老 pack 里这三个字段是 accent 的副本，
+    /// 行为不变；`resetThemePack` 清掉 defaults 后 `.default` 带的是暖色值，
+    /// 也和内置配色对得上。
+    static var thinkingFill: Color {
+        let hex = pack.thinkingFillHex
+        guard !hex.isEmpty else {
+            return AppearanceStudio.shared.color(.accent, scope: .chat).opacity(0.06)
+        }
+        return Color(hex: hex).opacity(0.06)
+    }
+    static var thinkingStroke: Color {
+        let hex = pack.thinkingStrokeHex
+        guard !hex.isEmpty else {
+            return AppearanceStudio.shared.color(.accent, scope: .chat).opacity(0.15)
+        }
+        return Color(hex: hex).opacity(0.15)
+    }
+    static var thinkingAccent: Color {
+        let hex = pack.thinkingAccentHex
+        guard !hex.isEmpty else {
+            return AppearanceStudio.shared.color(.accent, scope: .chat)
+        }
+        return Color(hex: hex)
+    }
     static var userStyle: AppearanceBubbleStyle { pack.userStyle }
     static var assistantStyle: AppearanceBubbleStyle { pack.assistantStyle }
     static var thinkingCardOpacity: Double { pack.thinkingCardImageOpacity }

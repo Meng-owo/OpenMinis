@@ -427,6 +427,19 @@ fileprivate final class MarkdownNSRenderer {
     private var headingTopMargin: CGFloat { theme.baseFontSize }
     private var headingBottomMargin: CGFloat { theme.baseFontSize }
 
+    /// [B28 B-1] 正文字距，单位 pt。跟行高同一条路：直读 UserDefaults，
+    /// 不碰 MainActor 的 AppearanceStudio。
+    ///
+    /// 原来是死滑杆 —— 有 UI（`AppearanceStudioView:932`）、有 setter
+    /// （`setLetterSpacing`）、有 `storedLetterSpacing()`，但全仓零调用，
+    /// 拖了字一点不变。这里把值取出来，写进 `.kern`。
+    ///
+    /// 只作用于正文、列表、引用块这类连续文字。代码块不跟：等宽代码加字距
+    /// 会让对齐和光标位置都对不上（`codeStyle` 里也刻意不写 kern）。
+    private var bodyKern: CGFloat {
+        CGFloat(AppearanceThemePack.storedLetterSpacing())
+    }
+
     /// Reuse existing media attachments across re-renders to avoid reload flicker during streaming.
     var imageAttachmentCache: [String: ImageAttachment] = [:]
     var videoAttachmentCache: [String: VideoAttachment] = [:]
@@ -1324,6 +1337,12 @@ fileprivate final class MarkdownNSRenderer {
             .font: theme.baseFont,
             .foregroundColor: quoteDepth > 0 ? theme.secondaryLabelColor : theme.labelColor,
         ]
+        // [B28 B-1] 字距。0 时不下这个键——`.kern: 0` 和没有这个键对
+        // TextKit 是同一件事，但少一个属性就少一层排版器的工作。
+        let kern = bodyKern
+        if kern != 0 {
+            attrs[.kern] = kern
+        }
         if quoteDepth > 0 {
             attrs[.blockquoteDepth] = quoteDepth
             let style = NSMutableParagraphStyle()
