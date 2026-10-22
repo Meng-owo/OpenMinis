@@ -703,7 +703,10 @@ struct MinisTextPreviewView: View {
                             Label(AppLocalized("Print"), systemImage: "printer")
                         }
                         .disabled(text.isEmpty)
-                        Button { showShareSheet = true } label: {
+                        // [K-2b] Menu items present while the menu is still
+                        // dismissing; one runloop turn is what makes the share
+                        // sheet actually appear.
+                        Button { DispatchQueue.main.async { showShareSheet = true } } label: {
                             Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                         }
                     } label: {
@@ -826,7 +829,10 @@ struct MinisMarkdownPreviewView: View {
                             Label(AppLocalized("Print"), systemImage: "printer")
                         }
                         .disabled(markdownContent.isEmpty)
-                        Button { showShareSheet = true } label: {
+                        // [K-2b] Menu items present while the menu is still
+                        // dismissing; one runloop turn is what makes the share
+                        // sheet actually appear.
+                        Button { DispatchQueue.main.async { showShareSheet = true } } label: {
                             Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
                         }
                         Button {

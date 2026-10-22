@@ -353,12 +353,13 @@ enum AIVoiceMessageComposer {
         }
         guard let url = URL(string: clean), url.scheme == "minis-clone" else { return nil }
         guard let host = url.host, host == "attachments" else { return nil }
-        let sub = url.percentEncodedPath.isEmpty
-            ? ""
-            : String(url.percentEncodedPath.dropFirst())
-        let decoded = sub.removingPercentEncoding ?? sub
-        guard !decoded.isEmpty else { return nil }
-        let name = (decoded as NSString).deletingPathExtension
+        // `URL` has no `percentEncodedPath` (that lives on `URLComponents`).
+        // `path` is already percent-decoded, so no second decode pass here —
+        // decoding twice would turn a literal "%20" in a filename into a space
+        // and point at a file that does not exist.
+        let sub = url.path.isEmpty ? "" : String(url.path.dropFirst())
+        guard !sub.isEmpty else { return nil }
+        let name = (sub as NSString).deletingPathExtension
         let txtName = name + ".txt"
         guard let sid = AIChatViewModel.activeSessionId, !sid.isEmpty else { return nil }
         return AIChatViewModel.minisAttachmentsPersistentDir(for: sid)

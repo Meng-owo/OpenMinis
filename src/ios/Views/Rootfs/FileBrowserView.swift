@@ -10,6 +10,7 @@ import UIKit
 import QuickLook
 import WebKit
 import FileProvider
+import UniformTypeIdentifiers
 
 enum FileSortKey: String, CaseIterable, Identifiable {
     case name
@@ -213,8 +214,24 @@ struct FileBrowserView: View {
             FilePreviewSheet(item: file)
         }
         .sheet(isPresented: $showImportPicker) {
-            FileImportPicker { urls in
+            // [K-7] Copy-mode picker, not `asCopy: false`.
+            //
+            // `FileImportPicker` used to open in place, which needs a
+            // FileProvider security-scoped grant. On resigned / sideloaded
+            // builds iOS refuses that grant silently: the picker opens, the
+            // user taps a file, "Open" does nothing and no error is delivered
+            // — exactly "外部挂载传不了". `DocumentCopyPicker` copies the file
+            // into tmp and hands back a plain file URL, so no grant is
+            // involved. Same component `ProviderInstancesView` already uses.
+            //
+            // `onDone` is what closes this sheet: a bare picker in a sheet has
+            // nothing that dismisses it after a pick, so it used to sit there
+            // showing the browser again.
+            DocumentCopyPicker(contentTypes: [.data, .item],
+                               allowsMultipleSelection: true) { urls in
                 viewModel.importFiles(urls)
+            } onDone: {
+                showImportPicker = false
             }
         }
         .sheet(item: $moveOrCopyItem) { item in
@@ -316,8 +333,13 @@ struct FileBrowserView: View {
                 }
                 Divider()
             }
+            // [K-7b] Let one runloop turn pass before presenting. A button
+            // inside a `Menu` presents while the menu is still dismissing, and
+            // iOS drops the presentation — the reported "点了没反应" on this
+            // exact entry (file browser ⋯ → Import File), which is also one of
+            // the ways "外部挂载传不了" shows up.
             Button {
-                showImportPicker = true
+                DispatchQueue.main.async { showImportPicker = true }
             } label: {
                 Label("Import File", systemImage: "plus")
             }
@@ -1330,14 +1352,18 @@ class FileBrowserViewModel: ObservableObject {
         // reason. Keep the first one and show it.
         var firstFailure: String?
         for url in urls {
-            guard url.startAccessingSecurityScopedResource() else {
-                failCount += 1
-                if firstFailure == nil {
-                    firstFailure = AppLocalized("Could not access the file. Pick it again from the Files app.")
-                }
-                continue
-            }
-            defer { url.stopAccessingSecurityScopedResource() }
+            // [K-7] `startAccessingSecurityScopedResource()` returns FALSE for
+            // a copy-mode URL — the file is already a plain file: URL inside
+            // the app's tmp, so there is no scope to enter. Treating that false
+            // as "unreadable" is what turned every copy-mode pick into
+            // "Could not access the file": the old guard rejected the one URL
+            // shape that actually works on a sideloaded build.
+            //
+            // The call is kept as an OPTIONAL grant for in-place URLs that may
+            // still reach here from other callers; only a failed *copy* counts
+            // as a failure now.
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             let destURL = destDir.appendingPathComponent(url.lastPathComponent)
             // [R3-034] Preserve the file being replaced until the new copy
             // is safely in place. The old flow deleted the original first,
@@ -1586,32 +1612,10 @@ struct FileItem: Identifiable {
 }
 
 // MARK: - File Import Picker
-
-private struct FileImportPicker: UIViewControllerRepresentable {
-    var onPick: ([URL]) -> Void
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data, .item], asCopy: false)
-        picker.allowsMultipleSelection = true
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
-    }
-
-    class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let onPick: ([URL]) -> Void
-        init(onPick: @escaping ([URL]) -> Void) { self.onPick = onPick }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            onPick(urls)
-        }
-    }
-}
+//
+// `FileImportPicker` (a `asCopy: false` wrapper) was deleted here: the only
+// caller now uses `DocumentCopyPicker`, and keeping an open-in-place picker
+// around invites the same "Open does nothing" regression on the next edit.
 
 // MARK: - Directory Picker
 

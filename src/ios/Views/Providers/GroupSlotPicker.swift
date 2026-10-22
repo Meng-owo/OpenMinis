@@ -103,8 +103,11 @@ struct GroupSlotPicker: View {
             }
 
             Divider()
+            // [K-2b] One runloop turn before presenting: a Menu item's action
+            // runs while the menu is still on screen, and a sheet requested in
+            // that same transaction is dropped ("从模型创建分组" dead).
             Button {
-                showCreate = true
+                DispatchQueue.main.async { showCreate = true }
             } label: {
                 Label("Create group from models…", systemImage: "plus.rectangle.on.folder")
             }

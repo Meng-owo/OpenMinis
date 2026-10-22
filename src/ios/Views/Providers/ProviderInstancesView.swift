@@ -237,9 +237,23 @@ struct ProviderInstancesView: View {
                     pendingDeleteInstance = nil
                 }
             }
-            Button(pendingDeleteInstance != nil ? "Cancel" : "OK") {
-                pendingDeleteInstance = nil
-                showImportResult = false
+            // [K-3b] `alert(_:isPresented:)` has two overloads: one takes a
+            // `LocalizedStringKey` and consults the string table, the other
+            // takes any `StringProtocol` and renders it verbatim. Passing a
+            // `String` (as the first cut of this merge did) silently chose the
+            // second one, so "Delete Provider" / "Import" stayed English for
+            // every locale even though all nine translations exist.
+            // Same trap ContentView.setupStep documents at `:4153`.
+            if pendingDeleteInstance != nil {
+                Button("Cancel", role: .cancel) {
+                    pendingDeleteInstance = nil
+                    showImportResult = false
+                }
+            } else {
+                Button("OK", role: .cancel) {
+                    pendingDeleteInstance = nil
+                    showImportResult = false
+                }
             }
         } message: {
             if pendingDeleteInstance != nil {
@@ -276,10 +290,11 @@ struct ProviderInstancesView: View {
         )
     }
 
-    private var alertTitle: String {
-        pendingDeleteInstance != nil
-            ? AppLocalized("Delete Provider")
-            : AppLocalized("Import")
+    /// [K-3b] Typed `LocalizedStringKey`, not `String`: `alert(_:isPresented:)`
+    /// picks its overload by this parameter's type, and only the
+    /// `LocalizedStringKey` one reads `Localizable.xcstrings`.
+    private var alertTitle: LocalizedStringKey {
+        pendingDeleteInstance != nil ? "Delete Provider" : "Import"
     }
 
     @available(iOS 17.0, *)

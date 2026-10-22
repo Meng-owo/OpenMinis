@@ -24,10 +24,14 @@ final class SpeechRecognitionManager: ObservableObject {
     }
 
     // MARK: - Available Languages
-
-    /// All locales supported by the on-device speech recognizer,
-    /// sorted with user's preferred languages first.
-    private(set) var availableLocales: [Locale] = []
+    //
+    // [K-5b] There used to be a second, independently ordered locale list here
+    // (`availableLocales`, system-preferred-first, with its own labels) that
+    // only the chat language badge read. `VoiceLanguages.options` is the list
+    // the inline voice panel uses, and it does the same ordering. Two lists for
+    // one choice meant the badge and the panel could disagree about which
+    // languages exist and in what order, so the manager's copy is gone — the
+    // badge now reads `VoiceLanguages.options` too.
 
     @Published private(set) var state: State = .idle
     @Published var recognizedText: String = ""
@@ -41,7 +45,6 @@ final class SpeechRecognitionManager: ObservableObject {
         }
     }
     @Published var provider: SpeechProvider = .system
-    @Published var showLanguagePicker: Bool = false
 
     var isAvailable: Bool {
         speechRecognizer?.isAvailable ?? false
@@ -92,13 +95,10 @@ final class SpeechRecognitionManager: ObservableObject {
         default: return langCode.prefix(2).uppercased()
         }
     }
+    // [K-5b] `displayName(for:)` lived here and only served the deleted
+    // `availableLocales` list. `VoiceLanguages.option(for:)` builds the same
+    // labels for the one list that is left.
 
-    /// Display name for a locale in its own language (e.g. "English" for en,
-    /// the native endonym for zh / ja / ko / etc.).
-    func displayName(for loc: Locale) -> String {
-        loc.localizedString(forIdentifier: loc.identifier)?.localizedCapitalized
-            ?? loc.identifier
-    }
 
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -114,6 +114,12 @@ final class SpeechRecognitionManager: ObservableObject {
         if let savedId = UserDefaults.standard.string(forKey: Self.savedLocaleKey),
            allSupported.contains(where: { $0.identifier == savedId }) {
             resolvedLocale = Locale(identifier: savedId)
+        } else if allSupported.contains(where: { $0.identifier == VoiceLanguages.lastUsed }) {
+            // [K-5b] One choice, one memory. The inline voice panel persists to
+            // `VoiceLanguages.lastUsed`; this manager used to keep a private key
+            // of its own, so a language picked in the panel was invisible to the
+            // badge and vice versa. Read the shared one as a fallback…
+            resolvedLocale = Locale(identifier: VoiceLanguages.lastUsed)
         } else {
             let systemLangCode = Locale.current.language.languageCode?.identifier ?? "en"
             resolvedLocale = allSupported.first { $0.language.languageCode?.identifier == systemLangCode }
@@ -122,22 +128,6 @@ final class SpeechRecognitionManager: ObservableObject {
 
         self.locale = resolvedLocale
         self.speechRecognizer = SFSpeechRecognizer(locale: resolvedLocale)
-
-        // Build sorted list: user preferred languages first, then the rest alphabetically
-        let preferredCodes = Locale.preferredLanguages.map { Locale(identifier: $0).language.languageCode?.identifier ?? "" }
-
-        let sorted = allSupported.sorted { a, b in
-            let aCode = a.language.languageCode?.identifier ?? ""
-            let bCode = b.language.languageCode?.identifier ?? ""
-            let aIdx = preferredCodes.firstIndex(of: aCode) ?? Int.max
-            let bIdx = preferredCodes.firstIndex(of: bCode) ?? Int.max
-            if aIdx != bIdx { return aIdx < bIdx }
-            // Same preference tier — sort by display name
-            let aName = displayName(for: a)
-            let bName = displayName(for: b)
-            return aName.localizedCaseInsensitiveCompare(bName) == .orderedAscending
-        }
-        self.availableLocales = sorted
     }
 
     // MARK: - Language Selection
@@ -151,6 +141,10 @@ final class SpeechRecognitionManager: ObservableObject {
         let wasRecording = state == .recording
         if wasRecording { stopRecording() }
         locale = newLocale
+        // [K-5b] Keep the shared "last used recognition language" in step, so a
+        // language picked here is what the inline voice panel starts with next
+        // time (and the other way round).
+        VoiceLanguages.lastUsed = newLocale.identifier
         logger.info("Language set to \(self.locale.identifier)")
         // Defer restart until the sheet is fully dismissed,
         // otherwise AVAudioSession conflicts with the sheet transition.

@@ -1967,7 +1967,15 @@ struct AIChatView: View {
         // a SECOND presentation for the same runloop, and SwiftUI keeps only
         // one of them — often the wrong one, so the drawer closed and nothing
         // ever appeared. One pending action at a time.
-        guard pendingPanelAction == nil else { return }
+        //
+        // [K-2b] …but the first cut just dropped the second tap, and by then
+        // the drawer was already closing, so the user saw the drawer vanish and
+        // nothing happen. Replace the pending target instead: the last tile the
+        // user tapped wins, which is what tapping twice in a row means.
+        if pendingPanelAction != nil {
+            pendingPanelAction = item
+            return
+        }
         pendingPanelAction = item
 
         if item != .sticker {
@@ -1986,8 +1994,12 @@ struct AIChatView: View {
         // while the drawer was in the tree. Wait for the drawer to leave.
         if item != .sticker {
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.drawerExitLead) {
+                // Read the CURRENT value, not the captured `item`: a second tap
+                // during the lead window replaces it, and firing the stale one
+                // would open the tile the user already changed their mind about.
+                guard let target = pendingPanelAction else { return }
                 pendingPanelAction = nil
-                performPlusPanelAction(item)
+                performPlusPanelAction(target)
             }
             return
         }
@@ -3462,18 +3474,31 @@ struct AIChatView: View {
         }
     }
 
-    /// Speech language badge shown only while recording.
+    /// Speech language badge, mounted on the recording waveform.
     ///
     /// [K-5] This button existed but nothing ever mounted it, and
     /// `showLanguagePicker` had no sheet attached — so the language was
     /// effectively unchangeable. A `Menu` rather than a sheet on purpose:
     /// AIChatView already carries 39 presentation modifiers, and a menu needs
     /// none, so this adds no presentation pressure to an 8400-line body.
+    ///
+    /// [K-5b] Two things were wrong with the first cut, both fixed here.
+    ///
+    /// 1. It listed `speechManager.availableLocales` — a SECOND language list
+    ///    (own order, own labels) next to `VoiceLanguages.options`, which is
+    ///    what the inline voice panel's globe menu uses. Same underlying
+    ///    recognizer locales, different presentation, so the two entry points
+    ///    disagreed. Both now read `VoiceLanguages.options`.
+    /// 2. It only ever appears on the legacy `speechManager` recording path,
+    ///    which normal users never reach: tapping the mic switches to the
+    ///    inline voice panel, and the panel's own globe menu is the real
+    ///    language switch. This badge covers the Shortcuts `.startVoice` path,
+    ///    which is the one place `speechManager` still starts a recording.
     private var languageBadgeButton: some View {
         Menu {
-            ForEach(speechManager.availableLocales, id: \.identifier) { loc in
+            ForEach(VoiceLanguages.options) { opt in
                 Button {
-                    speechManager.setLanguage(loc)
+                    speechManager.setLanguage(Locale(identifier: opt.code))
                     // The recogniser cannot be restarted while the menu is
                     // still dismissing; wait for it to leave the screen.
                     Task { @MainActor in
@@ -3481,10 +3506,10 @@ struct AIChatView: View {
                         speechManager.restartRecordingIfPending()
                     }
                 } label: {
-                    if loc.identifier == speechManager.locale.identifier {
-                        Label(speechManager.displayName(for: loc), systemImage: "checkmark")
+                    if opt.code == speechManager.locale.identifier {
+                        Label(opt.label, systemImage: "checkmark")
                     } else {
-                        Text(speechManager.displayName(for: loc))
+                        Text(opt.label)
                     }
                 }
             }
@@ -6832,8 +6857,11 @@ struct ChatStickerPanel: View {
             Task {
                 var addedCount = 0
                 for url in urls {
-                    guard url.startAccessingSecurityScopedResource() else { continue }
-                    defer { url.stopAccessingSecurityScopedResource() }
+                    // [K-7] Optional grant, not a gate: a copy-mode URL has no
+                    // security scope to enter, so the old `guard … else continue`
+                    // silently skipped the file and the import reported nothing.
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                     guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
                     if data.count > 15 * 1024 * 1024 { continue }
                     let name = url.deletingPathExtension().lastPathComponent

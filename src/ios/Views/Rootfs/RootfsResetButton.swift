@@ -42,7 +42,7 @@ struct RootfsResetButton: View {
         // [K-3] Two `.alert` modifiers on one view means iOS only honours one
         // of them; whichever was declared last won. "Reset & Backup" could be
         // dead depending on order. One alert, branch on which flag is set.
-        .alert(showBackupAlert ? "Reset with Backup?" : "Reset Rootfs?",
+        .alert(alertTitle,
                isPresented: Binding(
                    get: { showResetAlert || showBackupAlert },
                    set: { presented in
@@ -73,6 +73,14 @@ struct RootfsResetButton: View {
                 Text("This will delete the entire rootfs. All data will be lost. The app will need to restart.")
             }
         }
+    }
+
+    /// [K-3b] A ternary of two string literals collapses to `String` at the
+    /// call site, which picks the verbatim `alert` overload and skips the
+    /// string table entirely. Typing the branches as `LocalizedStringKey`
+    /// keeps both keys localizable.
+    private var alertTitle: LocalizedStringKey {
+        showBackupAlert ? "Reset with Backup?" : "Reset Rootfs?"
     }
 
     private var compactButton: some View {

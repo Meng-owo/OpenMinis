@@ -344,8 +344,10 @@ struct WebPreviewMoreMenu: View {
             } label: {
                 Label(AppLocalized("Print"), systemImage: "printer")
             }
+            // [K-2b] Menu item -> one runloop turn before presenting; the
+            // menu is still on screen when this action runs.
             Button {
-                showShareSheet = true
+                DispatchQueue.main.async { showShareSheet = true }
             } label: {
                 Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
             }
@@ -668,8 +670,10 @@ struct MinisSafariView: View {
             } label: {
                 Label(AppLocalized("Print"), systemImage: "printer")
             }
+            // [K-2b] Menu item -> one runloop turn before presenting; the
+            // menu is still on screen when this action runs.
             Button {
-                showShareSheet = true
+                DispatchQueue.main.async { showShareSheet = true }
             } label: {
                 Label(AppLocalized("Share"), systemImage: "square.and.arrow.up")
             }

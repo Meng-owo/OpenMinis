@@ -826,6 +826,11 @@ struct PlayHubView: View {
         try? data.write(to: dest)
     }
 
+    // [K-6b] `View.body` is `@MainActor` but a custom method on the struct is
+    // not. `importing` now drives an overlay, so this write really does touch
+    // the UI — and `Task { await … }` from `onChange` inherits the actor only by
+    // convention, not by the type system. Pin it.
+    @MainActor
     private func handleUploadPicks() async {
         guard !uploadPicks.isEmpty else { return }
         importing = true
@@ -841,14 +846,18 @@ struct PlayHubView: View {
         await rescan()
     }
 
+    @MainActor
     private func importFile(from url: URL) async {
         let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension
-        if url.startAccessingSecurityScopedResource() {
-            defer { url.stopAccessingSecurityScopedResource() }
-            guard let data = try? Data(contentsOf: url) else { return }
-            saveImported(data, ext: ext)
-            await rescan()
-        }
+        // [K-7] Same trap as the file browser: a copy-mode URL has no security
+        // scope to enter, so `startAccessingSecurityScopedResource()` returns
+        // false and the whole import was skipped without a word. Treat the call
+        // as an optional grant instead of a gate.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        saveImported(data, ext: ext)
+        await rescan()
     }
 }
 

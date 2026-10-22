@@ -299,8 +299,11 @@ struct ModelGroupsView: View {
         )
     }
 
-    private var dialogTitle: String {
-        showCreateGroup ? "New Group" : AppLocalized("Delete Group")
+    /// [K-3b] `LocalizedStringKey`, not `String` — the `alert` overload that
+    /// takes a plain `String` renders it verbatim and never reads the string
+    /// table. See `ContentView.setupStep` for the same trap.
+    private var dialogTitle: LocalizedStringKey {
+        showCreateGroup ? "New Group" : "Delete Group"
     }
 
     // MARK: - Actions

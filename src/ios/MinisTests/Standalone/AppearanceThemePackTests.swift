@@ -111,7 +111,14 @@ check("library files not defaults", library.contains("libraryPackURL"))
 check("legacy library migrate", library.contains("func migrateLegacyLibrary"))
 check("apply strips jpeg", pack.contains("stored.thinkingCardJPEGBase64 = nil"))
 check("studio title binding", studioView.contains("thinkingTitleSizeBinding"))
-check("category onChange", studioView.contains("onChange(of: categoryImageItem)"))
+// [K-4] The eight per-row `PhotosPicker`s collapsed into one page-level picker
+// driven by `pickedPhoto` + `pickerTarget`. The old assertion pinned the now
+// deleted `categoryImageItem`; pin the replacement wiring instead — a single
+// `.photosPicker(isPresented:selection:)` plus the dispatch that routes the
+// picked item to the row that asked for it.
+check("category onChange", studioView.contains("onChange(of: pickedPhoto)")
+      && studioView.contains("case .categoryImage")
+      && studioView.contains("pickerTarget = .categoryImage"))
 check("edit sheet observes studio", list.contains("struct SessionEditSheet"))
 check("list category fill", list.contains("categoryImage(for: key)"))
 check("default input radius 20", pack.contains("inputBarRadius: 20"))

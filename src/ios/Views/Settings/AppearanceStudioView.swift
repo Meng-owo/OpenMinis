@@ -35,7 +35,6 @@ import UIKit
 struct AppearanceStudioView: View {
     @ObservedObject private var studio = AppearanceStudio.shared
     @ObservedObject private var fontSettings = FontSettings.shared
-    @Environment(\.colorScheme) private var colorScheme
 
     @State private var variant: AppearanceVariant = .light
     @State private var page: AppearanceStudioPage = .palette
@@ -148,13 +147,13 @@ struct AppearanceStudioView: View {
         // reset confirmation could silently lose. One alert, branch on state.
         .alert(alertTitle, isPresented: isAlertPresented) {
             if showResetConfirm {
-                Button(AppLocalized("取消"), role: .cancel) { showResetConfirm = false }
-                Button(AppLocalized("恢复"), role: .destructive) {
+                Button("Cancel", role: .cancel) { showResetConfirm = false }
+                Button("Reset", role: .destructive) {
                     studio.resetThemePack()
                     showResetConfirm = false
                 }
             } else {
-                Button(AppLocalized("知道了"), role: .cancel) {
+                Button("OK", role: .cancel) {
                     showError = false
                     showSTWarnings = false
                 }
@@ -198,15 +197,21 @@ struct AppearanceStudioView: View {
         )
     }
 
-    private var alertTitle: String {
-        if showResetConfirm { return AppLocalized("恢复默认装扮？") }
-        if showSTWarnings { return AppLocalized("导入完成") }
-        return AppLocalized("出错了")
+    /// [K-3b] `LocalizedStringKey`, not `String`. The `String` overload of
+    /// `alert(_:isPresented:)` prints the value verbatim and never consults
+    /// the string table — and these three titles plus their bodies were also
+    /// missing from `Localizable.xcstrings` entirely, so every non-Chinese
+    /// locale showed raw Chinese. Both halves are fixed: the type here, the
+    /// five keys in the catalog.
+    private var alertTitle: LocalizedStringKey {
+        if showResetConfirm { return "Reset appearance?" }
+        if showSTWarnings { return "Import finished" }
+        return "Something went wrong"
     }
 
     private var alertMessage: String {
         if showResetConfirm {
-            return AppLocalized("颜色、气泡形状、贴图全部回到默认。壁纸和情头不动。")
+            return AppLocalized("Colors, bubble shapes, and stickers go back to default. Wallpaper and couple avatars stay.")
         }
         if showSTWarnings {
             return stWarnings.joined(separator: "\n")
@@ -242,7 +247,13 @@ struct AppearanceStudioView: View {
         }
         switch picker {
         case .wallpaper:
-            let dark = colorScheme == .dark
+            // [K-4b] Use the same light/dark source the rest of the app uses
+            // (`appearanceMode` override, then the trait collection) instead of
+            // `@Environment(\.colorScheme)`. With the app forced to light while
+            // the system is dark, `colorScheme` reads dark, so the wallpaper
+            // was written into the dark slot and the light UI showed the wrong
+            // one. 10-21 fixed this for CSS colours; the wallpaper was missed.
+            let dark = studio.activeVariant == .dark
             studio.setWallpaper(image, for: wallpaperScope, dark: dark)
         case .userAvatar:
             studio.setUserAvatar(image)

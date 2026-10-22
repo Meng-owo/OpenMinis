@@ -391,7 +391,6 @@ enum HelperAccent {
 struct HelperBlockView: View {
     @ObservedObject var block: AssistantBlock
     @Binding var detailBlock: AssistantBlock?
-    @State private var pulse = false
 
     /// Set the moment Resume is tapped so the button cannot be pressed twice
     /// while the restart is in flight.
@@ -556,34 +555,44 @@ struct HelperBlockView: View {
         .padding(.vertical, 12)
         .background(HelperAccent.color.opacity(0.07))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                // [K-6] `pulse` was set on appear and never read: the running
-                // state had a spinner but the card itself was static. Use it
-                // for what it was named after — a slow breathing outline while
-                // the sub agent is working, so a card sitting in a long
-                // transcript still reads as alive.
-                .stroke(HelperAccent.color.opacity(info.isRunning ? (pulse ? 0.85 : 0.3) : 0.35),
-                        lineWidth: 0.8)
-        )
+        .overlay { runningOutline }
         .contentShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { detailBlock = block }
-        .onAppear { startPulseIfNeeded() }
-        .onChange(of: info.isRunning) { _ in startPulseIfNeeded() }
         .accessibilityIdentifier("assistantDelegateBlock")
     }
 
-    /// [K-6] Drive `pulse` only while the block is actually running; stop the
-    /// repeating animation otherwise so a finished card goes still.
-    private func startPulseIfNeeded() {
-        guard info.isRunning else {
-            withAnimation(.easeOut(duration: 0.2)) { pulse = false }
-            return
+    /// [K-6] Breathing outline while the sub agent works, so a card sitting in
+    /// a long transcript still reads as alive.
+    ///
+    /// [K-6b] The first cut drove this from a `pulse` @State with
+    /// `withAnimation(.repeatForever)`. That animation has no cancel path:
+    /// writing `pulse = false` inside another animation replaces the value but
+    /// leaves the repeating animation attached to the layer until the view dies,
+    /// so every finished card kept redrawing for the life of the transcript.
+    ///
+    /// A `TimelineView` only exists while `info.isRunning` is true — when the
+    /// run ends the timeline is torn down, so nothing is left ticking, and the
+    /// opacity is a pure function of the clock with no state to reset.
+    @ViewBuilder
+    private var runningOutline: some View {
+        if info.isRunning {
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0)) { context in
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(HelperAccent.color.opacity(Self.breathingOpacity(at: context.date)),
+                            lineWidth: 0.8)
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(HelperAccent.color.opacity(0.35), lineWidth: 0.8)
         }
-        pulse = false
-        withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-            pulse = true
-        }
+    }
+
+    /// 0.30 → 0.85 → 0.30 over a 2.2s period, ease-in-out by construction.
+    private static func breathingOpacity(at date: Date) -> Double {
+        let period: Double = 2.2
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+        let wave = (1 - cos(2 * Double.pi * phase)) / 2
+        return 0.30 + 0.55 * wave
     }
 
     @ViewBuilder
