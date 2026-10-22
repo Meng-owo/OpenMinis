@@ -151,8 +151,6 @@ struct AppearanceStudioView: View {
                 ForEach([AppearanceStudioPage.palette, .bubbles, .backdrop, .avatars, .icons]) { item in
                     NavigationLink {
                         pageContent(item)
-                            .navigationTitle(item.title)
-                            .navigationBarTitleDisplayMode(.inline)
                     } label: {
                         studioRow(item)
                     }
@@ -167,8 +165,6 @@ struct AppearanceStudioView: View {
                 ForEach([AppearanceStudioPage.library, .behaviour]) { item in
                     NavigationLink {
                         pageContent(item)
-                            .navigationTitle(item.title)
-                            .navigationBarTitleDisplayMode(.inline)
                     } label: {
                         studioRow(item)
                     }
@@ -179,51 +175,6 @@ struct AppearanceStudioView: View {
         }
         .listStyle(.insetGrouped)
         .appearancePage(.settings)
-        .navigationTitle(AppLocalized("Appearance"))
-        .navigationBarTitleDisplayMode(.large)
-        // [K-4] THREE `.alert` modifiers used to sit here (error / reset
-        // confirm / import result). iOS honours one presentation per view
-        // level, so two of them were dead — "导入完成" never appeared and the
-        // reset confirmation could silently lose. One alert, branch on state.
-        .alert(alertTitle, isPresented: isAlertPresented) {
-            if showResetConfirm {
-                Button("Cancel", role: .cancel) { showResetConfirm = false }
-                Button("Reset", role: .destructive) {
-                    studio.resetThemePack()
-                    showResetConfirm = false
-                }
-            } else if pendingPaletteReset {
-                Button("Cancel", role: .cancel) { pendingPaletteReset = false }
-                Button("Reset", role: .destructive) {
-                    studio.resetPaletteWithUndo()
-                    pendingPaletteReset = false
-                    MinisToast.show(AppLocalized("色盘已恢复默认，点下面可以撤销。"))
-                }
-            } else if let dialog = inputDialog {
-                TextField(AppLocalized("Name it"), text: $inputName)
-                    .textInputAutocapitalization(.never)
-                switch dialog {
-                case .save:
-                    Button(AppLocalized("Save")) { commitSaveToLibrary() }
-                case .rename(let target):
-                    Button(AppLocalized("Rename")) { commitRenameTheme(target) }
-                }
-                Button("Cancel", role: .cancel) { inputDialog = nil }
-            } else if let pending = pendingDeleteTheme {
-                Button("Cancel", role: .cancel) { pendingDeleteTheme = nil }
-                Button("Delete", role: .destructive) {
-                    deleteTheme(pending)
-                    pendingDeleteTheme = nil
-                }
-            } else {
-                Button("OK", role: .cancel) {
-                    showError = false
-                    showSTWarnings = false
-                }
-            }
-        } message: {
-            Text(alertMessage)
-        }
         .fullScreenCover(isPresented: $showFullPreview) { fullPreviewSheet }
         .onAppear { syncVariantFromSystem() }
         .onChange(of: appearanceMode) { _ in
@@ -568,6 +519,49 @@ struct AppearanceStudioView: View {
         // The result has to be raised after this sheet is gone — `importSillyTavern`
         // runs from `onPick`, while the sheet is still on screen, and an alert
         // requested then is dropped. `pendingSTOutcome` carries it across.
+        // [B28 R3-1 · 真机 bug] alert 原来挂在根页 List 上：在主题库子页点
+        // 「删」，弹框被压在导航栈下面，要退回上一页才冒出来。所有触发者都在
+        // 子页里，所以宿主也搬到子页链（和可用的 sheet/picker 同层）。
+        // [K-4] 本页只许一个 alert —— 多实例被 iOS 吞，靠状态分支。
+        .alert(alertTitle, isPresented: isAlertPresented) {
+            if showResetConfirm {
+                Button("Cancel", role: .cancel) { showResetConfirm = false }
+                Button("Reset", role: .destructive) {
+                    studio.resetThemePack()
+                    showResetConfirm = false
+                }
+            } else if pendingPaletteReset {
+                Button("Cancel", role: .cancel) { pendingPaletteReset = false }
+                Button("Reset", role: .destructive) {
+                    studio.resetPaletteWithUndo()
+                    pendingPaletteReset = false
+                    MinisToast.show(AppLocalized("色盘已恢复默认，点下面可以撤销。"))
+                }
+            } else if let dialog = inputDialog {
+                TextField(AppLocalized("Name it"), text: $inputName)
+                    .textInputAutocapitalization(.never)
+                switch dialog {
+                case .save:
+                    Button(AppLocalized("Save")) { commitSaveToLibrary() }
+                case .rename(let target):
+                    Button(AppLocalized("Rename")) { commitRenameTheme(target) }
+                }
+                Button("Cancel", role: .cancel) { inputDialog = nil }
+            } else if let pending = pendingDeleteTheme {
+                Button("Cancel", role: .cancel) { pendingDeleteTheme = nil }
+                Button("Delete", role: .destructive) {
+                    deleteTheme(pending)
+                    pendingDeleteTheme = nil
+                }
+            } else {
+                Button("OK", role: .cancel) {
+                    showError = false
+                    showSTWarnings = false
+                }
+            }
+        } message: {
+            Text(alertMessage)
+        }
         .sheet(isPresented: $showSTImporter) {
             DocumentCopyPicker(contentTypes: [.json, .plainText, .data, .item],
                                allowsMultipleSelection: false) { urls in
@@ -1930,10 +1924,12 @@ struct AppearanceStudioView: View {
     // MARK: - 零件
 
     private func sectionTitle(_ text: String) -> some View {
+        // [B28 R3] 外面 List 的组头是灰字小标，里面原来是黑粗体 —— 同一页
+        // 两套话。统一成外层那种。
         Text(text)
             .font(.system(size: 13, weight: .semibold))
             .tracking(0.2)
-            .foregroundStyle(studio.color(.primaryText, variant: variant))
+            .foregroundStyle(studio.color(.secondaryText, variant: variant))
     }
 
     private func sliderRow(_ title: String, value: Binding<Double>,
@@ -2253,9 +2249,9 @@ private struct StudioCard: ViewModifier {
         content
             .padding(14)
             .background(studio.color(.surface, variant: variant).opacity(studio.surfaceOpacity),
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(studio.color(.border, variant: variant).opacity(0.28), lineWidth: 0.5)
             )
     }
