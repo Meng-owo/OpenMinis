@@ -21,8 +21,8 @@ if ! rg -q 'navigationTitle\(AppLocalized\("Appearance"\)\)' "$V" && ! rg -q 'na
 # R3-3 内外卡片同一语言：圆角和系统分组列表对齐（10pt continuous、无阴影）
 if rg -A20 "struct StudioCard" "$V" | rg -q "cornerRadius: 10"; then ok R3-3; else bad "R3-3 子页卡片还是另一套圆角"; fi
 
-# R3-4 主题库对头像诚实：明说头像不在这套里（C-3）
-if rg -q "情头不在这套里" "$V"; then ok R3-4; else bad "R3-4 头像不在包里这事 UI 没说"; fi
+# R3-4 情头归属（醒醒拍板 10-23）：头像归人设体系，主题库页面不提它
+if ! rg -q "情头不在这套里" "$V"; then ok R3-4; else bad "R3-4 主题库页面不该出现情头字样"; fi
 
 # R3-5 apply 部分成功不许装全好（F-2）
 if rg -q "func applyThemePack" "$P" && rg -A60 "func applyThemePack" "$P" | rg -q "warnings"; then

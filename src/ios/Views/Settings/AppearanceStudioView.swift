@@ -1561,9 +1561,6 @@ struct AppearanceStudioView: View {
                 .buttonStyle(.plain)
                 // [B28 R2-3] 以前存满 40 会静默删最旧 —— footer 有义务说清。
                 Text(AppLocalized("另存一份，不会冲掉正在用的。存满四十套会先要你删一套。"))
-                // [B28 R3-4 / C-3] 情头在角色数据里，不跟着主题存亡 ——
-                // 存不带、应用也不动，这事以前 UI 一个字没说，靠用户猜。
-                Text(AppLocalized("情头不在这套里。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
             }
