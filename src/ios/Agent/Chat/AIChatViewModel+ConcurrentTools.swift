@@ -1664,7 +1664,10 @@ private extension AIChatViewModel {
             // "say it out loud" got a model apology telling them to go flip a
             // setting. When the user clearly asked for voice in this turn,
             // turn it on here and send: that is what they asked for.
-            let askedForVoice = Self.userAskedForVoice(lastUserText(in: agentHistory))
+            // `lastUserText` is a static member; inside this instance method an
+            // unqualified call resolves as an instance access and fails to
+            // compile ("static member … cannot be used on instance").
+            let askedForVoice = Self.userAskedForVoice(Self.lastUserText(in: agentHistory))
             guard askedForVoice else {
                 return settle("Error: AI voice replies are turned OFF for this session. Do not synthesize anything — tell the user that AI voice is currently off and they can re-enable it in the session's voice settings; do not claim a voice message was sent.", false)
             }
