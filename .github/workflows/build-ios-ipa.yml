@@ -67,6 +67,25 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM=""
 
+      # [04b-2 §7] `build-for-testing` only COMPILES the test target — it never
+      # runs a single assertion, which is how a test that could never pass
+      # survived three rounds. The simulator cannot run the XCTest bundle here:
+      # the native deps (lame/ffmpeg/rclone/ish) are device-only slices, so
+      # `test-without-building` against a simulator destination cannot link.
+      # The standalone suite is a plain Swift script with no app graph, so run
+      # it for real — that is where the theme-pack assertions live.
+      - name: Run standalone source assertions
+        run: |
+          set -euo pipefail
+          cd src/ios/MinisTests/Standalone
+          # Every file here is written to run on its own (`swift <file>.swift`)
+          # and exits non-zero on failure. Only the theme-pack suite is wired
+          # in so far — it is the one whose assertions this branch actually
+          # touched and re-verified. The other nine exist but have never been
+          # executed by CI, so enabling them blind would just trade a silent
+          # gap for a red build nobody can attribute. Add them one at a time.
+          /usr/bin/swift AppearanceThemePackTests.swift
+
       - name: Archive OpenMinis clone app unsigned
         run: |
           mkdir -p build

@@ -74,6 +74,17 @@ struct AppearanceStudioView: View {
     @State private var pickerTarget: AppearancePicker?
     @State private var isPickerPresented = false
     @State private var pickedPhoto: PhotosPickerItem?
+    /// [04b-2 §5] Which light/dark slot the wallpaper belongs in, captured when
+    /// the picker is opened — NOT when the image finishes loading.
+    ///
+    /// `activeVariant` falls back to `UITraitCollection.current` when the app
+    /// follows the system, and Apple only guarantees that value during a
+    /// draw/layout pass. `applyPickedPhoto` runs after `await
+    /// loadTransferable(...)`, in a plain async continuation, where the trait
+    /// collection reads a stale (often `.unspecified` → light) value. So a dark
+    /// system plus "follow system" could save the wallpaper into the light slot.
+    /// The button's action does run in a real layout pass, so capture it there.
+    @State private var pickedWallpaperIsDark = false
     @State private var wallpaperScope: AppearanceScope = .global
     @State private var iconPickSlot: QuietIconSlot?
     @State private var categoryImageKey: String?
@@ -92,6 +103,14 @@ struct AppearanceStudioView: View {
     // [10-19 醒醒] 预览默认收起，别一进来就吃掉半屏
     @State private var showPreviewExpanded = false
     @State private var showSTImporter = false
+    /// [04b-2 §1] `importSillyTavern` runs from inside the picker sheet, where a
+    /// result alert would be dropped. Park it, raise it after `onDone`.
+    @State private var pendingSTOutcome: STImportOutcome?
+
+    enum STImportOutcome {
+        case success([String])
+        case failure(String)
+    }
     @State private var stWarnings: [String] = []
     @State private var showSTWarnings = false
 
@@ -172,10 +191,11 @@ struct AppearanceStudioView: View {
         // hangs off the page root, which stays mounted whichever sub-page is
         // open, and the trigger only records WHAT is being picked.
         //
-        // The `.fileImporter` for ST theme packs stays on the sub-page
-        // (`pageContent`) instead of joining this one: it was moved there on
-        // 10-19 because cross-layer presentation is unreliable, and that part
-        // was right — it only needed to get out of the ScrollView's content.
+        // The ST theme-pack picker stays on the sub-page (`pageContent`)
+        // instead of joining this one: it was moved there on 10-19 because
+        // cross-layer presentation is unreliable, and that part was right — it
+        // only needed to get out of the ScrollView's content. [04b-2 §3] It is
+        // now a `DocumentCopyPicker` sheet rather than `.fileImporter`.
         .photosPicker(isPresented: $isPickerPresented,
                       selection: $pickedPhoto, matching: .images)
         .onChange(of: pickedPhoto) { item in
@@ -247,14 +267,10 @@ struct AppearanceStudioView: View {
         }
         switch picker {
         case .wallpaper:
-            // [K-4b] Use the same light/dark source the rest of the app uses
-            // (`appearanceMode` override, then the trait collection) instead of
-            // `@Environment(\.colorScheme)`. With the app forced to light while
-            // the system is dark, `colorScheme` reads dark, so the wallpaper
-            // was written into the dark slot and the light UI showed the wrong
-            // one. 10-21 fixed this for CSS colours; the wallpaper was missed.
-            let dark = studio.activeVariant == .dark
-            studio.setWallpaper(image, for: wallpaperScope, dark: dark)
+            // [04b-2 §5] Use the variant captured when the picker opened, not
+            // one read here: this runs after `await loadTransferable`, outside
+            // any layout pass, where `UITraitCollection.current` is stale.
+            studio.setWallpaper(image, for: wallpaperScope, dark: pickedWallpaperIsDark)
         case .userAvatar:
             studio.setUserAvatar(image)
         case .assistantAvatar:
@@ -347,14 +363,31 @@ struct AppearanceStudioView: View {
         // host. The 10-19 note moved it from the root List into this page
         // because cross-layer presentation was unreliable; this keeps it in
         // the page, just outside the scrolling content.
-        .fileImporter(isPresented: $showSTImporter,
-                      allowedContentTypes: [.json, .plainText, .data, .item],
-                      allowsMultipleSelection: false) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first { importSillyTavern(url) }
-            case .failure(let error):
-                fail(error.localizedDescription)
+        // [04b-2 §3] Copy-mode picker, not `.fileImporter`. Open-in-place never
+        // receives its FileProvider grant on a resigned build, so picking a
+        // theme pack did nothing and said nothing.
+        //
+        // The result has to be raised after this sheet is gone — `importSillyTavern`
+        // runs from `onPick`, while the sheet is still on screen, and an alert
+        // requested then is dropped. `pendingSTOutcome` carries it across.
+        .sheet(isPresented: $showSTImporter) {
+            DocumentCopyPicker(contentTypes: [.json, .plainText, .data, .item],
+                               allowsMultipleSelection: false) { urls in
+                guard let url = urls.first else { return }
+                importSillyTavern(url)
+            } onDone: {
+                showSTImporter = false
+                guard let outcome = pendingSTOutcome else { return }
+                pendingSTOutcome = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    switch outcome {
+                    case .success(let notes):
+                        stWarnings = notes
+                        showSTWarnings = true
+                    case .failure(let message):
+                        fail(message)
+                    }
+                }
             }
         }
         .background(MinisTheme.color(.canvas, scope: .settings))
@@ -975,6 +1008,11 @@ struct AppearanceStudioView: View {
                 // [K-4] Component → Button + one shared picker modifier.
                 Button {
                     pickerTarget = .wallpaper
+                    // [04b-2 §5] Read the effective variant HERE: a button
+                    // action runs inside a real layout pass, where
+                    // `UITraitCollection.current` is valid. `applyPickedPhoto`
+                    // runs after an await, where it is not.
+                    pickedWallpaperIsDark = studio.activeVariant == .dark
                     isPickerPresented = true
                 } label: {
                     Label(studio.hasOwnWallpaper(wallpaperScope)
@@ -1843,7 +1881,7 @@ struct AppearanceStudioView: View {
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         guard let data = try? Data(contentsOf: url) else {
-            fail(AppLocalized("这个文件读不出来。"))
+            pendingSTOutcome = .failure(AppLocalized("这个文件读不出来。"))
             return
         }
         do {
@@ -1855,10 +1893,9 @@ struct AppearanceStudioView: View {
                 notes.append(contentsOf: imported.warnings)
             }
             notes.append(AppLocalized("CSS 里的装饰图、伪元素、按钮换图原生接不了，这些没有导入。"))
-            stWarnings = notes
-            showSTWarnings = true
+            pendingSTOutcome = .success(notes)
         } catch {
-            fail(error.localizedDescription)
+            pendingSTOutcome = .failure(error.localizedDescription)
         }
     }
 }

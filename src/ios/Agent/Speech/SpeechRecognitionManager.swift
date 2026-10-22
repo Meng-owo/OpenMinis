@@ -36,12 +36,17 @@ final class SpeechRecognitionManager: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published var recognizedText: String = ""
     @Published private(set) var audioLevels: [Float] = Array(repeating: 0, count: 40)
-    private static let savedLocaleKey = "SpeechRecognitionLocale"
 
     @Published var locale: Locale {
         didSet {
             speechRecognizer = SFSpeechRecognizer(locale: locale)
-            UserDefaults.standard.set(locale.identifier, forKey: Self.savedLocaleKey)
+            // [04b-2 §4] One choice, one memory. This used to write a private
+            // `SpeechRecognitionLocale` key, and `init` read that key FIRST with
+            // `VoiceLanguages.lastUsed` only as a fallback — so a language
+            // picked in the inline voice panel (which writes `lastUsed`) was
+            // ignored on the next launch whenever this path had ever written.
+            // The shared key is now the only one.
+            VoiceLanguages.lastUsed = locale.identifier
         }
     }
     @Published var provider: SpeechProvider = .system
@@ -109,16 +114,14 @@ final class SpeechRecognitionManager: ObservableObject {
     private init() {
         let allSupported = SFSpeechRecognizer.supportedLocales()
 
-        // Restore previously selected locale, or fall back to system language
+        // Restore previously selected locale, or fall back to system language.
+        //
+        // [04b-2 §4] `VoiceLanguages.lastUsed` is the ONLY source now. The
+        // private `SpeechRecognitionLocale` key that used to be read first was
+        // still being written and still won, so a language chosen in the inline
+        // voice panel was silently overridden on the next launch.
         let resolvedLocale: Locale
-        if let savedId = UserDefaults.standard.string(forKey: Self.savedLocaleKey),
-           allSupported.contains(where: { $0.identifier == savedId }) {
-            resolvedLocale = Locale(identifier: savedId)
-        } else if allSupported.contains(where: { $0.identifier == VoiceLanguages.lastUsed }) {
-            // [K-5b] One choice, one memory. The inline voice panel persists to
-            // `VoiceLanguages.lastUsed`; this manager used to keep a private key
-            // of its own, so a language picked in the panel was invisible to the
-            // badge and vice versa. Read the shared one as a fallback…
+        if allSupported.contains(where: { $0.identifier == VoiceLanguages.lastUsed }) {
             resolvedLocale = Locale(identifier: VoiceLanguages.lastUsed)
         } else {
             let systemLangCode = Locale.current.language.languageCode?.identifier ?? "en"

@@ -6365,6 +6365,10 @@ struct ChatStickerPanel: View {
         case add(initialData: Data?)
         case edit(StickerItem)
         case preview(StickerItem)
+        /// [04b-2 §3] The batch file import used to be a second `.sheet` on this
+        /// same view. One presentation per level — folding it in here keeps the
+        /// panel at exactly one sheet.
+        case importFiles
 
         var id: String {
             switch self {
@@ -6374,6 +6378,8 @@ struct ChatStickerPanel: View {
                 return "edit_\(item.id)"
             case .preview(let item):
                 return "preview_\(item.id)"
+            case .importFiles:
+                return "importFiles"
             }
         }
     }
@@ -6385,7 +6391,6 @@ struct ChatStickerPanel: View {
     @State private var selectedCategory: String = "全部"
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showPhotosPicker: Bool = false
-    @State private var showFileImporter: Bool = false
     @State private var activeSheet: ActivePanelSheet?
     @State private var isManageMode: Bool = false
     @State private var selectedStickerIds: Set<String> = []
@@ -6410,6 +6415,43 @@ struct ChatStickerPanel: View {
             return store.stickers
         } else {
             return store.stickers.filter { $0.category == selectedCategory }
+        }
+    }
+
+    /// [04b-2 §3/§6] Batch import from `DocumentCopyPicker` (copy mode, so the
+    /// URLs are plain file: URLs in tmp and need no security scope). Extracted
+    /// from the old `.fileImporter` closure unchanged apart from the optional
+    /// grant and the category pick.
+    private func importStickerFiles(_ urls: [URL]) {
+        let targetCategory = (selectedCategory != "常用" && selectedCategory != "全部") ? selectedCategory : "日常"
+        Task {
+            var addedCount = 0
+            for url in urls {
+                // Optional grant, not a gate: a copy-mode URL has no scope to
+                // enter, so a `guard … else continue` would skip every file.
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
+                if data.count > 15 * 1024 * 1024 { continue }
+                let name = url.deletingPathExtension().lastPathComponent
+                let title = name.isEmpty ? "表情包" : name
+                _ = await MainActor.run {
+                    store.addSticker(
+                        imageData: data,
+                        title: title,
+                        content: "",
+                        scenario: "",
+                        shortDesc: title,
+                        category: targetCategory
+                    )
+                }
+                addedCount += 1
+            }
+            if addedCount > 0 {
+                await MainActor.run {
+                    MinisToast.show(AppLocalized("成功导入 \(addedCount) 个表情"), systemImage: "checkmark.circle.fill")
+                }
+            }
         }
     }
 
@@ -6719,7 +6761,7 @@ struct ChatStickerPanel: View {
                                 // [K-1] Same menu-transaction swallow as the
                                 // "功能" menu: a contextMenu button that sets a
                                 // presentation flag needs one runloop turn.
-                                DispatchQueue.main.async { showFileImporter = true }
+                                DispatchQueue.main.async { activeSheet = .importFiles }
                             } label: {
                                 Label("从文件导入动图/表情", systemImage: "folder.fill")
                             }
@@ -6843,48 +6885,10 @@ struct ChatStickerPanel: View {
         // both flags whenever this panel leaves the screen.
         .onDisappear {
             showPhotosPicker = false
-            showFileImporter = false
+            activeSheet = nil
             selectedPhotoItems = []
         }
         .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhotoItems, maxSelectionCount: 50, matching: .images)
-        .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.image, .gif, .data],
-            allowsMultipleSelection: true
-        ) { result in
-            guard let urls = try? result.get(), !urls.isEmpty else { return }
-            let targetCategory = (selectedCategory != "常用" && selectedCategory != "全部") ? selectedCategory : "日常"
-            Task {
-                var addedCount = 0
-                for url in urls {
-                    // [K-7] Optional grant, not a gate: a copy-mode URL has no
-                    // security scope to enter, so the old `guard … else continue`
-                    // silently skipped the file and the import reported nothing.
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
-                    if data.count > 15 * 1024 * 1024 { continue }
-                    let name = url.deletingPathExtension().lastPathComponent
-                    let title = name.isEmpty ? "表情包" : name
-                    _ = await MainActor.run {
-                        store.addSticker(
-                            imageData: data,
-                            title: title,
-                            content: "",
-                            scenario: "",
-                            shortDesc: title,
-                            category: targetCategory
-                        )
-                    }
-                    addedCount += 1
-                }
-                if addedCount > 0 {
-                    await MainActor.run {
-                        MinisToast.show(AppLocalized("成功导入 \(addedCount) 个表情"), systemImage: "checkmark.circle.fill")
-                    }
-                }
-            }
-        }
         .onChange(of: selectedPhotoItems) { items in
             guard !items.isEmpty else { return }
             let count = items.count
@@ -6962,6 +6966,13 @@ struct ChatStickerPanel: View {
                 StickerEditSheet(editingItem: item)
             case .preview(let item):
                 StickerZoomPreviewSheet(sticker: item)
+            case .importFiles:
+                DocumentCopyPicker(contentTypes: [.image, .gif, .data],
+                                   allowsMultipleSelection: true) { urls in
+                    importStickerFiles(urls)
+                } onDone: {
+                    activeSheet = nil
+                }
             }
         }
         .onAppear {
@@ -8256,7 +8267,7 @@ struct StickerEditSheet: View {
     @ObservedObject private var store = StickerStore.shared
 
     @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var showFileImporter: Bool = false
+    @State private var showFilePicker: Bool = false
     @State private var imageData: Data?
     @State private var autoAiRecognize: Bool = VisionGroupResolver.isConfigured
     @State private var isRecognizing: Bool = false
@@ -8319,7 +8330,7 @@ struct StickerEditSheet: View {
                                 .buttonStyle(.borderless)
 
                                 Button {
-                                    showFileImporter = true
+                                    showFilePicker = true
                                 } label: {
                                     Text("从文件选择")
                                         .font(.subheadline.weight(.medium))
@@ -8423,25 +8434,29 @@ struct StickerEditSheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || imageData == nil)
                 }
             }
-            .fileImporter(
-            isPresented: $showFileImporter,
-            allowedContentTypes: [.image, .gif, .data],
-            allowsMultipleSelection: false
-        ) { result in
-            guard let urls = try? result.get(), let url = urls.first else { return }
-            guard url.startAccessingSecurityScopedResource() else { return }
-            defer { url.stopAccessingSecurityScopedResource() }
-            if let data = try? Data(contentsOf: url), !data.isEmpty {
-                if data.count <= 15 * 1024 * 1024 {
-                    self.imageData = data
-                    let name = url.deletingPathExtension().lastPathComponent
-                    if self.title.isEmpty { self.title = name }
-                    if self.shortDesc.isEmpty { self.shortDesc = name }
-                } else {
-                    MinisToast.show(AppLocalized("图片超过15MB上限"), systemImage: "exclamationmark.triangle.fill")
+            // [04b-2 §6] `.fileImporter` (open-in-place) plus a hard
+            // `startAccessingSecurityScopedResource()` gate: on a resigned
+            // build the grant is never given, so the guard returned early and
+            // picking a file did nothing, silently. Copy mode instead.
+            .sheet(isPresented: $showFilePicker) {
+                DocumentCopyPicker(contentTypes: [.image, .gif, .data],
+                                   allowsMultipleSelection: false) { urls in
+                    guard let url = urls.first else { return }
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    guard let data = try? Data(contentsOf: url), !data.isEmpty else { return }
+                    if data.count <= 15 * 1024 * 1024 {
+                        self.imageData = data
+                        let name = url.deletingPathExtension().lastPathComponent
+                        if self.title.isEmpty { self.title = name }
+                        if self.shortDesc.isEmpty { self.shortDesc = name }
+                    } else {
+                        MinisToast.show(AppLocalized("图片超过15MB上限"), systemImage: "exclamationmark.triangle.fill")
+                    }
+                } onDone: {
+                    showFilePicker = false
                 }
             }
-        }
         .onChange(of: selectedPhotoItem) { newItem in
                 guard let newItem else { return }
                 Task {

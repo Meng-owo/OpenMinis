@@ -70,10 +70,15 @@ struct PlayHubView: View {
     // 上传 / 删除（P1-2 / P1-3）
     @State private var uploadPicks: [PhotosPickerItem] = []
     @State private var showPhotoPicker = false
-    @State private var showFileImporter = false
+    /// [04b-2 §3] A copy-mode picker presented as a sheet, not SwiftUI's
+    /// `.fileImporter`. `.fileImporter` opens in place and needs a FileProvider
+    /// security-scoped grant, which a resigned build is never given: the picker
+    /// opens, the user picks a file, "Open" does nothing and no error arrives.
+    /// `DocumentCopyPicker` copies into tmp and returns a plain file URL.
+    @State private var showFilePicker = false
     @State private var importing = false
+    @State private var importError: String?
     @State private var showDeleteConfirm = false
-    @State private var currentFileTypes: [UTType] = [.item]
     @State private var collapsedCategories = Set<FileCategory>()
 
     // 批量删除（P1-3 打回：长按勾选，多选后一次确认）
@@ -167,11 +172,24 @@ struct PlayHubView: View {
                       selection: $uploadPicks,
                       maxSelectionCount: 20,
                       matching: uploadMatching)
-        .fileImporter(isPresented: $showFileImporter,
-                      allowedContentTypes: currentFileTypes) { result in
-            if case .success(let url) = result {
+        // [04b-2 §3] Copy-mode picker replaces `.fileImporter` (open-in-place,
+        // silently refused on resigned builds).
+        .sheet(isPresented: $showFilePicker) {
+            DocumentCopyPicker(contentTypes: [.item],
+                               allowsMultipleSelection: false) { urls in
+                guard let url = urls.first else { return }
                 Task { await importFile(from: url) }
+            } onDone: {
+                showFilePicker = false
             }
+        }
+        .alert("Error", isPresented: Binding(
+            get: { importError != nil },
+            set: { if !$0 { importError = nil } }
+        )) {
+            Button("OK", role: .cancel) { importError = nil }
+        } message: {
+            Text(importError ?? "")
         }
         .onChange(of: uploadPicks) { _, newValue in
             guard !newValue.isEmpty else { return }
@@ -261,10 +279,7 @@ struct PlayHubView: View {
                     Label("从相册导入（图片/视频）", systemImage: "photo.on.rectangle")
                 }
                 Button {
-                    DispatchQueue.main.async {
-                        currentFileTypes = [.item]
-                        showFileImporter = true
-                    }
+                    DispatchQueue.main.async { showFilePicker = true }
                 } label: {
                     Label("从文件导入（音频/文档/任意）", systemImage: "folder.fill")
                 }
@@ -849,13 +864,17 @@ struct PlayHubView: View {
     @MainActor
     private func importFile(from url: URL) async {
         let ext = url.pathExtension.isEmpty ? "bin" : url.pathExtension
-        // [K-7] Same trap as the file browser: a copy-mode URL has no security
+        // [K-7] Optional grant, not a gate: a copy-mode URL has no security
         // scope to enter, so `startAccessingSecurityScopedResource()` returns
-        // false and the whole import was skipped without a word. Treat the call
-        // as an optional grant instead of a gate.
+        // false and the whole import used to be skipped without a word.
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
+        // [04b-2 §8b] The failure used to be a bare `return` — she picks a file,
+        // nothing lands, nothing is said.
+        guard let data = try? Data(contentsOf: url) else {
+            importError = AppLocalized("Couldn't read that file. Try picking it again.")
+            return
+        }
         saveImported(data, ext: ext)
         await rescan()
     }

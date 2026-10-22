@@ -41,18 +41,20 @@ struct FileBrowserView: View {
     /// behaviour; persisted across app launches via UserDefaults.
     /// (T-hidden-files 74b70818)
     @AppStorage("fileBrowser.showHidden") private var showHidden: Bool = false
-    @State private var exportingFile: FileItem?
-    @State private var showExportSheet = false
-    @State private var previewingFile: FileItem?
-    @State private var showImportPicker = false
-    @State private var itemToDelete: FileItem?
-    @State private var moveOrCopyItem: FileItem?
-    @State private var moveOrCopyMode: MoveOrCopyMode = .move
-    @State private var successMessage = ""
-    @State private var showSuccess = false
-    /// Lightweight "Copied" toast for Copy Absolute Path. Separate from
-    /// `showSuccess` (which drives a blocking .alert for move/copy-to); this
-    /// is a self-dismissing capsule. [T-ios-copy-abs-path-copied-toast]
+    /// [04b-2 §2] This view used to carry 4 sheets + 3 alerts on the same
+    /// level. SwiftUI keeps exactly one presentation per level, so any two of
+    /// them asked for in the same transaction silently lose one — the "点了没
+    /// 反应" class of bug. Everything now funnels through `activeSheet` and
+    /// `dialog`, the same `sheet(item:)` shape `ContentView.activeToolSheet`
+    /// uses.
+    @State private var activeSheet: FileBrowserSheet?
+    @State private var dialog: FileBrowserDialog?
+    /// [04b-2 §1] `DocumentCopyPicker` runs `onPick` before `onDone`, so the
+    /// import result has to be parked here and raised after the sheet is gone.
+    @State private var pendingImportFailure: String?
+    /// Lightweight "Copied" toast for Copy Absolute Path. Separate from the
+    /// blocking Done alert for move/copy-to; this is a self-dismissing capsule.
+    /// [T-ios-copy-abs-path-copied-toast]
     @State private var copiedToast = false
     /// [T-browser-download-ux-v2] Filename to scroll to and briefly highlight
     /// after the first listing loads (downloads panel "Show in Files").
@@ -61,6 +63,58 @@ struct FileBrowserView: View {
     @State private var didLocateHighlight = false
 
     enum MoveOrCopyMode { case move, copy }
+
+    /// [04b-2 §2] One enum for every sheet this view can present.
+    private enum FileBrowserSheet: Identifiable {
+        case export(FileItem)
+        case preview(FileItem)
+        case importPicker
+        case moveOrCopy(FileItem, MoveOrCopyMode)
+        /// Kept as a sheet (not an alert) so the row-level "Add to Home Screen"
+        /// stops being a presentation mounted on every row.
+        case addToHome(FileItem)
+
+        var id: String {
+            switch self {
+            case .export(let f): return "export-\(f.id)"
+            case .preview(let f): return "preview-\(f.id)"
+            case .importPicker: return "import"
+            case .moveOrCopy(let f, let m): return "move-\(m)-\(f.id)"
+            case .addToHome(let f): return "home-\(f.id)"
+            }
+        }
+    }
+
+    /// [04b-2 §2] One enum for every alert this view can present.
+    private enum FileBrowserDialog: Identifiable {
+        case error(String)
+        case delete(FileItem)
+        case done(String)
+
+        var id: String {
+            switch self {
+            case .error: return "error"
+            case .delete(let f): return "delete-\(f.id)"
+            case .done: return "done"
+            }
+        }
+
+        var title: LocalizedStringKey {
+            switch self {
+            case .error: return "Error"
+            case .delete(let f): return "Delete \"\(f.name)\"?"
+            case .done: return "Done"
+            }
+        }
+
+        var message: String {
+            switch self {
+            case .error(let m): return m
+            case .delete(let f): return "\(f.formattedSize) · \(AppLocalized("This action cannot be undone."))"
+            case .done(let m): return m
+            }
+        }
+    }
 
     init(rootPath: URL? = nil, initialPath: URL? = nil, rootLabel: String? = nil,
          highlightFileName: String? = nil) {
@@ -113,23 +167,24 @@ struct FileBrowserView: View {
                 ScrollViewReader { proxy in
                     List {
                         ForEach(viewModel.items) { item in
-                            FileBrowserRow(item: item, viewModel: viewModel, itemToDelete: $itemToDelete) {
+                            FileBrowserRow(item: item, viewModel: viewModel) {
                                 if item.isDirectory {
                                     viewModel.navigateTo(item)
                                 } else {
-                                    previewingFile = item
+                                    activeSheet = .preview(item)
                                 }
                             } onExport: {
-                                exportingFile = item
-                                showExportSheet = true
+                                activeSheet = .export(item)
                             } onMove: {
-                                moveOrCopyItem = item
-                                moveOrCopyMode = .move
+                                activeSheet = .moveOrCopy(item, .move)
                             } onCopy: {
-                                moveOrCopyItem = item
-                                moveOrCopyMode = .copy
+                                activeSheet = .moveOrCopy(item, .copy)
                             } onCopiedPath: {
                                 showCopiedToast()
+                            } onDelete: {
+                                dialog = .delete(item)
+                            } onAddToHome: {
+                                activeSheet = .addToHome(item)
                             }
                             .id(item.id)
                             // [T-browser-download-ux-v2] Transient locate
@@ -183,89 +238,104 @@ struct FileBrowserView: View {
                 moreMenu
             }
         }
-        .sheet(isPresented: $showExportSheet) {
-            if let file = exportingFile {
+        // [04b-2 §2] One sheet, one alert for the whole page. Order matters
+        // only in that the import picker's dismissal is what unlocks the
+        // result alert.
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .export(let file):
                 DocumentExportView(fileURL: file.url)
-            }
-        }
-        .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(viewModel.errorMessage)
-        }
-        .alert(
-            "Delete \"\(itemToDelete?.name ?? "")\"?",
-            isPresented: Binding(
-                get: { itemToDelete != nil },
-                set: { if !$0 { itemToDelete = nil } }
-            )
-        ) {
-            Button("Delete", role: .destructive) {
-                if let item = itemToDelete {
-                    viewModel.deleteItem(item)
-                    itemToDelete = nil
+            case .preview(let file):
+                FilePreviewSheet(item: file)
+            case .importPicker:
+                // [K-7] Copy-mode picker, not `asCopy: false`.
+                //
+                // SwiftUI's `.fileImporter` (and any open-in-place picker)
+                // needs a FileProvider security-scoped grant. On resigned /
+                // sideloaded builds iOS refuses it silently: the picker opens,
+                // the user taps a file, "Open" does nothing and no error is
+                // delivered — exactly "外部挂载传不了". `DocumentCopyPicker`
+                // copies into tmp and hands back a plain file: URL, so no
+                // grant is involved.
+                //
+                // [04b-2 §1] `onPick` runs BEFORE `onDone`, and `importFiles`
+                // used to raise the error alert from inside `onPick` — while
+                // this sheet was still on screen, where SwiftUI drops it. Now
+                // the message is parked and raised from `onDone` one turn after
+                // the dismissal.
+                DocumentCopyPicker(contentTypes: [.data, .item],
+                                   allowsMultipleSelection: true) { urls in
+                    pendingImportFailure = viewModel.importFiles(urls)
+                } onDone: {
+                    activeSheet = nil
+                    guard let message = pendingImportFailure else { return }
+                    pendingImportFailure = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        dialog = .error(message)
+                    }
                 }
-            }
-            Button("Cancel", role: .cancel) { itemToDelete = nil }
-        } message: {
-            Text("\(itemToDelete?.formattedSize ?? "") · This action cannot be undone.")
-        }
-        .sheet(item: $previewingFile) { file in
-            FilePreviewSheet(item: file)
-        }
-        .sheet(isPresented: $showImportPicker) {
-            // [K-7] Copy-mode picker, not `asCopy: false`.
-            //
-            // `FileImportPicker` used to open in place, which needs a
-            // FileProvider security-scoped grant. On resigned / sideloaded
-            // builds iOS refuses that grant silently: the picker opens, the
-            // user taps a file, "Open" does nothing and no error is delivered
-            // — exactly "外部挂载传不了". `DocumentCopyPicker` copies the file
-            // into tmp and hands back a plain file URL, so no grant is
-            // involved. Same component `ProviderInstancesView` already uses.
-            //
-            // `onDone` is what closes this sheet: a bare picker in a sheet has
-            // nothing that dismisses it after a pick, so it used to sit there
-            // showing the browser again.
-            DocumentCopyPicker(contentTypes: [.data, .item],
-                               allowsMultipleSelection: true) { urls in
-                viewModel.importFiles(urls)
-            } onDone: {
-                showImportPicker = false
-            }
-        }
-        .sheet(item: $moveOrCopyItem) { item in
-            let minisPath = viewModel.rootPath.appendingPathComponent("var/minis")
-            let initial = FileManager.default.fileExists(atPath: minisPath.path) ? minisPath : nil
-            NavigationStack {
-                DirectoryPickerView(
-                    rootPath: viewModel.rootPath,
-                    rootLabel: viewModel.rootLabel,
-                    initialPath: initial,
-                    excludedURL: item.url,
-                    title: moveOrCopyMode == .move ? "Move to…" : "Copy to…"
-                ) { destinationDir in
-                    let destName = viewModel.displayPath(for: destinationDir)
-                    if moveOrCopyMode == .move {
-                        if viewModel.moveItem(item, to: destinationDir) {
-                            successMessage = "Moved \"\(item.name)\" to \(destName)"
-                            showSuccess = true
-                        }
-                    } else {
-                        if viewModel.copyItem(item, to: destinationDir) {
-                            successMessage = "Copied \"\(item.name)\" to \(destName)"
-                            showSuccess = true
+            case .moveOrCopy(let item, let mode):
+                let minisPath = viewModel.rootPath.appendingPathComponent("var/minis")
+                let initial = FileManager.default.fileExists(atPath: minisPath.path) ? minisPath : nil
+                NavigationStack {
+                    DirectoryPickerView(
+                        rootPath: viewModel.rootPath,
+                        rootLabel: viewModel.rootLabel,
+                        initialPath: initial,
+                        excludedURL: item.url,
+                        title: mode == .move ? "Move to…" : "Copy to…"
+                    ) { destinationDir in
+                        let destName = viewModel.displayPath(for: destinationDir)
+                        let moved = mode == .move
+                            ? viewModel.moveItem(item, to: destinationDir)
+                            : viewModel.copyItem(item, to: destinationDir)
+                        activeSheet = nil
+                        viewModel.loadItems()
+                        guard moved else { return }
+                        // Same trap as the import alert: the destination picker
+                        // is still dismissing, so the confirmation has to wait.
+                        let text = String(
+                            format: AppLocalized(moved ? "Moved \"%@\" to %@" : "Copied \"%@\" to %@"),
+                            item.name, destName
+                        )
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            dialog = .done(text)
                         }
                     }
-                    moveOrCopyItem = nil
-                    viewModel.loadItems()
                 }
+            case .addToHome(let file):
+                // The browser exposes already-resolved host URLs via
+                // FileItem.url, so we hand the URL straight to the sheet
+                // without going through minis-clone:// resolution.
+                WebAppAddToHomeSheet(htmlURL: file.url, sourceSessionId: nil)
             }
         }
-        .alert("Done", isPresented: $showSuccess) {
-            Button("OK", role: .cancel) {}
+        .alert(dialogTitle, isPresented: Binding(
+            get: { dialog != nil },
+            set: { if !$0 { dialog = nil } }
+        )) {
+            // `dialog` is optional, so the case pattern needs the `?` — without
+            // it this does not compile ("pattern of type 'FileBrowserDialog'
+            // cannot match 'FileBrowserDialog?'").
+            if case .delete(let item)? = dialog {
+                Button("Delete", role: .destructive) {
+                    dialog = nil
+                    viewModel.deleteItem(item)
+                }
+                Button("Cancel", role: .cancel) { dialog = nil }
+            } else {
+                Button("OK", role: .cancel) { dialog = nil }
+            }
         } message: {
-            Text(successMessage)
+            Text(dialog?.message ?? "")
+        }
+        // The view model still raises its own errors (delete / move / copy
+        // failures). With the per-case alerts merged into `dialog`, those have
+        // to be forwarded — otherwise they would now be set and never shown.
+        .onChange(of: viewModel.showError) { _, presented in
+            guard presented else { return }
+            viewModel.showError = false
+            dialog = .error(viewModel.errorMessage)
         }
         .modifier(SortSyncModifier(
             sortKeyRaw: sortKeyRaw,
@@ -274,6 +344,14 @@ struct FileBrowserView: View {
             showHidden: showHidden,
             apply: syncSort
         ))
+    }
+
+    /// [04b-2 §2] Typed `LocalizedStringKey`: `alert(_:isPresented:)` has a
+    /// `String` overload that prints verbatim without consulting the string
+    /// table, and `dialog?.title ?? ""` would pick exactly that one.
+    private var dialogTitle: LocalizedStringKey {
+        guard let dialog else { return "" }
+        return dialog.title
     }
 
     private var currentSortKey: FileSortKey {
@@ -339,7 +417,7 @@ struct FileBrowserView: View {
             // exact entry (file browser ⋯ → Import File), which is also one of
             // the ways "外部挂载传不了" shows up.
             Button {
-                DispatchQueue.main.async { showImportPicker = true }
+                DispatchQueue.main.async { activeSheet = .importPicker }
             } label: {
                 Label("Import File", systemImage: "plus")
             }
@@ -755,7 +833,6 @@ private struct FileInfoView: View {
 private struct FileBrowserRow: View {
     let item: FileItem
     @ObservedObject var viewModel: FileBrowserViewModel
-    @Binding var itemToDelete: FileItem?
     let onTap: () -> Void
     let onExport: () -> Void
     let onMove: () -> Void
@@ -763,8 +840,12 @@ private struct FileBrowserRow: View {
     /// Called after the guest path is placed on the clipboard, so the parent
     /// can show the "Copied" toast. [T-ios-copy-abs-path-copied-toast]
     var onCopiedPath: () -> Void = {}
-
-    @State private var showAddWebApp = false
+    /// [04b-2 §2] Delete confirmation and "Add to Home Screen" used to be a
+    /// binding and a `@State` sheet mounted on EVERY row — with a long listing
+    /// that is dozens of presentations competing with the page's own. Both are
+    /// callbacks now; the page owns the single presentation.
+    var onDelete: () -> Void = {}
+    var onAddToHome: () -> Void = {}
 
     private var isHTML: Bool {
         guard !item.isDirectory else { return false }
@@ -802,31 +883,23 @@ private struct FileBrowserRow: View {
                         // WebApp entry point — file browser surfaces both
                         // shared and mounted folders, so this single hook
                         // covers two of the three required entry points.
-                        Button {
-                            showAddWebApp = true
-                        } label: {
+                        Button { onAddToHome() } label: {
                             Label("Add to Home Screen", systemImage: "rectangle.stack.badge.plus")
                         }
                     }
                 }
                 Button(role: .destructive) {
-                    itemToDelete = item
+                    onDelete()
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
-                    itemToDelete = item
+                    onDelete()
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
-            }
-            .sheet(isPresented: $showAddWebApp) {
-                // The browser exposes already-resolved host URLs via
-                // FileItem.url, so we hand the URL straight to the sheet
-                // without going through minis-clone:// resolution.
-                WebAppAddToHomeSheet(htmlURL: item.url, sourceSessionId: nil)
             }
     }
 }
@@ -1342,7 +1415,18 @@ class FileBrowserViewModel: ObservableObject {
         return label + rel
     }
 
-    func importFiles(_ urls: [URL]) {
+    /// Import picked files. Returns the failure message (nil on full success)
+    /// instead of raising the alert itself.
+    ///
+    /// [P0 04b-2] The caller presents this from inside `DocumentCopyPicker`,
+    /// whose delegate runs `onPick` **before** `onDone`. Setting `showError`
+    /// there fired an alert while the picker sheet was still on screen, and
+    /// SwiftUI drops an alert requested during a presentation — so the import
+    /// failed and nothing was ever shown, which is the same "external mount
+    /// does nothing" complaint this round was meant to close. Returning the
+    /// message lets the caller raise it after the sheet is gone.
+    @discardableResult
+    func importFiles(_ urls: [URL]) -> String? {
         let fm = FileManager.default
         let destDir = currentPath.resolvingSymlinksInPath()
         var failCount = 0
@@ -1406,10 +1490,12 @@ class FileBrowserViewModel: ObservableObject {
         if failCount > 0 {
             // [K-7] Name the reason, not just the count.
             let countText = String(format: AppLocalized("Failed to import %d file(s)."), failCount)
-            errorMessage = firstFailure.map { "\(countText)\n\($0)" } ?? countText
-            showError = true
+            let message = firstFailure.map { "\(countText)\n\($0)" } ?? countText
+            loadItems()
+            return message
         }
         loadItems()
+        return nil
     }
 
     /// Convert a host-filesystem URL under `rootPath` to its corresponding Linux

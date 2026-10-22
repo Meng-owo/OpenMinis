@@ -1493,7 +1493,17 @@ enum VoiceLanguages {
     /// (each mapped to the closest supported recognizer locale), then every other
     /// supported recognizer locale. So the picker leads with what the user set in
     /// iOS Settings, then offers the rest.
-    static var options: [Option] {
+    ///
+    /// [04b-2 §8a] Computed once and cached. Building this costs one
+    /// `SFSpeechRecognizer.supportedLocales()` call, a walk over
+    /// `Locale.preferredLanguages`, and one `localizedString(forIdentifier:)`
+    /// per locale — ~100 of them. It used to be a computed property read inside
+    /// a `Menu` that sits on the recording waveform, which redraws on every
+    /// audio-level tick, so the whole thing could run per frame while recording.
+    /// The set of recognizer locales does not change during a process lifetime.
+    static let options: [Option] = buildOptions()
+
+    private static func buildOptions() -> [Option] {
         let supported = SFSpeechRecognizer.supportedLocales()
             .map(\.identifier)
             .sorted()

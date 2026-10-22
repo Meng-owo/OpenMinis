@@ -73,7 +73,16 @@ check("assistant bubble uses pack", think.contains("MinisThemeShape.assistantBub
 check("thinking fill uses pack", think.contains("MinisThemeShape.thinkingFill"))
 check("thinking card image", think.contains("thinkingCardImage()"))
 check("bubble style enum", pack.contains("enum AppearanceBubbleStyle"))
-check("tail style", pack.contains("case tail"))
+// [04b-2 §7] Both of these asserted a spelling the code no longer uses, so
+// they had been red since before b5595fc and made "run the tests" meaningless.
+// The BEHAVIOUR is there in both cases — the assertion was just pinned to an
+// older shape.
+//   • `case tail` is declared inside a combined case list
+//     (`case rounded, squircle, pill, tail, sharp`), so match the switch arm
+//     that proves the style is handled.
+//   • markdown links colour now comes from `uiColorSnapshot(.accent)`; the
+//     scoped `uiColor(.accent, scope: .chat)` form was the older accessor.
+check("tail style", pack.contains("case .tail:"))
 check("schema 5", pack.contains("schemaVersion = 5"))
 check("font family", pack.contains("enum AppearanceFontFamily"))
 check("input bar style", pack.contains("inputBarStyle"))
@@ -151,7 +160,7 @@ check("warning title", studio.contains("case .warning: return \"警告\""))
 check("ChatColors.warning", input.contains("static var warning: Color"))
 check("errors use destructive", input.contains("ChatColors.destructive"))
 check("interrupt uses warning", chat.contains("ChatColors.warning"))
-check("markdown links use accent", markdown.contains("uiColor(.accent, scope: .chat)"))
+check("markdown links use accent", markdown.contains("uiColorSnapshot(.accent)"))
 check("no chat capsule green leftover", !think.contains("accentColor: .green"))
 check("no tool live purple leftover", !toolLive.contains("return .purple"))
 check("clone icloud container", transport.contains("iCloud.com.openminis.clone"))

@@ -129,8 +129,14 @@ final class VoiceChainTests: XCTestCase {
         groupStore.updateGroup(updated)
         defer { cleanup([good, bad], groups: [group.id]) }
 
-        XCTAssertEqual(groupStore.candidates(for: group).count, 2)
-        XCTAssertEqual(groupStore.usableCandidates(for: group).map { $0.id }, [good.id],
+        // [04b-2 §7] `createGroup` returns a VALUE snapshot taken before the
+        // members were added, so asserting against `group` always read an empty
+        // member list and this line failed on every run — for three rounds,
+        // because CI only ever built the test target and never executed it.
+        // Fetch the stored copy instead.
+        let stored = groupStore.group(id: group.id) ?? group
+        XCTAssertEqual(groupStore.candidates(for: stored).count, 2)
+        XCTAssertEqual(groupStore.usableCandidates(for: stored).map { $0.id }, [good.id],
                        "a keyless member must not be counted as usable")
     }
 }

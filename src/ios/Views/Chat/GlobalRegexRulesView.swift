@@ -23,9 +23,15 @@ struct GlobalRegexRulesView: View {
     @State private var ruleReplaceOnly = false
     @State private var ruleDepthLimited = false
     @State private var ruleMaxDepth = 10
-    @State private var showImporter = false
+    /// [04b-2 §3] Copy-mode picker as a sheet, not `.fileImporter`. The
+    /// open-in-place picker never gets its FileProvider grant on a resigned
+    /// build, so picking a pack did nothing and said nothing.
+    @State private var showFilePicker = false
     @State private var importMessage: String?
-    @State private var showImportAlert = false
+    /// [04b-2 §1] `importPack` runs from inside the picker, so its result alert
+    /// has to be raised after the sheet is gone — an alert requested while a
+    /// sheet is on screen is dropped.
+    @State private var pendingImportMessage: String?
 
     var body: some View {
         List {
@@ -61,19 +67,25 @@ struct GlobalRegexRulesView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("正则替换")
         .navigationBarTitleDisplayMode(.inline)
-        .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: [.json, .plainText, .data],
-                      allowsMultipleSelection: false) { result in
-            switch result {
-            case .success(let urls):
-                if let url = urls.first { importPack(url) }
-            case .failure(let error):
-                importMessage = error.localizedDescription
-                showImportAlert = true
+        .sheet(isPresented: $showFilePicker) {
+            DocumentCopyPicker(contentTypes: [.json, .plainText, .data],
+                               allowsMultipleSelection: false) { urls in
+                guard let url = urls.first else { return }
+                importPack(url)
+            } onDone: {
+                showFilePicker = false
+                guard let message = pendingImportMessage else { return }
+                pendingImportMessage = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    importMessage = message
+                }
             }
         }
-        .alert("正则包", isPresented: $showImportAlert) {
-            Button("知道了", role: .cancel) {}
+        .alert("正则包", isPresented: Binding(
+            get: { importMessage != nil },
+            set: { if !$0 { importMessage = nil } }
+        )) {
+            Button("知道了", role: .cancel) { importMessage = nil }
         } message: {
             Text(importMessage ?? "")
         }
@@ -81,7 +93,7 @@ struct GlobalRegexRulesView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
                     Button {
-                        DispatchQueue.main.async { showImporter = true }
+                        DispatchQueue.main.async { showFilePicker = true }
                     } label: {
                         Label("导入 ST 正则包", systemImage: "square.and.arrow.down")
                     }
@@ -342,8 +354,7 @@ struct GlobalRegexRulesView: View {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         guard let data = try? Data(contentsOf: url) else {
-            importMessage = "这个文件读不出来。"
-            showImportAlert = true
+            pendingImportMessage = "这个文件读不出来。"
             return
         }
         do {
@@ -351,17 +362,15 @@ struct GlobalRegexRulesView: View {
             for r in rules {
                 store.add(GlobalRegexRule(legacy: r))
             }
-            importMessage = "导入 \(rules.count) 条规则。"
+            pendingImportMessage = "导入 \(rules.count) 条规则。"
         } catch {
-            importMessage = error.localizedDescription
+            pendingImportMessage = error.localizedDescription
         }
-        showImportAlert = true
     }
 
     private func exportPack() {
         guard !store.rules.isEmpty else {
             importMessage = "还没有规则可导出。"
-            showImportAlert = true
             return
         }
         // 导出走 ST 的字段名，能丢回小酒馆
@@ -374,11 +383,9 @@ struct GlobalRegexRulesView: View {
         guard let data = SillyTavernRegex.exportJSON(legacy),
               let text = String(data: data, encoding: .utf8) else {
             importMessage = "导出失败。"
-            showImportAlert = true
             return
         }
         UIPasteboard.general.string = text
         importMessage = "已复制 \(store.rules.count) 条规则到剪贴板。"
-        showImportAlert = true
     }
 }
