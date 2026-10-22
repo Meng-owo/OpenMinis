@@ -1658,7 +1658,11 @@ private extension AIChatViewModel {
         // [AUD8-01] "AI Voice Replies" 开关管住所有 AI 语音——两个工具名共用
         // 这一道门控。关 = 彻底没 AI 语音：给模型明确交代，让它如实告诉主人
         // 去开开关，而不是谎称发了。
-        guard AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) else {
+        // `guard … else` must exit the scope; this block does not (it enables
+        // the switch and carries on), so it has to be an `if`. Written as a
+        // `guard` it compiled past the first error and then failed with
+        // "'guard' body must not fall through".
+        if !AIVoiceMessageComposer.voiceRepliesEnabled(sessionId: sid) {
             // [B09-N06 2026-10-22] The switch defaults to OFF and only flips on
             // when you send a message BY VOICE — so a normal typing user asking
             // "say it out loud" got a model apology telling them to go flip a
