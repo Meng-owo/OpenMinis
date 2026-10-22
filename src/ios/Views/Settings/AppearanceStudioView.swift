@@ -1483,7 +1483,9 @@ struct AppearanceStudioView: View {
             "design": "设计", "productivity": "效率", "support": "客服", "other": "其他",
         ]
         guard let label = labels[key] else { return key }
-        return AppLocalized(label)
+        // AppLocalized 只吃编译期字面量（String.LocalizationValue 宏）；
+        // 运行时 key 查表走 String(localized:)，同一个 bundle、同一张表。
+        return String(localized: String.LocalizationValue(label), bundle: AppBundle.current)
     }
 
     private func categoryRow(_ key: String) -> some View {

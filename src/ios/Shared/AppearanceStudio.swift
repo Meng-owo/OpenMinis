@@ -664,7 +664,7 @@ final class AppearanceStudio: ObservableObject {
         do {
             try data.write(to: wallpaperURL(scope), options: .atomic)
         } catch {
-            Self.appearanceLog.warning("wallpaper write failed for \(scope.rawValue): \(error.localizedDescription)")
+            appearanceLog.warning("wallpaper write failed for \(scope.rawValue): \(error.localizedDescription)")
             return false
         }
         // [T-wallpaper-clear] Choosing a new image re-enables global
