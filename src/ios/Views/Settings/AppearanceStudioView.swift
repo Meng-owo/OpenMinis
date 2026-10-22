@@ -106,6 +106,11 @@ struct AppearanceStudioView: View {
     /// 2 明暗 × 8 页面的手工配色瞬间清空，没确认、没撤销。现在先问，
     /// 清完撤销条就在按钮底下等着。
     @State private var pendingPaletteReset = false
+    /// [B28 R5 试点] 样张数据就一行：kind + 文本。AssistantBlock 的其余
+    /// 状态全默认，真实组件吃什么假数据，就还你什么真效果。
+    @State private var previewThinkingBlock = AssistantBlock(
+        kind: .thinking,
+        content: AppLocalized("这张不是画的样张，是聊天里那张真卡——同一份代码，换主题一起换。"))
     /// [B28 R2-8/11] 命名弹窗：顶栏「存」和长按「重命名」共用一套。
     /// 和确认框同层 —— 这页只许一个 alert（K-4 的教训），靠状态分支。
     enum StudioInputDialog: Equatable {
@@ -1077,6 +1082,16 @@ struct AppearanceStudioView: View {
 
     private var bubblesPage: some View {
         VStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                // [B28 R5 试点 · 醒醒拍板「在哪改在哪看」] thinking 卡样张
+                // = 真实聊天页的 ThinkingBlockView 本体，不是手画复刻。
+                // 圆角/填充/描边/字号/图标全走 MinisThemeShape 门面：
+                // 真页哪天改渲染，样张同天跟着变 —— 预览没有撒谎的余地。
+                sectionTitle(AppLocalized("样张 · 实时"))
+                ThinkingBlockView(block: previewThinkingBlock, isStreaming: false)
+            }
+            .modifier(StudioCard(variant: variant))
+
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("气泡颜色"))
                 ForEach([AppearanceColorRole.userBubble, .assistantBubble], id: \.self) { role in

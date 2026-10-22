@@ -15282,6 +15282,65 @@
         }
       }
     },
+    "样张 · 实时" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live-Probe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live sample"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestra en vivo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aperçu en direct"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ライブ見本"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실시간 견본"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Живой образец"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "样张 · 实时"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "樣張 · 實時"
+          }
+        }
+      }
+    },
     "次要文字" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -20750,6 +20809,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "输入栏"
+          }
+        }
+      }
+    },
+    "这张不是画的样张，是聊天里那张真卡——同一份代码，换主题一起换。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist kein Mock-up — das ist die echte Karte aus dem Chat. Gleicher Code, gleiches Theme."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This isn't a mock-up — it's the real card from chat. Same code, same theme."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta no es una maqueta: es la tarjeta real del chat. Mismo código, mismo tema."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce n'est pas une maquette — c'est la vraie carte du chat. Même code, même thème."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これは見本の描き起こしではなく、チャットと同じ本物のカードです。同じコード、同じテーマ。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 카드는 그림이 아니라 채팅의 진짜 카드예요. 같은 코드, 같은 테마."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Это не макет — это настоящая карточка из чата. Тот же код, та же тема."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这张不是画的样张，是聊天里那张真卡——同一份代码，换主题一起换。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "這張不是畫的樣張，是聊天裡那張真卡——同一份代碼，換主題一起換。"
           }
         }
       }
