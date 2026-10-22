@@ -371,6 +371,17 @@ struct AppearanceStudioView: View {
         )
     }
 
+    /// [B28 R3-5] apply 的 warnings 字段名 → 给用户看的词（查九语种表，
+    /// 不硬塞中文）。
+    private static func themeImageName(_ field: String) -> String {
+        let labels: [String: String] = [
+            "wallpaper": "壁纸", "thinkingCard": "thinking 卡片",
+            "inputBar": "输入栏", "characterArt": "立绘",
+        ]
+        guard let label = labels[field] else { return field }
+        return String(localized: String.LocalizationValue(label), bundle: AppBundle.current)
+    }
+
     private func fail(_ message: String) {
         errorText = message
         showError = true
@@ -1550,6 +1561,9 @@ struct AppearanceStudioView: View {
                 .buttonStyle(.plain)
                 // [B28 R2-3] 以前存满 40 会静默删最旧 —— footer 有义务说清。
                 Text(AppLocalized("另存一份，不会冲掉正在用的。存满四十套会先要你删一套。"))
+                // [B28 R3-4 / C-3] 情头在角色数据里，不跟着主题存亡 ——
+                // 存不带、应用也不动，这事以前 UI 一个字没说，靠用户猜。
+                Text(AppLocalized("情头不在这套里。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
             }
@@ -1594,8 +1608,15 @@ struct AppearanceStudioView: View {
                             Button(AppLocalized("Apply")) {
                                 // [B28 D-3] 点了「应用」原来什么都不发生，用户
                                 // 以为没生效。现在成功/失败都有一句话。
-                                if studio.applySavedTheme(id: item.id) {
+                                if let warnings = studio.applySavedTheme(id: item.id) {
                                     MinisToast.show(String(format: AppLocalized("Applied “%@”"), item.name))
+                                    // [B28 R3-5] 图没落住就明说哪张，不装全好。
+                                    if !warnings.isEmpty {
+                                        MinisToast.show(String(format: AppLocalized("没接住：%@"),
+                                        warnings.map { Self.themeImageName($0) }
+                                                .joined(separator: "、")),
+                                        systemImage: "exclamationmark.triangle.fill")
+                                    }
                                 } else {
                                     MinisToast.show(AppLocalized("Couldn't apply this theme."),
                                                     systemImage: "exclamationmark.triangle.fill")

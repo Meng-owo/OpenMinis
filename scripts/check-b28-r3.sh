@@ -2,6 +2,8 @@
 # [B28 round 3] 真机反馈三条：alert 层级、标题重复、内外卡片语言。
 cd "$(dirname "$0")/.." || exit 2
 V=src/ios/Views/Settings/AppearanceStudioView.swift
+P=src/ios/Shared/AppearanceThemePack.swift
+L=src/ios/Shared/AppearanceThemeLibrary.swift
 fail=0
 ok()  { printf 'OK   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=$((fail+1)); }
@@ -18,6 +20,25 @@ if ! rg -q 'navigationTitle\(AppLocalized\("Appearance"\)\)' "$V" && ! rg -q 'na
 
 # R3-3 内外卡片同一语言：圆角和系统分组列表对齐（10pt continuous、无阴影）
 if rg -A20 "struct StudioCard" "$V" | rg -q "cornerRadius: 10"; then ok R3-3; else bad "R3-3 子页卡片还是另一套圆角"; fi
+
+# R3-4 主题库对头像诚实：明说头像不在这套里（C-3）
+if rg -q "情头不在这套里" "$V"; then ok R3-4; else bad "R3-4 头像不在包里这事 UI 没说"; fi
+
+# R3-5 apply 部分成功不许装全好（F-2）
+if rg -q "func applyThemePack" "$P" && rg -A60 "func applyThemePack" "$P" | rg -q "warnings"; then
+  ok R3-5; else bad "R3-5 apply 吞掉了没吃下的字段"; fi
+if rg -q "warnings" src/ios/NativeOffloads/ThemeOffloadBridge.swift; then ok R3-5b; else bad "R3-5b CLI 侧没透出 warnings"; fi
+
+# R3-6 文档不硬编码字段数，不再写 26（C-4）
+if ! rg -q "26 个字段" src/ios/Agent/Session/SkillStore.swift src/ios/NativeOffloads/ThemeOffloadExtras.swift; then
+  ok R3-6; else bad "R3-6 文档还写着 26 个字段（实际 30）"; fi
+
+# R3-7 「改完立刻生效」不许包办需要重进的（C-6：文案说实话，机制另轮）
+if rg -q "立刻生效" src/ios/Agent/Session/SkillStore.swift && rg -q "列表图标" src/ios/Agent/Session/SkillStore.swift; then
+  ok R3-7; else bad "R3-7 技能文案没说实话"; fi
+
+# R3-8 CLI save 空名字不再拿上次导入的名字当新名字（B-15）
+if rg -q 'trimmed.isEmpty \? "Untitled"' "$L"; then ok R3-8; else bad "R3-8 空名保存仍回落到 pack.name"; fi
 
 echo "----"
 if [ "$fail" -gt 0 ]; then echo "$fail FAILED"; exit 1; else echo "全部通过"; fi

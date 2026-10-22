@@ -579,14 +579,22 @@ extension AppearanceStudio {
     /// carry that image", so the file on disk stays. Callers that mean to
     /// remove an image call `removeWallpaper` / `removeThinkingCardImage` /
     /// `removeInputBarImage` instead of relying on an omission.
-    func applyThemePack(_ pack: AppearanceThemePack, wallpaper: UIImage? = nil) {
+    /// [B28 R3-5 / F-2] 图吃不下以前也照样应用成功 —— 应用方（UI/CLI/AI）
+    /// 需要知道哪些字段没落住，返回值就是那份实话。
+    @discardableResult
+    func applyThemePack(_ pack: AppearanceThemePack, wallpaper: UIImage? = nil) -> [String] {
+        var warnings: [String] = []
         var stored = pack
         stored.wallpaperJPEGBase64 = nil
         stored.thinkingCardJPEGBase64 = nil
         stored.inputBarJPEGBase64 = nil
         // [B28 A-1] 立绘也不再进 defaults：落成文件，字段置 nil。
-        if let b64 = pack.characterArtBase64, let data = Data(base64Encoded: b64) {
-            writeEncodedImage(data, to: characterArtURL(), maxEdge: 1600, quality: 0.82)
+        if let b64 = pack.characterArtBase64 {
+            if let data = Data(base64Encoded: b64) {
+                if !writeEncodedImage(data, to: characterArtURL(), maxEdge: 1600, quality: 0.82) {
+                    warnings.append("characterArt")
+                }
+            } else { warnings.append("characterArt") }
         }
         stored.characterArtBase64 = nil
         // Keep markers for category images the caller did not mention.
@@ -602,21 +610,25 @@ extension AppearanceStudio {
         if let opacity = pack.surfaceOpacity { surfaceOpacity = opacity }
         if let shade = pack.wallpaperShade { wallpaperShade = shade }
         if let wallpaper {
-            setWallpaper(wallpaper, for: .global)
-        } else if let b64 = pack.wallpaperJPEGBase64,
-                  let data = Data(base64Encoded: b64) {
-            setWallpaperEncoded(data, for: .global)
+            if !setWallpaper(wallpaper, for: .global) { warnings.append("wallpaper") }
+        } else if let b64 = pack.wallpaperJPEGBase64 {
+            if let data = Data(base64Encoded: b64) {
+                if !setWallpaperEncoded(data, for: .global) { warnings.append("wallpaper") }
+            } else { warnings.append("wallpaper") }
         }
-        if let b64 = pack.thinkingCardJPEGBase64,
-           let data = Data(base64Encoded: b64) {
-            setThinkingCardImageEncoded(data)
+        if let b64 = pack.thinkingCardJPEGBase64 {
+            if let data = Data(base64Encoded: b64) {
+                if !setThinkingCardImageEncoded(data) { warnings.append("thinkingCard") }
+            } else { warnings.append("thinkingCard") }
         }
-        if let b64 = pack.inputBarJPEGBase64,
-           let data = Data(base64Encoded: b64) {
-            setInputBarImageEncoded(data)
+        if let b64 = pack.inputBarJPEGBase64 {
+            if let data = Data(base64Encoded: b64) {
+                if !setInputBarImageEncoded(data) { warnings.append("inputBar") }
+            } else { warnings.append("inputBar") }
         }
         applyCategoryImages(pack.categoryImages)
         configureUIKitSurfaces()
+        return warnings
     }
 
     func exportThemePack(includeWallpaper: Bool) -> AppearanceThemePack {

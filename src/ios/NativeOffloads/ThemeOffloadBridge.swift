@@ -76,10 +76,13 @@ import UIKit
                 sem.signal()
                 return
             }
-            AppearanceStudio.shared.applyThemePack(pack)
+            // [B28 R3-5 / F-2] 吃不下的字段不再被吞 —— warnings 明说哪些
+            // 图没落住，AI 侧能自查重试，不会拿着 ok 当全好。
+            let warnings = AppearanceStudio.shared.applyThemePack(pack)
             var out = AppearanceStudio.shared.currentThemePack().asJSONObject()
             out["ok"] = true
             out["applied"] = true
+            if !warnings.isEmpty { out["warnings"] = warnings }
             out.removeValue(forKey: "wallpaperJPEGBase64")
             out.removeValue(forKey: "characterArtBase64")
             out["hasCharacterArt"] = AppearanceStudio.shared.hasCharacterArt
@@ -230,10 +233,13 @@ import UIKit
         let sem = DispatchSemaphore(value: 0)
         var result: [String: Any] = [:]
         Task { @MainActor in
-            let ok = AppearanceStudio.shared.applySavedTheme(id: id)
-            result = ok
-                ? ["ok": true, "applied": true, "id": id]
-                : ["ok": false, "error": "not_found", "message": "No saved theme \(id)"]
+            if let warnings = AppearanceStudio.shared.applySavedTheme(id: id) {
+                var out: [String: Any] = ["ok": true, "applied": true, "id": id]
+                if !warnings.isEmpty { out["warnings"] = warnings }
+                result = out
+            } else {
+                result = ["ok": false, "error": "not_found", "message": "No saved theme \(id)"]
+            }
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {

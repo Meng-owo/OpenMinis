@@ -87,8 +87,10 @@ extension AppearanceStudio {
     func saveCurrentTheme(name: String? = nil) -> AppearanceSavedTheme? {
         if savedThemes().count >= AppearanceSavedTheme.limit { return nil }
         var pack = exportThemePack(includeWallpaper: true)
-        let trimmed = (name ?? pack.name).trimmingCharacters(in: .whitespacesAndNewlines)
-        let label = trimmed.isEmpty ? pack.name : trimmed
+        // [B28 R3-8/B-15] 空名字以前回落到 pack.name —— 那可能是上次导入的
+        // ST 包名，存出来一套叫「XX主题 v2.1」，用户根本没起过这名字。
+        let trimmed = (name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = trimmed.isEmpty ? "Untitled" : trimmed
         pack.name = label
         let item = AppearanceSavedTheme(
             id: UUID().uuidString.lowercased(),
@@ -104,14 +106,16 @@ extension AppearanceStudio {
         return item
     }
 
-    func applySavedTheme(id: String) -> Bool {
+    /// [B28 R3-5] nil = 没应用成；返回数组 = 应用了但哪些图没落住（F-2）。
+    @discardableResult
+    func applySavedTheme(id: String) -> [String]? {
         guard savedThemes().contains(where: { $0.id == id }),
-              let pack = readLibraryPack(id: id) else { return false }
-        applyThemePack(pack)
+              let pack = readLibraryPack(id: id) else { return nil }
+        let warnings = applyThemePack(pack)
         // [B28 R2-10] 「现在用的是哪套」以前在模型里根本没有。记下这次
         // 应用的是谁，列表才能诚实回答：还是它 / 你后来改过。
         UserDefaults.standard.set(id, forKey: Self.lastAppliedKey)
-        return true
+        return warnings
     }
 
     private static let lastAppliedKey = "appearanceStudio.lastAppliedLibraryID"
