@@ -16,7 +16,10 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
     // 只是终端文字是 ANSI 16 色，role 对它无效。
     //
     // 结论：`terminal` 能挂壁纸、不能调色，跟 `bottomBar` 同一类。
-    case global, home, chat, settings, browser, files, terminal, bottomBar
+    // [B28 R4 · 醒醒拍板 B] `persona` 通讯录独立槽位：能单独挂壁纸、
+    // 能调色。之前这页压根没接进主题系统，换什么背景都不动 ——
+    // 「冷冰冰」的根在这，不在圆角和标签。
+    case global, home, chat, settings, browser, files, terminal, bottomBar, persona
 
     var id: String { rawValue }
     var title: String {
@@ -29,6 +32,7 @@ enum AppearanceScope: String, CaseIterable, Identifiable {
         case .browser: return AppLocalized("浏览器")
         case .files: return AppLocalized("文件")
         case .terminal: return AppLocalized("终端")
+        case .persona: return AppLocalized("通讯录")
         }
     }
 

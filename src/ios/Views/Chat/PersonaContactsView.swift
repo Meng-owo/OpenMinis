@@ -115,6 +115,8 @@ struct PersonaContactsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // [B28 R4] 接进主题系统：通讯录有独立壁纸槽位（.persona）。
+        .appearancePage(.persona)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索联系人")
         .navigationTitle("通讯录")
         .navigationBarTitleDisplayMode(.inline)
@@ -158,11 +160,24 @@ struct PersonaContactsView: View {
         }
     }
 
+    /// [B28 R4] 简介行不许把 markdown 源码直接印给用户 ——
+    /// `| name | ios-swift |`、`| --- |` 这些格式是写给人设本体的，
+    /// 不是给人看的字。保守清洗：表格线、分隔杠、标题符、行内码、星号。
+    private static func cleanBio(_ raw: String) -> String {
+        var t = raw.replacingOccurrences(of: "\n", with: " ")
+        t = t.replacingOccurrences(of: "[-:|]{3,}[-:| ]*", with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: "\\s*\\|\\s*", with: " ", options: .regularExpression)
+        t = t.replacingOccurrences(of: "[#`]", with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: "\\*{1,3}", with: "", options: .regularExpression)
+        t = t.replacingOccurrences(of: " {2,}", with: " ", options: .regularExpression)
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
     private func personaBio(for persona: Persona) -> String {
         if let soul = SoulStore.load(for: persona.id) {
             let bio = soul.body.trimmingCharacters(in: .whitespacesAndNewlines)
             if !bio.isEmpty {
-                return bio.replacingOccurrences(of: "\n", with: " ")
+                return Self.cleanBio(bio)
             }
         }
         return persona.isBuiltIn ? "桥内置的 MCP 管家" : "暂无人设描述"

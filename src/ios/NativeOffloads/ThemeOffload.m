@@ -62,7 +62,7 @@ static NSString *const HELP_TEXT =
      "  --role <name>         avatar: user | assistant. color: colour role\n"
      "  --slot <name>         icon: slot name, see `minis-theme icon --list`\n"
      "  --scope <name>        wallpaper: global home chat settings browser files\n"
-     "                        terminal bottomBar\n"
+     "                        terminal bottomBar persona\n"
      "                        color: same minus bottomBar/terminal (wallpaper-only)\n"
      "  --variant <name>      color: light | dark (default light)\n"
      "  --hex <RRGGBB>        color: replacement value\n"
