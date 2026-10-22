@@ -394,6 +394,37 @@ struct AppearanceStudioView: View {
         return String(localized: String.LocalizationValue(label), bundle: AppBundle.current)
     }
 
+    /// [B28 R5/R6] 「在哪改在哪看」的落点：真聊天组件的共享样张卡。
+    /// 气泡页挂它、配色页挂它 —— 一处实现，两处诚实。
+    @ViewBuilder
+    private var liveSampleCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(AppLocalized("样张 · 实时"))
+            AssistantBlockView(block: previewAssistantMessage.blocks[0],
+                               message: previewAssistantMessage,
+                               isActiveMessage: false,
+                               highlightedBlockId: $previewHighlightedBlock,
+                               detailBlock: $previewAssistantBlock)
+            HStack {
+                Spacer(minLength: 0)
+                Text(AppLocalized("也真的想你"))
+                    .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                    .foregroundStyle(ChatColors.primaryText)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .modifier(UserBubbleSurface(isQueued: false))
+            }
+            ThinkingBlockView(block: previewThinkingBlock, isStreaming: false)
+            // [B28 R6] 配色页的主顾是文字颜色：加两行真字色样张。
+            Text(AppLocalized("主文字看看我"))
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(studio.color(.primaryText, variant: variant))
+            Text(AppLocalized("次文字也看看我"))
+                .font(.system(size: 11.5))
+                .foregroundStyle(studio.color(.secondaryText, variant: variant))
+        }
+        .modifier(StudioCard(variant: variant))
+    }
+
     private func fail(_ message: String) {
         errorText = message
         showError = true
@@ -706,6 +737,7 @@ struct AppearanceStudioView: View {
 
     private var palettePage: some View {
         VStack(spacing: 16) {
+            liveSampleCard
             shuffleCard
             presetsCard
             contrastCard
@@ -1089,30 +1121,7 @@ struct AppearanceStudioView: View {
 
     private var bubblesPage: some View {
         VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                // [B28 R5 试点 · 醒醒拍板「在哪改在哪看」] thinking 卡样张
-                // = 真实聊天页的 ThinkingBlockView 本体，不是手画复刻。
-                // 圆角/填充/描边/字号/图标全走 MinisThemeShape 门面：
-                // 真页哪天改渲染，样张同天跟着变 —— 预览没有撒谎的余地。
-                sectionTitle(AppLocalized("样张 · 实时"))
-                // AI 真卡（含 .text 的 Markdown 渲染、气泡皮肤、显示形态）
-                AssistantBlockView(block: previewAssistantMessage.blocks[0],
-                                   message: previewAssistantMessage,
-                                   isActiveMessage: false,
-                                   highlightedBlockId: $previewHighlightedBlock,
-                                   detailBlock: $previewAssistantBlock)
-                // 用户真泡：同一份 UserBubbleSurface（平铺/气泡/文稿 + Glass）
-                HStack {
-                    Spacer(minLength: 0)
-                    Text(AppLocalized("也真的想你"))
-                        .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
-                        .foregroundStyle(ChatColors.primaryText)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .modifier(UserBubbleSurface(isQueued: false))
-                }
-                ThinkingBlockView(block: previewThinkingBlock, isStreaming: false)
-            }
-            .modifier(StudioCard(variant: variant))
+            liveSampleCard
 
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("气泡颜色"))
@@ -1570,11 +1579,9 @@ struct AppearanceStudioView: View {
                     .autocorrectionDisabled()
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                ColorPicker("", selection: categoryColorBinding(key), supportsOpacity: false)
-                    .labelsHidden()
-                    .frame(width: 18, height: 18)
-                    .disabled(true)
-                    .opacity(0.3)
+                // [B28 R6] 原来这里摆着 disabled 的 ColorPicker —— 看着能点、
+                // 点了没反应、也不说为什么：假控件。categoryColors 字段已废
+                // （B-5），废字段的界面一并摘掉，不留僵尸。
             }
         }
         .padding(.vertical, 5)
