@@ -2495,5 +2495,93 @@
   "fr": "Annuler",
   "de": "Rückgängig",
   "ru": "Отменить"
+ },
+ "定时任务与脉搏": {
+  "en": "Scheduled tasks & pulse",
+  "zh-Hans": "定时任务与脉搏",
+  "zh-Hant": "定時任務與脈搏",
+  "ja": "定期タスクとパルス",
+  "ko": "예약 작업과 펄스",
+  "es": "Tareas programadas y pulso",
+  "fr": "Tâches planifiées et impulsion",
+  "de": "Geplante Aufgaben & Puls",
+  "ru": "Задачи по расписанию и импульс"
+ },
+ "技能": {
+  "en": "Skill",
+  "zh-Hans": "技能",
+  "zh-Hant": "技能",
+  "ja": "スキル",
+  "ko": "스킬",
+  "es": "Habilidad",
+  "fr": "Compétence",
+  "de": "Fähigkeit",
+  "ru": "Навык"
+ },
+ "文件": {
+  "en": "File",
+  "zh-Hans": "文件",
+  "zh-Hant": "檔案",
+  "ja": "ファイル",
+  "ko": "파일",
+  "es": "Archivo",
+  "fr": "Fichier",
+  "de": "Datei",
+  "ru": "Файл"
+ },
+ "桥·对外连接": {
+  "en": "Bridge · outbound",
+  "zh-Hans": "桥·对外连接",
+  "zh-Hant": "橋·對外連接",
+  "ja": "ブリッジ・外部接続",
+  "ko": "브리지·외부 연결",
+  "es": "Puente · conexión saliente",
+  "fr": "Passerelle · liaison sortante",
+  "de": "Bridge · Ausgangsverbindung",
+  "ru": "Мост · исходящие подключения"
+ },
+ "浏览器": {
+  "en": "Browser",
+  "zh-Hans": "浏览器",
+  "zh-Hant": "瀏覽器",
+  "ja": "ブラウザ",
+  "ko": "브라우저",
+  "es": "Navegador",
+  "fr": "Navigateur",
+  "de": "Browser",
+  "ru": "Браузер"
+ },
+ "终端": {
+  "en": "Terminal",
+  "zh-Hans": "终端",
+  "zh-Hant": "終端機",
+  "ja": "ターミナル",
+  "ko": "터미널",
+  "es": "Terminal",
+  "fr": "Terminal",
+  "de": "Terminal",
+  "ru": "Терминал"
+ },
+ "联网搜索": {
+  "en": "Web search",
+  "zh-Hans": "联网搜索",
+  "zh-Hant": "聯網搜尋",
+  "ja": "ウェブ検索",
+  "ko": "웹 검색",
+  "es": "Búsqueda web",
+  "fr": "Recherche web",
+  "de": "Websuche",
+  "ru": "Веб-поиск"
+ },
+ "记忆": {
+  "en": "Memory",
+  "zh-Hans": "记忆",
+  "zh-Hant": "記憶",
+  "ja": "メモリ",
+  "ko": "메모리",
+  "es": "Memoria",
+  "fr": "Mémoire",
+  "de": "Speicher",
+  "ru": "Память"
  }
 }
