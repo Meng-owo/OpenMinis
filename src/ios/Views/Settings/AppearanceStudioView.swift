@@ -111,6 +111,13 @@ struct AppearanceStudioView: View {
     @State private var previewThinkingBlock = AssistantBlock(
         kind: .thinking,
         content: AppLocalized("这张不是画的样张，是聊天里那张真卡——同一份代码，换主题一起换。"))
+    /// [B28 R5] AI 侧样张 = AssistantBlockView 真卡：一条 .text block 的假消息。
+    @State private var previewAssistantMessage = ChatMessage(
+        role: .assistant,
+        content: AppLocalized("今晚月色真美呀"),
+        blocks: [AssistantBlock(kind: .text, content: AppLocalized("今晚月色真美呀"))])
+    @State private var previewAssistantBlock: AssistantBlock?
+    @State private var previewHighlightedBlock: UUID?
     /// [B28 R2-8/11] 命名弹窗：顶栏「存」和长按「重命名」共用一套。
     /// 和确认框同层 —— 这页只许一个 alert（K-4 的教训），靠状态分支。
     enum StudioInputDialog: Equatable {
@@ -1088,6 +1095,21 @@ struct AppearanceStudioView: View {
                 // 圆角/填充/描边/字号/图标全走 MinisThemeShape 门面：
                 // 真页哪天改渲染，样张同天跟着变 —— 预览没有撒谎的余地。
                 sectionTitle(AppLocalized("样张 · 实时"))
+                // AI 真卡（含 .text 的 Markdown 渲染、气泡皮肤、显示形态）
+                AssistantBlockView(block: previewAssistantMessage.blocks[0],
+                                   message: previewAssistantMessage,
+                                   isActiveMessage: false,
+                                   highlightedBlockId: $previewHighlightedBlock,
+                                   detailBlock: $previewAssistantBlock)
+                // 用户真泡：同一份 UserBubbleSurface（平铺/气泡/文稿 + Glass）
+                HStack {
+                    Spacer(minLength: 0)
+                    Text(AppLocalized("也真的想你"))
+                        .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                        .foregroundStyle(ChatColors.primaryText)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .modifier(UserBubbleSurface(isQueued: false))
+                }
                 ThinkingBlockView(block: previewThinkingBlock, isStreaming: false)
             }
             .modifier(StudioCard(variant: variant))

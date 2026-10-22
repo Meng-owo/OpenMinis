@@ -154,7 +154,9 @@ private struct ContextMenuPreviewSurface: ViewModifier {
 /// keeps it above the material: `.glassEffect` composites the material over the
 /// view it modifies, so an overlaid label would be painted underneath it and
 /// disappear (the FAB regression).
-private struct UserBubbleSurface: ViewModifier {
+// [B28 R5] internal（原 private）：装扮页样张复用真气泡皮肤本体 ——
+// 平铺/气泡/文稿三形态和 Liquid Glass 判定全在这里，复制=双维护=撒谎。
+struct UserBubbleSurface: ViewModifier {
     let isQueued: Bool
 
     /// Matches `.contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))`
