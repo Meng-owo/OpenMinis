@@ -2,6 +2,9 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+/// [B28 R2-2] 图片写失败不再静默：留一条可查的日志。
+let appearanceLog = AppLogger(category: "Appearance")
+
 // MARK: - Semantic appearance system
 
 enum AppearanceScope: String, CaseIterable, Identifiable {
@@ -630,9 +633,13 @@ final class AppearanceStudio: ObservableObject {
         return image
     }
 
-    func setWallpaper(_ image: UIImage, for scope: AppearanceScope, dark: Bool = false) {
-        guard let data = Self.backgroundJPEG(image, dark: dark) else { return }
+    /// [B28 R2-2] 原来解不出来就 `guard else return`——用户点了、转完了、
+    /// 什么也没发生、什么也没说。撒谎的沉默。现在把失败如实报给 UI。
+    @discardableResult
+    func setWallpaper(_ image: UIImage, for scope: AppearanceScope, dark: Bool = false) -> Bool {
+        guard let data = Self.backgroundJPEG(image, dark: dark) else { return false }
         writeWallpaperData(data, for: scope)
+        return true
     }
 
     /// Stores wallpaper bytes that are already encoded.
@@ -640,32 +647,44 @@ final class AppearanceStudio: ObservableObject {
     /// A pack carries a JPEG; decoding it into a UIImage and re-encoding
     /// threw away a generation and inflated the file. Re-encoding now only
     /// happens when the image is larger than the wallpaper edge limit.
-    func setWallpaperEncoded(_ data: Data, for scope: AppearanceScope) {
+    @discardableResult
+    func setWallpaperEncoded(_ data: Data, for scope: AppearanceScope) -> Bool {
         if let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 {
             let longest = max(image.size.width, image.size.height)
             if longest > 2200 {
-                setWallpaper(image, for: scope)
-                return
+                return setWallpaper(image, for: scope)
             }
         }
-        writeWallpaperData(data, for: scope)
+        return writeWallpaperData(data, for: scope)
     }
 
-    private func writeWallpaperData(_ data: Data, for scope: AppearanceScope) {
-        try? data.write(to: wallpaperURL(scope), options: .atomic)
+    @discardableResult
+    private func writeWallpaperData(_ data: Data, for scope: AppearanceScope) -> Bool {
+        // [B28 R2-2] 写失败（磁盘满、目录异常）以前被 try? 吃掉。现在报出去。
+        do {
+            try data.write(to: wallpaperURL(scope), options: .atomic)
+        } catch {
+            Self.appearanceLog.warning("wallpaper write failed for \(scope.rawValue): \(error.localizedDescription)")
+            return false
+        }
         // [T-wallpaper-clear] Choosing a new image re-enables global
         // fallback for this scope (the clear only sticks until overridden).
         wallpaperClearedFallback.remove(scope)
         persistWallpaperCleared()
         wallpaperCache.removeAll()
         wallpaperRevision += 1
+        return true
     }
 
     func removeWallpaper(_ scope: AppearanceScope) {
         try? FileManager.default.removeItem(at: wallpaperURL(scope))
-        // [T-wallpaper-clear] Removing the GLOBAL image also resets every
-        // cleared-fallback flag (nothing left to inherit anyway).
-        if scope == .global { wallpaperClearedFallback.removeAll() }
+        // [B28 R2-9] 恢复继承就得把"不继承"标记一起清掉 —— 以前只删文件
+        // 不清标记，用户选了"跟随全局"，全局图却不出现：状态和承诺不符。
+        if scope == .global {
+            wallpaperClearedFallback.removeAll()
+        } else {
+            wallpaperClearedFallback.remove(scope)
+        }
         persistWallpaperCleared()
         wallpaperCache.removeAll()
         wallpaperRevision += 1
@@ -675,6 +694,11 @@ final class AppearanceStudio: ObservableObject {
     /// cut the global inheritance so the page returns to its initial plain
     /// canvas. Distinct from `removeWallpaper` ("改用继承的背景"), which only
     /// drops the page's own image and lets the global one take over.
+    /// [B28 R2-9] UI 三选一的状态查询：这一页是不是主动掐了继承。
+    func wallpaperClearsGlobal(_ scope: AppearanceScope) -> Bool {
+        wallpaperClearedFallback.contains(scope)
+    }
+
     func clearWallpaper(_ scope: AppearanceScope) {
         try? FileManager.default.removeItem(at: wallpaperURL(scope))
         if scope != .global { wallpaperClearedFallback.insert(scope) }
@@ -783,24 +807,38 @@ final class AppearanceStudio: ObservableObject {
         customIcons[id]
     }
 
-    func setIcon(_ image: UIImage, for id: String) {
-        if case .success(let value) = SoulIconImage.encode(image) {
-            // [PIC-6] File first, memory second: the PNG file is the source
-            // of truth; the dictionary is only the read cache.
-            try? FileManager.default.createDirectory(at: customIconsDirectory,
-                                                     withIntermediateDirectories: true)
-            if let png = SoulIconImage.pngData(from: value) {
-                try? png.write(to: customIconURL(for: id), options: .atomic)
+    /// [B28 R2-7/A-3] 以前 encode 失败静默、删不存在的 slot 也报成功。
+    /// CLI 和用户都需要知道「做了」还是「没做」。
+    @discardableResult
+    func setIcon(_ image: UIImage, for id: String) -> Bool {
+        guard case .success(let value) = SoulIconImage.encode(image) else { return false }
+        // [PIC-6] File first, memory second: the PNG file is the source
+        // of truth; the dictionary is only the read cache.
+        try? FileManager.default.createDirectory(at: customIconsDirectory,
+                                                 withIntermediateDirectories: true)
+        if let png = SoulIconImage.pngData(from: value) {
+            do {
+                try png.write(to: customIconURL(for: id), options: .atomic)
+            } catch {
+                appearanceLog.warning("icon write failed for \(id): \(error.localizedDescription)")
+                return false
             }
-            customIcons[id] = value
-            persistIcons()
         }
+        customIcons[id] = value
+        persistIcons()
+        return true
     }
 
-    func removeIcon(for id: String) {
+    /// Returns whether an icon was actually there to remove (A-3:
+    /// removing a nonexistent slot used to answer "removed: true").
+    @discardableResult
+    func removeIcon(for id: String) -> Bool {
+        let existed = customIcons[id] != nil
+            || FileManager.default.fileExists(atPath: customIconURL(for: id).path)
         try? FileManager.default.removeItem(at: customIconURL(for: id))
         customIcons.removeValue(forKey: id)
         persistIcons()
+        return existed
     }
 
     private func persistIcons() {

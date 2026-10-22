@@ -733,6 +733,17 @@ extension AppearanceStudio {
         if let colors = try? JSONEncoder().encode(overrides) {
             try? colors.write(to: scratch.appendingPathComponent("colors.json"), options: .atomic)
         }
+        // [B28 R2-12] resetColors 顺手重置 surface/bubble/shade 三个滑杆，
+        // 但快照原来只存 pack.json + colors.json —— 「撤销」救不回这三个值，
+        // 撤销条就成了谎言。bubbleOpacity 是独立 UserDefaults 键，尤其容易漏。
+        let opacity: [String: Double] = [
+            "surface": surfaceOpacity,
+            "bubble": bubbleOpacity,
+            "shade": wallpaperShade,
+        ]
+        if let data = try? JSONEncoder().encode(opacity) {
+            try? data.write(to: scratch.appendingPathComponent("opacity.json"), options: .atomic)
+        }
         for key in AppearanceThemePack.categoryKeys {
             let src = categoryImageURL(key)
             if FileManager.default.fileExists(atPath: src.path) {
@@ -783,6 +794,14 @@ extension AppearanceStudio {
            let decoded = try? JSONDecoder().decode([String: String].self, from: colors) {
             restoreColorOverrides(decoded)
         }
+        // [B28 R2-12] 配套：快照里有 opacity.json 就如实恢复三个滑杆。
+        // 旧快照没这个文件时保持现值 —— 不假装恢复到没记录过的状态。
+        if let data = try? Data(contentsOf: dir.appendingPathComponent("opacity.json")),
+           let op = try? JSONDecoder().decode([String: Double].self, from: data) {
+            if let v = op["surface"] { surfaceOpacity = v }
+            if let v = op["bubble"] { bubbleOpacity = v }
+            if let v = op["shade"] { wallpaperShade = v }
+        }
         for key in AppearanceThemePack.categoryKeys {
             let src = dir.appendingPathComponent("category-\(key).jpg")
             if FileManager.default.fileExists(atPath: src.path) {
@@ -804,6 +823,13 @@ extension AppearanceStudio {
         }
         objectWillChange.send()
         return true
+    }
+
+    /// [B28 R2-1] 「恢复默认色盘」先抓快照再清 —— 和整包重置同一套撤销机制，
+    /// 撤销条承诺「撤销上一次恢复」时，色盘重置也要真的能撤。
+    func resetPaletteWithUndo() {
+        _ = captureThemeUndoSnapshot()
+        resetColors()
     }
 
     func resetThemePack() {
@@ -1067,12 +1093,16 @@ extension AppearanceStudio {
         return image
     }
 
-    func setCategoryImage(_ image: UIImage, for key: String) {
-        guard AppearanceThemePack.categoryKeys.contains(key) else { return }
-        writeDownscaledJPEG(image, to: categoryImageURL(key), maxEdge: 256, quality: 0.86)
+    @discardableResult
+    func setCategoryImage(_ image: UIImage, for key: String) -> Bool {
+        guard AppearanceThemePack.categoryKeys.contains(key) else { return false }
+        guard writeDownscaledJPEG(image, to: categoryImageURL(key), maxEdge: 256, quality: 0.86) else {
+            return false
+        }
         var pack = currentThemePack()
         pack.categoryImages[key] = "file"
         persistPack(pack)
+        return true
     }
 
     func removeCategoryImage(for key: String) {
@@ -1125,8 +1155,9 @@ extension AppearanceStudio {
     }
 
     /// Writes a downscaled JPEG and drops the cached thumbnail for that path.
+    @discardableResult
     private func writeDownscaledJPEG(_ image: UIImage, to url: URL,
-                                    maxEdge: CGFloat, quality: CGFloat) {
+                                    maxEdge: CGFloat, quality: CGFloat) -> Bool {
         let size = image.size
         let scale = min(1, maxEdge / max(size.width, size.height, 1))
         let target = CGSize(width: max(1, size.width * scale), height: max(1, size.height * scale))
@@ -1136,10 +1167,19 @@ extension AppearanceStudio {
         let rendered = UIGraphicsImageRenderer(size: target, format: format).image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
-        if let data = rendered.jpegData(compressionQuality: quality) {
-            try? data.write(to: url, options: .atomic)
-            ThumbnailCache.shared.removeThumbnail(for: url.path)
+        // [B28 R2-2] 编码失败 / 写盘失败以前全是静默的。现在如实上抛。
+        guard let data = rendered.jpegData(compressionQuality: quality) else {
+            appearanceLog.warning("jpeg encode failed for \(url.lastPathComponent)")
+            return false
         }
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            appearanceLog.warning("image write failed \(url.lastPathComponent): \(error.localizedDescription)")
+            return false
+        }
+        ThumbnailCache.shared.removeThumbnail(for: url.path)
+        return true
     }
 
     /// Stores an image payload that already arrived as encoded bytes.
@@ -1148,17 +1188,23 @@ extension AppearanceStudio {
     /// roughly 3x the bytes and a visible generation loss on every apply.
     /// The bytes are only re-encoded when they exceed the target edge, which
     /// is the one case where re-encoding actually buys something.
+    @discardableResult
     private func writeEncodedImage(_ data: Data, to url: URL,
-                                   maxEdge: CGFloat, quality: CGFloat) {
+                                   maxEdge: CGFloat, quality: CGFloat) -> Bool {
         if let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 {
             let longest = max(image.size.width, image.size.height)
             if longest > maxEdge {
-                writeDownscaledJPEG(image, to: url, maxEdge: maxEdge, quality: quality)
-                return
+                return writeDownscaledJPEG(image, to: url, maxEdge: maxEdge, quality: quality)
             }
         }
-        try? data.write(to: url, options: .atomic)
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            appearanceLog.warning("image write failed \(url.lastPathComponent): \(error.localizedDescription)")
+            return false
+        }
         ThumbnailCache.shared.removeThumbnail(for: url.path)
+        return true
     }
 
     private func thinkingCardURL() -> URL {
@@ -1178,19 +1224,23 @@ extension AppearanceStudio {
         FileManager.default.fileExists(atPath: thinkingCardURL().path)
     }
 
-    func setThinkingCardImage(_ image: UIImage) {
-        writeDownscaledJPEG(image, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82)
+    @discardableResult
+    func setThinkingCardImage(_ image: UIImage) -> Bool {
+        guard writeDownscaledJPEG(image, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82) else { return false }
         var pack = currentThemePack()
         pack.thinkingCardJPEGBase64 = nil
         persistPack(pack)
+        return true
     }
 
     /// Stores an already-encoded thinking-card image without a re-encode round trip.
-    func setThinkingCardImageEncoded(_ data: Data) {
-        writeEncodedImage(data, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82)
+    @discardableResult
+    func setThinkingCardImageEncoded(_ data: Data) -> Bool {
+        guard writeEncodedImage(data, to: thinkingCardURL(), maxEdge: 1400, quality: 0.82) else { return false }
         var pack = currentThemePack()
         pack.thinkingCardJPEGBase64 = nil
         persistPack(pack)
+        return true
     }
 
     func removeThinkingCardImage() {
@@ -1224,19 +1274,23 @@ extension AppearanceStudio {
         FileManager.default.fileExists(atPath: inputBarImageURL().path)
     }
 
-    func setInputBarImage(_ image: UIImage) {
-        writeDownscaledJPEG(image, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82)
+    @discardableResult
+    func setInputBarImage(_ image: UIImage) -> Bool {
+        guard writeDownscaledJPEG(image, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82) else { return false }
         var pack = currentThemePack()
         pack.inputBarJPEGBase64 = nil
         persistPack(pack)
+        return true
     }
 
     /// Stores an already-encoded input-bar image without a re-encode round trip.
-    func setInputBarImageEncoded(_ data: Data) {
-        writeEncodedImage(data, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82)
+    @discardableResult
+    func setInputBarImageEncoded(_ data: Data) -> Bool {
+        guard writeEncodedImage(data, to: inputBarImageURL(), maxEdge: 1400, quality: 0.82) else { return false }
         var pack = currentThemePack()
         pack.inputBarJPEGBase64 = nil
         persistPack(pack)
+        return true
     }
 
     func removeInputBarImage() {

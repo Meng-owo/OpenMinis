@@ -170,13 +170,22 @@ import UIKit
         let sem = DispatchSemaphore(value: 0)
         var result: [String: Any] = [:]
         Task { @MainActor in
-            let item = AppearanceStudio.shared.saveCurrentTheme(name: name)
-            result = [
-                "ok": true,
-                "saved": true,
-                "id": item.id,
-                "name": item.name,
-            ]
+            // [B28 R2-3] 满 40 套时 saveCurrentTheme 现在返回 nil —— 如实
+            // 报「库满，先删一套」，不再悄悄顶掉最旧的来腾地方。
+            if let item = AppearanceStudio.shared.saveCurrentTheme(name: name) {
+                result = [
+                    "ok": true,
+                    "saved": true,
+                    "id": item.id,
+                    "name": item.name,
+                ]
+            } else {
+                result = [
+                    "ok": false,
+                    "error": "library full",
+                    "message": "The theme library holds 40 themes. Delete one before saving another.",
+                ]
+            }
             sem.signal()
         }
         if sem.wait(timeout: .now() + 5) == .timedOut {

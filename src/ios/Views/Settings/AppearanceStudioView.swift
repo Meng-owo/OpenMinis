@@ -100,9 +100,20 @@ struct AppearanceStudioView: View {
     @State private var paletteScope: AppearanceScope = .global
 
     // 杂项
-    @State private var saveName: String = ""
     /// [B28 B-2] 待删的那一套。非 nil 就弹确认框。
     @State private var pendingDeleteTheme: AppearanceSavedTheme?
+    /// [B28 R2-1] 「恢复默认色盘」原来是裸调用：红字按钮一点，16 角色 ×
+    /// 2 明暗 × 8 页面的手工配色瞬间清空，没确认、没撤销。现在先问，
+    /// 清完撤销条就在按钮底下等着。
+    @State private var pendingPaletteReset = false
+    /// [B28 R2-8/11] 命名弹窗：顶栏「存」和长按「重命名」共用一套。
+    /// 和确认框同层 —— 这页只许一个 alert（K-4 的教训），靠状态分支。
+    enum StudioInputDialog: Equatable {
+        case save
+        case rename(AppearanceSavedTheme)
+    }
+    @State private var inputDialog: StudioInputDialog?
+    @State private var inputName = ""
     /// [B28 B-2] 删完还能撤销：pack 文件进回收站，整条元数据留在内存里。
     @State private var deletedThemeUndo: AppearanceSavedTheme?
     @State private var errorText: String?
@@ -181,6 +192,23 @@ struct AppearanceStudioView: View {
                     studio.resetThemePack()
                     showResetConfirm = false
                 }
+            } else if pendingPaletteReset {
+                Button("Cancel", role: .cancel) { pendingPaletteReset = false }
+                Button("Reset", role: .destructive) {
+                    studio.resetPaletteWithUndo()
+                    pendingPaletteReset = false
+                    MinisToast.show(AppLocalized("色盘已恢复默认，点下面可以撤销。"))
+                }
+            } else if let dialog = inputDialog {
+                TextField(AppLocalized("Name it"), text: $inputName)
+                    .textInputAutocapitalization(.never)
+                switch dialog {
+                case .save:
+                    Button(AppLocalized("Save")) { commitSaveToLibrary() }
+                case .rename(let target):
+                    Button(AppLocalized("Rename")) { commitRenameTheme(target) }
+                }
+                Button("Cancel", role: .cancel) { inputDialog = nil }
             } else if let pending = pendingDeleteTheme {
                 Button("Cancel", role: .cancel) { pendingDeleteTheme = nil }
                 Button("Delete", role: .destructive) {
@@ -229,13 +257,16 @@ struct AppearanceStudioView: View {
     /// [K-4] One flag for the shared alert.
     private var isAlertPresented: Binding<Bool> {
         Binding(
-            get: { showError || showResetConfirm || showSTWarnings || pendingDeleteTheme != nil },
+            get: { showError || showResetConfirm || showSTWarnings || pendingDeleteTheme != nil
+                || pendingPaletteReset || inputDialog != nil },
             set: { presented in
                 guard !presented else { return }
                 showError = false
                 showResetConfirm = false
                 showSTWarnings = false
                 pendingDeleteTheme = nil
+                pendingPaletteReset = false
+                inputDialog = nil
             }
         )
     }
@@ -248,6 +279,9 @@ struct AppearanceStudioView: View {
     /// five keys in the catalog.
     private var alertTitle: LocalizedStringKey {
         if showResetConfirm { return "Reset appearance?" }
+        if pendingPaletteReset { return "Reset the color palette?" }
+        if inputDialog == .save { return "Save as new theme" }
+        if case .rename? = inputDialog { return "Rename theme" }
         if showSTWarnings { return "Import finished" }
         // [B28 B-2] 删主题现在要二次确认。原来点一下行就没了，没确认、
         // 没撤销、也没说删的是不是正在用的那套。
@@ -259,8 +293,19 @@ struct AppearanceStudioView: View {
         if let pending = pendingDeleteTheme {
             return String(format: AppLocalized("“%@” will be removed from the library."), pending.name)
         }
+        if pendingPaletteReset {
+            return AppLocalized("Clear every palette tweak. You can undo right after.")
+        }
+        if case .rename(let target)? = inputDialog {
+            return target.name
+        }
+        if inputDialog == .save {
+            return AppLocalized("另存一份，不会冲掉正在用的。")
+        }
         if showResetConfirm {
-            return AppLocalized("Colors, bubble shapes, and stickers go back to default. Wallpaper and couple avatars stay.")
+            // [B28 R2-4] 旧文案没提三个透明度滑杆 —— 点完才发现压色、
+            // 卡片透明度也被清了。功能必须诚实具备它描述的样子（醒醒 10-23）。
+            return AppLocalized("Colors, bubble shapes, stickers, and the three opacity sliders go back to default. Wallpaper and couple avatars stay.")
         }
         if showSTWarnings {
             return stWarnings.joined(separator: "\n")
@@ -299,7 +344,10 @@ struct AppearanceStudioView: View {
             // [04b-2 §5] Use the variant captured when the picker opened, not
             // one read here: this runs after `await loadTransferable`, outside
             // any layout pass, where `UITraitCollection.current` is stale.
-            studio.setWallpaper(image, for: wallpaperScope, dark: pickedWallpaperIsDark)
+            // [B28 R2-2] 写失败以前静默 —— 点了、转完了、什么也没发生。
+            if !studio.setWallpaper(image, for: wallpaperScope, dark: pickedWallpaperIsDark) {
+                fail(AppLocalized("选中的图读不出来。"))
+            }
         case .userAvatar:
             studio.setUserAvatar(image)
         case .assistantAvatar:
@@ -307,19 +355,71 @@ struct AppearanceStudioView: View {
             catch { fail(error.localizedDescription) }
         case .icon:
             guard let slot else { return }
-            studio.setIcon(image, for: slot.id)
+            if !studio.setIcon(image, for: slot.id) { fail(AppLocalized("选中的图读不出来。")) }
         case .thinkingCard:
-            studio.setThinkingCardImage(image)
+            if !studio.setThinkingCardImage(image) { fail(AppLocalized("选中的图读不出来。")) }
         case .inputBar:
-            studio.setInputBarImage(image)
+            if !studio.setInputBarImage(image) { fail(AppLocalized("选中的图读不出来。")) }
         case .categoryImage:
             guard let categoryKey else { return }
-            studio.setCategoryImage(image, for: categoryKey)
+            if !studio.setCategoryImage(image, for: categoryKey) { fail(AppLocalized("选中的图读不出来。")) }
         case .characterArt:
             // [B28 A-1] 直接落文件，不再绕 base64 进 defaults。
             studio.setCharacterArtImage(image)
         }
     }
+    /// [B28 R2-11] 存当前这套。名字来自弹窗，可改。满 40 套如实拒绝 ——
+    /// 以前会悄悄删掉你最旧的一套腾地方，你没点过任何删除。
+    private func commitSaveToLibrary() {
+        let label = inputName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = AppLocalized("Untitled")
+        if let item = studio.saveCurrentTheme(name: label.isEmpty ? fallback : label) {
+            MinisToast.show(String(format: AppLocalized("Saved “%@”"), item.name))
+        } else {
+            MinisToast.show(AppLocalized("The library is full (40). Delete one theme first."),
+                            systemImage: "exclamationmark.triangle.fill")
+        }
+        inputDialog = nil
+    }
+
+    /// [B28 R2-8] 名字打错不必删了重存。CLI 早就有 rename，UI 补上。
+    private func commitRenameTheme(_ target: AppearanceSavedTheme) {
+        let label = inputName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if studio.renameSavedTheme(id: target.id, name: label) {
+            MinisToast.show(String(format: AppLocalized("Renamed “%@”"), label))
+        } else {
+            MinisToast.show(AppLocalized("名字不能是空的。"),
+                            systemImage: "exclamationmark.triangle.fill")
+        }
+        inputDialog = nil
+    }
+
+    /// [B28 R2-9] 壁纸三选一的状态：有本页图 / 没图且没掐继承 / 没图且掐了
+    /// 继承。切到「本页图」且当前没图时拉起选图器 —— 取消就回到原状态，
+    /// 不做没发生的事。
+    private var wallpaperSourceBinding: Binding<Int> {
+        Binding(
+            get: {
+                if studio.hasOwnWallpaper(wallpaperScope) { return 0 }
+                return studio.wallpaperClearsGlobal(wallpaperScope) ? 2 : 1
+            },
+            set: { target in
+                switch target {
+                case 0:
+                    guard !studio.hasOwnWallpaper(wallpaperScope) else { return }
+                    pickerTarget = .wallpaper
+                    pickedWallpaperIsDark = studio.activeVariant == .dark
+                    isPickerPresented = true
+                case 1:
+                    studio.removeWallpaper(wallpaperScope)
+                case 2:
+                    studio.clearWallpaper(wallpaperScope)
+                default: break
+                }
+            }
+        )
+    }
+
     private func fail(_ message: String) {
         errorText = message
         showError = true
@@ -367,8 +467,14 @@ struct AppearanceStudioView: View {
                     .lineLimit(1)
                 Spacer()
                 Button(AppLocalized("Undo")) {
-                    _ = studio.restoreSavedTheme(undo)
-                    deletedThemeUndo = nil
+                    // [B28 R2-3] 库满时撤销不进来 —— 不许静默丢弃，
+                    // 撤销条留着，并说清楚为什么。
+                    if studio.restoreSavedTheme(undo) {
+                        deletedThemeUndo = nil
+                    } else {
+                        MinisToast.show(AppLocalized("The library is full (40). Delete one theme first."),
+                                        systemImage: "exclamationmark.triangle.fill")
+                    }
                 }
                 .font(.system(size: 12, weight: .medium))
             }
@@ -435,6 +541,17 @@ struct AppearanceStudioView: View {
             .padding(.bottom, 32)
         }
         .scrollIndicators(.hidden)
+        // [B28 R2-11] 顶栏「存」。调色调到一半想留住现状，不用退回主题库
+        // 找入口。点了弹名字框 —— 不自动起名，名字是你给这套样子的身份。
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(AppLocalized("Save")) {
+                    inputName = ""
+                    inputDialog = .save
+                }
+                .font(.system(size: 13))
+            }
+        }
         // [K-4] The ST theme-pack importer used to hang off `libraryPage`,
         // which lives INSIDE this ScrollView's content. A presentation
         // modifier attached to a view that the scroll container recycles has
@@ -894,13 +1011,24 @@ struct AppearanceStudioView: View {
                     hairline.padding(.leading, 0).padding(.vertical, 4)
 
                     Button {
-                        studio.resetColors()
+                        // [B28 R2-1] 先确认，清完给撤销。见 alert 的
+                        // pendingPaletteReset 分支。
+                        pendingPaletteReset = true
                     } label: {
                         Text(AppLocalized("恢复默认色盘"))
                             .font(.system(size: 12))
                             .foregroundStyle(studio.color(.destructive, variant: variant))
                     }
                     .buttonStyle(.plain)
+                    if studio.canUndoThemeReset {
+                        Button(AppLocalized("撤销上一次恢复")) {
+                            if studio.undoThemeReset() {
+                                MinisToast.show(AppLocalized("已撤销。"))
+                            }
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                    }
                 }
                 .padding(16)
             }
@@ -1103,15 +1231,25 @@ struct AppearanceStudioView: View {
                 }
                 .buttonStyle(.plain)
 
-                if studio.hasOwnWallpaper(wallpaperScope) {
-                    Button(AppLocalized("改用继承的背景")) { studio.removeWallpaper(wallpaperScope) }
-                        .font(.system(size: 12))
-                        .foregroundStyle(studio.color(.destructive, variant: variant))
-                }
-                if studio.hasWallpaper(wallpaperScope) {
-                    Button(AppLocalized("清除当前背景")) { studio.clearWallpaper(wallpaperScope) }
-                        .font(.system(size: 12))
-                        .foregroundStyle(studio.color(.destructive, variant: variant))
+                if wallpaperScope == .global {
+                    // 全局自己谈不上"继承"，只有有图/没图两态。
+                    if studio.hasWallpaper(.global) {
+                        Button(AppLocalized("清除壁纸")) { studio.removeWallpaper(.global) }
+                            .font(.system(size: 12))
+                            .foregroundStyle(studio.color(.destructive, variant: variant))
+                    }
+                } else {
+                    // [B28 R2-9] 「改用继承的背景」和「清除当前背景」是编程的
+                    // 话，两个红按钮并排没人点得明白。改成三选一：状态一眼
+                    // 可见，点哪个就变成哪个，不用猜"按了 A 对 B 做了什么"。
+                    sectionTitle(AppLocalized("壁纸来源"))
+                    Picker(AppLocalized("壁纸来源"), selection: wallpaperSourceBinding) {
+                        Text(AppLocalized("本页图")).tag(0)
+                        Text(AppLocalized("跟随全局")).tag(1)
+                        Text(AppLocalized("无背景")).tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                 }
             }
             .modifier(StudioCard(variant: variant))
@@ -1335,6 +1473,19 @@ struct AppearanceStudioView: View {
         }
     }
 
+    /// [B28 R2-6] 「分类图标」原来把 `code`/`writing` 这种内部 key 直接印
+    /// 给用户看。词表在九语种表里；查不到的 key 原样显示，不编。
+    private func categoryDisplayName(_ key: String) -> String {
+        let labels: [String: String] = [
+            "code": "编程", "writing": "写作", "research": "调研", "analysis": "分析",
+            "creative": "创作", "chat": "闲聊", "math": "数学", "translation": "翻译",
+            "health": "健康", "finance": "金融", "travel": "旅行", "education": "教育",
+            "design": "设计", "productivity": "效率", "support": "客服", "other": "其他",
+        ]
+        guard let label = labels[key] else { return key }
+        return AppLocalized(label)
+    }
+
     private func categoryRow(_ key: String) -> some View {
         let themedSymbol = MinisThemeList.categoryIcon(for: key).systemName
         return VStack(alignment: .leading, spacing: 6) {
@@ -1348,7 +1499,7 @@ struct AppearanceStudioView: View {
                         RoundedRectangle(cornerRadius: 6.5, style: .continuous)
                             .stroke(Color.black.opacity(0.08), lineWidth: 0.5)
                     )
-                Text(key)
+                Text(categoryDisplayName(key))
                     .font(.system(size: 12.5))
                     .foregroundStyle(studio.color(.primaryText, variant: variant))
                 Spacer()
@@ -1391,22 +1542,18 @@ struct AppearanceStudioView: View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("存这一套"))
-                TextField(AppLocalized("给它起个名字"), text: $saveName)
-                    .textInputAutocapitalization(.never)
-                    .font(.system(size: 13))
                 Button {
-                    // [B28 D-3] 返回值不再丢：存成功给一句 toast，带名字。
-                    let label = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let item = studio.saveCurrentTheme(name: label.isEmpty ? AppLocalized("Untitled") : label)
-                    saveName = ""
-                    MinisToast.show(String(format: AppLocalized("Saved “%@”"), item.name))
+                    // [B28 R2-11] 和顶栏「存」同一个弹窗。
+                    inputName = ""
+                    inputDialog = .save
                 } label: {
                     Text(AppLocalized("存进主题库"))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(studio.color(.accent, variant: variant))
                 }
                 .buttonStyle(.plain)
-                Text(AppLocalized("另存一份，不会冲掉正在用的。最多四十套。"))
+                // [B28 R2-3] 以前存满 40 会静默删最旧 —— footer 有义务说清。
+                Text(AppLocalized("另存一份，不会冲掉正在用的。存满四十套会先要你删一套。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
             }
@@ -1425,9 +1572,24 @@ struct AppearanceStudioView: View {
                     ForEach(saved) { item in
                         HStack(spacing: 11) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.name)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(studio.color(.primaryText, variant: variant))
+                                HStack(spacing: 6) {
+                                    Text(item.name)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(studio.color(.primaryText, variant: variant))
+                                    // [B28 R2-10] 「现在用的是哪套」以前模型里
+                                    // 没有这个状态。三态全部由真实状态推导：
+                                    // 是它且没动过 = 使用中；动过 = 明说已改。
+                                    let match = studio.savedThemeMatch(id: item.id)
+                                    if match == .inUse {
+                                        Text(AppLocalized("In use"))
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(studio.color(.accent, variant: variant))
+                                    } else if match == .modifiedSince {
+                                        Text(AppLocalized("In use · modified"))
+                                            .font(.system(size: 10))
+                                            .foregroundStyle(studio.color(.secondaryText, variant: variant))
+                                    }
+                                }
                                 Text(item.userStyleTitle + " · " + item.assistantStyleTitle)
                                     .font(.system(size: 10))
                                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
@@ -1451,6 +1613,21 @@ struct AppearanceStudioView: View {
                                 .foregroundStyle(studio.color(.destructive, variant: variant))
                         }
                         .padding(.vertical, 5)
+                        // [B28 R2-8] 长按出菜单：重命名不用再删了重存。
+                        // 行上不加第三个按钮 —— 两个已经够挤，重命名是低频操作。
+                        .contextMenu {
+                            Button {
+                                inputName = item.name
+                                inputDialog = .rename(item)
+                            } label: {
+                                Label(AppLocalized("Rename"), systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                pendingDeleteTheme = item
+                            } label: {
+                                Label(AppLocalized("删"), systemImage: "trash")
+                            }
+                        }
                     }
                 }
             }
@@ -1642,8 +1819,20 @@ struct AppearanceStudioView: View {
                     ForEach(studioIconOptions) { option in
                         Button {
                             guard appIconMode != option.id else { return }
+                            let previous = appIconMode
                             appIconMode = option.id
-                            UIApplication.shared.setAlternateIconName(option.iconName) { _ in }
+                            // [B28 R2-5] completion 以前整个忽略 —— 系统拒了、
+                            // 资源缺失，界面照样打勾，用户以为换了。失败就
+                            // 把勾退回去并说一声。
+                            UIApplication.shared.setAlternateIconName(option.iconName) { error in
+                                DispatchQueue.main.async {
+                                    guard let error else { return }
+                                    appIconMode = previous
+                                    appearanceLog.warning("setAlternateIconName failed: \(error.localizedDescription)")
+                                    MinisToast.show(AppLocalized("Couldn't change the app icon."),
+                                                    systemImage: "exclamationmark.triangle.fill")
+                                }
+                            }
                         } label: {
                             HStack(spacing: 14) {
                                 if let img = UIImage(named: option.imageName) {

@@ -104,15 +104,21 @@ import UIKit
             return fail("no_image", "Cannot read an image at \(hostPath).") as NSDictionary
         }
         return onMain {
-            AppearanceStudio.shared.setIcon(image, for: slot)
+            // [B28 R2-7] 编码或写盘失败以前也报 ok:true。
+            guard AppearanceStudio.shared.setIcon(image, for: slot) else {
+                return fail("icon_write_failed", "Could not store the icon for slot \u{22}" + slot + "\u{22}.")
+            }
             return ["ok": true, "slot": slot]
         }
     }
 
     @objc public static func removeIcon(_ slot: String) -> NSDictionary {
         onMain {
-            AppearanceStudio.shared.removeIcon(for: slot)
-            return ["ok": true, "slot": slot, "removed": true]
+            // [B28 R2-7 / A-3] 删一个根本没有图标的 slot 以前也回
+            // "removed": true —— AI 据此以为清理完成了。现在如实区分。
+            let existed = AppearanceStudio.shared.removeIcon(for: slot)
+            if existed { return ["ok": true, "slot": slot, "removed": true] }
+            return fail("no_icon_for_slot", "Nothing was set for slot \u{22}" + slot + "\u{22}; nothing removed.")
         }
     }
 

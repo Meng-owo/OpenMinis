@@ -81,7 +81,11 @@ extension AppearanceStudio {
         return list.sorted { $0.savedAt > $1.savedAt }
     }
 
-    func saveCurrentTheme(name: String? = nil) -> AppearanceSavedTheme {
+    /// [B28 R2-3] 满 40 套时以前**悄悄删掉你最旧的一套**再存 —— 用户没
+    /// 点过任何删除，一套主题就这么消失了。现在满了直接拒绝并说原因：
+    /// 「删一套再存」。宁可多一步操作，不替你扔东西。
+    func saveCurrentTheme(name: String? = nil) -> AppearanceSavedTheme? {
+        if savedThemes().count >= AppearanceSavedTheme.limit { return nil }
         var pack = exportThemePack(includeWallpaper: true)
         let trimmed = (name ?? pack.name).trimmingCharacters(in: .whitespacesAndNewlines)
         let label = trimmed.isEmpty ? pack.name : trimmed
@@ -96,12 +100,6 @@ extension AppearanceStudio {
         writeLibraryPack(pack, id: item.id)
         var list = savedThemes()
         list.insert(item, at: 0)
-        if list.count > AppearanceSavedTheme.limit {
-            for extra in list.suffix(from: AppearanceSavedTheme.limit) {
-                try? FileManager.default.removeItem(at: libraryPackURL(extra.id))
-            }
-            list = Array(list.prefix(AppearanceSavedTheme.limit))
-        }
         persistLibrary(list)
         return item
     }
@@ -110,7 +108,45 @@ extension AppearanceStudio {
         guard savedThemes().contains(where: { $0.id == id }),
               let pack = readLibraryPack(id: id) else { return false }
         applyThemePack(pack)
+        // [B28 R2-10] 「现在用的是哪套」以前在模型里根本没有。记下这次
+        // 应用的是谁，列表才能诚实回答：还是它 / 你后来改过。
+        UserDefaults.standard.set(id, forKey: Self.lastAppliedKey)
         return true
+    }
+
+    private static let lastAppliedKey = "appearanceStudio.lastAppliedLibraryID"
+
+    /// 当前这套与某一库里的主题的关系。三态，全部由真实状态推导，
+    /// 没有会过期的标记：
+    ///   - notThisOne    当前不是从它应用的
+    ///   - inUse         是从它应用的，且此后一个字段都没动过
+    ///   - modifiedSince 是从它应用的，但你后来改过配色/滑杆/图
+    ///
+    /// 对比刻意不逐字节比图片：>2200px 的图 apply 时会缩放落盘，
+    /// 字节必然和库里的原始包不同 —— 那是系统缩放，不是用户改过。
+    /// 图片按「哪个槽位有图」参与对比，颜色/布局/透明度逐字段比。
+    enum SavedThemeMatch { case notThisOne, inUse, modifiedSince }
+
+    func savedThemeMatch(id: String) -> SavedThemeMatch {
+        guard UserDefaults.standard.string(forKey: Self.lastAppliedKey) == id else { return .notThisOne }
+        guard let saved = readLibraryPack(id: id) else { return .modifiedSince }
+        return Self.packsMatchSemantically(exportThemePack(includeWallpaper: true), saved)
+            ? .inUse : .modifiedSince
+    }
+
+    private static func packsMatchSemantically(_ a: AppearanceThemePack, _ b: AppearanceThemePack) -> Bool {
+        func key(_ p: AppearanceThemePack) -> [String: Any] {
+            var j = p.asJSONObject()
+            for volatile in ["name", "id", "savedAt",
+                             "wallpaperJPEGBase64", "thinkingCardJPEGBase64",
+                             "inputBarJPEGBase64", "characterArtBase64"] {
+                j[volatile] = nil
+            }
+            let imgs = (j["categoryImages"] as? [String: String]) ?? [:]
+            j["categoryImages"] = imgs.keys.sorted()   // 只比哪些槽位有图
+            return j
+        }
+        return (key(a) as NSDictionary).isEqual(key(b) as NSDictionary)
     }
 
     func renameSavedTheme(id: String, name: String) -> Bool {
@@ -156,10 +192,12 @@ extension AppearanceStudio {
         try? FileManager.default.removeItem(at: libraryPackURL(item.id))
         try? FileManager.default.moveItem(at: src, to: libraryPackURL(item.id))
         var list = savedThemes()
-        if !list.contains(where: { $0.id == item.id }) {
-            list.insert(item, at: 0)
-        }
-        persistLibrary(Array(list.prefix(AppearanceSavedTheme.limit)))
+        guard !list.contains(where: { $0.id == item.id }) else { return true }
+        // [B28 R2-3] 库满时撤销不进来，如实失败 —— 以前会静默把最后一套
+        // 挤出列表，制造第二次「没删却消失」。
+        guard list.count < AppearanceSavedTheme.limit else { return false }
+        list.insert(item, at: 0)
+        persistLibrary(list)
         return true
     }
 
