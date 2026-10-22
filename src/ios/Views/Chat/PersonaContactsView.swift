@@ -65,22 +65,22 @@ struct PersonaContactsView: View {
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(ChatColors.primaryText)
 
-                                    if persona.isBuiltIn {
-                                        Text("内置")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Capsule().fill(Color.secondary.opacity(0.12)))
-                                            .foregroundStyle(MinisTheme.secondaryText)
-                                    }
-
+                                    // [B28 R6 · 醒醒点名] 「内置」批删了：出身不是
+                                    // 关系，防误删保护本来就在 swipeActions 里。
+                                    // 「使用中」加呼吸小灯 —— 系统 symbolEffect 的
+                                    // pulse，合成器驱动不烧 CPU，语义一字没改。
                                     if persona.id == store.currentPersonaID {
-                                        Text("使用中")
-                                            .font(.system(size: 10, weight: .medium))
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Capsule().fill(MinisThemeList.accent.opacity(0.15)))
-                                            .foregroundStyle(MinisThemeList.accent)
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "circle.fill")
+                                                .font(.system(size: 6))
+                                                .symbolEffect(.pulse, options: .repeating)
+                                            Text("使用中")
+                                        }
+                                        .font(.system(size: 10, weight: .medium))
+                                        .padding(.horizontal, 7)
+                                        .padding(.vertical, 2.5)
+                                        .background(Capsule().fill(MinisThemeList.accent.opacity(0.15)))
+                                        .foregroundStyle(MinisThemeList.accent)
                                     }
                                 }
 

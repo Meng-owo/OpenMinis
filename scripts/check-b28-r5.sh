@@ -31,5 +31,11 @@ print("; ".join(missing)); raise SystemExit(1 if missing else 0)
 PY
 then ok R5-4; else bad "R5-4 样张文案语种不齐"; fi
 
+# R5-5 通讯录呼吸灯 + 「内置」批下线（醒醒 10-23 点名：要动画、出身不是关系）
+C2=src/ios/Views/Chat/PersonaContactsView.swift
+if rg -q 'symbolEffect\(.pulse, options: .repeating\)' "$C2" && ! rg -q 'Text\("内置"\)' "$C2"; then
+  echo "OK   R5-5"; else echo "FAIL R5-5 呼吸灯没亮或内置批还挂着"; exit 1; fi
+
 echo "----"
 if [ "$fail" -gt 0 ]; then echo "$fail FAILED"; exit 1; else echo "全部通过"; fi
+
