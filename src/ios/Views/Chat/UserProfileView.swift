@@ -13,6 +13,7 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var draft: String = ""
+    @State private var nameDraft: String = ""
     @State private var loadedBody: String = ""
 
     private let profileId = PersonaStore.userProfilePersonaID
@@ -54,12 +55,13 @@ struct UserProfileView: View {
                 HStack {
                     Text("怎么称呼你")
                     Spacer()
-                    TextField("留空则用「你」", text: Binding(
-                        get: { SoulStore.userProfileAddressingName(for: profileId) },
-                        set: { newValue in setFieldValue("怎么称呼", to: newValue) }
-                    ))
-                    .multilineTextAlignment(.trailing)
-                    .font(.system(size: 14))
+                    // 不用 get/set 直连磁盘：那样每敲一个字写一次文件，
+                    // 光标还会被读回来的旧值顶掉。先落在本地，回车/离开时再落盘。
+                    TextField("留空则用「你」", text: $nameDraft)
+                        .multilineTextAlignment(.trailing)
+                        .font(.system(size: 14))
+                        .submitLabel(.done)
+                        .onSubmit { commitName() }
                 }
             } header: {
                 Text("叫法")
@@ -117,6 +119,14 @@ struct UserProfileView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("我自己")
         .onAppear { reload() }
+        .onDisappear { commitName() }
+    }
+
+    /// 落盘「怎么称呼」。空串也算一次有效修改（清掉叫法）。
+    private func commitName() {
+        let current = SoulStore.userProfileAddressingName(for: profileId)
+        guard nameDraft != current else { return }
+        setFieldValue("怎么称呼", to: nameDraft.trimmingCharacters(in: .whitespaces))
     }
 
     private func reload() {
@@ -124,6 +134,7 @@ struct UserProfileView: View {
         let text = (file?.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         draft = text.isEmpty ? PersonaStore.userProfileSoulTemplate() : text
         loadedBody = draft
+        nameDraft = SoulStore.userProfileAddressingName(for: profileId)
     }
 
     /// 小节填写进度，给"档案内容"那行当副标题。

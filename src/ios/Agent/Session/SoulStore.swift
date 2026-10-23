@@ -1315,9 +1315,14 @@ enum SystemPromptBuilder {
     private static let userProfileNSFWKey = "persona.userProfile.nsfwInjection.enabled"
 
     /// 档案里真正写了「怎么称呼」时用它，否则回落到人设名。
-    static func userProfileAddressingName(for personaID: String = PersonaStore.userProfilePersonaID) -> String {
+    static func userProfileAddressingName(for personaID: String) -> String {
         let file = SoulStore.load(for: personaID)
         return userProfileFieldValue(in: file, keys: ["怎么称呼", "称呼"])
+    }
+
+    /// 便捷版：固定读「我自己」。
+    static func userProfileAddressingName() -> String {
+        userProfileAddressingName(for: PersonaStore.userProfilePersonaID)
     }
 
     private static func userProfileFieldValue(in file: SoulFile?, keys: [String]) -> String {
@@ -1342,8 +1347,9 @@ enum SystemPromptBuilder {
     }
 
     static func userProfileSection(from file: SoulFile?) -> String {
-        guard let body = file?.body?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty
+        guard let raw = file?.body, !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return "" }
+        let body = raw
 
         var blocks: [String] = []
         var pendingTitle: String?
