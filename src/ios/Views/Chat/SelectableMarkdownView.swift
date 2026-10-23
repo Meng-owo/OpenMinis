@@ -1479,7 +1479,6 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// from the line-number gutter, which is also a UITextView).
     static let codeTextViewTag = 9873
     /// Tag for the line-number gutter UITextView inside the scroll view.
-    static let gutterTag = 9874
     /// Tag for the header hairline divider.
     static let headerDividerTag = 9875
 
@@ -1489,11 +1488,6 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// @MainActor 的 AppearanceStudio，所以从 UserDefaults 的镜像快照读，
     /// 由 AppearanceStudio 在 persist 时同步写入。
     static let codeSettingsKey = "appearanceStudio.codeBlock.v1"
-
-    /// 长行是否自动换行。默认开（她要的）。
-    static var codeBlockWrapEnabled: Bool {
-        (UserDefaults.standard.dictionary(forKey: codeSettingsKey)?["wrap"] as? Bool) ?? true
-    }
 
     /// 超过多少行自动折叠。默认 12。
     static var collapseLineThreshold: Int {
@@ -1582,42 +1576,9 @@ final class CodeBlockAttachment: NSTextAttachment {
 
     /// Width of the line-number gutter for a given line count. Digits are
     /// Menlo (~0.6em); the +16 covers right padding + a hair of air.
-    static func gutterWidth(forLineCount lineCount: Int) -> CGFloat {
-        let digits = max(1, String(lineCount).count)
-        return max(32, CGFloat(digits) * 9 + 16)
-    }
-
-    /// Builds the gutter's attributed text (right-aligned line numbers) with
-    /// the same font + lineSpacing as the code view so rows line up 1:1.
-    static func gutterAttributedText(lineCount: Int, font: UIFont, color: UIColor) -> NSAttributedString {
-        let style = NSMutableParagraphStyle()
-        style.lineSpacing = 4
-        style.alignment = .right
-        style.lineBreakMode = .byClipping
-        let text = (1...max(1, lineCount)).map(String.init).joined(separator: "\n")
-        return NSAttributedString(string: text, attributes: [
-            .font: font,
-            .foregroundColor: color,
-            .paragraphStyle: style,
-        ])
-    }
-
-    /// Configures a UITextView as a non-interactive line-number gutter.
-    /// Same text engine as the code view → identical line metrics.
-    static func makeGutterTextView(theme: SelectableMarkdownTheme) -> UITextView {
-        let gutter = UITextView()
-        gutter.tag = gutterTag
-        gutter.isEditable = false
-        gutter.isSelectable = false
-        gutter.isScrollEnabled = false
-        gutter.isUserInteractionEnabled = false
-        gutter.backgroundColor = .clear
-        gutter.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 6)
-        gutter.textContainer.lineFragmentPadding = 0
-        gutter.textContainer.lineBreakMode = .byClipping
-        gutter.font = theme.codeBlockFont
-        return gutter
-    }
+    /// [10-23 醒醒] 行号整块下线：代码块只留代码。宽度算法继续走这个函数，
+    /// 恒 0，以后想加回来只改这里一处。
+    static func gutterWidth(forLineCount lineCount: Int) -> CGFloat { 0 }
 
     /// Height of the first `lines` source lines (collapsed viewport).
     /// Same measurer as measureCodeHeight so the numbers agree.
@@ -1765,7 +1726,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         codeStyle.lineSpacing = 4
         // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
         // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
-        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
+        codeStyle.lineBreakMode = .byCharWrapping
         codeAttr.addAttribute(.paragraphStyle, value: codeStyle,
                              range: NSRange(location: 0, length: codeAttr.length))
         codeTextView.attributedText = codeAttr
@@ -1850,7 +1811,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         let collapsed = Self.collapseState[contentFingerprint]
             ?? (lineCountForMeasure > Self.collapseLineThreshold)
         // [10-20 醒醒] 换行模式下高度按可用宽度算，不再是内容宽度。
-        let wrapWidth: CGFloat? = Self.codeBlockWrapEnabled ? codeWrapWidth(fullWidth: width) : nil
+        let wrapWidth: CGFloat? = codeWrapWidth(fullWidth: width)
         let contentHeight = collapsed
             ? measurePrefixHeight(lines: Self.collapsedVisibleLines, wrapWidth: wrapWidth)
             : measureCodeHeight(wrapWidth: wrapWidth)
@@ -1934,7 +1895,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         codeStyle.lineSpacing = 4
         // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
         // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
-        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
+        codeStyle.lineBreakMode = .byCharWrapping
         let highlighted = CodeSyntaxHighlighter.highlight(
             code, language: language, font: theme.codeBlockFont,
             plainColor: theme.codeBlockTextColor, background: theme.codeBlockBackground)
@@ -1945,7 +1906,7 @@ final class CodeBlockAttachment: NSTextAttachment {
 
         // Measure content size. [10-20 醒醒] 换行模式下按可用宽度量，
         // 不换行才用无约束宽度（横向滚动）。
-        let wrapEnabled = Self.codeBlockWrapEnabled
+        let wrapEnabled = true
         let gutterW = Self.gutterWidth(forLineCount: lineCount)
         let availableCodeWidth = max(60, contentWidth - gutterW)
         if wrapEnabled {
@@ -1958,11 +1919,6 @@ final class CodeBlockAttachment: NSTextAttachment {
         let fittingWidth = wrapEnabled ? availableCodeWidth : fitting.width
         // [P1-5] Line-number gutter: lives inside the scroll view so it stays
         // in sync for free; same text engine → identical line metrics.
-        let gutter = Self.makeGutterTextView(theme: theme)
-        gutter.attributedText = Self.gutterAttributedText(
-            lineCount: lineCount, font: theme.codeBlockFont,
-            color: theme.codeBlockTextColor.withAlphaComponent(0.35))
-        gutter.frame = CGRect(x: 0, y: 0, width: gutterW, height: contentHeight)
         codeTextView.frame = CGRect(x: gutterW, y: 0, width: fittingWidth, height: contentHeight)
 
         // [B28 R7] 400pt 封顶删除：展开态高度=代码真实长度。
@@ -1979,7 +1935,6 @@ final class CodeBlockAttachment: NSTextAttachment {
 
         scrollView.showsHorizontalScrollIndicator = !wrapEnabled
         scrollView.alwaysBounceHorizontal = !wrapEnabled
-        scrollView.addSubview(gutter)
         scrollView.addSubview(codeTextView)
         scrollView.contentSize = CGSize(width: metrics.fittingWidth, height: contentHeight)
         container.addSubview(scrollView)
@@ -2126,7 +2081,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         codeStyle.lineSpacing = 4
         // [10-20 醒醒] 换行模式下段落样式也必须是折行，否则 textContainer
         // 的 byCharWrapping 会被段落样式覆盖回去，长行仍然溢出。
-        codeStyle.lineBreakMode = Self.codeBlockWrapEnabled ? .byCharWrapping : .byClipping
+        codeStyle.lineBreakMode = .byCharWrapping
         let codeAttr = NSAttributedString(string: code, attributes: [
             .font: theme.codeBlockFont,
             .foregroundColor: theme.codeBlockTextColor,
@@ -2134,7 +2089,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         ])
         codeTextView.attributedText = codeAttr
 
-        let wrapEnabled = Self.codeBlockWrapEnabled
+        let wrapEnabled = true
         metrics.wrapEnabled = wrapEnabled
         if wrapEnabled {
             codeTextView.textContainer.lineBreakMode = .byCharWrapping
@@ -2145,12 +2100,6 @@ final class CodeBlockAttachment: NSTextAttachment {
         // [P1-5] Keep the gutter in step as the code grows mid-stream.
         let lineCount = code.components(separatedBy: "\n").count
         let gutterW = Self.gutterWidth(forLineCount: lineCount)
-        if let gutter = scrollView.viewWithTag(Self.gutterTag) as? UITextView {
-            gutter.attributedText = Self.gutterAttributedText(
-                lineCount: lineCount, font: theme.codeBlockFont,
-                color: theme.codeBlockTextColor.withAlphaComponent(0.35))
-            gutter.frame = CGRect(x: 0, y: 0, width: gutterW, height: fitting.height)
-        }
         let codeWidth = wrapEnabled ? max(60, metrics.contentWidth - gutterW) : fitting.width
         codeTextView.frame = CGRect(x: gutterW, y: 0, width: codeWidth, height: fitting.height)
         scrollView.contentSize = CGSize(width: wrapEnabled ? metrics.contentWidth : gutterW + fitting.width,
@@ -6876,8 +6825,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     /// ——高度和宽度都按旧设置算死了，光重排不算数。这里比一次设置指纹，
     /// 变了就丢掉视图缓存并让下面的 dedupe 失效。
     func applyCodeBlockSettingsIfChanged() -> Bool {
-        let current = (CodeBlockAttachment.codeBlockWrapEnabled,
-                       CodeBlockAttachment.collapseLineThreshold)
+        // 换行已是固定行为（没有开关了），指纹只跟折叠阈值走。
+        let current = (true, CodeBlockAttachment.collapseLineThreshold)
         guard let last = lastCodeBlockSettings, last != current else {
             lastCodeBlockSettings = current
             return false

@@ -1211,11 +1211,6 @@ struct AppearanceStudioView: View {
             // [10-20 醒醒] 代码块
             VStack(alignment: .leading, spacing: 12) {
                 sectionTitle(AppLocalized("代码块"))
-                Toggle(AppLocalized("长行自动换行"), isOn: codeBlockWrapBinding)
-                    .tint(studio.color(.accent, variant: variant))
-                Text(AppLocalized("关掉就保持横向滚动，缩进不会断。"))
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
                 Stepper(value: codeBlockCollapseLinesBinding, in: 4...40, step: 1) {
                     HStack {
                         Text(AppLocalized("超过多少行折叠"))
@@ -2104,10 +2099,6 @@ struct AppearanceStudioView: View {
 
     // MARK: [10-20 醒醒] 代码块
 
-    private var codeBlockWrapBinding: Binding<Bool> {
-        Binding(get: { studio.currentThemePack().codeBlockWrap },
-                set: { studio.setCodeBlockWrap($0) })
-    }
     private var codeBlockCollapseLinesBinding: Binding<Int> {
         Binding(get: { studio.currentThemePack().codeBlockCollapseLines },
                 set: { studio.setCodeBlockCollapseLines($0) })

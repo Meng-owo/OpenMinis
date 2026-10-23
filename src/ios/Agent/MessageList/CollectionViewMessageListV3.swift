@@ -2911,12 +2911,18 @@ extension CollectionViewMessageListV3 {
                         for (i, item) in snapshot.itemIdentifiers.enumerated() {
                             guard case .wholeMessage(let mid) = item, mid == messageId else { continue }
                             let ip = IndexPath(item: i, section: 0)
+                            // 键里带了展开态，新键天然没有记忆，会老实重量一次；
+                            // 旧键那条留着——切回去时它就是那个状态量过的高度。
                             (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
                             layout.invalidateHeight(at: i)
                             var snap = snapshot
                             snap.reconfigureItems([item])
                             self.dataSource?.apply(snap, animatingDifferences: false)
-                            layout.invalidateLayout()
+                            // 无隐式动画：格子高度一次到位，不留中间帧的残影。
+                            UIView.performWithoutAnimation {
+                                layout.invalidateLayout()
+                                cv.layoutIfNeeded()
+                            }
                             break
                         }
                     }
@@ -3851,6 +3857,14 @@ extension CollectionViewMessageListV3 {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
 
+            // [10-23 醒醒] 长文折叠态要参与预计算：布局先按全文预留、格子再缩，
+            // 展开/收起时会跳一下。含代码的消息不折（代码块自己会折），跳过。
+            if UserMessageText.isLongText(text),
+               UserCodeFencing.autoFenced(text) == text,
+               !UserBubbleExpansion.shared.isExpanded(message.id) {
+                text = UserMessageText.collapsedPreview(of: text)
+            }
+
             let attachCount = message.attachments.isEmpty
                 ? message.inputAttachments.count : message.attachments.count
 
@@ -4118,7 +4132,12 @@ extension CollectionViewMessageListV3 {
                 // height with a phantom blank line — and the snapshot
                 // compare sees "no change" and never re-measures.
                 let q = msg(id)?.isQueued == true ? 1 : 0
-                return "w:\(id.uuidString):\(n):\(a):\(q)"
+                // [10-23 醒醒] 展开/收起必须进键。高度按内容键记忆，而展开
+                // 不改内容长度——键不变就命中旧高度，格子被旧高度钉死，
+                // 正文裁着不动：她看到的「假的展开」「收起无效」就是这个。
+                // 工具卡早就这么干了（g:…:x/c），这里是同一个病同一个方子。
+                let x = UserBubbleExpansion.shared.isExpanded(id) ? 1 : 0
+                return "w:\(id.uuidString):\(n):\(a):\(q):\(x)"
             case .assistantHeader(let id):
                 return "h:\(id.uuidString)"
             case .assistantFooter(let id):

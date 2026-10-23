@@ -41,9 +41,28 @@ C=src/ios/Views/Chat/ChatMessageViews.swift
 if rg -qF 'UserMessageText(text: userDisplayText' "$C" && rg -qF 'enum UserCodeFencing' "$C"; then
   ok R7-7; else bad "R7-7 用户气泡没走新组件"; fi
 
-# R7-8 自动补栅栏 + 长文折叠阈值都在
-if rg -qF 'static func autoFenced' "$C" && rg -qF 'lines.count > 12 || text.count > 320' "$C"; then
+# R7-8 自动补栅栏 + 长文折叠阈值都在（折叠判定只此一份）
+if rg -qF 'static func autoFenced' "$C" && rg -qF 'static func isLongText' "$C" \
+   && rg -qF 'text.count > 320' "$C"; then
   ok R7-8; else bad "R7-8 代码识别或长文阈值缺失"; fi
+
+# R7-13 识别器语料：30 段真代码全中，44 段真散文零误报
+if python3 scripts/check-code-detect.py | rg -q '误报 0 漏判 0'; then
+  ok R7-13; else bad "R7-13 代码识别语料不过（误报或漏判）"; fi
+
+# R7-14 代码块统一：无行号、恒换行、无横向滚动
+M=src/ios/Views/Chat/SelectableMarkdownView.swift
+if ! rg -q 'gutterAttributedText|makeGutterTextView' "$M" \
+   && rg -qF 'static func gutterWidth(forLineCount lineCount: Int) -> CGFloat { 0 }' "$M" \
+   && ! rg -q 'codeBlockWrapEnabled' "$M" src/ios/Shared/AppearanceThemePack.swift \
+   && rg -qF 'showsHorizontalScrollIndicator = !wrapEnabled' "$M"; then
+  ok R7-14; else bad "R7-14 代码块还有行号或换行开关残留"; fi
+
+# R7-15 展开态进高度键 + 预计算跟着折叠态走
+VC=src/ios/Agent/MessageList/CollectionViewMessageListV3.swift
+if rg -qF 'UserBubbleExpansion.shared.isExpanded(id) ? 1 : 0' "$VC" \
+   && rg -qF 'UserMessageText.collapsedPreview(of: text)' "$VC"; then
+  ok R7-15; else bad "R7-15 折叠态没接进高度链路"; fi
 
 # R7-9 展开/收起两条文案九语种齐
 if python3 -c 'import json,sys
