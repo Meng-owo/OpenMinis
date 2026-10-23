@@ -514,6 +514,7 @@ final class ChatCodeBlockStore: ObservableObject {
             }
         }
         let threshold = (UserDefaults.standard.dictionary(forKey: CodeBlockAttachment.codeSettingsKey)?["collapseLines"] as? Int) ?? 12
+        mix("t\(threshold)")
         var foundCode = false
         for segment in ChatMarkdownSegmenter.segments(from: markdown) {
             guard case .code(let language, let code) = segment else { continue }
