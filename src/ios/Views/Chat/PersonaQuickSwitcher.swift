@@ -42,7 +42,7 @@ struct PersonaQuickSwitcher: View {
     private let maxListHeight: CGFloat = 300
 
     private var listHeight: CGFloat {
-        let count = store.personas.count
+        let count = store.chatSelectablePersonas.count
         guard count > 0 else { return rowHeight }
         let dividers = CGFloat(count - 1) * hairlineWidth
         return min(CGFloat(count) * rowHeight + dividers, maxListHeight)
@@ -69,9 +69,9 @@ struct PersonaQuickSwitcher: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(store.personas) { p in
+                    ForEach(store.chatSelectablePersonas) { p in
                         personaRow(p)
-                        if p.id != store.personas.last?.id {
+                        if p.id != store.chatSelectablePersonas.last?.id {
                             hairline(inset: true)
                         }
                     }

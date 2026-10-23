@@ -24,6 +24,13 @@ struct Persona: Codable, Identifiable, Hashable {
     var localToolIds: [String]?  // nil = 全部可用
     var sortOrder: Int
     var isBuiltIn: Bool          // 内置（小管家）不可删除
+    /// [B28 R11] 这只描述的是**用户本人**，不是 AI。三个后果：
+    /// 1) 不能当聊天对象被选中（不进快速切换器/人设列表）；
+    /// 2) 通讯录里固定成一张「我自己」卡，可编辑、不可删；
+    /// 3) 它的 SOUL.md 走"关于她"的第三人称注入段，绝不进 identitySection，
+    ///    否则模型会把她的性格读成自己的性格（人格混淆）。
+    /// 旧 personas.json 缺这个键照样能解（decodeIfPresent 兜底 false）。
+    var isUserProfile: Bool
 
     // Kelivo 对齐 - 基础设置 (采样与模型)
     var temperature: Double?
@@ -54,7 +61,8 @@ struct Persona: Codable, Identifiable, Hashable {
     var customBody: [PersonaCustomBodyItem]
 
     enum CodingKeys: String, CodingKey {
-        case id, name, avatar, modelId, skillIds, mcpServerIds, localToolIds, sortOrder, isBuiltIn
+        case id, name, avatar, modelId, skillIds, mcpServerIds, localToolIds, sortOrder, isBuiltIn,
+             isUserProfile
         case temperature, topP, limitContextMessages, contextMessageSize, thinkingBudget, maxTokens
         case defaultWorkspace, useAssistantAvatar, useAssistantName, streamOutput
         case background, useGradientBackground
@@ -65,7 +73,7 @@ struct Persona: Codable, Identifiable, Hashable {
 
     init(id: String, name: String, avatar: String? = nil, modelId: String? = nil,
          skillIds: [String]? = nil, mcpServerIds: [String]? = nil, localToolIds: [String]? = nil,
-         sortOrder: Int = 0, isBuiltIn: Bool = false,
+         sortOrder: Int = 0, isBuiltIn: Bool = false, isUserProfile: Bool = false,
          temperature: Double? = nil, topP: Double? = nil, limitContextMessages: Bool = false,
          contextMessageSize: Int = 20, thinkingBudget: Int? = nil, maxTokens: Int? = nil,
          defaultWorkspace: String? = nil, useAssistantAvatar: Bool = false, useAssistantName: Bool = false,
@@ -83,6 +91,7 @@ struct Persona: Codable, Identifiable, Hashable {
         self.localToolIds = localToolIds
         self.sortOrder = sortOrder
         self.isBuiltIn = isBuiltIn
+        self.isUserProfile = isUserProfile
         self.temperature = temperature
         self.topP = topP
         self.limitContextMessages = limitContextMessages
@@ -116,6 +125,7 @@ struct Persona: Codable, Identifiable, Hashable {
         localToolIds = try container.decodeIfPresent([String].self, forKey: .localToolIds)
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
         isBuiltIn = try container.decodeIfPresent(Bool.self, forKey: .isBuiltIn) ?? false
+        isUserProfile = try container.decodeIfPresent(Bool.self, forKey: .isUserProfile) ?? false
 
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
         topP = try container.decodeIfPresent(Double.self, forKey: .topP)
@@ -373,6 +383,8 @@ final class PersonaStore: ObservableObject {
     static let defaultPersonaID = "default"
     /// 内置小管家"MCP小助手"。固定 id，不可删除。
     static let stewardPersonaID = "steward"
+    /// [B28 R11] 描述**用户本人**的那只。固定 id，不可删除，不可当聊天对象。
+    static let userProfilePersonaID = "me"
 
     private static let currentIDKey = "persona.current.id"
     private static let fileName = "personas.json"
@@ -387,12 +399,111 @@ final class PersonaStore: ObservableObject {
     }
 
     var current: Persona {
-        personas.first { $0.id == currentPersonaID }
-            ?? personas.first { $0.id == Self.defaultPersonaID }
-            ?? personas.first
+        // 「我自己」永远不能当当前聊天人设——即使她手滑把它写进了
+        // persona.current.id，也要退回 default，否则 AI 会以为自己是她。
+        if let hit = personas.first(where: { $0.id == currentPersonaID }), !hit.isUserProfile {
+            return hit
+        }
+        return personas.first { $0.id == Self.defaultPersonaID && !$0.isUserProfile }
+            ?? chatSelectablePersonas.first
             ?? Persona(id: Self.defaultPersonaID, name: "嘟嘟", avatar: nil,
                        modelId: nil, skillIds: nil, mcpServerIds: nil,
                        localToolIds: nil, sortOrder: 0, isBuiltIn: false)
+    }
+
+    /// [B28 R11] 用户本人的人设。整个 App 只有这一只。
+    var userProfilePersona: Persona? {
+        personas.first { $0.id == Self.userProfilePersonaID }
+    }
+
+    /// [B28 R11] 能当聊天对象选的人设。切换器、新建会话选择器、
+    /// 任何"挑一只人设来聊"的列表都必须走这里，
+    /// 免得「我自己」冒出来变成可以跟自己说话。
+    var chatSelectablePersonas: [Persona] {
+        personas.filter { !$0.isUserProfile }
+    }
+
+    /// [B28 R11] 非 isolated 版：prompt 组装、工具过滤这些静态路径要用。
+    nonisolated static func isUserProfileID(_ id: String) -> Bool {
+        id == userProfilePersonaID
+    }
+
+    /// [B28 R11] 「我自己」这只人设本体。name 只是占位显示名，
+    /// 真正"她叫什么"由 SOUL.md 的「称呼」小节决定（ChatAddressing 读那边）。
+    static func makeUserProfilePersona() -> Persona {
+        Persona(id: userProfilePersonaID, name: "我自己", avatar: nil,
+                modelId: nil,
+                skillIds: [],
+                mcpServerIds: [],
+                localToolIds: [],
+                sortOrder: -1,
+                isBuiltIn: true,
+                isUserProfile: true)
+    }
+
+    /// [B28 R11] 首启/升级时给她铺一份 SOUL.md 模板。
+    /// 已存在就绝不覆盖——她写过的东西比我的模板值钱。
+    /// 模板本身按 ChatAddressing 的规矩生成，不写死任何名字。
+    static func seedUserProfileSoulIfNeeded() {
+        let url = SoulStore.fileURL(for: userProfilePersonaID)
+        if FileManager.default.fileExists(atPath: url.path) { return }
+        let text = userProfileSoulTemplate()
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try text.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            AppLogger(category: "Persona").warning(
+                "[B28-R11] 用户人设 SOUL.md 铺模板失败 \(url.lastPathComponent): \(error)")
+        }
+    }
+
+    static func userProfileSoulTemplate() -> String {
+        """
+        ---
+        name: 我自己
+        ---
+
+        # 身份
+
+        - 怎么称呼：（填了之后，App 里的文案和 AI 的叫法都会跟着变）
+        - 代词：
+        - 时区/作息：
+
+        # 性格与底色
+
+        - 我是什么样的人：
+        - 我吃什么这套：（喜欢被怎么对待，指令化写，别写形容词）
+
+        # 喜好
+
+        - 感兴趣：
+        - 想聊：
+        - 不想聊：
+
+        # 雷区
+
+        - 绝对不能：（写了 AI 必须照做，优先级最高）
+        - 会让我难受：
+
+        # NSFW（需要才填；默认注入，档案页可关掉）
+
+        - 尺度：
+        - 玩法：
+        - 硬边界：
+        - 安全词/停止信号：
+
+        # 当下（这部分 AI 只当参考，不许当定性）
+
+        - 最近状态：
+        - 正在做：
+        - 压力来源：
+
+        # 变更历史（谁改的、什么时候、改了什么）
+
+        - （格式：2026-10-24 她自己写 / AI 补充并标\"（我的推断）\" · 内容）
+
+        """
     }
 
     // MARK: - nonisolated 静态助手（prompt 组装 / 工具过滤用）
@@ -560,6 +671,8 @@ final class PersonaStore: ObservableObject {
         }
 
         let list = [
+            // [B28 R11] 「我自己」排在最前。她是用户资料，不是聊天对象。
+            Self.makeUserProfilePersona(),
             Persona(id: Self.defaultPersonaID, name: soulName, avatar: nil,
                     modelId: nil, skillIds: nil, mcpServerIds: nil,
                     localToolIds: nil, sortOrder: 0, isBuiltIn: false),
@@ -569,6 +682,7 @@ final class PersonaStore: ObservableObject {
                     mcpServerIds: nil,
                     localToolIds: nil, sortOrder: 1, isBuiltIn: true),
         ]
+        Self.seedUserProfileSoulIfNeeded()
         save(list)
         self.personas = list.sorted { $0.sortOrder < $1.sortOrder }
         if UserDefaults.standard.string(forKey: Self.currentIDKey) == nil {
@@ -612,6 +726,8 @@ final class PersonaStore: ObservableObject {
               !list.isEmpty else {
             // 注册表坏了：重建默认（不丢记忆文件，只重建注册表）。
             personas = [
+                // [B28 R11] 重建也带上「我自己」，不然升级后看不到这张卡。
+                Self.makeUserProfilePersona(),
                 Persona(id: Self.defaultPersonaID, name: "嘟嘟", avatar: nil,
                         modelId: nil, skillIds: nil, mcpServerIds: nil,
                         localToolIds: nil, sortOrder: 0, isBuiltIn: false),
@@ -636,8 +752,20 @@ final class PersonaStore: ObservableObject {
             }
         }
         if migrated { save(personas) }
+        // [B28 R11] 老设备升级：注册表是好的，但里面没有「我自己」。
+        // 只补缺，不动她已有的任何一只，也不改当前聊天对象。
+        if !personas.contains(where: { $0.id == Self.userProfilePersonaID }) {
+            personas.insert(Self.makeUserProfilePersona(), at: 0)
+            save(personas)
+        }
+        Self.seedUserProfileSoulIfNeeded()
         // 当前 id 指向的人设没了 → 回落到 default
         if !personas.contains(where: { $0.id == currentPersonaID }) {
+            currentPersonaID = Self.defaultPersonaID
+        }
+        // [B28 R11] 双保险：当前 id 要是被写成了「我自己」，也退回 default。
+        // AI 拿用户的 SOUL.md 当身份跑，会直接人格混淆。
+        if personas.first(where: { $0.id == currentPersonaID })?.isUserProfile == true {
             currentPersonaID = Self.defaultPersonaID
         }
     }
@@ -760,6 +888,9 @@ final class PersonaStore: ObservableObject {
 
     /// 切换当前人设。
     func setCurrent(_ id: String) {
+        // [B28 R11] 「我自己」描述的是用户，永远不能当当前聊天人设——
+        // 选中它等于让 AI 用她的档案当自己的性格。这里硬挡，不靠 UI 自觉。
+        guard !isUserProfileID(id) else { return }
         guard personas.contains(where: { $0.id == id }), id != currentPersonaID else { return }
         currentPersonaID = id
         SoulStore.refreshCache()

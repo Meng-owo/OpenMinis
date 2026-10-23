@@ -24,6 +24,7 @@
 		E5AJR0003 /* ModelTierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AJR0013 /* ModelTierResolver.swift */; };
 		E5AMI0001 /* HelperModelIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AMI0011 /* HelperModelIdentity.swift */; };
 		E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */; };
+		E5CBK0002 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0012 /* UserProfileView.swift */; };
 		E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */; };
 		E5SCH0001 /* ScheduledJobRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0011 /* ScheduledJobRunner.swift */; };
 		E5SCH0002 /* ScheduledOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0012 /* ScheduledOffload.m */; };
@@ -753,6 +754,7 @@
 		E5AJR0013 /* ModelTierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ModelTierResolver.swift"; path = "Agent/Jobs/ModelTierResolver.swift"; sourceTree = SOURCE_ROOT; };
 		E5AMI0011 /* HelperModelIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "HelperModelIdentity.swift"; path = "Agent/Jobs/HelperModelIdentity.swift"; sourceTree = SOURCE_ROOT; };
 		E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+ProgrammaticPrompt.swift"; path = "Agent/Chat/AIChatViewModel+ProgrammaticPrompt.swift"; sourceTree = SOURCE_ROOT; };
+		E5CBK0012 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "UserProfileView.swift"; path = "Views/Chat/UserProfileView.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+CodeBlockEditing.swift"; path = "Agent/Chat/AIChatViewModel+CodeBlockEditing.swift"; sourceTree = SOURCE_ROOT; };
 		E5SCH0011 /* ScheduledJobRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledJobRunner.swift"; path = "Agent/Jobs/ScheduledJobRunner.swift"; sourceTree = SOURCE_ROOT; };
 		E5SCH0012 /* ScheduledOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "ScheduledOffload.m"; path = "NativeOffloads/ScheduledOffload.m"; sourceTree = SOURCE_ROOT; };
@@ -2592,6 +2594,7 @@
 				E5AJR0013 /* ModelTierResolver.swift */,
 				E5AMI0011 /* HelperModelIdentity.swift */,
 				E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */,
+				E5CBK0012 /* UserProfileView.swift */,
 				E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */,
 				E5SCH0011 /* ScheduledJobRunner.swift */,
 				E5SCH0012 /* ScheduledOffload.m */,
@@ -3121,6 +3124,7 @@
 				E5AJR0001 /* AgentJobRegistry.swift in Sources */,
 				E5AJN0001 /* AgentJobCompletionNotice.swift in Sources */,
 				E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */,
+				E5CBK0002 /* UserProfileView.swift in Sources */,
 				E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */,
 				E5SCH0001 /* ScheduledJobRunner.swift in Sources */,
 				E5SCH0002 /* ScheduledOffload.m in Sources */,

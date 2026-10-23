@@ -16,7 +16,7 @@ struct PersonaListSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(store.personas) { persona in
+                ForEach(store.chatSelectablePersonas) { persona in
                     Button {
                         store.setCurrent(persona.id)
                         dismiss()
@@ -57,7 +57,7 @@ struct PersonaListSheet: View {
                             } label: {
                                 Label("删除", systemImage: "trash.fill")
                             }
-                            .disabled(store.personas.count <= 1)
+                            .disabled(store.chatSelectablePersonas.count <= 1)
                         }
                         Button {
                             if let copy = store.duplicatePersona(persona.id) {
@@ -81,7 +81,7 @@ struct PersonaListSheet: View {
                         } label: {
                             Label("复制", systemImage: "doc.on.doc.fill")
                         }
-                        if !persona.isBuiltIn && store.personas.count > 1 {
+                        if !persona.isBuiltIn && store.chatSelectablePersonas.count > 1 {
                             Button(role: .destructive) {
                                 deleteTarget = persona
                             } label: {

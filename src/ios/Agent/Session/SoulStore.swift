@@ -1282,9 +1282,119 @@ enum SystemPromptBuilder {
     }
 
     /// ［persona］按人设渲染身份段：读该人设的 SOUL.md。
+    /// [B28 R11] 「我自己」是人设档案，不是说话的人——它的 SOUL.md 描述的是
+    /// 用户，绝不能当身份注入，否则 AI 会以为自己是用户。
+    /// 真被传进来了就退回默认人设的 SOUL，并且不许崩。
     static func identitySection(for personaID: String) -> String {
-        let file = SoulStore.load(for: personaID)
+        let id = PersonaStore.isUserProfileID(personaID) ? PersonaStore.defaultPersonaID : personaID
+        let file = SoulStore.load(for: id)
         return identitySection(from: file)
+    }
+
+    /// [B28 R11] 用户档案段。与 identitySection 完全分开，措辞第三人称，
+    /// 明确"这是你在服务的人，不是你的性格"。字段全部由她/它自己填，
+    /// 没填的小节不注入——空白模板不该占上下文。
+    /// NSFW 小节受总开关控制（`userProfileNSFWInjectionEnabled`）：
+    /// 敏感模型可能一看尺度描写就整段拒答，所以默认可以关掉。
+    static func userProfileSection(for personaID: String) -> String {
+        let file = SoulStore.load(for: personaID)
+        return userProfileSection(from: file)
+    }
+
+    /// 便捷版：读当前会话之外的固定「我自己」档案。
+    static func userProfileSection() -> String {
+        userProfileSection(for: PersonaStore.userProfilePersonaID)
+    }
+
+    /// NSFW 注入总开关。关 = 整个 NSFW 小节不进 prompt。
+    static var userProfileNSFWInjectionEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: userProfileNSFWKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: userProfileNSFWKey) }
+    }
+
+    private static let userProfileNSFWKey = "persona.userProfile.nsfwInjection.enabled"
+
+    /// 档案里真正写了「怎么称呼」时用它，否则回落到人设名。
+    static func userProfileAddressingName(for personaID: String = PersonaStore.userProfilePersonaID) -> String {
+        let file = SoulStore.load(for: personaID)
+        return userProfileFieldValue(in: file, keys: ["怎么称呼", "称呼"])
+    }
+
+    private static func userProfileFieldValue(in file: SoulFile?, keys: [String]) -> String {
+        guard let body = file?.body else { return "" }
+        for rawLine in body.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            for key in keys where line.contains(key) {
+                guard let colon = line.firstIndex(of: "：") ?? line.firstIndex(of: ":") else { continue }
+                let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                // 模板里的括号是提示语，不算她填的内容。
+                let cleaned = value.replacingOccurrences(of: "（", with: "")
+                    .replacingOccurrences(of: "）", with: "")
+                    .replacingOccurrences(of: "(", with: "")
+                    .replacingOccurrences(of: ")", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+                if !cleaned.isEmpty, !cleaned.contains("填了之后"), !cleaned.contains("默认") {
+                    return cleaned
+                }
+            }
+        }
+        return ""
+    }
+
+    static func userProfileSection(from file: SoulFile?) -> String {
+        guard let body = file?.body?.trimmingCharacters(in: .whitespacesAndNewlines), !body.isEmpty
+        else { return "" }
+
+        var blocks: [String] = []
+        var pendingTitle: String?
+        var pendingLines: [String] = []
+
+        func flush() {
+            guard let title = pendingTitle else { pendingLines = []; return }
+            // 只保留真填了的行：形如 "- x：" 冒号后为空的是模板占位。
+            let filled = pendingLines.filter { line in
+                let stripped = line.replacingOccurrences(of: "- ", with: "").trimmingCharacters(in: .whitespaces)
+                guard let colon = stripped.firstIndex(of: "：") ?? stripped.firstIndex(of: ":") else {
+                    return !stripped.isEmpty
+                }
+                let value = stripped[stripped.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                return !value.isEmpty
+            }
+            if !filled.isEmpty {
+                blocks.append("## \(title)\n" + filled.joined(separator: "\n"))
+            }
+            pendingTitle = nil
+            pendingLines = []
+        }
+
+        for rawLine in body.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("# ") {
+                flush()
+                pendingTitle = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                pendingLines.append(line)
+            }
+        }
+        flush()
+
+        // NSFW 小节：开关关掉时整段不进模型。
+        if !userProfileNSFWInjectionEnabled {
+            // flush() 已把小节统一成 "## 标题"，模板里写 # 还是 ## 都能命中。
+            blocks.removeAll { $0.hasPrefix("## NSFW") }
+        }
+        guard !blocks.isEmpty else { return "" }
+
+        return "\n\n# 关于正在和你说话的人\n\n"
+            + "下面是关于**用户本人**的档案，由她自己维护、并由你在长期互动里补充。"
+            + "这不是你的性格，不要把它当自己的设定；说的是坐在你对面那个人。\n"
+            + "档案原文在 /var/minis/memory/personas/me/SOUL.md（iSH 里就是这个路径）：你确认过的新信息可以直接写进去"
+            + "（先读后改，只动你自己那一行，别覆盖她写的），并在「变更历史」补一条。"
+            + "规则：以「她明确写下的」为准，你推断的一律标\"（我的推断）\"、只当参考；"
+            + "她本人写的优先级最高，冲突时先按新的、并把差异提出来让她定；"
+            + "「雷区」写了就必须照做；提到她时用第三人称，称呼照档案里的来。\n\n"
+            + blocks.joined(separator: "\n\n")
+            + "\n"
     }
 
     private static func identitySection(from file: SoulFile?) -> String {

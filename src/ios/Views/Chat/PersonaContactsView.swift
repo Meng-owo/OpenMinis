@@ -45,12 +45,43 @@ struct PersonaContactsView: View {
         }
     }
 
+    /// 档案副标题：数一下真正填了冒号内容的条目。
+    static func profileSummaryText() -> String {
+        guard let soul = SoulStore.load(for: PersonaStore.userProfilePersonaID) else {
+            return "还没填，点进来写"
+        }
+        var filled = 0
+        for raw in soul.body.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("- ") else { continue }
+            let stripped = String(line.dropFirst(2))
+            guard let colon = stripped.firstIndex(of: "：") ?? stripped.firstIndex(of: ":") else { continue }
+            let value = stripped[stripped.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            if !value.isEmpty { filled += 1 }
+        }
+        if filled == 0 { return "还没填，点进来写" }
+        return "已填 \(filled) 项 · AI 每轮对话都看得到"
+    }
+
+    /// [B28 R11] 卡片标题：档案显示她档案里填的称呼，人设显示人设名。
+    static func displayName(for persona: Persona) -> String {
+        guard persona.isUserProfile else { return persona.name }
+        let called = SoulStore.userProfileAddressingName()
+        return called.isEmpty ? persona.name : called
+    }
+
     var body: some View {
         List {
             Section {
                 ForEach(filteredPersonas) { persona in
                     NavigationLink {
-                        PersonaDetailHomeView(personaId: persona.id, onSelectAndChat: onSelectAndChat)
+                        // [B28 R11] 「我自己」走资料页，不给模型/工具/技能那一套——
+                        // 它描述的是用户，不是会说话的谁。
+                        if persona.isUserProfile {
+                            UserProfileView()
+                        } else {
+                            PersonaDetailHomeView(personaId: persona.id, onSelectAndChat: onSelectAndChat)
+                        }
                     } label: {
                         HStack(spacing: 14) {
                             PersonaAvatarView(iconRef: persona.avatar, size: 46)
@@ -61,7 +92,7 @@ struct PersonaContactsView: View {
 
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(spacing: 6) {
-                                    Text(persona.name)
+                                    Text(PersonaContactsView.displayName(for: persona))
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundStyle(ChatColors.primaryText)
 
@@ -69,6 +100,15 @@ struct PersonaContactsView: View {
                                     // 关系，防误删保护本来就在 swipeActions 里。
                                     // 「使用中」加呼吸小灯 —— 系统 symbolEffect 的
                                     // pulse，合成器驱动不烧 CPU，语义一字没改。
+                                    if persona.isUserProfile {
+                                        // 「我自己」不是聊天对象，标出来免得她被算进联系人。
+                                        Text("我的资料")
+                                            .font(.system(size: 10, weight: .medium))
+                                            .padding(.horizontal, 7)
+                                            .padding(.vertical, 2.5)
+                                            .background(Capsule().fill(MinisThemeList.accent.opacity(0.12)))
+                                            .foregroundStyle(MinisThemeList.accent)
+                                    }
                                     if persona.id == store.currentPersonaID {
                                         HStack(spacing: 4) {
                                             Image(systemName: "circle.fill")
@@ -100,12 +140,14 @@ struct PersonaContactsView: View {
                                 Label("删除", systemImage: "trash.fill")
                             }
                         }
-                        Button {
-                            _ = store.duplicatePersona(persona.id)
-                        } label: {
-                            Label("复制", systemImage: "doc.on.doc.fill")
+                        if !persona.isUserProfile {
+                            Button {
+                                _ = store.duplicatePersona(persona.id)
+                            } label: {
+                                Label("复制", systemImage: "doc.on.doc.fill")
+                            }
+                            .tint(.blue)
                         }
-                        .tint(.blue)
                     }
                 }
             } header: {
@@ -174,6 +216,11 @@ struct PersonaContactsView: View {
     }
 
     private func personaBio(for persona: Persona) -> String {
+        // [B28 R11] 档案的正文是一堆小节标题，直接当副标题会糊成一片，
+        // 所以给它单独一句：填了几项、还差什么。
+        if persona.isUserProfile {
+            return PersonaContactsView.profileSummaryText()
+        }
         if let soul = SoulStore.load(for: persona.id) {
             let bio = soul.body.trimmingCharacters(in: .whitespacesAndNewlines)
             if !bio.isEmpty {

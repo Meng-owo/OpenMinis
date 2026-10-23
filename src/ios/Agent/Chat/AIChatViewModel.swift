@@ -1786,13 +1786,26 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         return _cachedTimeString
     }
 
+    /// [B28 R11] 「我自己」档案段。长对话里档案容易被几十轮工具输出冲淡，
+    /// 所以历史超过阈值时，在档案后面再钉一句"当回事"的提醒。
+    /// 阈值取 40 条：短对话没必要，长对话正是开始忘的时候。
+    private var userProfilePromptSection: String {
+        let section = SystemPromptBuilder.userProfileSection()
+        guard !section.isEmpty else { return "" }
+        if messages.count > 40 {
+            return section + "\n（提醒：上面是她的档案，不是你的性格。这一轮开口前先照一遍——尤其是「雷区」和「怎么称呼」。）\n"
+        }
+        return section
+    }
+
     private var baseSystemPrompt: String {
         // [T-soul-md] Layer 1: SOUL.md personality and identity
         // [T-sub-agents-v1] A sub agent session has no claim on the app's own
         // identity: its first layer is the delegation preamble instead.
         (isSubAgentChild
             ? subAgentIdentitySection
-            : SystemPromptBuilder.identitySection(for: sessionPersonaId ?? PersonaStore.currentID()))
+            : SystemPromptBuilder.identitySection(for: sessionPersonaId ?? PersonaStore.currentID())
+                + userProfilePromptSection)
             + "You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), "
             + "writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.\n\n"
             + "Execution discipline for long-running or dispatched work: make tool calls immediately instead of describing intentions, and keep working until the task is complete. "
