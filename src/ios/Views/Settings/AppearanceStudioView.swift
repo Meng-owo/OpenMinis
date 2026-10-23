@@ -155,6 +155,8 @@ struct AppearanceStudioView: View {
     }
     @State private var stWarnings: [String] = []
     @State private var showSTWarnings = false
+    /// [B28 R10] 自定义称呼的输入缓冲。提交时才落盘，边打字边写会一直存。
+    @State private var userDisplayNameDraft = ""
 
     @MainActor private var aiName: String {
         let n = SoulStore.cachedMetadata.name
@@ -1437,8 +1439,12 @@ struct AppearanceStudioView: View {
                     .foregroundStyle(studio.color(.accent, variant: variant).opacity(0.7))
                 VStack(spacing: 7) {
                     PersonAvatarView(kind: .user, size: 60)
-                    Text(AppLocalized("你"))
+                    // [B28 R10] 她给自己填了称呼就显示她填的，没填回落到"你"。
+                    Text(studio.userDisplayName.isEmpty
+                         ? AppLocalized("你")
+                         : studio.userDisplayName)
                         .font(.system(size: 11, weight: .medium))
+                        .lineLimit(1)
                         .foregroundStyle(studio.color(.secondaryText, variant: variant))
                 }
                 Spacer()
@@ -1456,6 +1462,26 @@ struct AppearanceStudioView: View {
                 Button(AppLocalized("去掉我的头像")) { studio.removeUserAvatar() }
                     .font(.system(size: 12))
                     .foregroundStyle(studio.color(.destructive, variant: variant))
+            }
+
+            // [B28 R10] 自定义称呼。App 里所有"提到说话的人"的文案都从这里取，
+            // 不写死任何名字。留空 = 用中性的"你"。
+            HStack(spacing: 8) {
+                TextField(String(format: AppLocalized("%@怎么称呼你"), aiName),
+                          text: $userDisplayNameDraft)
+                    .font(.system(size: 13))
+                    .textFieldStyle(.roundedBorder)
+                    .submitLabel(.done)
+                    .onSubmit { studio.setUserDisplayName(userDisplayNameDraft) }
+                    .frame(maxWidth: 220)
+                if !studio.userDisplayName.isEmpty {
+                    Button(AppLocalized("清除")) {
+                        userDisplayNameDraft = ""
+                        studio.setUserDisplayName("")
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(studio.color(.destructive, variant: variant))
+                }
             }
 
             Button {
@@ -1481,6 +1507,7 @@ struct AppearanceStudioView: View {
                 .lineSpacing(1.5)
                 .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
         }
+        .onAppear { userDisplayNameDraft = studio.userDisplayName }
         .modifier(StudioCard(variant: variant))
     }
 

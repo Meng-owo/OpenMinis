@@ -470,6 +470,8 @@ struct AIChatView: View {
     @State private var previewImageFile: URL?
     @State private var imageGallery: GalleryPresentation?
     @State private var previewVideoFile: URL?
+    /// [B28 R10] 待全屏展示的放大代码块（由卡片上的放大按钮经路由送过来）。
+    @State private var codeBlockCover: ChatCodeBlockCover?
     @State private var previewAudioFile: URL?
     @State private var previewTextFile: URL?
     @State private var previewMarkdownFile: URL?
@@ -947,6 +949,12 @@ struct AIChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: MarkdownImageTapRouter.tappedNotification)) { note in
             handleMarkdownImageTap(note)
         }
+        // [B28 R10] 代码块放大 → 顶层全屏（见 ChatCodeBlockExpandRouter）
+        .onReceive(NotificationCenter.default.publisher(for: ChatCodeBlockExpandRouter.expandedNotification)) { note in
+            if let request = note.object as? ChatCodeBlockEditRequest {
+                codeBlockCover = ChatCodeBlockCover(request: request)
+            }
+        }
         .modifier(DismissImmersiveCoversListener(onDismiss: dismissAllOwnedImmersiveCovers))
         .onReceive(vm.requestComposerFocusSignal) {
             // VM fires this after filling the composer programmatically
@@ -958,6 +966,12 @@ struct AIChatView: View {
         .modifier(RerunFromToolBlockListener(vm: vm))
         .fullScreenCover(item: $previewVideoFile) { fileURL in
             MinisVideoFullscreenPlayer(fileURL: fileURL)
+        }
+        // [B28 R10] 代码块放大全屏。挂在这里而不是卡片自己身上：卡片住在
+        // UIHostingConfiguration 的 cell 里，会被复用/销毁，cover 状态说丢就丢，
+        // 而且 iOS 每个 host 只允许一只 fullScreenCover——和图片、视频同一套走法。
+        .fullScreenCover(item: $codeBlockCover) { cover in
+            ChatCodeBlockDetailView(request: cover.request)
         }
         .sheet(item: $previewAudioFile) { fileURL in
             MinisAudioPreviewView(fileURL: fileURL)
@@ -2045,6 +2059,10 @@ struct AIChatView: View {
             showTokenUsage = true
         case .share:
             exportCurrentConversation()
+        case .compactHistory:
+            vm.compactAll()
+        case .clearChat:
+            vm.clearChatConfirmRequested = true
         }
     }
 
@@ -2998,6 +3016,7 @@ struct AIChatView: View {
         if previewImageFile != nil { previewImageFile = nil }
         if imageGallery != nil { imageGallery = nil }
         if previewVideoFile != nil { previewVideoFile = nil }
+        if codeBlockCover != nil { codeBlockCover = nil }
         if fullBrowserURL != nil { fullBrowserURL = nil }
         if showTerminal { showTerminal = false }
         if showCamera { showCamera = false }
@@ -6153,6 +6172,10 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     case gauge = "gauge"         // Token用量
     case share = "share"         // 导出对话
 
+    // Page 3: 会话空间整理 (2项)
+    case compactHistory = "compactHistory" // 压缩上下文
+    case clearChat = "clearChat"           // 清空当前对话
+
     public var id: String { rawValue }
 
     public var title: String {
@@ -6173,6 +6196,8 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "会话文件"
         case .gauge: return "Token用量"
         case .share: return "导出会话"
+        case .compactHistory: return "压缩上下文"
+        case .clearChat: return "清空当前对话"
         }
     }
 
@@ -6195,6 +6220,8 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "folder.fill"
         case .gauge: return "gauge.with.needle.fill"
         case .share: return "square.and.arrow.up.fill"
+        case .compactHistory: return "arrow.down.doc"
+        case .clearChat: return "trash"
         }
     }
 }
@@ -6280,6 +6307,10 @@ public struct ChatPlusPanel: View {
         .skills, .mcps, .memory, .terminal,
         .browser, .files, .gauge, .share
     ]
+    // [B28 R10] 会话空间整理放回加号，不再只藏在斜杠命令里。
+    private let page3Items: [PlusPanelItemType] = [
+        .compactHistory, .clearChat
+    ]
     private let columns = [
         GridItem(.flexible(), spacing: 10),
         GridItem(.flexible(), spacing: 10),
@@ -6336,13 +6367,26 @@ public struct ChatPlusPanel: View {
                 .padding(.top, 16)
                 .padding(.bottom, 6)
                 .tag(1)
+
+                // Page 3
+                LazyVGrid(columns: columns, spacing: 22) {
+                    ForEach(page3Items) { item in
+                        PlusPanelTileButton(item: item) {
+                            onItemTap(item)
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 16)
+                .padding(.bottom, 6)
+                .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: tabViewHeight)
 
-            // 底部指示小圆点 (两页)
+            // 底部指示小圆点
             HStack(spacing: 8) {
-                ForEach(0..<2, id: \.self) { idx in
+                ForEach(0..<3, id: \.self) { idx in
                     Capsule()
                         .fill(currentPage == idx ? CSSThemeVariables.accent() : CSSThemeVariables.divider())
                         .frame(width: currentPage == idx ? 20 : 7, height: 7)

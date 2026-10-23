@@ -215,6 +215,9 @@ final class AppearanceStudio: ObservableObject {
     private enum Keys {
         static let colors = "appearanceStudio.colors.v1"
         static let userAvatar = "appearanceStudio.userAvatar.v1"
+        /// [B28 R10] 用户自定义称呼。界面/提示里要提到"说话的人"时用它，
+        /// 不写死任何具体名字——没填就回落到中性称呼。
+        static let userDisplayName = "appearanceStudio.userDisplayName.v1"
         static let surfaceOpacity = "appearanceStudio.surfaceOpacity"
         static let bubbleOpacity = "appearanceStudio.bubbleOpacity"
         static let wallpaperShade = "appearanceStudio.wallpaperShade"
@@ -229,6 +232,8 @@ final class AppearanceStudio: ObservableObject {
     @Published private(set) var wallpaperRevision = 0
     @Published private(set) var iconRevision = 0
     @Published private(set) var userAvatar: String
+    /// [B28 R10] 她自己填的称呼。空 = 没设置，调用方自己回落到中性词。
+    @Published private(set) var userDisplayName: String
     @Published private var customIcons: [String: String]
     @Published var surfaceOpacity: Double {
         didSet { UserDefaults.standard.set(surfaceOpacity, forKey: Keys.surfaceOpacity) }
@@ -274,6 +279,8 @@ final class AppearanceStudio: ObservableObject {
         } else {
             userAvatar = rawAvatar
         }
+        userDisplayName = (UserDefaults.standard.string(forKey: Keys.userDisplayName) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         // [PIC-6] Custom icons used to live in UserDefaults as one JSON blob
         // of base64 data URIs (23 slots × ~1MB of PNG = a multi-MB plist
         // the system rewrites on every sync). They now live as PNG files
@@ -789,6 +796,17 @@ final class AppearanceStudio: ObservableObject {
     func removeUserAvatar() {
         userAvatar = ""
         UserDefaults.standard.removeObject(forKey: Keys.userAvatar)
+    }
+
+    /// [B28 R10] 存她填的称呼。空串 = 清掉，回到"没有自定义称呼"的状态。
+    func setUserDisplayName(_ raw: String) {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        userDisplayName = trimmed
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: Keys.userDisplayName)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: Keys.userDisplayName)
+        }
     }
 
     func setAssistantAvatar(_ image: UIImage) throws {
@@ -1510,5 +1528,31 @@ extension AppearanceStudio {
         iconRevision += 1
         configureUIKitSurfaces()
         objectWillChange.send()
+    }
+}
+
+// MARK: - [B28 R10] 称呼自适应
+
+/// App 里任何"要提到对话双方"的文案，都从这里取称呼，不写死具体名字。
+/// - AI 侧：跟着当前会话绑的人设走（SOUL.md 的 name），人设改名即生效。
+/// - 用户侧：她在外观工作室里自己填的称呼；没填就回落到中性词，
+///   UI 用"你"，给模型的提示词用"用户"（对模型说"你"会指错人）。
+@MainActor
+enum ChatAddressing {
+    /// 回答的人叫什么。
+    static func assistant(sessionPersonaId: String? = nil) -> String {
+        SoulStore.displayName(for: SoulStore.displayPersonaId(sessionPersonaId))
+    }
+
+    /// 说话的人叫什么（界面可见文案用）。
+    static func user() -> String {
+        let n = AppearanceStudio.shared.userDisplayName
+        return n.isEmpty ? AppLocalized("你") : n
+    }
+
+    /// 说话的人叫什么（注入给模型的提示词用）。
+    static func userForModel() -> String {
+        let n = AppearanceStudio.shared.userDisplayName
+        return n.isEmpty ? AppLocalized("用户") : n
     }
 }

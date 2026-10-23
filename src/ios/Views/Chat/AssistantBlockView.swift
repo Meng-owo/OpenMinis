@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 import Combine
 import UIKit
 
@@ -227,10 +228,12 @@ struct AssistantBlockView: View {
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         textBlockView(markdown: text)
                     }
-                case .code(let language, let code):
+                case .code(let language, let code, let codeIndex):
                     ChatCodeBlockView(
                         code: code,
                         language: language,
+                        sourceMarkdown: actionContent,
+                        codeIndex: codeIndex,
                         messageId: message.id,
                         blockId: block.id
                     )
@@ -372,7 +375,7 @@ struct AssistantBlockView: View {
 /// through ChatCodeBlockView, so no NSTextAttachment is involved.
 enum ChatMarkdownSegment {
     case prose(String)
-    case code(language: String?, code: String)
+    case code(language: String?, code: String, codeIndex: Int)
 }
 
 enum ChatMarkdownSegmenter {
@@ -394,6 +397,7 @@ enum ChatMarkdownSegmenter {
         var out: [ChatMarkdownSegment] = []
         var prose: [String] = []
         var index = 0
+        var codeIndex = 0
 
         func flushProse() {
             guard !prose.isEmpty else { return }
@@ -427,7 +431,8 @@ enum ChatMarkdownSegmenter {
             }
             let code = codeLines.joined(separator: "\n")
                 .trimmingCharacters(in: .newlines)
-            out.append(.code(language: fence.language, code: code))
+            out.append(.code(language: fence.language, code: code, codeIndex: codeIndex))
+            codeIndex += 1
             if !closed { break }
         }
         flushProse()
@@ -458,144 +463,87 @@ enum ChatMarkdownSegmenter {
             .trimmingCharacters(in: .whitespaces)
             .isEmpty
     }
-}
 
-/// Collapse state survives cell reuse (same reason as UserBubbleExpansion).
-/// Keyed by code+language, not by block id, so streaming re-renders and cell
-/// reconfigures keep the user's manual choice.
-final class ChatCodeBlockStore: ObservableObject {
-    static let shared = ChatCodeBlockStore()
-    @Published private(set) var revision: UInt64 = 0
-    private var collapsedByKey: [String: Bool] = [:]
-    private var manualKeys: Set<String> = []
-    private init() {}
-
-    static func key(code: String, language: String?) -> String {
-        var hash: UInt64 = 1469598103934665603
-        func mix(_ text: String) {
-            for byte in text.utf8 {
-                hash ^= UInt64(byte)
-                hash = hash &* 1099511628211
+    static func replacingNthCode(in markdown: String, index: Int, newCode: String) -> String? {
+        let lines = markdown.components(separatedBy: "\n")
+        var seen = -1
+        var position = 0
+        while position < lines.count {
+            guard let fence = parseFence(lines[position]) else {
+                position += 1
+                continue
             }
-        }
-        mix(language ?? "")
-        hash ^= 0xff
-        hash = hash &* 1099511628211
-        mix(code)
-        return String(hash, radix: 16)
-    }
-
-    func isCollapsed(key: String, lineCount: Int, threshold: Int) -> Bool {
-        if let stored = collapsedByKey[key] { return stored }
-        return lineCount > threshold
-    }
-
-    func toggle(key: String, lineCount: Int, threshold: Int) {
-        let next = !isCollapsed(key: key, lineCount: lineCount, threshold: threshold)
-        if collapsedByKey.count > 400, let oldest = collapsedByKey.keys.first {
-            collapsedByKey.removeValue(forKey: oldest)
-            manualKeys.remove(oldest)
-        }
-        collapsedByKey[key] = next
-        manualKeys.insert(key)
-        revision &+= 1
-    }
-
-    /// Folded into the list's contentKey so a collapse toggle re-measures the
-    /// host cell instead of reusing the old height from the memo. Per-content:
-    /// toggling one code block must not re-key every other code block on screen.
-    func signature(for markdown: String, force: Bool = false) -> Int {
-        guard force || ChatMarkdownSegmenter.hasFence(markdown) else { return 0 }
-        var hash: UInt64 = 1469598103934665603
-        func mix(_ text: String) {
-            for byte in text.utf8 {
-                hash ^= UInt64(byte)
-                hash = hash &* 1099511628211
+            seen += 1
+            let start = position + 1
+            var closing = lines.count
+            var closed = false
+            var probe = start
+            while probe < lines.count {
+                if isClosingFence(lines[probe], marker: fence.marker, count: fence.count) {
+                    closing = probe
+                    closed = true
+                    break
+                }
+                probe += 1
             }
+            if seen == index {
+                var result = Array(lines[0...position])
+                result.append(contentsOf: newCode.components(separatedBy: "\n"))
+                if closed {
+                    result.append(contentsOf: lines[closing...])
+                } else {
+                    result.append(String(repeating: String(fence.marker), count: fence.count))
+                }
+                return result.joined(separator: "\n")
+            }
+            position = closed ? closing + 1 : lines.count
         }
-        let threshold = (UserDefaults.standard.dictionary(forKey: CodeBlockAttachment.codeSettingsKey)?["collapseLines"] as? Int) ?? 12
-        mix("t\(threshold)")
-        var foundCode = false
-        for segment in ChatMarkdownSegmenter.segments(from: markdown) {
-            guard case .code(let language, let code) = segment else { continue }
-            foundCode = true
-            let key = Self.key(code: code, language: language)
-            mix(key)
-            let lines = max(1, code.components(separatedBy: "\n").count)
-            mix(isCollapsed(key: key, lineCount: lines, threshold: threshold) ? "1" : "0")
-        }
-        guard foundCode || force else { return 0 }
-        return Int(truncatingIfNeeded: hash)
+        return nil
     }
-}
 
-struct ChatCodeBlockTogglePayload {
-    let messageId: UUID
-    let blockId: UUID?
+    static func replacingCode(in markdown: String, oldCode: String, newCode: String) -> String? {
+        segments(from: markdown).enumerated().first { _, segment in
+            if case .code(_, let code, _) = segment { return code == oldCode }
+            return false
+        }.flatMap { offset, _ in
+            replacingNthCode(in: markdown, index: offset, newCode: newCode)
+        }
+    }
+
+    static func codeCount(in markdown: String) -> Int {
+        segments(from: markdown).reduce(0) { count, segment in
+            if case .code = segment { return count + 1 }
+            return count
+        }
+    }
 }
 
 struct ChatCodeBlockView: View {
     let code: String
     let language: String?
+    let sourceMarkdown: String
+    let codeIndex: Int
     let messageId: UUID?
     let blockId: UUID?
 
-    @ObservedObject private var store = ChatCodeBlockStore.shared
+    static let cardHeight = VoiceCatBubbleCardView.cardHeight
+
     @State private var copied = false
-    @State private var settingsRevision = 0
 
-    init(code: String, language: String?, messageId: UUID?, blockId: UUID?) {
-        self.code = code
-        self.language = language
-        self.messageId = messageId
-        self.blockId = blockId
-    }
-
-    /// Measure the exact view the renderer will draw, at the same width.
-    /// Used by the user-bubble precalc so the estimate cannot drift from the
-    /// SwiftUI code card (the old TextKit attachment measurement did).
     @MainActor
     static func measuredHeight(code: String, language: String?, width: CGFloat) -> CGFloat {
-        guard width > 1 else { return 0 }
-        let view = ChatCodeBlockView(code: code,
-                                     language: language,
-                                     messageId: nil,
-                                     blockId: nil)
-            .frame(width: width, alignment: .leading)
-        let host = UIHostingController(rootView: view)
-        host.view.backgroundColor = .clear
-        host.view.frame = CGRect(x: 0, y: 0, width: width, height: 1)
-        host.view.layoutIfNeeded()
-        return ceil(host.sizeThatFits(in: CGSize(width: width,
-                                                 height: .greatestFiniteMagnitude)).height)
+        Self.cardHeight
     }
 
     private var theme: SelectableMarkdownTheme {
         SelectableMarkdownTheme(baseFontSize: FontSettings.shared.scaledMessage(16.5))
     }
-    private var stateKey: String {
-        ChatCodeBlockStore.key(code: code, language: language)
-    }
-    private var lineCount: Int {
-        max(1, code.components(separatedBy: "\n").count)
-    }
-    private var threshold: Int {
-        _ = settingsRevision
-        return (UserDefaults.standard.dictionary(forKey: CodeBlockAttachment.codeSettingsKey)?["collapseLines"] as? Int) ?? 12
-    }
-    private var visibleLines: Int { min(8, max(2, threshold - 1)) }
-    private var canCollapse: Bool { lineCount > threshold }
-    private var isCollapsed: Bool {
-        canCollapse && store.isCollapsed(key: stateKey, lineCount: lineCount, threshold: threshold)
-    }
-    private var collapsedHeight: CGFloat {
-        let n = CGFloat(max(1, min(visibleLines, lineCount)))
-        return ceil(n * theme.codeBlockFont.lineHeight + max(0, n - 1) * 4) + 1
-    }
+
     private var displayLanguage: String {
         guard let language, !language.isEmpty else { return "CODE" }
         return language.uppercased()
     }
+
     private var codeText: AttributedString {
         let ns = ChatCodeBlockHighlighter.attributed(code: code, language: language, theme: theme)
         return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(code)
@@ -607,97 +555,314 @@ struct ChatCodeBlockView: View {
             Rectangle()
                 .fill(Color(uiColor: theme.codeBlockTextColor).opacity(0.10))
                 .frame(height: 0.5)
-            codeBody
+            preview
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: Self.cardHeight, alignment: .top)
         .background(Color(uiColor: theme.codeBlockBackground))
         .clipShape(RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous)
                 .stroke(Color(uiColor: theme.codeBlockTextColor).opacity(0.08), lineWidth: 0.5)
         )
-        .onReceive(NotificationCenter.default.publisher(for: .codeBlockLayoutSettingsChanged)) { _ in
-            settingsRevision &+= 1
-            notifyHeightChange()
-        }
         .accessibilityElement(children: .contain)
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            Button {
-                toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Text(displayLanguage)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.45))
-                    Spacer(minLength: 0)
-                    if canCollapse {
-                        Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.45))
-                    }
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
+            Text(displayLanguage)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.45))
+                .accessibilityLabel("代码块语言")
+            Spacer(minLength: 8)
             Button {
                 UIPasteboard.general.string = code
                 copied = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                    copied = false
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
             } label: {
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.5))
-                    .frame(width: 22, height: 22)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.55))
+                    .frame(width: 26, height: 26)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(copied ? "代码已复制" : "复制代码")
+
+            Button {
+                // [B28 R10] 不在 cell 里就地起全屏——把内容打包给顶层 AIChatView 展示。
+                ChatCodeBlockExpandRouter.postExpand(
+                    messageId: messageId,
+                    blockId: blockId,
+                    sourceMarkdown: sourceMarkdown,
+                    codeIndex: codeIndex,
+                    code: code,
+                    language: language)
+            } label: {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.55))
+                    .frame(width: 26, height: 26)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("放大查看代码")
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(height: 32)
     }
 
-    private var codeBody: some View {
+    private var preview: some View {
         Text(codeText)
             .lineSpacing(4)
             .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxHeight: isCollapsed ? collapsedHeight : nil, alignment: .top)
+            .frame(maxHeight: .infinity, alignment: .top)
             .clipped()
             .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(.top, 7)
             .overlay(alignment: .bottom) {
-                if isCollapsed {
-                    LinearGradient(
-                        colors: [
-                            Color(uiColor: theme.codeBlockBackground).opacity(0),
-                            Color(uiColor: theme.codeBlockBackground)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 18)
-                    .allowsHitTesting(false)
-                }
+                LinearGradient(
+                    colors: [
+                        Color(uiColor: theme.codeBlockBackground).opacity(0),
+                        Color(uiColor: theme.codeBlockBackground)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 16)
+                .allowsHitTesting(false)
             }
     }
+}
 
-    private func toggle() {
-        guard canCollapse else { return }
-        store.toggle(key: stateKey, lineCount: lineCount, threshold: threshold)
-        notifyHeightChange()
+/// [B28 R10] 放大代码块的出站路由。
+///
+/// 为什么不让卡片自己 `.fullScreenCover`：卡片住在 UIHostingConfiguration 的
+/// collection cell 里，会被复用/销毁，cover 状态跟着丢；而且一个 host 上
+/// fullScreenCover 只能挂一只，会把图片/视频的全屏挤掉。
+/// 所以照 `MarkdownImageTapRouter` 的既有走法：内容打包成通知，交给顶层
+/// AIChatView 的全屏宿主展示。
+enum ChatCodeBlockExpandRouter {
+    static let expandedNotification = Notification.Name("ChatCodeBlockExpanded")
+
+    @MainActor
+    static func postExpand(messageId: UUID?, blockId: UUID?, sourceMarkdown: String,
+                           codeIndex: Int, code: String, language: String?) {
+        guard let messageId else { return }
+        let request = ChatCodeBlockEditRequest(
+            messageId: messageId,
+            blockId: blockId,
+            sourceMarkdown: sourceMarkdown,
+            codeIndex: codeIndex,
+            oldCode: code,
+            newCode: code,
+            language: language
+        )
+        NotificationCenter.default.post(name: expandedNotification, object: request)
+    }
+}
+
+/// fullScreenCover(item:) 用的包装。UUID 每次新建，所以同一块代码
+/// 关掉再点开也会重新给一份初始内容。
+struct ChatCodeBlockCover: Identifiable {
+    let id = UUID()
+    let request: ChatCodeBlockEditRequest
+}
+
+struct ChatCodeBlockDetailView: View {
+    let initialCode: String
+    let language: String?
+    let onSave: (String) -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var code: String
+    @State private var editing = false
+    @State private var previewMode = false
+    @State private var copied = false
+    @State private var saved = false
+
+    /// 全屏页直接从路由送来的请求构造；保存回同一个请求的 newCode 槽位，
+    /// 交给 `ChatCodeBlockEditRouter` 落到当前会话的 VM。
+    init(request: ChatCodeBlockEditRequest) {
+        self.initialCode = request.oldCode
+        self.language = request.language
+        self.onSave = { edited in
+            let out = ChatCodeBlockEditRequest(
+                messageId: request.messageId,
+                blockId: request.blockId,
+                sourceMarkdown: request.sourceMarkdown,
+                codeIndex: request.codeIndex,
+                oldCode: request.oldCode,
+                newCode: edited,
+                language: request.language
+            )
+            return ChatCodeBlockEditRouter.current?.saveEditedCodeBlock(out) ?? false
+        }
+        _code = State(initialValue: request.oldCode)
     }
 
-    private func notifyHeightChange() {
-        guard let messageId else { return }
-        let payload = ChatCodeBlockTogglePayload(messageId: messageId, blockId: blockId)
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .chatCodeBlockToggled, object: payload)
+    init(initialCode: String, language: String?, onSave: @escaping (String) -> Bool) {
+        self.initialCode = initialCode
+        self.language = language
+        self.onSave = onSave
+        _code = State(initialValue: initialCode)
+    }
+
+    private var displayTitle: String {
+        guard let language, !language.isEmpty else { return "代码" }
+        return language
+    }
+
+    private var isHTML: Bool {
+        let normalized = (language ?? "").lowercased()
+        if ["html", "htm", "xhtml"].contains(normalized) { return true }
+        let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return trimmed.contains("<html") && trimmed.contains("</html>")
+    }
+
+    private var canSave: Bool {
+        code != initialCode
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if editing {
+                    editor
+                } else if previewMode {
+                    ChatCodeBlockHTMLPreview(code: code)
+                } else {
+                    codeReader
+                }
+            }
+            .navigationTitle(displayTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "chevron.down")
+                    }
+                    .accessibilityLabel("关闭代码全屏")
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // [B28 R10] 预览按钮不再只有 html 才出现：她要的是全屏里
+                    // 随时能"当网页跑一下看看"。非 html 内容丢给 WKWebView
+                    // 也只会当文本渲染，不会崩，所以没必要藏起来。
+                    if !editing {
+                        Button {
+                            previewMode.toggle()
+                        } label: {
+                            Image(systemName: previewMode ? "chevron.left.forwardslash.chevron.right" : "globe")
+                        }
+                        .accessibilityLabel(previewMode ? "返回代码" : "HTML 预览")
+                    }
+                    Button {
+                        UIPasteboard.general.string = code
+                        copied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+                    } label: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    }
+                    .accessibilityLabel(copied ? "已复制" : "复制代码")
+
+                    if editing {
+                        Button {
+                        if canSave, onSave(code) {
+                            editing = false
+                            saved = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { saved = false }
+                        } else if !canSave {
+                            editing = false
+                        }
+                    } label: {
+                        Image(systemName: saved ? "checkmark" : "square.and.arrow.down")
+                    }
+                    .disabled(!canSave && !editing)
+                    .accessibilityLabel("保存代码")
+                    } else {
+                        Button {
+                            editing = true
+                            previewMode = false
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .accessibilityLabel("编辑代码")
+                    }
+                }
+            }
+        }
+    }
+
+    private var editor: some View {
+        TextEditor(text: $code)
+            .font(.system(size: 15, weight: .regular, design: .monospaced))
+            .scrollContentBackground(.hidden)
+            .background(Color(uiColor: .systemBackground))
+            .tint(.accentColor)
+    }
+
+    private var attributedCode: NSAttributedString {
+        ChatCodeBlockHighlighter.attributed(
+            code: code,
+            language: language,
+            theme: SelectableMarkdownTheme(baseFontSize: FontSettings.shared.scaledMessage(16.5))
+        )
+    }
+
+    private var codeReader: some View {
+        ScrollView {
+            Text(AttributedString(attributedCode))
+                .font(.system(size: 15, weight: .regular, design: .monospaced))
+                .lineSpacing(4)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .padding(16)
+        }
+        .background(Color(uiColor: .systemBackground))
+    }
+}
+
+struct ChatCodeBlockHTMLPreview: UIViewRepresentable {
+    let code: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.navigationDelegate = context.coordinator
+        webView.loadHTMLString(code, baseURL: nil)
+        return webView
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        if uiView.url == nil {
+            uiView.loadHTMLString(code, baseURL: nil)
+        } else if context.coordinator.lastCode != code {
+            context.coordinator.lastCode = code
+            uiView.loadHTMLString(code, baseURL: nil)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        var lastCode = ""
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if navigationAction.navigationType == .linkActivated {
+                if let url = navigationAction.request.url {
+                    UIApplication.shared.open(url)
+                }
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
         }
     }
 }
@@ -1324,10 +1489,6 @@ extension Notification.Name {
     /// [B28 R7-3 醒醒 10-23] 用户气泡「展开全文 / 收起」变了高度，
     /// 列表要清缓存重算——object 是 ChatMessage.id。
     static let userBubbleToggled = Notification.Name("userBubbleToggled")
-    /// [B28 R9] 代码块折叠/展开变了高度。object 是 ChatCodeBlockTogglePayload
-    /// （messageId + blockId），列表按它找到 assistantBlock / wholeMessage
-    /// 单元格，清缓存、重配、按 0.22s 把格子长/缩过去。
-    static let chatCodeBlockToggled = Notification.Name("chatCodeBlockToggled")
     /// [chat-ui] Posted when a tool-call group card's header is tapped.
     /// object is the card's state key ("<messageId>:<firstBlockId>").
     /// The message list clears that cell's cached height and reconfigures it

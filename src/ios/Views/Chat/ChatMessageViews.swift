@@ -458,10 +458,12 @@ struct UserMessageText: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .modifier(MinisOpenURLHandler())
                             }
-                        case .code(let language, let code):
+                        case .code(let language, let code, let codeIndex):
                             ChatCodeBlockView(
                                 code: code,
                                 language: language,
+                                sourceMarkdown: fenced,
+                                codeIndex: codeIndex,
                                 messageId: messageId,
                                 blockId: nil
                             )

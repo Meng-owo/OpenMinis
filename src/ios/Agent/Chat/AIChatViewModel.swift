@@ -461,9 +461,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                                systemImage: "speaker.slash")
             }
 
+        ChatCodeBlockEditRouter.current = self
     }
 
     deinit {
+        if ChatCodeBlockEditRouter.current === self {
+            ChatCodeBlockEditRouter.current = nil
+        }
         let vmId = vmInstanceId
         // Snapshot tracker-relevant state at deinit so we can spot leaks: if
         // isProcessing was still true when the vm is about to die, the

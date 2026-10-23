@@ -35,12 +35,16 @@ enum ProgrammaticPromptOrigin: Equatable {
     case shortcut
     /// An `AgentJobRegistry` job (scheduled trigger, helper completion, …).
     case job(jobId: String)
+    /// The user saved an edited code block and asked the active assistant to
+    /// see the new version.
+    case userCodeEdit
 
     var logLabel: String {
         switch self {
         case .cli: return "cli"
         case .shortcut: return "shortcut"
         case .job(let id): return "job:\(id.prefix(8))"
+        case .userCodeEdit: return "user-code-edit"
         }
     }
 }

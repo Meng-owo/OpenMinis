@@ -3492,6 +3492,92 @@ actor ChatStore {
         markDirty(recordType: "Message", recordId: messageId)
     }
 
+    /// [B28 R10] Replace one fenced code block in the row's persisted text parts.
+    /// This keeps an edit made in the fullscreen editor durable across reload.
+    func replaceTextPartContainingCode(messageId: String, oldCode: String, newCode: String) -> Bool {
+        guard oldCode != newCode else { return false }
+        let selectSQL = "SELECT parts_json FROM messages WHERE id = ? LIMIT 1"
+        var selectStmt: OpaquePointer?
+        var parts: [ContentPart] = []
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &selectStmt, nil) == SQLITE_OK else {
+            sqlite3_finalize(selectStmt)
+            return false
+        }
+        sqlite3_bind_text(selectStmt, 1, (messageId as NSString).utf8String, -1, nil)
+        defer { sqlite3_finalize(selectStmt) }
+        if sqlite3_step(selectStmt) == SQLITE_ROW,
+           let pointer = sqlite3_column_text(selectStmt, 0),
+           let text = String(cString: pointer).data(using: .utf8) {
+            parts = (try? JSONDecoder().decode([ContentPart].self, from: text)) ?? []
+        } else {
+            return false
+        }
+
+        var updatedParts = parts
+        var changed = false
+        for index in parts.indices {
+            if case .text(let text) = parts[index],
+               let updated = ChatMarkdownSegmenter.replacingCode(in: text, oldCode: oldCode, newCode: newCode),
+               updated != text {
+                updatedParts[index] = .text(updated)
+                changed = true
+                break
+            }
+        }
+        guard changed else { return false }
+        updateMessageParts(messageId: messageId, parts: updatedParts)
+        return true
+    }
+
+    /// [B28 R10] Same replacement, scoped to one UI message's raw rows.
+    /// A UI bubble can be folded from several `messages` rows (assistant turns
+    /// with continuation blocks), and `ChatMessage` only carries the first
+    /// row id — so when that row does not hold the fenced block, retry across
+    /// the inclusive `sort_order` range the bubble was built from. Scoped by
+    /// range on purpose: a whole-DB sweep could rewrite an identical snippet
+    /// living in a different message, which is silent user-data corruption.
+    /// Returns how many rows were rewritten.
+    @discardableResult
+    func replaceCodeInSortRange(sessionId: String, range: ClosedRange<Int>,
+                                oldCode: String, newCode: String) -> Int {
+        guard oldCode != newCode else { return 0 }
+        let selectSQL = "SELECT id, parts_json FROM messages "
+            + "WHERE session_id = ? AND sort_order >= ? AND sort_order <= ? "
+            + "ORDER BY sort_order ASC"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, selectSQL, -1, &stmt, nil) == SQLITE_OK else {
+            sqlite3_finalize(stmt)
+            return 0
+        }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+        sqlite3_bind_int64(stmt, 2, Int64(range.lowerBound))
+        sqlite3_bind_int64(stmt, 3, Int64(range.upperBound))
+
+        var written = 0
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let idPtr = sqlite3_column_text(stmt, 0),
+                  let partsPtr = sqlite3_column_text(stmt, 1),
+                  let data = String(cString: partsPtr).data(using: .utf8) else { continue }
+            let rowId = String(cString: idPtr)
+            var parts = (try? JSONDecoder().decode([ContentPart].self, from: data)) ?? []
+            var changed = false
+            for index in parts.indices {
+                if case .text(let text) = parts[index],
+                   let updated = ChatMarkdownSegmenter.replacingCode(in: text, oldCode: oldCode, newCode: newCode),
+                   updated != text {
+                    parts[index] = .text(updated)
+                    changed = true
+                    break
+                }
+            }
+            guard changed else { continue }
+            updateMessageParts(messageId: rowId, parts: parts)
+            written += 1
+        }
+        return written
+    }
+
     /// Delete all message rows AFTER the first `keepCount` rows (ordered by
     /// sort_order). Callers pass `agentHistory.count` meaning "keep the first N
     /// rows"; they do NOT pass a sort_order value.
