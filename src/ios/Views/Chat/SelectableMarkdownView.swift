@@ -387,6 +387,43 @@ func renderMarkdownBlocks(_ blocks: [BlockNode]) -> NSAttributedString {
     return renderer.render(blocks: blocks)
 }
 
+/// [10-23 醒醒 问题4] 用户气泡里的代码/富文本高度不能按纯文本量。
+/// 走与 AI 文本块同一条 Markdown 渲染链，代码块的 attachmentBounds 才会
+/// 被算进去；否则格子按纯文本留高，代码块会被裁掉/看起来像没了。
+@MainActor
+private enum MarkdownHeightMeasureCache {
+    static var values: [String: CGFloat] = [:]
+}
+
+extension SelectableMarkdownView {
+    @MainActor
+    static func measureMarkdownHeight(_ markdown: String, width: CGFloat) -> CGFloat {
+        guard width > 1, !markdown.isEmpty else { return 0 }
+        let fontKey = Int(FontSettings.shared.scaledMessage(16.5) * 10)
+        let lineKey = Int(AppearanceThemePack.storedLineHeight() * 100)
+        let kernKey = Int(AppearanceThemePack.storedLetterSpacing() * 10)
+        let key = "\(SelectableMarkdownTextView.safeBucket(width))|\(markdown.hashValue)|\(CodeBlockAttachment.collapseGeneration)|\(fontKey)|\(lineKey)|\(kernKey)"
+        if let cached = MarkdownHeightMeasureCache.values[key] { return cached }
+        let content = MarkdownContent(prepareMarkdownForRender(markdown))
+        let renderer = MarkdownNSRenderer(baseFontSize: FontSettings.shared.scaledMessage(16.5))
+        let attr = renderer.render(blocks: content.blocks)
+        let tv = SelectableMarkdownTextView()
+        tv.isScrollEnabled = false
+        tv.contentInset = .zero
+        tv.textContainerInset = UIEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
+        tv.textContainer.lineFragmentPadding = 0
+        tv.textContainer.lineBreakMode = .byWordWrapping
+        tv.attributedText = attr
+        let height = ceil(tv.sizeThatFits(
+            CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+        if MarkdownHeightMeasureCache.values.count > 200 {
+            MarkdownHeightMeasureCache.values.removeAll(keepingCapacity: true)
+        }
+        MarkdownHeightMeasureCache.values[key] = height
+        return height
+    }
+}
+
 // MARK: - MarkdownNSRenderer
 
 /// Converts `[BlockNode]` → `NSMutableAttributedString` for display in a UITextView.
@@ -1678,7 +1715,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         // 长高，展开出来的代码就压在下面那条气泡上。先把这一段失效，
         // 再让宿主重量、列表重排。
         (host as? SelectableMarkdownTextView)?.refreshAttachmentBounds(for: wrapper)
-        (host as? SelectableMarkdownTextView)?.invalidateCellSizeIfNeeded()
+        (host as? SelectableMarkdownTextView)?.invalidateCellSizeIfNeeded(animated: true)
     }
 
     /// Render `code` in a modal WKWebView (HTML preview entry).
@@ -7854,7 +7891,37 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         invalidateIntrinsicContentSize()
     }
 
-    func invalidateCellSizeIfNeeded() {
+    /// [10-23 醒醒 问题2] 手动展开/收起代码块：内层已经按 0.22s 动画到新高度，
+    /// 这里把宿主 cell 按同一个 delta、同一个曲线长/缩，并把代码块顶部钉住。
+    /// 下一段气泡就会被推下去，而不是被展开的代码盖住。
+    private func applyAnimatedCellHeight(delta: CGFloat) {
+        guard abs(delta) > 0.5,
+              let cv = findCollectionView(),
+              let cell = findCell() as? SelfSizingCell,
+              let ip = cv.indexPath(for: cell),
+              let layout = cv.collectionViewLayout as? MessageListLayout else { return }
+        let oldCellH = cell.bounds.height
+        guard oldCellH > 1 else { return }
+        let target = max(1, oldCellH + delta)
+        let anchorScreenY = cell.frame.minY - cv.contentOffset.y
+        cell.clearCachedHeightIncludingSeed()
+        layout.setTransitionHeight(target, at: ip.item)
+        UIView.animate(withDuration: 0.22, delay: 0,
+                       options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+            layout.invalidateLayout()
+            cv.layoutIfNeeded()
+            if let newY = layout.layoutAttributesForItem(at: ip)?.frame.minY {
+                let minOff = -cv.adjustedContentInset.top
+                let maxOff = max(minOff, cv.contentSize.height
+                                 - cv.bounds.height + cv.adjustedContentInset.bottom)
+                cv.contentOffset.y = min(max(newY - anchorScreenY, minOff), maxOff)
+            }
+        } completion: { _ in
+            layout.unlockTransitionHeight(at: ip.item, expectedHeight: target)
+        }
+    }
+
+    func invalidateCellSizeIfNeeded(animated: Bool = false) {
         guard textContainer.size.width > 1 else {
             return
         }
@@ -7948,6 +8015,28 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             return
         }
         let delta = newHeight - previousHeight
+
+        if animated && previousHeight > 1 {
+            // 用户主动点开的，不走滚动延迟：当场量、当场动画、当场推下面。
+            lastSizedStorageLen = textStorage.length
+            lastSizedWidth = measureWidth
+            lastSizedTableGenSum = tableGenSum
+            lastComputedHeight = newHeight
+            deferredCorrectionPending = false
+            // 同步 SwiftUI 的尺寸缓存，否则下一次 sizeThatFits 还会拿旧高度
+            // 把刚展开的 cell 重新钉回去（代码块又压住下面）。
+            if let coord = self.delegate as? SelectableMarkdownView.Coordinator {
+                let widthKey = SelectableMarkdownTextView.safeBucket(measureWidth)
+                coord.cachedSizes.removeAll(keepingCapacity: true)
+                coord.cachedSizes[widthKey] = newHeight
+                let bindingLen = rawMarkdown.isEmpty
+                    ? textStorage.length
+                    : (rawMarkdown as NSString).length
+                coord.cachedSizeMarkdownCount = bindingLen
+            }
+            applyAnimatedCellHeight(delta: delta)
+            return
+        }
 
         // [T-ios-lastcell-clip-defer-lost] Height genuinely moved. Decide the
         // defer-skip BEFORE consuming the measurement. The old order refreshed

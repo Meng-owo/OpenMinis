@@ -131,6 +131,11 @@ final class MessageListLayout: UICollectionViewLayout {
     /// UIKit=157pt due to invisible .sheet/.contextMenu modifiers).
     private var geometryReaderConfirmed: Set<Int> = []
 
+    /// [10-23 醒醒 问题1/2] 展开/收起动画期间锁住这个 index 的自 sizing。
+    /// SwiftUI 的中间帧会量出中间高度；不锁的话，UIKit 会在动画途中把目标
+    /// 高度改回去，屏幕又跳。动画结束由调用方 unlock。
+    private var transitionLocked: Set<Int> = []
+
     /// [T-ios-scroll-decel-height-drift] Real measured heights keyed by a
     /// stable content key (messageId+blockId), NOT by item index. The
     /// index-keyed `heightCache` is the live source of truth, but it is keyed
@@ -312,6 +317,13 @@ final class MessageListLayout: UICollectionViewLayout {
     /// Number of pending deferred heights (for diagnostics).
     var deferredHeightCount: Int { deferredHeights.count }
 
+    /// [10-23 醒醒 问题1] 手动展开前的预布局会故意把高度变化压进 deferredHeights；
+    /// 压完直接丢掉——紧接着会 setTransitionHeight 用精确目标重排，不能让
+    /// 预布局的中间值在动画结束后又冒出来。
+    func clearDeferredHeights() {
+        deferredHeights.removeAll()
+    }
+
     /// Move deferred heights into the real cache.  Call after scrolling ends.
     /// Only writes if the cache doesn't already have a value (GeometryReader
     /// may have reported a more precise height while we were deferring).
@@ -379,6 +391,9 @@ final class MessageListLayout: UICollectionViewLayout {
         withOriginalAttributes originalAttributes: UICollectionViewLayoutAttributes
     ) -> Bool {
         let index = preferredAttributes.indexPath.item
+        // 展开/收起动画进行中：目标高度由 setTransitionHeight 钉住，忽略
+        // SwiftUI 的中间帧，否则格子会在动画途中被改回中间高度。
+        if transitionLocked.contains(index) { return false }
         let preferred = preferredAttributes.size.height
         let original = originalAttributes.size.height
 
@@ -409,8 +424,19 @@ final class MessageListLayout: UICollectionViewLayout {
                 }
                 // Growing while deferred + has cache — allow through
             } else {
-                // First measurement (no cached height) — allow it through
-                // so the cell isn't truncated when scrolled into view.
+                // First measurement (no cached height). Cells at/below the
+                // viewport may be measured immediately (they'd otherwise be
+                // truncated when scrolled into view). A cell entirely ABOVE
+                // the viewport is invisible, so letting it grow mid-scroll
+                // would push the visible content down for no benefit — defer
+                // it to the settle pass instead.
+                let viewportTop = collectionView?.contentOffset.y ?? 0
+                if originalAttributes.frame.maxY <= viewportTop {
+                    if abs(preferred - original) > 0.5 {
+                        deferredHeights[index] = preferred
+                    }
+                    return false
+                }
             }
         }
 
@@ -503,7 +529,7 @@ final class MessageListLayout: UICollectionViewLayout {
                 tag: metricsTagByIndex[index] ?? "")
             #endif
             if cv.isDecelerating, abs(delta) > 2 {
-                AppLogger(category: "SettleJitter").info("[SettleJitter][decel-inv] idx=\(index) \(pos) Δ\(String(format: "%+.1f", delta)) (\(String(format: "%.0f", oldHeight))→\(String(format: "%.0f", newHeight))) key=\(contentKeyByIndex[index]?.prefix(2) ?? "??") src=\(estimateSrc) offset=\(String(format: "%.0f", viewportTop))")
+                AppLogger(category: "SettleJitter").debug("[SettleJitter][decel-inv] idx=\(index) \(pos) Δ\(String(format: "%+.1f", delta)) (\(String(format: "%.0f", oldHeight))→\(String(format: "%.0f", newHeight))) key=\(contentKeyByIndex[index]?.prefix(2) ?? "??") src=\(estimateSrc) offset=\(String(format: "%.0f", viewportTop))")
             }
         }
 
@@ -741,6 +767,7 @@ final class MessageListLayout: UICollectionViewLayout {
             self.precalcHeights.removeAll()
             self.estimatedHeights.removeAll()
             self.geometryReaderConfirmed.removeAll()
+            self.transitionLocked.removeAll()
             // Deferred heights were measured at the old width — keeping them
             // would apply stale widths' heights to rows at the new width.
             self.deferredHeights.removeAll()
@@ -782,6 +809,9 @@ final class MessageListLayout: UICollectionViewLayout {
         precalcHeights = newPrecalc
         estimatedHeights = newEstimated
         geometryReaderConfirmed = newConfirmed
+        // 快照重排后 index 变了，动画锁不再可信；直接清掉，宁可让
+        // 中途测量纠正一次，也不留下一个永远锁死的格子。
+        transitionLocked.removeAll()
         deferredHeights = newDeferred
     }
 
@@ -790,6 +820,7 @@ final class MessageListLayout: UICollectionViewLayout {
     func invalidateHeight(at index: Int) {
         heightCache.removeValue(forKey: index)
         geometryReaderConfirmed.remove(index)
+        transitionLocked.remove(index)
         // [T-ios-scroll-decel-height-drift] Belt-and-suspenders: also drop the
         // content-keyed memo for this index. The content-versioned key already
         // makes a height change miss the old entry, but an explicit invalidate
@@ -811,6 +842,7 @@ final class MessageListLayout: UICollectionViewLayout {
     /// 永远不重测的格子。
     func invalidateHeightKeepingPlaceholder(at index: Int) {
         geometryReaderConfirmed.remove(index)
+        transitionLocked.remove(index)
         // precalc/estimate 是更早、更不准的旧值，留着只会成为回落候选。
         precalcHeights.removeValue(forKey: index)
         estimatedHeights.removeValue(forKey: index)
@@ -826,6 +858,24 @@ final class MessageListLayout: UICollectionViewLayout {
     func setCachedHeight(_ height: CGFloat, at index: Int) {
         heightCache[index] = height
         geometryReaderConfirmed.insert(index)
+        transitionLocked.remove(index)
+    }
+
+    /// [10-23 醒醒 问题1/2] 展开/收起动画用的目标高度：立刻参与 prepare()，
+    /// 但**不**标记成 GeometryReader 已确认，后续真实测量仍可纠正。
+    func setTransitionHeight(_ height: CGFloat, at index: Int) {
+        heightCache[index] = height
+        transitionLocked.insert(index)
+        geometryReaderConfirmed.remove(index)
+    }
+
+    /// 动画结束后解锁，让后续真实测量可以纠正残余误差。
+    /// 只在缓存仍然是这次动画的目标高度时解锁——快速连点两次时，
+    /// 第一次动画的 completion 不能把第二次的锁拆掉。
+    func unlockTransitionHeight(at index: Int, expectedHeight: CGFloat) {
+        guard let current = heightCache[index],
+              abs(current - expectedHeight) < 0.5 else { return }
+        transitionLocked.remove(index)
     }
 
     /// Read the cached height for a specific item index, if any.
@@ -921,6 +971,7 @@ final class MessageListLayout: UICollectionViewLayout {
         precalcHeights.removeAll()
         estimatedHeights.removeAll()
         geometryReaderConfirmed.removeAll()
+        transitionLocked.removeAll()
         deferredHeights.removeAll()
         measuredHeightByContentKey.removeAll()
         contentKeyByIndex.removeAll()

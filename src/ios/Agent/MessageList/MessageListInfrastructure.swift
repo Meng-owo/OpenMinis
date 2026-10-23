@@ -672,6 +672,15 @@ class SelfSizingCell: UICollectionViewCell {
         lastMeasureMediaTime = nil
     }
 
+    /// [10-23 醒醒 问题1/2] 展开/收起动画前用：连 seed 一起清掉。
+    /// 不清 seed 的话，preferredLayoutAttributesFitting 会直接返回旧内容
+    /// 种下的高度，量不到新内容，动画目标就成了旧高度。
+    func clearCachedHeightIncludingSeed() {
+        clearCachedHeight()
+        seededHeight = nil
+        seededWidth = nil
+    }
+
     override func prepareForReuse() {
         super.prepareForReuse()
         lastComputedHeight = nil

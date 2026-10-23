@@ -1162,7 +1162,9 @@ extension CollectionViewMessageListV3 {
                 } else if delta > 0 && self.scrollMode == .userBrowsing {
                     // [DIAG-3b] Content grew while user is browsing — no pin.
                     // If a cell ABOVE viewport grew, all cells below shift down.
-                    AppLogger(category: "StreamDiag").info("[KVO] contentSize grew +\(String(format: "%.0f", delta)) IN BROWSE MODE — no pin. offset=\(String(format: "%.0f", cv.contentOffset.y)) tracking=\(cv.isTracking) decel=\(cv.isDecelerating)")
+                    // debug: this fires on every contentSize change during
+                    // streaming; keep it out of Release's disk log.
+                    AppLogger(category: "StreamDiag").debug("[KVO] contentSize grew +\(String(format: "%.0f", delta)) IN BROWSE MODE — no pin. offset=\(String(format: "%.0f", cv.contentOffset.y)) tracking=\(cv.isTracking) decel=\(cv.isDecelerating)")
                 } else if delta < 0 && self.scrollMode == .autoScrolling {
                     // Content shrank while auto-scrolling — clamp to prevent overscroll.
                     // Skip during deceleration: settleAfterInteraction will handle it.
@@ -2667,14 +2669,45 @@ extension CollectionViewMessageListV3 {
         // a backstop flush. [T-message-list-empty-on-foreground]
         fileprivate func flushPendingSnapshotIfNeeded(caller: String = "?") {
             guard hasPendingSnapshot else { return }
-            hasPendingSnapshot = false
             let blocks = vm?.messages.last(where: { $0.role == .assistant })?.blocks.count ?? -1
+            guard let msgs = vm?.messages else {
+                hasPendingSnapshot = false
+                return
+            }
+            guard let cv = viewController?.collectionView,
+                  let layout = viewController?.messageListLayout else {
+                hasPendingSnapshot = false
+                applySnapshot(messages: msgs, caller: "flushPending(\(caller))")
+                return
+            }
+            // 用户还在拖/惯性滑动时不要换快照——那会在手指底下改高度和 offset。
+            // 留在 settle 后统一做，pending 标记保持 true。
+            guard !cv.isTracking, !cv.isDecelerating else { return }
+            hasPendingSnapshot = false
             // [T-ios-scroll-suspend-leak] Include blockCount + isProcessing so a
             // FLUSH can be matched against the DEFER that queued it — a DEFER with
             // no corresponding FLUSH (see the [SessionLoad] stale-suspend clear) is
             // the leak signature.
             AppLogger(category: "PendingSnap").info("[PendingSnap] FLUSH caller=\(caller) blockCount=\(blocks) isProcessing=\(vm?.isProcessing == true) — applying deferred snapshot")
-            if let msgs = vm?.messages { applySnapshot(messages: msgs, caller: "flushPending(\(caller))") }
+            let anchorIP = cv.indexPathsForVisibleItems.min()
+            let anchorPreY = anchorIP.flatMap { layout.layoutAttributesForItem(at: $0)?.frame.minY }
+            let savedOffset = cv.contentOffset.y
+            applySnapshot(messages: msgs, caller: "flushPending(\(caller))")
+            // 快照换了，高度也可能换了；按锚点把用户正在看的那一行钉住。
+            UIView.performWithoutAnimation {
+                cv.layoutIfNeeded()
+                if let ip = anchorIP, let preY = anchorPreY {
+                    let postY = layout.layoutAttributesForItem(at: ip)?.frame.minY ?? preY
+                    let screenY = preY - savedOffset
+                    let target = postY - screenY
+                    let minOff = -cv.adjustedContentInset.top
+                    let maxOff = max(minOff, cv.contentSize.height
+                                     - cv.bounds.height + cv.adjustedContentInset.bottom)
+                    cv.contentOffset.y = min(max(target, minOff), maxOff)
+                } else {
+                    cv.contentOffset.y = savedOffset
+                }
+            }
         }
 
         private func flushStreamingLayout() {
@@ -2709,6 +2742,14 @@ extension CollectionViewMessageListV3 {
         private func doFlushStreamingLayout() {
             lastStreamingLayoutTime = Date()
             guard let layout = viewController?.messageListLayout else { return }
+            // [10-23 醒醒 问题3] 用户正在拖动/惯性滑动时不要再整表重排：
+            // 流式更新每 3 秒一次，但每一次 invalidateLayout 都可能让正在
+            // 看的列表卡一下。滚动期间把高度变化留给 settle 统一 flush。
+            if scrollMode == .userBrowsing,
+               let cv = layout.collectionView,
+               cv.isTracking || cv.isDecelerating {
+                return
+            }
             // Always invalidate layout — even during scrolling. The layout's
             // invalidationContext already skips contentOffsetAdjustment when
             // isTracking/isDecelerating, so this won't cause scroll jitter.
@@ -2911,34 +2952,26 @@ extension CollectionViewMessageListV3 {
                         for (i, item) in snapshot.itemIdentifiers.enumerated() {
                             guard case .wholeMessage(let mid) = item, mid == messageId else { continue }
                             let ip = IndexPath(item: i, section: 0)
-                            // [10-23 醒醒 问题1] 展开/收起之前先记住这条消息
-                            // 在屏幕里的位置。高度一改，下面所有内容都会挪；
-                            // 只有把 offset 反推回去，被点的那条才原地不动，
-                            // 多出来的高度全推给它下面——不再「屏幕一跳」。
+                            // [10-23 醒醒 问题1] 先记住被点这条在屏幕里的位置。
+                            // 高度改完后按它反推 offset，被点那条原地不动，
+                            // 多出来的高度全推给下面。
                             let anchorScreenY = cv.cellForItem(at: ip)
-                                .map { $0.frame.minY - cv.contentOffset.y }
-                            // 键里带了展开态，新键天然没有记忆，会老实重量一次；
-                            // 旧键那条留着——切回去时它就是那个状态量过的高度。
-                            (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
-                            // 保留旧高度当占位：删缓存会让 prepare() 先画一帧
-                            // precalc/estimate 的高度，再跳到真高度——那就是她
-                            // 说的「一跳一跳」。旧值留着，测完一次替换。
-                            layout.invalidateHeightKeepingPlaceholder(at: i)
-                            var snap = snapshot
-                            snap.reconfigureItems([item])
-                            // 一次布局干完：apply → 失效 → 布局 → 回填 offset，
-                            // 中间不留第二帧，避免「先按旧高度画一帧再跳」。
-                            UIView.performWithoutAnimation {
+                                .map { $0.frame.minY - cv.contentOffset.y } ?? 0
+                            // @Published 的展开态要等 SwiftUI 下一次更新才落进
+                            // cell；同步量会量到旧内容（点了没反应）。隔一拍再量，
+                            // 这时 cell 里已经是新内容，动画才有意义。
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self,
+                                      let live = self.dataSource?.snapshot(),
+                                      ip.item < live.itemIdentifiers.count,
+                                      case .wholeMessage(let mid) = live.itemIdentifiers[ip.item],
+                                      mid == messageId else { return }
+                                // 显式 reconfigure：不赌 SwiftUI 在下一拍已经
+                                // 把新展开态画进 cell；这里强制换成新内容再量。
+                                var snap = live
+                                snap.reconfigureItems([live.itemIdentifiers[ip.item]])
                                 self.dataSource?.apply(snap, animatingDifferences: false)
-                                layout.invalidateLayout()
-                                cv.layoutIfNeeded()
-                                if let anchorScreenY, !cv.isTracking, !cv.isDecelerating,
-                                   let newY = layout.layoutAttributesForItem(at: ip)?.frame.minY {
-                                    let minOff = -cv.adjustedContentInset.top
-                                    let maxOff = max(minOff, cv.contentSize.height
-                                                     - cv.bounds.height + cv.adjustedContentInset.bottom)
-                                    cv.contentOffset.y = min(max(newY - anchorScreenY, minOff), maxOff)
-                                }
+                                self.animateCellResize(at: ip, anchorScreenY: anchorScreenY)
                             }
                             break
                         }
@@ -3874,13 +3907,14 @@ extension CollectionViewMessageListV3 {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
             }
 
-            // [10-23 醒醒] 长文折叠态要参与预计算：布局先按全文预留、格子再缩，
-            // 展开/收起时会跳一下。含代码的消息不折（代码块自己会折），跳过。
-            if UserMessageText.isLongText(text),
-               !UserMessageText.hasCode(text),
-               !UserBubbleExpansion.shared.isExpanded(message.id) {
-                text = UserMessageText.collapsedPreview(of: text)
-            }
+            // [10-23 醒醒 问题1/4] 折叠态和代码态都参与预计算，且视图/列表同一条尺：
+            // 长文按 8 行裁剪量，代码走 Markdown 渲染链量。只改一边 = 高度对不上。
+            let hasCode = UserMessageText.hasCode(text)
+            let isCollapsedLong = !hasCode
+                && UserMessageText.isLongText(text)
+                && !UserBubbleExpansion.shared.isExpanded(message.id)
+            let hasToggle = !hasCode && UserMessageText.isLongText(text)
+            let rowChrome: CGFloat = 7
 
             let attachCount = message.attachments.isEmpty
                 ? message.inputAttachments.count : message.attachments.count
@@ -3934,9 +3968,19 @@ extension CollectionViewMessageListV3 {
             // (which differ by the withdraw button's 28pt) can't share a cached
             // measurement — the entry is invalidated implicitly when the queue
             // drains. Stated here because that is load-bearing, not incidental.
-            let key = "\(text.count)|\(Int(usableTextWidth))|\(Int(fontSize))|\(attachCount)|\(text.hashValue)"
+            let key = "\(text.count)|\(Int(usableTextWidth))|\(Int(fontSize))|\(attachCount)|\(text.hashValue)|c\(isCollapsedLong ? 1 : 0)|h\(hasCode ? 1 : 0)"
             if let cached = cache[key] {
                 return cached
+            }
+
+            if hasCode {
+                let fenced = UserCodeFencing.autoFenced(text)
+                let markdownH = MainActor.assumeIsolated {
+                    SelectableMarkdownView.measureMarkdownHeight(fenced, width: usableTextWidth)
+                }
+                let total = markdownH + 20 + rowChrome + attachH + 1 + (hasToggle ? 21 : 0)
+                cache[key] = total
+                return total
             }
 
             // [T-ios-user-msg-estimate-tail-jitter] Measure with UILabel, NOT raw
@@ -3957,12 +4001,25 @@ extension CollectionViewMessageListV3 {
             // being investigated separately. Keep the measurement cheap.
             let font = UIFont.systemFont(ofSize: fontSize)
             let attr = NSAttributedString(string: text, attributes: [.font: font])
-            let bounds = attr.boundingRect(
-                with: CGSize(width: usableTextWidth, height: .greatestFiniteMagnitude),
-                options: [.usesLineFragmentOrigin, .usesFontLeading],
-                context: nil
-            )
-            let textH = ceil(bounds.height)
+            let textH: CGFloat
+            if isCollapsedLong {
+                // Kelivo 式：全文不动，只按 8 行裁。UILabel 的 numberOfLines
+                // 给出和 SwiftUI Text 裁剪后一致的 8 行高度。
+                let label = UILabel()
+                label.font = font
+                label.numberOfLines = UserMessageText.collapsedLineLimit
+                label.lineBreakMode = .byTruncatingTail
+                label.attributedText = attr
+                textH = ceil(label.sizeThatFits(
+                    CGSize(width: usableTextWidth, height: .greatestFiniteMagnitude)).height)
+            } else {
+                let bounds = attr.boundingRect(
+                    with: CGSize(width: usableTextWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    context: nil
+                )
+                textH = ceil(bounds.height)
+            }
             // [T-ios-decel-inv-estimate-calibration → superseded] There used to
             // be a CJK-gated flat +7 here, calibrated from CJK samples that
             // measured +6.3–7.0 taller than this estimate and attributed to
@@ -4010,7 +4067,6 @@ extension CollectionViewMessageListV3 {
             // at every length, but on a screen-filling bubble the re-measure
             // relayouts a full-height row (visible blank strip), while on a 42pt
             // bubble it is absorbed silently.
-            let rowChrome: CGFloat = 7
             // bubble vertical padding (10*2) + row chrome + attachment block + 1pt safety.
             let total = textH + 20 + rowChrome + attachH + 1
             cache[key] = total
@@ -5727,6 +5783,50 @@ extension CollectionViewMessageListV3 {
             for sub in view.subviews { forEachMarkdownTextView(in: sub, body) }
         }
 
+        /// [10-23 醒醒 问题1/2] 内容高度变了之后：先量出目标高度，再用
+        /// 0.22s easeOut 把 collection view 的格子长/缩过去，同时把被点的
+        /// 格子顶部钉在原来的屏幕位置。这样下面内容是被「推下去/拉回来」，
+        /// 不是整屏硬跳。
+        private func animateCellResize(at indexPath: IndexPath,
+                                       anchorScreenY: CGFloat,
+                                       duration: TimeInterval = 0.22) {
+            guard let cv = viewController?.collectionView,
+                  let layout = cv.collectionViewLayout as? MessageListLayout,
+                  let cell = cv.cellForItem(at: indexPath) as? SelfSizingCell else { return }
+            let width = maxContentWidth > 0 ? min(cv.bounds.width, maxContentWidth) : cv.bounds.width
+            // 强制让 reconfigure 的新内容落进 cell；这次布局不允许改高度/offset，
+            // 量完再统一走动画。
+            if !layout.deferSelfSizing {
+                layout.deferSelfSizing = true
+                layout.suppressContentOffsetAdjustment = true
+                cv.layoutIfNeeded()
+                layout.suppressContentOffsetAdjustment = false
+                layout.deferSelfSizing = false
+                layout.clearDeferredHeights()
+            }
+            // 内容层已经按最终状态排版（不做 SwiftUI 动画），这里量到的就是
+            // 最终高度；用这个值做格子动画，动画结束不会再有第二次跳动。
+            cell.clearCachedHeightIncludingSeed()
+            let probe = UICollectionViewLayoutAttributes(forCellWith: indexPath)
+            probe.size = CGSize(width: width, height: 0)
+            let height = cell.preferredLayoutAttributesFitting(probe).size.height
+            guard height > 1 else { return }
+            layout.setTransitionHeight(height, at: indexPath.item)
+            UIView.animate(withDuration: duration, delay: 0,
+                           options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]) {
+                layout.invalidateLayout()
+                cv.layoutIfNeeded()
+                if let newY = layout.layoutAttributesForItem(at: indexPath)?.frame.minY {
+                    let minOff = -cv.adjustedContentInset.top
+                    let maxOff = max(minOff, cv.contentSize.height
+                                     - cv.bounds.height + cv.adjustedContentInset.bottom)
+                    cv.contentOffset.y = min(max(newY - anchorScreenY, minOff), maxOff)
+                }
+            } completion: { _ in
+                layout.unlockTransitionHeight(at: indexPath.item, expectedHeight: height)
+            }
+        }
+
         private func settleAfterInteraction(_ scrollView: UIScrollView) {
             // Re-acquire auto-scroll only when the user settled essentially at
             // the bottom (tight threshold), not merely "near" it. This stops
@@ -5745,6 +5845,13 @@ extension CollectionViewMessageListV3 {
 
             // Re-enable self-sizing so future layout passes use real heights.
             layout.deferSelfSizing = false
+
+            // [SettleJitter] Capture the anchor BEFORE consuming deferred
+            // corrections: consuming can itself change heights and reflow, and
+            // anchoring after that would preserve the wrong content.
+            let anchorIP = cv.indexPathsForVisibleItems.min()
+            let anchorPreY = anchorIP.flatMap { layout.layoutAttributesForItem(at: $0)?.frame.minY }
+            let savedOffset = cv.contentOffset.y
 
             // [T-ios-defer-retry-never-consumed] Now that the defer window is
             // genuinely closed, let every visible markdown view apply a
@@ -5768,16 +5875,6 @@ extension CollectionViewMessageListV3 {
                 Self.forEachMarkdownTextView(in: cell) { $0.consumeDeferredCorrectionIfNeeded() }
             }
 
-            // [SettleJitter] Evidence capture (H1): the flush below re-flows
-            // frames from corrected heights but restores only the numeric
-            // offset — if cells ABOVE the viewport changed height, the same
-            // offset now shows different content. Anchor on the top visible
-            // cell's screen-relative y before/after to quantify the jump the
-            // user actually sees at decel end.
-            let anchorIP = cv.indexPathsForVisibleItems.min()
-            let anchorPreY = anchorIP.flatMap { layout.layoutAttributesForItem(at: $0)?.frame.minY }
-
-            let savedOffset = cv.contentOffset.y
             isFlushing = true
             layout.applyDeferredHeights()
 

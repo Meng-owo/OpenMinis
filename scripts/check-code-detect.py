@@ -49,26 +49,107 @@ def is_comment(raw):
     return t.startswith("//") or t.startswith("/*") or t.startswith("* ") \
         or t.startswith("--") or t.startswith("<!--")
 
+def is_list_line(raw):
+    t = raw.strip()
+    if t.startswith(("- ", "* ", "+ ", "> ", "# ")):
+        return True
+    return re.match(r'^\d+\.\s', t) is not None
+
+def has_fence(s):
+    return "```" in s or "~~~" in s
+
+def looks_like_json(s):
+    t = s.strip()
+    if not (t.startswith("{") or t.startswith("[")):
+        return False
+    try:
+        import json
+        json.loads(t)
+        return True
+    except Exception:
+        return False
+
+def looks_like_diff(lines):
+    body = [l for l in lines if l.strip()]
+    if len(body) < 2:
+        return False
+    has_header = any(l.startswith(("@@", "diff --git", "+++", "---")) for l in body)
+    if not has_header:
+        return False
+    diff = sum(1 for l in body if l.startswith(("@@", "+++", "---", "diff --git", "+", "-")))
+    return diff >= max(2, len(body) * 3 // 5) and cjk_ratio("".join(body)) < 0.05
+
+def looks_like_indented(lines):
+    body = [l for l in lines if l.strip()]
+    if len(body) < 2:
+        return False
+    indented = sum(1 for l in body if l.startswith("\t") or l.startswith("    "))
+    codeish = sum(1 for l in body if line_score(l) >= 1)
+    listish = sum(1 for l in body if is_list_line(l))
+    return (indented >= max(2, len(body) * 4 // 5)
+            and codeish >= max(1, len(body) // 2)
+            and listish == 0
+            and cjk_ratio("".join(body)) < 0.15)
+
+def looks_like_single_line(raw):
+    t = raw.strip()
+    if not t or "\n" in t:
+        return False
+    if cjk_ratio(t) > 0.05:
+        return False
+    if t[-1] in ".。！？!?":
+        return False
+    if line_score(t) >= 3:
+        return True
+    code_punct = any(x in t for x in ("(", "{", "=", ";", "[", "::", "->", "=>"))
+    if code_punct and line_score(t) >= 2:
+        return True
+    if t.startswith("SELECT ") and " FROM " in t:
+        return True
+    if t.startswith(("INSERT INTO ", "UPDATE ", "DELETE FROM ")):
+        return True
+    return any(t.startswith(c) for c in CMDS) and line_score(t) >= 2
+
 def is_code_run(run):
     # 注释行不参与投票：代码里的中文注释是常态，不该把整段判成散文。
     body = [l for l in run if not is_comment(l)]
-    if len(body) < 2:
+    if not body:
         return False
+    if sum(1 for l in body if is_list_line(l)) >= max(1, len(body) // 2):
+        return False
+    joined = "\n".join(body)
+    if looks_like_json(joined):
+        return True
+    if looks_like_diff(body):
+        return True
+    if looks_like_indented(body):
+        return True
+    if len(body) == 1:
+        return looks_like_single_line(body[0])
     scores = [line_score(l) for l in body]
-    joined = "".join(body)
     if len(body) == 2:
         return all(x >= 2 for x in scores) and cjk_ratio(joined) < 0.05
-    strong = [x for x in scores if x >= 2]
-    if len(strong) / len(body) < 0.8: return False
-    if cjk_ratio(joined) > 0.10: return False
+    strong = sum(1 for x in scores if x >= 2)
+    ratio = strong / len(body)
+    if len(body) >= 4:
+        if ratio < 0.6:
+            return False
+    elif ratio < 0.8:
+        return False
+    if cjk_ratio(joined) > 0.10:
+        return False
     if sum(1 for x in scores if x >= 3) < 2 and not all(x >= 2 for x in scores):
         return False
     return True
 
 def auto_fence(text):
-    if "```" in text: return text
+    if has_fence(text):
+        return text
     lines = text.split("\n")
-    if len(lines) < 2: return text
+    if not lines:
+        return text
+    if looks_like_json(text) or looks_like_diff(lines) or looks_like_indented(lines):
+        return "```\n" + text + "\n```"
     out, run = [], []
     def flush():
         if not run: return
@@ -187,6 +268,21 @@ if (x == 1) {
 """# 这是 python 注释
 def f():
     return 1""",
+"""npm install""",
+"""git status""",
+"""{"a": 1, "b": [2, 3]}""",
+"""~~~swift
+let x = 1
+let y = 2
+~~~""",
+"""diff --git a/a.swift b/a.swift
+@@ -1 +1 @@
+-let x = 1
++let x = 2""",
+"""    let x = 1
+    let y = 2""",
+"""print("hi")""",
+"""SELECT * FROM users""",
 ]
 
 PROSE = [
@@ -253,11 +349,22 @@ We never saw him again.""",
 一共 30 块。""",
 """备注：这里要加一个 try 保护，别让异常冒出来。
 还有记得写日志。""",
+"""I think we should try a different approach here, because the current one is slow.""",
+"""Please return the file to me when you are done with it.""",
+"""   这是缩进的普通说明
+   第二行也是说明""",
+"""    - item one
+    - item two""",
+"""- item one
+- item two""",
+"""    1. first
+    2. second""",
+"""Please select the best option from the list.""",
 ]
 
 if __name__ == "__main__":
-    fp = [p for p in PROSE if auto_fence(p) != p]
-    fn = [c for c in CODE if auto_fence(c) == c]
+    fp = [p for p in PROSE if not has_fence(p) and auto_fence(p) != p]
+    fn = [c for c in CODE if not (has_fence(c) or auto_fence(c) != c)]
     print("误报", len(fp), "漏判", len(fn), "/", len(CODE))
     for x in fp: print("FP:", x[:50])
     for x in fn: print("FN:", x[:50])

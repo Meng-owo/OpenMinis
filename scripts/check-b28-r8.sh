@@ -13,20 +13,49 @@ V3=src/ios/Agent/MessageList/CollectionViewMessageListV3.swift
 L=src/ios/Agent/MessageList/MessageListLayout.swift
 S=src/ios/Views/Chat/SelectableMarkdownView.swift
 
-# R8-1 自带围栏的代码也要走代码块（旧判据只认 autoFenced 改动过文本）
-if rg -qF 'text.contains("```") || UserCodeFencing.autoFenced(text) != text' "$C"; then
-  ok R8-1; else bad "R8-1 用户自带三反引号的代码还会被当纯文本"; fi
+# R8-1 自带围栏（``` / ~~~）的代码也要走代码块
+if rg -qF 'UserCodeFencing.hasFence(text) || UserCodeFencing.autoFenced(text) != text' "$C"; then
+  ok R8-1; else bad "R8-1 用户自带围栏的代码还会被当纯文本"; fi
 
-# R8-1b 视图和列表预计算共用同一个代码判据（只改一边=高度对不上）
-if rg -qF 'static func hasCode(_ text: String) -> Bool' "$C" \
-   && rg -qF '!UserMessageText.hasCode(text)' "$V3" \
-   && ! rg -qF 'UserCodeFencing.autoFenced(text) == text' "$V3"; then
-  ok R8-1b; else bad "R8-1b 预计算和视图的代码判据不一致"; fi
+# R8-1b 视图和列表预计算共用同一个代码判据；代码消息走 Markdown 测高
+if rg -qF 'let hasCode = UserMessageText.hasCode(text)' "$V3" \
+   && rg -qF 'SelectableMarkdownView.measureMarkdownHeight(fenced, width: usableTextWidth)' "$V3" \
+   && rg -qF 'static func measureMarkdownHeight' "$S"; then
+  ok R8-1b; else bad "R8-1b 预计算/视图的代码判据或代码测高不一致"; fi
 
-# R8-2 展开/收起保留旧高度当占位（删缓存会先画一帧错高度 = 那一跳）
-if rg -qF 'func invalidateHeightKeepingPlaceholder' "$L" \
-   && rg -qF 'layout.invalidateHeightKeepingPlaceholder(at: i)' "$V3"; then
-  ok R8-2; else bad "R8-2 展开仍走删缓存路径"; fi
+# R8-2 展开/收起量出新高度后走动画，不再硬跳
+if rg -qF 'private func animateCellResize' "$V3" \
+   && rg -qF 'layout.setTransitionHeight(height, at: indexPath.item)' "$V3" \
+   && rg -qF 'UIView.animate(withDuration: duration' "$V3"; then
+  ok R8-2; else bad "R8-2 展开仍走硬改高度"; fi
+
+# R8-7 AI 代码块展开同步长高宿主 cell
+if rg -qF 'invalidateCellSizeIfNeeded(animated: true)' "$S" \
+   && rg -qF 'private func applyAnimatedCellHeight' "$S" \
+   && rg -qF 'layout.setTransitionHeight(target, at: ip.item)' "$S"; then
+  ok R8-7; else bad "R8-7 代码块展开没有同步长高宿主 cell"; fi
+
+# R8-8 滚动中不换快照，结算后按锚点回位
+if rg -qF 'guard !cv.isTracking, !cv.isDecelerating else { return }' "$V3" \
+   && rg -qF 'let anchorIP = cv.indexPathsForVisibleItems.min()' "$V3"; then
+  ok R8-8; else bad "R8-8 快照刷新会抢滚动 offset"; fi
+
+# R8-9 用户长文用 Kelivo 式裁剪，不换字符串
+if rg -qF 'static let collapsedLineLimit = 8' "$C" \
+   && rg -qF 'frame(maxHeight: collapsedMaxHeight' "$C" \
+   && rg -qF 'label.numberOfLines = UserMessageText.collapsedLineLimit' "$V3"; then
+  ok R8-9; else bad "R8-9 用户长文仍靠换字符串折叠"; fi
+
+# R8-10 展开动画期间锁住自 sizing，结束再解锁
+if rg -qF 'transitionLocked' "$L" \
+   && rg -qF 'func unlockTransitionHeight' "$L" \
+   && rg -qF 'unlockTransitionHeight(at: indexPath.item, expectedHeight: height)' "$V3" \
+   && rg -qF 'unlockTransitionHeight(at: ip.item, expectedHeight: target)' "$S"; then
+  ok R8-10; else bad "R8-10 动画中途会被 SwiftUI 中间帧改高度"; fi
+
+# R8-11 用户滚动期间不整表重排流式内容
+if rg -qF '滚动期间把高度变化留给 settle' "$V3"; then
+  ok R8-11; else bad "R8-11 滚动中仍在做流式整表重排"; fi
 
 # R8-3 用户气泡展开按锚点回填 offset（被点那条原地不动）
 if rg -qF 'let anchorScreenY = cv.cellForItem(at: ip)' "$V3" \

@@ -1,4 +1,6 @@
 import SwiftUI
+import UIKit
+import Foundation
 
 // MARK: - Context-menu preview
 
@@ -197,6 +199,66 @@ enum UserCodeFencing {
         s.range(of: pattern, options: .regularExpression) != nil
     }
 
+    /// 围栏不只 ```，Markdown 也认 ~~~。
+    static func hasFence(_ s: String) -> Bool {
+        s.contains("```") || s.contains("~~~")
+    }
+
+    /// 整段 JSON：单行 `{"a":1}` 也要成块。
+    private static func looksLikeJSON(_ s: String) -> Bool {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard t.hasPrefix("{") || t.hasPrefix("[") else { return false }
+        guard let data = t.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) != nil
+    }
+
+    /// diff / patch：+ - @@ 这些行本身就是代码。
+    private static func looksLikeDiff(_ lines: [String]) -> Bool {
+        let body = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard body.count >= 2 else { return false }
+        // 必须有真正的 diff 头；光有 "- item" 的列表不算。
+        let hasHeader = body.contains {
+            $0.hasPrefix("@@") || $0.hasPrefix("diff --git")
+                || $0.hasPrefix("+++") || $0.hasPrefix("---")
+        }
+        guard hasHeader else { return false }
+        let diff = body.filter {
+            $0.hasPrefix("@@") || $0.hasPrefix("+++") || $0.hasPrefix("---")
+                || $0.hasPrefix("diff --git") || $0.hasPrefix("+") || $0.hasPrefix("-")
+        }.count
+        return diff >= max(2, (body.count * 3) / 5) && cjkRatio(body.joined()) < 0.05
+    }
+
+    /// 四空格 / Tab 缩进的整段，按 Markdown 缩进代码处理。
+    private static func looksLikeIndentedCode(_ lines: [String]) -> Bool {
+        let body = lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        guard body.count >= 2 else { return false }
+        let indented = body.filter { $0.hasPrefix("\t") || $0.hasPrefix("    ") }.count
+        let codeish = body.filter { lineScore($0) >= 1 }.count
+        let listish = body.filter { isListLine($0) }.count
+        return indented >= max(2, (body.count * 4) / 5)
+            && codeish >= max(1, body.count / 2)
+            && listish == 0
+            && cjkRatio(body.joined()) < 0.15
+    }
+
+    /// 单行代码：`npm install` / `git status` / `{"a":1}` 这类整句就是命令的。
+    private static func looksLikeSingleLineCode(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty, !t.contains("\n") else { return false }
+        if cjkRatio(t) > 0.05 { return false }
+        if let last = t.last, ".。！？!?".contains(last) { return false }
+        if lineScore(t) >= 3 { return true }
+        let codePunct = t.contains("(") || t.contains("{") || t.contains("=")
+            || t.contains(";") || t.contains("[") || t.contains("::")
+            || t.contains("->") || t.contains("=>")
+        if codePunct && lineScore(t) >= 2 { return true }
+        if t.hasPrefix("SELECT ") && t.contains(" FROM ") { return true }
+        if t.hasPrefix("INSERT INTO ") || t.hasPrefix("UPDATE ")
+            || t.hasPrefix("DELETE FROM ") { return true }
+        return commands.contains(where: { t.hasPrefix($0) }) && lineScore(t) >= 2
+    }
+
     /// 单行得分。>= 2 才算「这行像代码」。
     static func lineScore(_ raw: String) -> Int {
         let t = raw.trimmingCharacters(in: .whitespaces)
@@ -231,19 +293,40 @@ enum UserCodeFencing {
             || t.hasPrefix("--") || t.hasPrefix("<!--")
     }
 
+    /// Markdown 列表行：缩进列表不是代码块。
+    private static func isListLine(_ raw: String) -> Bool {
+        let t = raw.trimmingCharacters(in: .whitespaces)
+        if t.hasPrefix("- ") || t.hasPrefix("* ") || t.hasPrefix("+ ")
+            || t.hasPrefix("> ") || t.hasPrefix("# ") { return true }
+        return t.range(of: #"^\d+\.\s"#, options: .regularExpression) != nil
+    }
+
     /// 一整段是否够格当代码块。短段要求更严。
     static func isCodeRun(_ run: [String]) -> Bool {
-        guard run.count >= 2 else { return false }
         // 注释行不参与投票，只看真代码行。
         let body = run.filter { !isCommentLine($0) }
-        guard body.count >= 2 else { return false }
+        guard !body.isEmpty else { return false }
+        // 缩进列表 / 引用块不是代码。
+        if body.filter({ isListLine($0) }).count >= max(1, body.count / 2) {
+            return false
+        }
+        let joined = body.joined(separator: "\n")
+        if looksLikeJSON(joined) { return true }
+        if looksLikeDiff(body) { return true }
+        if looksLikeIndentedCode(body) { return true }
+        if body.count == 1 { return looksLikeSingleLineCode(body[0]) }
         let scores = body.map { lineScore($0) }
-        let joined = body.joined()
         if body.count == 2 {
             return scores.allSatisfy { $0 >= 2 } && cjkRatio(joined) < 0.05
         }
         let strong = scores.filter { $0 >= 2 }.count
-        if Double(strong) / Double(body.count) < 0.8 { return false }
+        let ratio = Double(strong) / Double(body.count)
+        // 四行以上允许两成是说明/空行；两到三行仍要求几乎整段都是代码。
+        if body.count >= 4 {
+            if ratio < 0.6 { return false }
+        } else if ratio < 0.8 {
+            return false
+        }
         if cjkRatio(joined) > 0.10 { return false }
         if scores.filter({ $0 >= 3 }).count < 2 && !scores.allSatisfy({ $0 >= 2 }) {
             return false
@@ -253,9 +336,13 @@ enum UserCodeFencing {
 
     /// 给没有围栏的连续代码段补上栅栏。已经有栅栏就原样返回。
     static func autoFenced(_ text: String) -> String {
-        guard !text.contains("```") else { return text }
+        guard !hasFence(text) else { return text }
         let lines = text.components(separatedBy: "\n")
-        guard lines.count >= 2 else { return text }
+        guard !lines.isEmpty else { return text }
+        // 整段就是 JSON / diff / 缩进代码：不用逐行投票，直接包起来。
+        if looksLikeJSON(text) || looksLikeDiff(lines) || looksLikeIndentedCode(lines) {
+            return "```\n" + text + "\n```"
+        }
         var out: [String] = []
         var run: [String] = []
 
@@ -325,24 +412,34 @@ struct UserMessageText: View {
     /// 视图和列表的预计算必须用**同一个**判据：只改一边的话，格子先按
     /// 折叠长文留高、视图按代码块铺开，滚动时就对不上（那一跳的另一种来源）。
     static func hasCode(_ text: String) -> Bool {
-        text.contains("```") || UserCodeFencing.autoFenced(text) != text
+        UserCodeFencing.hasFence(text) || UserCodeFencing.autoFenced(text) != text
     }
     private var hasCode: Bool { Self.hasCode(text) }
     // [10-23 醒醒] 折叠判定与折叠后的样子只写一份：视图用、列表预计算也用。
     // 预计算不知道折叠态的话，格子先按全文高度占位、再缩回去，就是那一跳。
+    static let collapsedLineLimit = 8
     static func isLongText(_ text: String) -> Bool {
-        text.components(separatedBy: "\n").count > 12 || text.count > 320
+        text.components(separatedBy: "\n").count > collapsedLineLimit || text.count > 320
     }
     static func collapsedPreview(of text: String) -> String {
         let lines = text.components(separatedBy: "\n")
-        if lines.count > 8 { return lines.prefix(8).joined(separator: "\n") + "\n…" }
+        if lines.count > collapsedLineLimit {
+            return lines.prefix(collapsedLineLimit).joined(separator: "\n") + "\n…"
+        }
         return String(text.prefix(280)) + "…"
+    }
+    /// Kelivo 式裁剪高度：只给 8 行的高度，内容本身不换字符串。
+    static func collapsedHeightForCurrentFont() -> CGFloat {
+        let font = UIFont.systemFont(ofSize: FontSettings.shared.scaledMessage(16.5))
+        return ceil(font.lineHeight * CGFloat(collapsedLineLimit)) + 2
     }
     private var isLong: Bool {
         guard !hasCode else { return false }   // 代码块自己会折
         return Self.isLongText(text)
     }
-    private var collapsedText: String { Self.collapsedPreview(of: text) }
+    private var collapsedMaxHeight: CGFloat? {
+        (isLong && !expanded) ? Self.collapsedHeightForCurrentFont() : nil
+    }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -352,27 +449,47 @@ struct UserMessageText: View {
                 // 并把半宽记进缓存——长行全被挤折。AI 那边没有 Spacer 竞争，
                 // 所以一直是满宽。maxWidth: .infinity 让它自己吃满，旋转、
                 // iPad 都自适应，一个数字都不用写死。
-                SelectableMarkdownView(markdown: fenced)
+                SelectableMarkdownView(markdown: fenced, messageId: messageId)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .modifier(MinisOpenURLHandler())
                     .id(appearanceStudio.themePackRevision)
             } else {
-                Text(isLong && !expanded ? collapsedText : text)
+                // [10-23 醒醒 问题1] Kelivo 式：正文始终是全文，只裁可视高度，
+                // 不再把字符串换成预览——换字符串那一下就是「一跳」的一半。
+                // 裁剪高度和列表预计算共用 collapsedLineLimit，视图/格子同一条尺。
+                Text(text)
                     .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
                     .foregroundStyle(isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
+                    // 先按全文高度排版，再由下面的 frame 裁到 8 行；
+                    // 不 fixedSize 的话 Text 会自己压到 8 行，展开时没有内容可露。
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxHeight: collapsedMaxHeight, alignment: .top)
+                    .clipped()
+                    .mask {
+                        if isLong && !expanded {
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black, location: 0),
+                                    .init(color: .black, location: 0.82),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        } else {
+                            Rectangle().fill(Color.black)
+                        }
+                    }
                     .id(appearanceStudio.themePackRevision)
             }
             if isLong {
                 Button {
-                    // [10-23 醒醒 问题1] 不加动画：格子高度是列表硬改的，文字
-                    // 动画跑在旧高度的裁切框里，就是残影。先求准，顺另做。
+                    // [10-23 醒醒 问题1] Kelivo 式：状态一翻，正文裁切高度和
+                    // 列表格子一起走 0.22s easeOut；列表那边等 SwiftUI 重画完
+                    // 再量新高度，避免量到旧内容。
                     expansion.toggle(messageId)
                     if let messageId {
-                        // [10-23 醒醒 问题1] 以前隔一拍再发通知：那一拍里
-                        // SwiftUI 已经按新状态重画了，格子还是旧高度——内容
-                        // 被裁着闪一下，下一拍才跳到新高度，就是「一跳一跳」。
-                        // 同步发：列表当场 reconfigure + 重排，只有一次布局。
                         NotificationCenter.default.post(name: .userBubbleToggled, object: messageId)
                     }
                 } label: {
