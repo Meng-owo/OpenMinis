@@ -2674,7 +2674,7 @@ final class TableAttachment: NSTextAttachment {
         // full per-cell measurement, try the process-wide cache: an identical
         // table at this width measured by any earlier cell can be reused as-is.
         // computeLayout is a pure function of content+width, so this is safe.
-        let sharedKey = Self.LayoutCacheKey(contentSig: layoutContentSignature, widthBucket: Int((width / 4).rounded()))
+        let sharedKey = Self.LayoutCacheKey(contentSig: layoutContentSignature, widthBucket: SelectableMarkdownTextView.safeBucket(width / 4))
         if let shared = Self.sharedLayoutCache[sharedKey] {
             Self.sharedLayoutHits &+= 1
             Self.flushSharedLayoutStatsIfNeeded()
@@ -7860,7 +7860,20 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 total += video.thumbnail?.size.height ?? 0
             }
         }
-        return Int(total.rounded())
+        return SelectableMarkdownTextView.safeBucket(total)
+    }
+
+    /// [B28 R7-crash 2026-10-23 11:30] SwiftUI 会拿 `.infinity` 来探尺寸
+    /// （`.fixedSize` / 自适应容器里很常见）。Swift 里 `Int(Double)` 遇到
+    /// 无穷或 NaN 是硬 trap——主线程 SIGTRAP，表现就是「打开某个会话直接闪退」。
+    /// 崩溃寄存器 x8 里就是 0x7ff0000000000000（+∞），实锤。
+    /// 所有宽度分桶都必须走这里。
+    @inline(__always)
+    static func safeBucket(_ value: CGFloat) -> Int {
+        // 回落用常量，不碰 UIScreen（这个函数可能从非主线程被调到）。
+        guard value.isFinite else { return 320 }
+        let clamped = min(max(value, -1_000_000), 1_000_000)
+        return Int(clamped.rounded())
     }
 
     func invalidateCellSizeIfNeeded() {
@@ -8073,7 +8086,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             // probe rounding) written by the CTFramesetter fast path would
             // otherwise be copied back over this authoritative TextKit height
             // by sizeThatFits' near-width reuse, re-pinning the cell short.
-            let widthKey = Int(measureWidth.rounded())
+            let widthKey = SelectableMarkdownTextView.safeBucket(measureWidth)
             coord.cachedSizes.removeAll(keepingCapacity: true)
             coord.cachedSizes[widthKey] = newHeight
             // [T-ios-lastcell-clip-defer-lost] Key the cache generation by the
@@ -9111,7 +9124,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
     @available(iOS 16.0, *)
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: SelectableMarkdownTextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        // [B28 R7-crash] 非有限宽度一律回落到屏宽：无穷往下传，任何一个
+        // Double→Int 都会 trap。
+        let proposedRaw = proposal.width ?? UIScreen.main.bounds.width
+        let width = (proposedRaw.isFinite && proposedRaw > 0) ? proposedRaw : UIScreen.main.bounds.width
         // Key the size cache on the SwiftUI binding length, not
         // uiView.textStorage.length. Within a single render pass SwiftUI calls
         // sizeThatFits BEFORE updateUIView, so textStorage still reflects the
@@ -9131,7 +9147,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // length. Multi-width cache survives SwiftUI's recursive sizeThatFits
         // probing where the same view is measured at 2–3 nearby widths during
         // a single preferredLayoutAttributesFitting pass.
-        let widthKey = Int(width.rounded())
+        let widthKey = SelectableMarkdownTextView.safeBucket(width)
         if bindingLen == coord.cachedSizeMarkdownCount,
            let cachedHeight = coord.cachedSizes[widthKey] {
             coord.sizeThatFitsCacheHitCount &+= 1
@@ -9603,7 +9619,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // Only log MISS on slow paths or periodically — every-token MISS during
         // streaming was a primary noise source.
         if totalMs >= 50 || callIdx % 100 == 0 {
-            let widthDelta = Int((width - oldWidth).rounded())
+            let widthDelta = SelectableMarkdownTextView.safeBucket(width - oldWidth)
             let level: String
             if totalMs >= 200 { level = "🔥🔥" }
             else if totalMs >= 50 { level = "🔥" }
@@ -9685,7 +9701,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         pending.enumerateAttribute(.attachment, in: NSRange(location: 0, length: pending.length), options: []) { v, _, stop in
             if v != nil { hasAttachment = true; stop.pointee = true }
         }
-        guard !hasAttachment, fullHeight > 0 else { return nil }
+        // [B28 R7-crash] 非有限宽度直接放弃 hug：往下算会把 ∞ 带进
+        // CGSize / Int 分桶，主线程 trap。
+        guard proposedWidth.isFinite, proposedWidth > 0 else { return nil }
+        guard !hasAttachment, fullHeight > 0, fullHeight.isFinite else { return nil }
         // [T-assistant-bubble-hug][v2] ONE length gate for every call site —
         // per-site gates (4000 here, none there) were what made the bubble
         // "sometimes long, sometimes short" (醒醒 09-09). Beyond this size the

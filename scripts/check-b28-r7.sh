@@ -67,5 +67,11 @@ if ! rg -qF 'MinisThemeShape.thinkingFill' "$V" \
    && [ "$(rg -c 'TurnSummaryRow\(' "$V")" -ge 2 ]; then
   ok R7-11; else bad "R7-11 样张里还有自绘的 thinking 卡片"; fi
 
+# R7-12 闪退：SwiftUI 用 ∞ 探尺寸时不许把非有限值喂进 Int（SIGTRAP）
+if rg -qF 'static func safeBucket' "$S" \
+   && rg -qF 'proposedRaw.isFinite && proposedRaw > 0' "$S" \
+   && ! rg -q 'widthBucket: Int\(|let widthKey = Int\(width' "$S"; then
+  ok R7-12; else bad "R7-12 还有非有限宽度直接转 Int 的路径"; fi
+
 echo "----"
 if [ "$fail" -gt 0 ]; then echo "$fail FAILED"; exit 1; else echo "全部通过"; fi
