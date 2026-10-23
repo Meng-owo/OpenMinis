@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 // MARK: - Assistant Block View (individual block — isolated invalidation)
 
@@ -60,42 +61,57 @@ struct AssistantBlockView: View {
                 let activeSticker = stickerMatch.flatMap { StickerStore.shared.sticker(for: $0.id) }
                 let finalContent = (stickerMatch != nil) ? cleanAppliedContent : appliedContent
 
-                let segments = Self.splitBubbleSegments(finalContent)
-                if segments.count > 1 {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
-                            if !seg.isEmpty {
-                                self.singleTextBubble(seg)
+                // [B28 R9] 代码块不再塞进 NSTextAttachment。先把围栏代码从
+                // 正文里拆出来，正文仍走 SelectableMarkdownView，代码块走独立
+                // 的 ChatCodeBlockView；两者的高度都由 SwiftUI 自己排版，宿主
+                // cell 只负责一次重测，不再维护 attachmentBounds 那套账。
+                let mixedSegments = ChatMarkdownSegmenter.segments(from: finalContent)
+                let hasCodeSegment = mixedSegments.contains {
+                    if case .code = $0 { return true }
+                    return false
+                }
+                if hasCodeSegment {
+                    mixedTextBubble(mixedSegments,
+                                    sticker: activeSticker,
+                                    actionContent: finalContent)
+                } else {
+                    let segments = Self.splitBubbleSegments(finalContent)
+                    if segments.count > 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                                if !seg.isEmpty {
+                                    self.singleTextBubble(seg)
+                                }
+                            }
+                            if let activeSticker {
+                                StickerThumbnailView(sticker: activeSticker)
+                            }
+                            // [T-message-action-bar 09-11] One action bar under the
+                            // LAST bubble group of the last text block — the reply's
+                            // visible tail. It reads THE WHOLE BLOCK (all segments),
+                            // not just the last segment, so "播放本条" means this
+                            // message's complete text.
+                            if Self.isLastTextBlock(of: message, block: block),
+                               canShowActionBar {
+                                actionBar(forBlockContent: finalContent)
                             }
                         }
-                        if let activeSticker {
-                            StickerThumbnailView(sticker: activeSticker)
+                        .id(appearanceStudio.themePackRevision)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            if !finalContent.isEmpty {
+                                self.singleTextBubble(finalContent)
+                            }
+                            if let activeSticker {
+                                StickerThumbnailView(sticker: activeSticker)
+                            }
+                            if Self.isLastTextBlock(of: message, block: block),
+                               canShowActionBar {
+                                actionBar(forBlockContent: finalContent)
+                            }
                         }
-                        // [T-message-action-bar 09-11] One action bar under the
-                        // LAST bubble group of the last text block — the reply's
-                        // visible tail. It reads THE WHOLE BLOCK (all segments),
-                        // not just the last segment, so "播放本条" means this
-                        // message's complete text.
-                        if Self.isLastTextBlock(of: message, block: block),
-                           canShowActionBar {
-                            actionBar(forBlockContent: finalContent)
-                        }
+                        .id(appearanceStudio.themePackRevision)
                     }
-                    .id(appearanceStudio.themePackRevision)
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if !finalContent.isEmpty {
-                            self.singleTextBubble(finalContent)
-                        }
-                        if let activeSticker {
-                            StickerThumbnailView(sticker: activeSticker)
-                        }
-                        if Self.isLastTextBlock(of: message, block: block),
-                           canShowActionBar {
-                            actionBar(forBlockContent: finalContent)
-                        }
-                    }
-                    .id(appearanceStudio.themePackRevision)
                 }
             }
         case .thinking:
@@ -196,6 +212,41 @@ struct AssistantBlockView: View {
                 )
                 .clipShape(MinisThemeShape.assistantBubble)
         }
+    }
+
+    @ViewBuilder
+    private func mixedTextBubble(_ segments: [ChatMarkdownSegment],
+                                 sticker: StickerItem?,
+                                 actionContent: String) -> some View {
+        let display = AppearanceChatDisplay.parse(
+            AppearanceStudio.shared.currentThemePack().chatDisplay)
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                switch segment {
+                case .prose(let text):
+                    if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        textBlockView(markdown: text)
+                    }
+                case .code(let language, let code):
+                    ChatCodeBlockView(
+                        code: code,
+                        language: language,
+                        messageId: message.id,
+                        blockId: block.id
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            if let sticker {
+                StickerThumbnailView(sticker: sticker)
+            }
+            if Self.isLastTextBlock(of: message, block: block),
+               canShowActionBar {
+                actionBar(forBlockContent: actionContent)
+            }
+        }
+        .modifier(AssistantBubbleChrome(display: display, isHighlighted: isHighlighted))
+        .id(appearanceStudio.themePackRevision)
     }
 
     // MARK: - [T-message-action-bar 09-11] kelivo-style bubble actions
@@ -311,6 +362,392 @@ struct AssistantBlockView: View {
     @ViewBuilder
     private var textBlockView: some View {
         textBlockView(markdown: block.content)
+    }
+}
+
+// MARK: - [B28 R9] Code block segments (outside TextKit)
+
+/// One run of a text block after fenced code has been pulled out of the
+/// markdown. Prose still goes through SelectableMarkdownView; code goes
+/// through ChatCodeBlockView, so no NSTextAttachment is involved.
+enum ChatMarkdownSegment {
+    case prose(String)
+    case code(language: String?, code: String)
+}
+
+enum ChatMarkdownSegmenter {
+    private struct Fence {
+        let marker: Character
+        let count: Int
+        let language: String?
+    }
+
+    static func hasFence(_ text: String) -> Bool {
+        text.components(separatedBy: "\n").contains { parseFence($0) != nil }
+    }
+
+    /// Split on ``` / ~~~ fences. Prose keeps its blank lines; code keeps its
+    /// indentation and internal blank lines. An unclosed fence (streaming)
+    /// renders the rest as code instead of showing raw backticks.
+    static func segments(from markdown: String) -> [ChatMarkdownSegment] {
+        let lines = markdown.components(separatedBy: "\n")
+        var out: [ChatMarkdownSegment] = []
+        var prose: [String] = []
+        var index = 0
+
+        func flushProse() {
+            guard !prose.isEmpty else { return }
+            let text = prose.joined(separator: "\n")
+                .trimmingCharacters(in: .newlines)
+            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                out.append(.prose(text))
+            }
+            prose.removeAll(keepingCapacity: true)
+        }
+
+        while index < lines.count {
+            let line = lines[index]
+            guard let fence = parseFence(line) else {
+                prose.append(line)
+                index += 1
+                continue
+            }
+            flushProse()
+            var codeLines: [String] = []
+            index += 1
+            var closed = false
+            while index < lines.count {
+                if isClosingFence(lines[index], marker: fence.marker, count: fence.count) {
+                    closed = true
+                    index += 1
+                    break
+                }
+                codeLines.append(lines[index])
+                index += 1
+            }
+            let code = codeLines.joined(separator: "\n")
+                .trimmingCharacters(in: .newlines)
+            out.append(.code(language: fence.language, code: code))
+            if !closed { break }
+        }
+        flushProse()
+        return out.isEmpty ? [.prose(markdown)] : out
+    }
+
+    private static func parseFence(_ line: String) -> Fence? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard let first = trimmed.first, first == "`" || first == "~" else { return nil }
+        let count = trimmed.prefix { $0 == first }.count
+        guard count >= 3 else { return nil }
+        let rest = String(trimmed.dropFirst(count)).trimmingCharacters(in: .whitespaces)
+        if first == "`" && rest.contains("`") { return nil }
+        let language = rest.split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .first.map(String.init)
+        return Fence(marker: first,
+                     count: count,
+                     language: (language?.isEmpty == false) ? language : nil)
+    }
+
+    private static func isClosingFence(_ line: String,
+                                       marker: Character,
+                                       count: Int) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let run = trimmed.prefix { $0 == marker }.count
+        guard run >= count else { return false }
+        return String(trimmed.dropFirst(run))
+            .trimmingCharacters(in: .whitespaces)
+            .isEmpty
+    }
+}
+
+/// Collapse state survives cell reuse (same reason as UserBubbleExpansion).
+/// Keyed by code+language, not by block id, so streaming re-renders and cell
+/// reconfigures keep the user's manual choice.
+final class ChatCodeBlockStore: ObservableObject {
+    static let shared = ChatCodeBlockStore()
+    @Published private(set) var revision: UInt64 = 0
+    private var collapsedByKey: [String: Bool] = [:]
+    private var manualKeys: Set<String> = []
+    private init() {}
+
+    static func key(code: String, language: String?) -> String {
+        var hash: UInt64 = 1469598103934665603
+        func mix(_ text: String) {
+            for byte in text.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* 1099511628211
+            }
+        }
+        mix(language ?? "")
+        hash ^= 0xff
+        hash = hash &* 1099511628211
+        mix(code)
+        return String(hash, radix: 16)
+    }
+
+    func isCollapsed(key: String, lineCount: Int, threshold: Int) -> Bool {
+        if let stored = collapsedByKey[key] { return stored }
+        return lineCount > threshold
+    }
+
+    func toggle(key: String, lineCount: Int, threshold: Int) {
+        let next = !isCollapsed(key: key, lineCount: lineCount, threshold: threshold)
+        if collapsedByKey.count > 400, let oldest = collapsedByKey.keys.first {
+            collapsedByKey.removeValue(forKey: oldest)
+            manualKeys.remove(oldest)
+        }
+        collapsedByKey[key] = next
+        manualKeys.insert(key)
+        revision &+= 1
+    }
+
+    /// Folded into the list's contentKey so a collapse toggle re-measures the
+    /// host cell instead of reusing the old height from the memo. Per-content:
+    /// toggling one code block must not re-key every other code block on screen.
+    func signature(for markdown: String, force: Bool = false) -> Int {
+        guard force || ChatMarkdownSegmenter.hasFence(markdown) else { return 0 }
+        var hash: UInt64 = 1469598103934665603
+        func mix(_ text: String) {
+            for byte in text.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* 1099511628211
+            }
+        }
+        let threshold = (UserDefaults.standard.dictionary(forKey: CodeBlockAttachment.codeSettingsKey)?["collapseLines"] as? Int) ?? 12
+        var foundCode = false
+        for segment in ChatMarkdownSegmenter.segments(from: markdown) {
+            guard case .code(let language, let code) = segment else { continue }
+            foundCode = true
+            let key = Self.key(code: code, language: language)
+            mix(key)
+            let lines = max(1, code.components(separatedBy: "\n").count)
+            mix(isCollapsed(key: key, lineCount: lines, threshold: threshold) ? "1" : "0")
+        }
+        guard foundCode || force else { return 0 }
+        return Int(truncatingIfNeeded: hash)
+    }
+}
+
+struct ChatCodeBlockTogglePayload {
+    let messageId: UUID
+    let blockId: UUID?
+}
+
+struct ChatCodeBlockView: View {
+    let code: String
+    let language: String?
+    let messageId: UUID?
+    let blockId: UUID?
+
+    @ObservedObject private var store = ChatCodeBlockStore.shared
+    @State private var copied = false
+    @State private var settingsRevision = 0
+
+    init(code: String, language: String?, messageId: UUID?, blockId: UUID?) {
+        self.code = code
+        self.language = language
+        self.messageId = messageId
+        self.blockId = blockId
+    }
+
+    /// Measure the exact view the renderer will draw, at the same width.
+    /// Used by the user-bubble precalc so the estimate cannot drift from the
+    /// SwiftUI code card (the old TextKit attachment measurement did).
+    @MainActor
+    static func measuredHeight(code: String, language: String?, width: CGFloat) -> CGFloat {
+        guard width > 1 else { return 0 }
+        let view = ChatCodeBlockView(code: code,
+                                     language: language,
+                                     messageId: nil,
+                                     blockId: nil)
+            .frame(width: width, alignment: .leading)
+        let host = UIHostingController(rootView: view)
+        host.view.backgroundColor = .clear
+        host.view.frame = CGRect(x: 0, y: 0, width: width, height: 1)
+        host.view.layoutIfNeeded()
+        return ceil(host.sizeThatFits(in: CGSize(width: width,
+                                                 height: .greatestFiniteMagnitude)).height)
+    }
+
+    private var theme: SelectableMarkdownTheme {
+        SelectableMarkdownTheme(baseFontSize: FontSettings.shared.scaledMessage(16.5))
+    }
+    private var stateKey: String {
+        ChatCodeBlockStore.key(code: code, language: language)
+    }
+    private var lineCount: Int {
+        max(1, code.components(separatedBy: "\n").count)
+    }
+    private var threshold: Int {
+        _ = settingsRevision
+        return (UserDefaults.standard.dictionary(forKey: CodeBlockAttachment.codeSettingsKey)?["collapseLines"] as? Int) ?? 12
+    }
+    private var visibleLines: Int { min(8, max(2, threshold - 1)) }
+    private var canCollapse: Bool { lineCount > threshold }
+    private var isCollapsed: Bool {
+        canCollapse && store.isCollapsed(key: stateKey, lineCount: lineCount, threshold: threshold)
+    }
+    private var collapsedHeight: CGFloat {
+        let n = CGFloat(max(1, min(visibleLines, lineCount)))
+        return ceil(n * theme.codeBlockFont.lineHeight + max(0, n - 1) * 4) + 1
+    }
+    private var displayLanguage: String {
+        guard let language, !language.isEmpty else { return "CODE" }
+        return language.uppercased()
+    }
+    private var codeText: AttributedString {
+        let ns = ChatCodeBlockHighlighter.attributed(code: code, language: language, theme: theme)
+        return (try? AttributedString(ns, including: \.uiKit)) ?? AttributedString(code)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Rectangle()
+                .fill(Color(uiColor: theme.codeBlockTextColor).opacity(0.10))
+                .frame(height: 0.5)
+            codeBody
+        }
+        .background(Color(uiColor: theme.codeBlockBackground))
+        .clipShape(RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous)
+                .stroke(Color(uiColor: theme.codeBlockTextColor).opacity(0.08), lineWidth: 0.5)
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .codeBlockLayoutSettingsChanged)) { _ in
+            settingsRevision &+= 1
+            notifyHeightChange()
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button {
+                toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Text(displayLanguage)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.45))
+                    Spacer(minLength: 0)
+                    if canCollapse {
+                        Image(systemName: isCollapsed ? "chevron.down" : "chevron.up")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.45))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                UIPasteboard.general.string = code
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    copied = false
+                }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(uiColor: theme.codeBlockTextColor).opacity(0.5))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+    }
+
+    private var codeBody: some View {
+        Text(codeText)
+            .lineSpacing(4)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxHeight: isCollapsed ? collapsedHeight : nil, alignment: .top)
+            .clipped()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .overlay(alignment: .bottom) {
+                if isCollapsed {
+                    LinearGradient(
+                        colors: [
+                            Color(uiColor: theme.codeBlockBackground).opacity(0),
+                            Color(uiColor: theme.codeBlockBackground)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 18)
+                    .allowsHitTesting(false)
+                }
+            }
+    }
+
+    private func toggle() {
+        guard canCollapse else { return }
+        store.toggle(key: stateKey, lineCount: lineCount, threshold: threshold)
+        notifyHeightChange()
+    }
+
+    private func notifyHeightChange() {
+        guard let messageId else { return }
+        let payload = ChatCodeBlockTogglePayload(messageId: messageId, blockId: blockId)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .chatCodeBlockToggled, object: payload)
+        }
+    }
+}
+
+private enum ChatCodeBlockHighlighter {
+    private static let cache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 120
+        return cache
+    }()
+
+    static func attributed(code: String,
+                           language: String?,
+                           theme: SelectableMarkdownTheme) -> NSAttributedString {
+        let key = "\(language ?? "")|\(theme.baseFontSize)|\(theme.codeBlockBackground.hashValue)|\(code.hashValue)" as NSString
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+        let result = CodeSyntaxHighlighter.highlight(
+            code,
+            language: language,
+            font: theme.codeBlockFont,
+            plainColor: theme.codeBlockTextColor,
+            background: theme.codeBlockBackground
+        )
+        cache.setObject(result, forKey: key)
+        return result
+    }
+}
+
+private struct AssistantBubbleChrome: ViewModifier {
+    let display: AppearanceChatDisplay
+    let isHighlighted: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if display == .flat || display == .document {
+            content.padding(.vertical, 4)
+        } else {
+            content
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    MinisThemeShape.assistantBubble.fill(ChatColors.assistantBubble)
+                )
+                .overlay(
+                    MinisThemeShape.assistantBubble.fill(
+                        ChatColors.accent.opacity(isHighlighted ? 0.10 : 0))
+                )
+                .clipShape(MinisThemeShape.assistantBubble)
+        }
     }
 }
 
@@ -886,6 +1323,10 @@ extension Notification.Name {
     /// [B28 R7-3 醒醒 10-23] 用户气泡「展开全文 / 收起」变了高度，
     /// 列表要清缓存重算——object 是 ChatMessage.id。
     static let userBubbleToggled = Notification.Name("userBubbleToggled")
+    /// [B28 R9] 代码块折叠/展开变了高度。object 是 ChatCodeBlockTogglePayload
+    /// （messageId + blockId），列表按它找到 assistantBlock / wholeMessage
+    /// 单元格，清缓存、重配、按 0.22s 把格子长/缩过去。
+    static let chatCodeBlockToggled = Notification.Name("chatCodeBlockToggled")
     /// [chat-ui] Posted when a tool-call group card's header is tapped.
     /// object is the card's state key ("<messageId>:<firstBlockId>").
     /// The message list clears that cell's cached height and reconfigures it

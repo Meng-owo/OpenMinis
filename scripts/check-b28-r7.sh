@@ -61,7 +61,7 @@ if ! rg -q 'gutterAttributedText|makeGutterTextView' "$M" \
 # R7-15 展开态进高度键 + 预计算跟着折叠态走
 VC=src/ios/Agent/MessageList/CollectionViewMessageListV3.swift
 if rg -qF 'UserBubbleExpansion.shared.isExpanded(id) ? 1 : 0' "$VC" \
-   && rg -qF 'UserMessageText.collapsedPreview(of: text)' "$VC"; then
+   && rg -qF 'UserMessageText.collapsedLineLimit' "$VC"; then
   ok R7-15; else bad "R7-15 折叠态没接进高度链路"; fi
 
 # R7-9 展开/收起两条文案九语种齐

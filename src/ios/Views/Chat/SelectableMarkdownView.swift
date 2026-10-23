@@ -2203,7 +2203,7 @@ final class CodeBlockAttachment: NSTextAttachment {
 /// Single combined regex per language, comment/string alternatives first so
 /// they win over keywords inside them. Unknown languages and very long
 /// inputs fall back to plain text (never crash, never hang).
-private enum CodeSyntaxHighlighter {
+enum CodeSyntaxHighlighter {
     /// Max characters to highlight — longer inputs stay plain (perf guard).
     private static let maxHighlightLength = 120_000
 

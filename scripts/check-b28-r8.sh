@@ -12,15 +12,17 @@ C=src/ios/Views/Chat/ChatMessageViews.swift
 V3=src/ios/Agent/MessageList/CollectionViewMessageListV3.swift
 L=src/ios/Agent/MessageList/MessageListLayout.swift
 S=src/ios/Views/Chat/SelectableMarkdownView.swift
+A=src/ios/Views/Chat/AssistantBlockView.swift
 
 # R8-1 自带围栏（``` / ~~~）的代码也要走代码块
 if rg -qF 'UserCodeFencing.hasFence(text) || UserCodeFencing.autoFenced(text) != text' "$C"; then
   ok R8-1; else bad "R8-1 用户自带围栏的代码还会被当纯文本"; fi
 
-# R8-1b 视图和列表预计算共用同一个代码判据；代码消息走 Markdown 测高
+# R8-1b 视图和列表预计算共用同一个代码判据、同一套分段/测高
 if rg -qF 'let hasCode = UserMessageText.hasCode(text)' "$V3" \
-   && rg -qF 'SelectableMarkdownView.measureMarkdownHeight(fenced, width: usableTextWidth)' "$V3" \
-   && rg -qF 'static func measureMarkdownHeight' "$S"; then
+   && rg -qF 'ChatCodeBlockView.measuredHeight(' "$V3" \
+   && rg -qF 'static func measuredHeight' "$A" \
+   && rg -qF 'ChatMarkdownSegmenter.segments(from: fenced)' "$V3"; then
   ok R8-1b; else bad "R8-1b 预计算/视图的代码判据或代码测高不一致"; fi
 
 # R8-2 展开/收起量出新高度后走动画，不再硬跳
@@ -76,6 +78,29 @@ if rg -qF 'if originalAttributes.frame.minY < viewportBottom,' "$L" \
 if rg -qF 'func refreshAttachmentBounds(for view: UIView)' "$S" \
    && rg -qF '.refreshAttachmentBounds(for: wrapper)' "$S"; then
   ok R8-6; else bad "R8-6 折叠后没有失效附件布局"; fi
+
+# R9-1 代码块已脱离 NSTextAttachment，AI/用户都走独立视图
+if rg -qF 'struct ChatCodeBlockView' "$A" \
+   && rg -qF 'ChatCodeBlockView(' "$A" \
+   && rg -qF 'ChatCodeBlockView(' "$C"; then
+  ok R9-1; else bad "R9-1 代码块仍在 TextKit 附件里"; fi
+
+# R9-2 代码块分段器与用户预计算共用同一套
+if rg -qF 'enum ChatMarkdownSegmenter' "$A" \
+   && rg -qF 'ChatMarkdownSegmenter.segments(from: fenced)' "$V3" \
+   && rg -qF 'ChatMarkdownSegmenter.segments(from: markdown)' "$A"; then
+  ok R9-2; else bad "R9-2 分段器没有同时服务渲染和测高"; fi
+
+# R9-3 折叠态进高度缓存键，展开后不会命中旧高度
+if rg -qF 'ChatCodeBlockStore.shared.signature(for: content)' "$V3" \
+   && rg -qF 'ChatCodeBlockStore.shared.signature(' "$V3"; then
+  ok R9-3; else bad "R9-3 折叠态没进高度缓存键"; fi
+
+# R9-4 代码块展开有独立通知，列表清缓存并动画
+if rg -qF 'static let chatCodeBlockToggled' "$A" \
+   && rg -qF 'for: .chatCodeBlockToggled' "$V3" \
+   && rg -qF 'animateCellResize(at: ip, anchorScreenY: anchorScreenY)' "$V3"; then
+  ok R9-4; else bad "R9-4 代码块展开没有接列表重测"; fi
 
 echo "----"
 if [ "$fail" -gt 0 ]; then echo "$fail FAILED"; exit 1; else echo "全部通过"; fi

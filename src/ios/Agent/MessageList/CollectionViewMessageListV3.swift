@@ -889,6 +889,8 @@ extension CollectionViewMessageListV3 {
         private var thinkingToggleSub: AnyCancellable?
         /// [B28 R7-3] 用户气泡展开/收起 → 清缓存重算高度。
         private var userBubbleToggleSub: AnyCancellable?
+        /// [B28 R9] 代码块折叠/展开 → 清缓存、重配、动画长高/缩短。
+        private var chatCodeBlockToggleSub: AnyCancellable?
         // === [chat-ui] Tool Group Card Toggle ===
         private var toolGroupToggleSub: AnyCancellable?
 
@@ -2978,6 +2980,63 @@ extension CollectionViewMessageListV3 {
                     }
             }
 
+            // [B28 R9] 代码块折叠/展开：代码块现在是普通 SwiftUI 子视图，
+            // 不再有 attachmentBounds。高度变了只需要重配这一格、量最终高度、
+            // 0.22s 把格子长/缩过去；被点的格子顶部钉在原屏幕位置。
+            if chatCodeBlockToggleSub == nil {
+                chatCodeBlockToggleSub = NotificationCenter.default.publisher(for: .chatCodeBlockToggled)
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] notification in
+                        guard let self,
+                              let payload = notification.object as? ChatCodeBlockTogglePayload,
+                              let cv = self.viewController?.collectionView,
+                              let layout = cv.collectionViewLayout as? MessageListLayout,
+                              let snapshot = self.dataSource?.snapshot() else { return }
+                        for (i, item) in snapshot.itemIdentifiers.enumerated() {
+                            let matches: Bool
+                            switch item {
+                            case .assistantBlock(let mid, let bid):
+                                matches = mid == payload.messageId
+                                    && (payload.blockId == nil || bid == payload.blockId)
+                            case .wholeMessage(let mid):
+                                matches = mid == payload.messageId && payload.blockId == nil
+                            default:
+                                matches = false
+                            }
+                            guard matches else { continue }
+                            let ip = IndexPath(item: i, section: 0)
+                            let anchorScreenY = cv.cellForItem(at: ip)
+                                .map { $0.frame.minY - cv.contentOffset.y } ?? 0
+                            (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeightIncludingSeed()
+                            layout.invalidateHeight(at: i)
+                            // 等 SwiftUI 把 store 的新折叠态画进 cell，再量；
+                            // 同步量会量到旧内容，动画就会先跳一下。
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self,
+                                      let live = self.dataSource?.snapshot(),
+                                      ip.item < live.itemIdentifiers.count else { return }
+                                let liveItem = live.itemIdentifiers[ip.item]
+                                let stillMatches: Bool
+                                switch liveItem {
+                                case .assistantBlock(let mid, let bid):
+                                    stillMatches = mid == payload.messageId
+                                        && (payload.blockId == nil || bid == payload.blockId)
+                                case .wholeMessage(let mid):
+                                    stillMatches = mid == payload.messageId && payload.blockId == nil
+                                default:
+                                    stillMatches = false
+                                }
+                                guard stillMatches else { return }
+                                var snap = live
+                                snap.reconfigureItems([liveItem])
+                                self.dataSource?.apply(snap, animatingDifferences: false)
+                                self.animateCellResize(at: ip, anchorScreenY: anchorScreenY)
+                            }
+                            break
+                        }
+                    }
+            }
+
             // [chat-ui] Tool-group card header tap → re-measure that cell.
             // Same shape as the thinking toggle above: the card's expanded
             // state lives in ToolGroupExpansion (keyed by message+first block),
@@ -3913,7 +3972,6 @@ extension CollectionViewMessageListV3 {
             let isCollapsedLong = !hasCode
                 && UserMessageText.isLongText(text)
                 && !UserBubbleExpansion.shared.isExpanded(message.id)
-            let hasToggle = !hasCode && UserMessageText.isLongText(text)
             let rowChrome: CGFloat = 7
 
             let attachCount = message.attachments.isEmpty
@@ -3968,17 +4026,42 @@ extension CollectionViewMessageListV3 {
             // (which differ by the withdraw button's 28pt) can't share a cached
             // measurement — the entry is invalidated implicitly when the queue
             // drains. Stated here because that is load-bearing, not incidental.
-            let key = "\(text.count)|\(Int(usableTextWidth))|\(Int(fontSize))|\(attachCount)|\(text.hashValue)|c\(isCollapsedLong ? 1 : 0)|h\(hasCode ? 1 : 0)"
+            let key = "\(text.count)|\(Int(usableTextWidth))|\(Int(fontSize))|\(attachCount)|\(text.hashValue)|c\(isCollapsedLong ? 1 : 0)|h\(hasCode ? 1 : 0)|cb\(hasCode ? ChatCodeBlockStore.shared.signature(for: UserCodeFencing.autoFenced(text), force: true) : 0)"
             if let cached = cache[key] {
                 return cached
             }
 
             if hasCode {
                 let fenced = UserCodeFencing.autoFenced(text)
-                let markdownH = MainActor.assumeIsolated {
-                    SelectableMarkdownView.measureMarkdownHeight(fenced, width: usableTextWidth)
+                // [B28 R9] 代码块已经是独立 SwiftUI 视图，不能再拿
+                // SelectableMarkdownView 的 TextKit 附件高度来预计算——
+                // 两套渲染的 header/padding 不一样，预计算会先给错高度，
+                // 滚动时再被真实高度纠正，就是那一跳。
+                // 这里按同一份分段、同一个 ChatCodeBlockView 去量。
+                let contentH = MainActor.assumeIsolated { () -> CGFloat in
+                    let segments = ChatMarkdownSegmenter.segments(from: fenced)
+                    var total: CGFloat = 0
+                    var count = 0
+                    for segment in segments {
+                        switch segment {
+                        case .prose(let prose):
+                            guard !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+                            total += SelectableMarkdownView.measureMarkdownHeight(prose, width: usableTextWidth)
+                            count += 1
+                        case .code(let language, let code):
+                            total += ChatCodeBlockView.measuredHeight(
+                                code: code,
+                                language: language,
+                                width: usableTextWidth)
+                            count += 1
+                        }
+                    }
+                    if count > 1 {
+                        total += CGFloat(count - 1) * 8
+                    }
+                    return total
                 }
-                let total = markdownH + 20 + rowChrome + attachH + 1 + (hasToggle ? 21 : 0)
+                let total = contentH + 20 + rowChrome + attachH + 1
                 cache[key] = total
                 return total
             }
@@ -4195,7 +4278,8 @@ extension CollectionViewMessageListV3 {
             }
             switch item {
             case .wholeMessage(let id):
-                let n = msg(id)?.content.count ?? 0
+                let c = msg(id)?.content ?? ""
+                let n = c.count
                 let a = msg(id)?.attachments.count ?? 0
                 // Queued state belongs in the key: a queued user bubble is
                 // measured 28pt narrower (withdraw button) and therefore
@@ -4210,7 +4294,13 @@ extension CollectionViewMessageListV3 {
                 // 正文裁着不动：她看到的「假的展开」「收起无效」就是这个。
                 // 工具卡早就这么干了（g:…:x/c），这里是同一个病同一个方子。
                 let x = UserBubbleExpansion.shared.isExpanded(id) ? 1 : 0
-                return "w:\(id.uuidString):\(n):\(a):\(q):\(x)"
+                // [B28 R9] 代码块折叠态也不改内容长度，必须进键；否则
+                // 展开后仍命中旧高度，格子不长高，代码块又被下面盖住。
+                let cb = UserMessageText.hasCode(c)
+                    ? ChatCodeBlockStore.shared.signature(
+                        for: UserCodeFencing.autoFenced(c), force: true)
+                    : 0
+                return "w:\(id.uuidString):\(n):\(a):\(q):\(x):\(cb)"
             case .assistantHeader(let id):
                 return "h:\(id.uuidString)"
             case .assistantFooter(let id):
@@ -4219,8 +4309,10 @@ extension CollectionViewMessageListV3 {
                 return "t:\(id.uuidString)"
             case .assistantBlock(let mid, let bid):
                 let block = msg(mid)?.blocks.first(where: { $0.id == bid })
-                let n = block?.content.count ?? 0
-                return "b:\(mid.uuidString):\(bid.uuidString):\(n)"
+                let content = block?.content ?? ""
+                let n = content.count
+                let cb = ChatCodeBlockStore.shared.signature(for: content)
+                return "b:\(mid.uuidString):\(bid.uuidString):\(n):\(cb)"
             case .assistantToolGroup(let mid, let groupKey):
                 // [chat-ui] Height depends on membership + expanded state; the
                 // state key folds the expansion in so a toggle re-memoizes.

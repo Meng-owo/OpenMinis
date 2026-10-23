@@ -444,16 +444,32 @@ struct UserMessageText: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
             if hasCode {
-                // [10-23 醒醒] 代码块吃满气泡可用宽度。不给确定宽度的话，
-                // 外层 HStack 的 Spacer 会跟气泡平分行宽，代码块按半宽建视图
-                // 并把半宽记进缓存——长行全被挤折。AI 那边没有 Spacer 竞争，
-                // 所以一直是满宽。maxWidth: .infinity 让它自己吃满，旋转、
-                // iPad 都自适应，一个数字都不用写死。
-                SelectableMarkdownView(markdown: fenced, messageId: messageId)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .modifier(MinisOpenURLHandler())
-                    .id(appearanceStudio.themePackRevision)
+                // [B28 R9] 用户代码也走独立代码块视图。这里不再把整段交给
+                // SelectableMarkdownView 的 NSTextAttachment；正文和代码拆开，
+                // 代码块高度自己定，气泡和列表按普通 SwiftUI 子视图测量。
+                let codeSegments = ChatMarkdownSegmenter.segments(from: fenced)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(codeSegments.enumerated()), id: \.offset) { _, segment in
+                        switch segment {
+                        case .prose(let prose):
+                            if !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                SelectableMarkdownView(markdown: prose, messageId: messageId)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .modifier(MinisOpenURLHandler())
+                            }
+                        case .code(let language, let code):
+                            ChatCodeBlockView(
+                                code: code,
+                                language: language,
+                                messageId: messageId,
+                                blockId: nil
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                .id(appearanceStudio.themePackRevision)
             } else {
                 // [10-23 醒醒 问题1] Kelivo 式：正文始终是全文，只裁可视高度，
                 // 不再把字符串换成预览——换字符串那一下就是「一跳」的一半。
