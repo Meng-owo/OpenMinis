@@ -391,11 +391,14 @@ final class MessageListLayout: UICollectionViewLayout {
         if deferSelfSizing {
             let hasCached = heightCache[index] != nil
             if hasCached {
-                // Cell is growing (streaming text) — allow it through so the
-                // content doesn't overflow the frozen cell frame and overlap
-                // adjacent cells. Only defer shrinking or stable cells.
-                if preferred <= original + 0.5 {
-                    // Shrinking or stable — defer the update.
+                // [10-23 醒醒 问题3] 以前只推迟「缩小/不变」，增长一律放行。
+                // 可滚动中视口上方或里面任何一个格子长高，都会把正在看的
+                // 内容整体推走；而 tracking/decelerating 期间 offset 补偿是
+                // 关着的（为了保动量），于是她看到「自己跳到没滑到的位置」。
+                // 滚动中只放行视口下方的格子：看不见，改了也不影响她。
+                let viewportBottom = (collectionView?.contentOffset.y ?? 0)
+                    + (collectionView?.bounds.height ?? 0)
+                if originalAttributes.frame.minY < viewportBottom {
                     if abs(preferred - original) > 0.5 {
                         deferredHeights[index] = preferred
                     }
@@ -789,6 +792,25 @@ final class MessageListLayout: UICollectionViewLayout {
         // makes a height change miss the old entry, but an explicit invalidate
         // (thinking collapse, async image load, streaming re-measure) should not
         // leave a now-wrong memo that a later same-length edit could match.
+        if let key = contentKeyByIndex[index] {
+            measuredHeightByContentKey.removeValue(forKey: key)
+        }
+    }
+
+    /// [10-23 醒醒 问题1/2] 让这个 index 重测，但**把旧高度留在缓存里当占位**。
+    ///
+    /// `invalidateHeight` 会把 heightCache 删掉，prepare() 于是退到
+    /// precalcHeights（按折叠态算出来的旧值）或 estimatedItemHeight(200)。
+    /// 展开一条消息时这就是「先画一帧错的高度，cell 自测完再跳到真高度」，
+    /// 屏幕上看着就是一跳。旧值留着，cell 一旦测出新高度就通过
+    /// invalidationContext 一次性替换，中间没有第二个高度。
+    /// 展开/收起的目标 cell 一定在屏幕上（用户刚点过），所以不会留下
+    /// 永远不重测的格子。
+    func invalidateHeightKeepingPlaceholder(at index: Int) {
+        geometryReaderConfirmed.remove(index)
+        // precalc/estimate 是更早、更不准的旧值，留着只会成为回落候选。
+        precalcHeights.removeValue(forKey: index)
+        estimatedHeights.removeValue(forKey: index)
         if let key = contentKeyByIndex[index] {
             measuredHeightByContentKey.removeValue(forKey: key)
         }

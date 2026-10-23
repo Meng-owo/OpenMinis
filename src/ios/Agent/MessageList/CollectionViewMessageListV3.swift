@@ -2911,17 +2911,34 @@ extension CollectionViewMessageListV3 {
                         for (i, item) in snapshot.itemIdentifiers.enumerated() {
                             guard case .wholeMessage(let mid) = item, mid == messageId else { continue }
                             let ip = IndexPath(item: i, section: 0)
+                            // [10-23 醒醒 问题1] 展开/收起之前先记住这条消息
+                            // 在屏幕里的位置。高度一改，下面所有内容都会挪；
+                            // 只有把 offset 反推回去，被点的那条才原地不动，
+                            // 多出来的高度全推给它下面——不再「屏幕一跳」。
+                            let anchorScreenY = cv.cellForItem(at: ip)
+                                .map { $0.frame.minY - cv.contentOffset.y }
                             // 键里带了展开态，新键天然没有记忆，会老实重量一次；
                             // 旧键那条留着——切回去时它就是那个状态量过的高度。
                             (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
-                            layout.invalidateHeight(at: i)
+                            // 保留旧高度当占位：删缓存会让 prepare() 先画一帧
+                            // precalc/estimate 的高度，再跳到真高度——那就是她
+                            // 说的「一跳一跳」。旧值留着，测完一次替换。
+                            layout.invalidateHeightKeepingPlaceholder(at: i)
                             var snap = snapshot
                             snap.reconfigureItems([item])
-                            self.dataSource?.apply(snap, animatingDifferences: false)
-                            // 无隐式动画：格子高度一次到位，不留中间帧的残影。
+                            // 一次布局干完：apply → 失效 → 布局 → 回填 offset，
+                            // 中间不留第二帧，避免「先按旧高度画一帧再跳」。
                             UIView.performWithoutAnimation {
+                                self.dataSource?.apply(snap, animatingDifferences: false)
                                 layout.invalidateLayout()
                                 cv.layoutIfNeeded()
+                                if let anchorScreenY, !cv.isTracking, !cv.isDecelerating,
+                                   let newY = layout.layoutAttributesForItem(at: ip)?.frame.minY {
+                                    let minOff = -cv.adjustedContentInset.top
+                                    let maxOff = max(minOff, cv.contentSize.height
+                                                     - cv.bounds.height + cv.adjustedContentInset.bottom)
+                                    cv.contentOffset.y = min(max(newY - anchorScreenY, minOff), maxOff)
+                                }
                             }
                             break
                         }
@@ -5770,8 +5787,26 @@ extension CollectionViewMessageListV3 {
             isFlushing = false
 
             // Restore offset
+            // [10-23 醒醒 问题3] 以前只把 offset 数字放回去。可屏幕上方的
+            // 格子在这轮 flush 里变高/变矮了，同一个数字对应的就是另一段
+            // 内容——她滑到哪，松手后自己跳走。下面那段 anchor 早就算出
+            // 「顶部可见格子在屏幕上的位置」，这里按它反推 offset：看得见
+            // 的那一行原地不动，高度差全部消化在它下面。
             if scrollMode == .userBrowsing {
-                cv.contentOffset.y = savedOffset
+                UIView.performWithoutAnimation {
+                    cv.layoutIfNeeded()
+                    if let ip = anchorIP, let preY = anchorPreY {
+                        let postY = layout.layoutAttributesForItem(at: ip)?.frame.minY ?? preY
+                        let screenY = preY - savedOffset          // 锚点原来在屏幕里的 y
+                        let target = postY - screenY
+                        let minOff = -cv.adjustedContentInset.top
+                        let maxOff = max(minOff, cv.contentSize.height
+                                         - cv.bounds.height + cv.adjustedContentInset.bottom)
+                        cv.contentOffset.y = min(max(target, minOff), maxOff)
+                    } else {
+                        cv.contentOffset.y = savedOffset
+                    }
+                }
             }
 
             // [SettleJitter] Post-flush: same anchor item, new frame. screenΔ

@@ -318,7 +318,10 @@ struct UserMessageText: View {
 
     private var fenced: String { UserCodeFencing.autoFenced(text) }
     /// 有代码就走 markdown（代码块可折叠），没有就保持纯文本（不擅自改排版）。
-    private var hasCode: Bool { fenced != text }
+    /// [10-23 醒醒 问题4] 她自己粘的带 ``` 的代码，autoFenced 原样返回，
+    /// 旧判据 `fenced != text` 于是判成「没代码」→ 整段按纯文本渲染，
+    /// 三个反引号照字面显示，代码块消失。原文自带围栏也是代码。
+    private var hasCode: Bool { text.contains("```") || fenced != text }
     // [10-23 醒醒] 折叠判定与折叠后的样子只写一份：视图用、列表预计算也用。
     // 预计算不知道折叠态的话，格子先按全文高度占位、再缩回去，就是那一跳。
     static func isLongText(_ text: String) -> Bool {
@@ -356,14 +359,15 @@ struct UserMessageText: View {
             }
             if isLong {
                 Button {
-                    // [10-23 醒醒] 不加动画：格子高度是列表硬改的，文字动画
-                    // 跑在旧高度的裁切框里，就是她看到的残影。先求准，顺另做。
+                    // [10-23 醒醒 问题1] 不加动画：格子高度是列表硬改的，文字
+                    // 动画跑在旧高度的裁切框里，就是残影。先求准，顺另做。
                     expansion.toggle(messageId)
                     if let messageId {
-                        // 下一拍再发：等 SwiftUI 先把新高度算出来，列表重测才拿得到新值。
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: .userBubbleToggled, object: messageId)
-                        }
+                        // [10-23 醒醒 问题1] 以前隔一拍再发通知：那一拍里
+                        // SwiftUI 已经按新状态重画了，格子还是旧高度——内容
+                        // 被裁着闪一下，下一拍才跳到新高度，就是「一跳一跳」。
+                        // 同步发：列表当场 reconfigure + 重排，只有一次布局。
+                        NotificationCenter.default.post(name: .userBubbleToggled, object: messageId)
                     }
                 } label: {
                     Text(expanded ? AppLocalized("收起") : AppLocalized("展开全文"))

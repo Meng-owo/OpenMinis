@@ -1673,6 +1673,11 @@ final class CodeBlockAttachment: NSTextAttachment {
         applyCollapsedLayout(to: wrapper, collapsed: next, animated: true)
         var host: UIView? = wrapper.superview
         while let h = host, !(h is SelectableMarkdownTextView) { host = h.superview }
+        // [10-23 醒醒 问题2] 只改视图 frame 不够：TextKit 已经按旧的
+        // attachmentBounds 排好版，sizeThatFits 继续返回旧高度，格子不
+        // 长高，展开出来的代码就压在下面那条气泡上。先把这一段失效，
+        // 再让宿主重量、列表重排。
+        (host as? SelectableMarkdownTextView)?.refreshAttachmentBounds(for: wrapper)
         (host as? SelectableMarkdownTextView)?.invalidateCellSizeIfNeeded()
     }
 
@@ -7823,6 +7828,30 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         guard value.isFinite else { return 320 }
         let clamped = min(max(value, -1_000_000), 1_000_000)
         return Int(clamped.rounded())
+    }
+
+    /// [10-23 醒醒 问题2] 某个附件视图（代码块折叠窗）自己的 frame 变了，
+    /// 但 TextKit 还按旧的 attachmentBounds 排版。把它的字符范围失效掉，
+    /// 下一次 sizeThatFits 才会重新问 attachmentBounds、量到新高度。
+    /// 不这么做，展开只是把内容画到格子外面——压住下面那条气泡。
+    func refreshAttachmentBounds(for view: UIView) {
+        guard let storage = textStorage as? NSTextStorage, storage.length > 0,
+              let lm = layoutManager as? MinisLayoutManager else { return }
+        var hit: NSRange?
+        storage.enumerateAttribute(.attachment,
+                                   in: NSRange(location: 0, length: storage.length),
+                                   options: []) { value, range, stop in
+            guard let att = value as? NSTextAttachment else { return }
+            if attachmentViewMap[ObjectIdentifier(att)] === view {
+                hit = range
+                stop.pointee = true
+            }
+        }
+        if let hit {
+            lm.invalidateLayout(forCharacterRange: hit, actualCharacterRange: nil)
+            lm.invalidateDisplay(forCharacterRange: hit)
+        }
+        invalidateIntrinsicContentSize()
     }
 
     func invalidateCellSizeIfNeeded() {
