@@ -887,6 +887,8 @@ extension CollectionViewMessageListV3 {
 
         // === Thinking Block Toggle ===
         private var thinkingToggleSub: AnyCancellable?
+        /// [B28 R7-3] 用户气泡展开/收起 → 清缓存重算高度。
+        private var userBubbleToggleSub: AnyCancellable?
         // === [chat-ui] Tool Group Card Toggle ===
         private var toolGroupToggleSub: AnyCancellable?
 
@@ -2890,6 +2892,32 @@ extension CollectionViewMessageListV3 {
                         }
                         if !matched {
                             tlog.warning("[ThinkingCollapse] MISS block=\(blockId.uuidString.prefix(8)) not in snapshot (items=\(snapshot.itemIdentifiers.count))")
+                        }
+                    }
+            }
+
+            // [B28 R7-3 醒醒 10-23] 用户气泡「展开全文 / 收起」：整条消息是一个
+            // wholeMessage 单元格，高度靠 SelfSizingCell 缓存。不清缓存的话
+            // 按钮文字变了、正文还按旧高度切着——看着就是「点了没展开」。
+            if userBubbleToggleSub == nil {
+                userBubbleToggleSub = NotificationCenter.default.publisher(for: .userBubbleToggled)
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] notification in
+                        guard let self,
+                              let messageId = notification.object as? UUID,
+                              let cv = self.viewController?.collectionView,
+                              let layout = cv.collectionViewLayout as? MessageListLayout,
+                              let snapshot = self.dataSource?.snapshot() else { return }
+                        for (i, item) in snapshot.itemIdentifiers.enumerated() {
+                            guard case .wholeMessage(let mid) = item, mid == messageId else { continue }
+                            let ip = IndexPath(item: i, section: 0)
+                            (cv.cellForItem(at: ip) as? SelfSizingCell)?.clearCachedHeight()
+                            layout.invalidateHeight(at: i)
+                            var snap = snapshot
+                            snap.reconfigureItems([item])
+                            self.dataSource?.apply(snap, animatingDifferences: false)
+                            layout.invalidateLayout()
+                            break
                         }
                     }
             }

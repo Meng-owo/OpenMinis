@@ -121,6 +121,7 @@ struct AppearanceStudioView: View {
             AssistantBlock(kind: .text, content: AppLocalized("今晚月色真美呀")),
         ])
     @State private var showTurnDetailSheet = false
+    @State private var showBackdropTurnSheet = false
     /// [B28 R5] AI 侧样张 = AssistantBlockView 真卡：一条 .text block 的假消息。
     @State private var previewAssistantMessage = ChatMessage(
         role: .assistant,
@@ -446,33 +447,25 @@ struct AppearanceStudioView: View {
     private var backdropSampleCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             sampleHeader
-            VStack(alignment: .leading, spacing: 6) {
-                Text(AppLocalized("Deep Thinking"))
-                    .font(MinisThemeShape.fontFamily.font(size: 14, weight: .semibold))
-                    .foregroundStyle(MinisThemeShape.thinkingAccent)
-                Text(AppLocalized("这张不是画的样张，是聊天里那张真卡——同一份代码，换主题一起换。"))
-                    .font(MinisThemeShape.fontFamily.font(size: 13))
-                    .lineSpacing(3)
-                    .foregroundStyle(ChatColors.primaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ZStack {
-                    MinisThemeShape.thinkingFill
-                    if let image = AppearanceStudio.shared.thinkingCardImage() {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .opacity(MinisThemeShape.thinkingCardOpacity)
-                    }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            // [B28 R7-3 醒醒 10-23] 不自己画 thinking 卡片了——真身是
+            // TurnSummaryRow 合并行，点开弹 TurnDetailSheet 抽屉，卡片背景
+            // （fill + 卡片图 + 浓度）就长在那个抽屉里。样张点开=同一个抽屉。
+            Text(AppLocalized("点这一行看 thinking 卡片的真身，卡片图就贴在那上面。"))
+                .font(.system(size: 11.5))
+                .lineSpacing(2)
+                .foregroundStyle(studio.color(.secondaryText, variant: variant))
+            TurnSummaryRow(
+                message: previewTurnMessage,
+                memberIDs: previewTurnMessage.blocks.filter { $0.kind == .thinking }.map(\.id),
+                isWorking: false
+            ) { showBackdropTurnSheet = true }
             inputBarSample
         }
         .modifier(StudioCard(variant: variant))
+        .sheet(isPresented: $showBackdropTurnSheet) {
+            TurnDetailSheet(message: previewTurnMessage)
+                .presentationDetents([.fraction(2/3), .large])
+        }
     }
 
     /// 配色页样张：它管的是颜色 —— 气泡底色、主次文字色。

@@ -1473,8 +1473,6 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// wired by the renderer (see updateAttachmentViews) — called after a
     /// manual collapse toggle so the host cell re-measures.
     static var heightChangedKey: UInt8 = 0
-    /// Tag for the collapsed-state fade mask inside the container.
-    static let fadeViewTag = 9871
     /// Tag for the header collapse chevron.
     static let chevronTag = 9872
     /// Tag for the code UITextView inside the scroll view (distinguishes it
@@ -1625,6 +1623,18 @@ final class CodeBlockAttachment: NSTextAttachment {
     /// Same measurer as measureCodeHeight so the numbers agree.
     /// `wrapWidth` nil = 不换行（按内容宽度量）；有值 = 按该宽度换行后量。
     private func measurePrefixHeight(lines: Int, wrapWidth: CGFloat? = nil) -> CGFloat {
+        // [B28 R7-2 醒醒 10-23 截图] 不换行时代码行高是恒定的，直接用字体度量
+        // 算：`ceil(lineHeight) + 4`（和 paragraphStyle.lineSpacing 同值）。
+        // 以前另建一个 UITextView 去量，量出来的行高和真渲染对不上——折叠窗
+        // 号称 8 行，实际只装下 5 行，剩下的空间被渐变条盖着，看着就是
+        // 「一条灰线 + 底下一大块空白」。
+        if wrapWidth == nil {
+            // lineSpacing 只加在行与行之间，最后一行后面没有：n 行 =
+            // n*lineHeight + (n-1)*4。多算 4pt 就会在折叠窗底露出一条
+            // 第 9 行的边（醒醒对「多余一条」很敏感）。
+            let n = CGFloat(max(1, lines))
+            return n * theme.codeBlockFont.lineHeight + max(0, n - 1) * 4
+        }
         let prefix = code.components(separatedBy: "\n").prefix(lines).joined(separator: "\n")
         let codeStyle = NSMutableParagraphStyle()
         codeStyle.lineSpacing = 4
@@ -1668,20 +1678,6 @@ final class CodeBlockAttachment: NSTextAttachment {
             scrollView.contentSize = CGSize(width: contentW,
                                             height: collapsed ? visibleHeight + metrics.bottomPadding : metrics.fullHeight)
             if collapsed { scrollView.contentOffset = .zero }
-            if let fade = container.viewWithTag(fadeViewTag) {
-                fade.isHidden = !collapsed
-                fade.frame = CGRect(x: 0, y: metrics.topOffset + visibleHeight - 24,
-                                    width: metrics.contentWidth, height: 24)
-                fade.layer.sublayers?.first?.frame = fade.bounds
-                // [B28 R7 黑线] 渐变的收尾色必须跟容器当前真实背景色一致。
-                // makeView 里那次 resolve（UITraitCollection.current）可能拿到
-                // 遗留 trait → 渐变成黑色，就是「截断处一条黑线」。每次布局
-                // 都从 container.backgroundColor 现取，主题换了也会跟着刷新。
-                let fadeBg = (container.backgroundColor ?? .clear)
-                    .resolvedColor(with: container.traitCollection)
-                (fade.layer.sublayers?.first as? CAGradientLayer)?.colors =
-                    [UIColor.clear.cgColor, fadeBg.cgColor]
-            }
             if let chevron = container.viewWithTag(chevronTag) as? UIImageView {
                 chevron.image = UIImage(systemName: collapsed ? "chevron.down" : "chevron.up",
                                         withConfiguration: UIImage.SymbolConfiguration(pointSize: 10, weight: .semibold))
@@ -1846,7 +1842,13 @@ final class CodeBlockAttachment: NSTextAttachment {
         // makeView 用 32/14，差 4pt，事故稳定复现。
         let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 32 : 14
         // [chat-ui] Collapsed blocks measure the 8-line viewport, not the full text.
-        let collapsed = Self.collapseState[contentFingerprint] ?? false
+        // [B28 R7-2 醒醒 10-23 空白] 查不到状态时不能默认「展开」：文本系统
+        // 往往先量高度、后建视图，默认展开就会按 15 行的全高预留格子，而视图
+        // 建好后按 8 行折叠——格子底下空出一大块。默认值必须和 makeView 用
+        // 同一条规则（超过阈值就折）。
+        let lineCountForMeasure = code.components(separatedBy: "\n").count
+        let collapsed = Self.collapseState[contentFingerprint]
+            ?? (lineCountForMeasure > Self.collapseLineThreshold)
         // [10-20 醒醒] 换行模式下高度按可用宽度算，不再是内容宽度。
         let wrapWidth: CGFloat? = Self.codeBlockWrapEnabled ? codeWrapWidth(fullWidth: width) : nil
         let contentHeight = collapsed
@@ -1982,20 +1984,6 @@ final class CodeBlockAttachment: NSTextAttachment {
         scrollView.contentSize = CGSize(width: metrics.fittingWidth, height: contentHeight)
         container.addSubview(scrollView)
         wrapper.addSubview(container)
-
-        // Collapsed fade mask. [B28 R7 黑线] 以前这里用 UITraitCollection.current
-        // resolve 背景色——makeView 不在 layout pass 里，那个值是遗留的，经常
-        // 解成黑色，就是截断处那条黑线。现在初值直接用容器自己的背景色，
-        // applyCollapsedLayout 每次布局还会再刷一遍（主题切换也跟得上）。
-        let fade = UIView()
-        fade.tag = Self.fadeViewTag
-        fade.isUserInteractionEnabled = false
-        let gradient = CAGradientLayer()
-        let resolvedBg = container.backgroundColor?
-            .resolvedColor(with: container.traitCollection) ?? .clear
-        gradient.colors = [UIColor.clear.cgColor, resolvedBg.cgColor]
-        fade.layer.addSublayer(gradient)
-        container.addSubview(fade)
 
         // Initial layout (no animation on first paint).
         Self.applyCollapsedLayout(to: wrapper, collapsed: collapsed, animated: false)

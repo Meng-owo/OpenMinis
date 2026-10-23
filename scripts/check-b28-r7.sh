@@ -22,10 +22,11 @@ if rg -qF 'collapsed ? metrics.collapsedHeight : metrics.fullHeight' "$S" \
 n=$(rg -c 'maxCodeHeight' "$S" 2>/dev/null || echo 0)
 if [ "$n" -le 1 ]; then ok R7-3; else bad "R7-3 maxCodeHeight 残留 $n 处"; fi
 
-# R7-4 折叠渐变的收尾色跟容器真背景，不再用 UITraitCollection.current
-if rg -qF 'container.backgroundColor ?? .clear' "$S" \
-   && ! rg -qF 'theme.codeBlockBackground.resolvedColor(with: UITraitCollection.current)' "$S"; then
-  ok R7-4; else bad "R7-4 渐变遮罩还在猜背景色"; fi
+# R7-4 折叠渐变整块删掉（醒醒 10-23 二次反馈：那条灰带就是它），
+# 折叠高度改字体度量算
+if ! rg -qF 'fadeViewTag' "$S" \
+   && rg -qF 'n * theme.codeBlockFont.lineHeight + max(0, n - 1) * 4' "$S"; then
+  ok R7-4; else bad "R7-4 渐变遮罩没删干净或折叠高度还在另建 UITextView 量"; fi
 
 # R7-5 updateExistingView 的高度公式与展开态同式
 if rg -qF 'let newTotal = metrics.topOffset + metrics.fullHeight + metrics.bottomPadding' "$S"; then
@@ -51,6 +52,20 @@ w={"de","en","es","fr","ja","ko","ru","zh-Hans","zh-Hant"}
 bad=[k for k in ["展开全文","收起"] if w-set(c.get(k,{}).get("localizations",{}))]
 sys.exit(1 if bad else 0)'
 then ok R7-9; else bad "R7-9 展开/收起文案语种不齐"; fi
+
+# R7-10 用户气泡展开：状态在共享存储 + 发通知让列表重算
+C=src/ios/Views/Chat/ChatMessageViews.swift
+V3=src/ios/Agent/MessageList/CollectionViewMessageListV3.swift
+if rg -qF 'final class UserBubbleExpansion' "$C" \
+   && rg -qF 'userBubbleToggled' "$C" \
+   && rg -qF 'for: .userBubbleToggled' "$V3" \
+   && rg -qF 'case .wholeMessage(let mid) = item, mid == messageId' "$V3"; then
+  ok R7-10; else bad "R7-10 用户气泡展开没接列表重算"; fi
+
+# R7-11 thinking 样张不再自己画卡片（真身是 TurnSummaryRow + TurnDetailSheet）
+if ! rg -qF 'MinisThemeShape.thinkingFill' "$V" \
+   && [ "$(rg -c 'TurnSummaryRow\(' "$V")" -ge 2 ]; then
+  ok R7-11; else bad "R7-11 样张里还有自绘的 thinking 卡片"; fi
 
 echo "----"
 if [ "$fail" -gt 0 ]; then echo "$fail FAILED"; exit 1; else echo "全部通过"; fi

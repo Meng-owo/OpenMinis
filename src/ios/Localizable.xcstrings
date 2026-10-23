@@ -18409,6 +18409,65 @@
         }
       }
     },
+    "点这一行看 thinking 卡片的真身，卡片图就贴在那上面。" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tippe auf diese Zeile, um die echte Thinking-Karte zu sehen — dort sitzt das Kartenbild."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap this row to see the real thinking card — that's where the card image lives."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toca esta fila para ver la tarjeta real de thinking; ahí va la imagen de la tarjeta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Touchez cette ligne pour voir la vraie carte thinking — c'est là que va l'image."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "この行をタップすると thinking カードの実物が見られます。カード画像はそこに貼られます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 줄을 탭하면 thinking 카드 실물을 볼 수 있어요. 카드 이미지는 거기에 붙습니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Нажмите на эту строку, чтобы увидеть настоящую карточку thinking — там и живёт изображение карточки."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点这一行看 thinking 卡片的真身，卡片图就贴在那上面。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "點這一行看 thinking 卡片的真身，卡片圖就貼在那上面。"
+          }
+        }
+      }
+    },
     "组件默认态" : {
       "extractionState" : "manual",
       "localizations" : {

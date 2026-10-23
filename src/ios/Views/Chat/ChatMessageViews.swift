@@ -217,13 +217,30 @@ enum UserCodeFencing {
 
 // MARK: - 正文视图
 
+/// [B28 R7-3] 用户气泡的展开状态不能放 @State：列表重算会 reconfigure 这个
+/// 单元格，SwiftUI 视图重建、@State 归零，刚展开又弹回去。放在外面按消息 id 记。
+final class UserBubbleExpansion: ObservableObject {
+    static let shared = UserBubbleExpansion()
+    @Published private(set) var expanded: Set<UUID> = []
+    func isExpanded(_ id: UUID?) -> Bool { id.map { expanded.contains($0) } ?? false }
+    func toggle(_ id: UUID?) {
+        guard let id else { return }
+        if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+    }
+}
+
 struct UserMessageText: View {
     let text: String
     let isQueued: Bool
     var isDelivering: Bool = false
+    /// [B28 R7-3] 展开/收起改了高度，得让列表清缓存重算——不然只是按钮文字
+    /// 变了，正文还是被旧高度切着（醒醒 10-23 截图：点了「展开全文」没展开）。
+    var messageId: UUID? = nil
 
-    @State private var expanded = false
     @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+    @ObservedObject private var expansion = UserBubbleExpansion.shared
+
+    private var expanded: Bool { expansion.isExpanded(messageId) }
 
     private var fenced: String { UserCodeFencing.autoFenced(text) }
     /// 有代码就走 markdown（代码块可折叠），没有就保持纯文本（不擅自改排版）。
@@ -253,7 +270,13 @@ struct UserMessageText: View {
             }
             if isLong {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
+                    withAnimation(.easeInOut(duration: 0.18)) { expansion.toggle(messageId) }
+                    if let messageId {
+                        // 下一拍再发：等 SwiftUI 先把新高度算出来，列表重测才拿得到新值。
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .userBubbleToggled, object: messageId)
+                        }
+                    }
                 } label: {
                     Text(expanded ? AppLocalized("收起") : AppLocalized("展开全文"))
                         .font(.system(size: 12, weight: .medium))
@@ -670,7 +693,8 @@ struct ChatMessageRow: View {
                             // [B28 R7] 代码自动成可折叠块 + 长文可折，都在这个组件里。
                             UserMessageText(text: userDisplayText,
                                             isQueued: message.isQueued,
-                                            isDelivering: message.isDelivering)
+                                            isDelivering: message.isDelivering,
+                                            messageId: message.id)
 
                             if message.isQueued {
                                 if let onWithdraw {
