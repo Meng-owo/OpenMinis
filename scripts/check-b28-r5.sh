@@ -5,11 +5,12 @@ V=src/ios/Views/Settings/AppearanceStudioView.swift
 C=src/ios/Views/Chat/ChatMessageViews.swift
 fail=0
 ok()  { printf 'OK   %s\n' "$1"; }
-bad() { printf 'FAIL %s\n' "$1'; }" | sed "s/' };//" ; }
 bad() { printf 'FAIL %s\n' "$1"; fail=$((fail+1)); }
 
-# R5-1 thinking 样张 = 真组件 ThinkingBlockView
-if rg -qF 'ThinkingBlockView(block: previewThinkingBlock' "$V"; then ok R5-1; else bad "R5-1 thinking 样张不是真组件"; fi
+# R5-1 thinking 样张 = 真身（合并行 + 点开真抽屉）
+# [B28 R7 醒醒实拍 10-23] 聊天里 thinking 早已不是折叠卡片 ThinkingBlockView，
+# 真身是 TurnSummaryRow 合并行、点开弹 TurnDetailSheet 抽屉。样张跟着真身走。
+if rg -qF 'TurnSummaryRow(' "$V" && rg -qF 'TurnDetailSheet(message: previewTurnMessage)' "$V" && ! rg -qF 'ThinkingBlockView(block: previewThinkingBlock' "$V"; then ok R5-1; else bad "R5-1 thinking 样张不是真身"; fi
 
 # R5-2 AI 样张 = 真 AssistantBlockView（含 Markdown 渲染与显示形态判定）
 if rg -qF 'AssistantBlockView(block: previewAssistantMessage.blocks[0]' "$V"; then ok R5-2; else bad "R5-2 AI 气泡样张不是真组件"; fi

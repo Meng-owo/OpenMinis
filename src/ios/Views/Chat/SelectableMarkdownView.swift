@@ -1553,7 +1553,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         var fullHeight: CGFloat
         var fittingWidth: CGFloat
         var collapsedHeight: CGFloat
-        let maxCodeHeight: CGFloat
+        // [B28 R7] maxCodeHeight 已删：展开态不再有 400pt 封顶窗口。
         let bottomPadding: CGFloat
         let language: String?
         let theme: SelectableMarkdownTheme
@@ -1566,7 +1566,7 @@ final class CodeBlockAttachment: NSTextAttachment {
         var wrapEnabled: Bool = false
         init(fullWidth: CGFloat, inset: CGFloat, contentWidth: CGFloat, topOffset: CGFloat,
              fullHeight: CGFloat, fittingWidth: CGFloat, collapsedHeight: CGFloat,
-             maxCodeHeight: CGFloat, bottomPadding: CGFloat,
+             bottomPadding: CGFloat,
              language: String?, theme: SelectableMarkdownTheme, gutterWidth: CGFloat) {
             self.fullWidth = fullWidth
             self.inset = inset
@@ -1575,7 +1575,6 @@ final class CodeBlockAttachment: NSTextAttachment {
             self.fullHeight = fullHeight
             self.fittingWidth = fittingWidth
             self.collapsedHeight = collapsedHeight
-            self.maxCodeHeight = maxCodeHeight
             self.bottomPadding = bottomPadding
             self.language = language
             self.theme = theme
@@ -1654,7 +1653,9 @@ final class CodeBlockAttachment: NSTextAttachment {
         guard let metrics = objc_getAssociatedObject(wrapper, &metricsKey) as? CodeLayoutMetrics,
               let container = wrapper.subviews.first,
               let scrollView = container.subviews.first(where: { $0 is UIScrollView }) as? UIScrollView else { return }
-        let visibleHeight = collapsed ? metrics.collapsedHeight : min(metrics.fullHeight, metrics.maxCodeHeight)
+        // [B28 R7] 展开=全量高度，不再有 400pt 滚动窗口（内层纵向滚动在
+        // 聊天列表里被外层 pan 吃掉，用户根本滚不动——黑线和截断都源自这套）。
+        let visibleHeight = collapsed ? metrics.collapsedHeight : metrics.fullHeight
         let totalHeight = metrics.topOffset + visibleHeight + metrics.bottomPadding
         let applyFrames = {
             scrollView.frame = CGRect(x: 0, y: metrics.topOffset, width: metrics.contentWidth,
@@ -1672,6 +1673,14 @@ final class CodeBlockAttachment: NSTextAttachment {
                 fade.frame = CGRect(x: 0, y: metrics.topOffset + visibleHeight - 24,
                                     width: metrics.contentWidth, height: 24)
                 fade.layer.sublayers?.first?.frame = fade.bounds
+                // [B28 R7 黑线] 渐变的收尾色必须跟容器当前真实背景色一致。
+                // makeView 里那次 resolve（UITraitCollection.current）可能拿到
+                // 遗留 trait → 渐变成黑色，就是「截断处一条黑线」。每次布局
+                // 都从 container.backgroundColor 现取，主题换了也会跟着刷新。
+                let fadeBg = (container.backgroundColor ?? .clear)
+                    .resolvedColor(with: container.traitCollection)
+                (fade.layer.sublayers?.first as? CAGradientLayer)?.colors =
+                    [UIColor.clear.cgColor, fadeBg.cgColor]
             }
             if let chevron = container.viewWithTag(chevronTag) as? UIImageView {
                 chevron.image = UIImage(systemName: collapsed ? "chevron.down" : "chevron.up",
@@ -1830,7 +1839,12 @@ final class CodeBlockAttachment: NSTextAttachment {
 
     override func attachmentBounds(for textContainer: NSTextContainer?, proposedLineFragment lineFrag: CGRect, glyphPosition position: CGPoint, characterIndex charIndex: Int) -> CGRect {
         let width = lineFrag.width
-        let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 28 : 12
+        // [B28 R7 醒醒黑线] 必须和 makeView 的 topOffset（14 / 32）逐值相等：
+        // 外层按这里的 height 预留 attachment 槽位，makeView 造出来的真实
+        // 视图要是高出 4pt，容器背景就会从槽位底下漏出来——那就是她看到的
+        // 「底部黑线 + 切掉最后一行 + 压住下面那行字」。以前写 28/12，
+        // makeView 用 32/14，差 4pt，事故稳定复现。
+        let topOffset: CGFloat = (language != nil && !language!.isEmpty) ? 32 : 14
         // [chat-ui] Collapsed blocks measure the 8-line viewport, not the full text.
         let collapsed = Self.collapseState[contentFingerprint] ?? false
         // [10-20 醒醒] 换行模式下高度按可用宽度算，不再是内容宽度。
@@ -1839,8 +1853,10 @@ final class CodeBlockAttachment: NSTextAttachment {
             ? measurePrefixHeight(lines: Self.collapsedVisibleLines, wrapWidth: wrapWidth)
             : measureCodeHeight(wrapWidth: wrapWidth)
         let bottomPadding: CGFloat = 12
-        let maxCodeHeight: CGFloat = 400 - topOffset - bottomPadding
-        let scrollHeight = min(contentHeight, maxCodeHeight)
+        // [B28 R7] 展开态不再设 400pt 封顶窗口。旧封顶 + 内层纵向滚动在
+        // 聊天列表里滚不动（纵向 pan 被列表吃掉），代码就被锁在半截高度。
+        // 现在展开=全量铺开（长块默认仍是折叠 8 行窗，点头部开合）。
+        let scrollHeight = contentHeight
         let totalHeight = topOffset + scrollHeight + bottomPadding
         let height = totalHeight + Self.topMargin + Self.bottomMargin
         return CGRect(x: 0, y: 0, width: width, height: height)
@@ -1947,15 +1963,14 @@ final class CodeBlockAttachment: NSTextAttachment {
         gutter.frame = CGRect(x: 0, y: 0, width: gutterW, height: contentHeight)
         codeTextView.frame = CGRect(x: gutterW, y: 0, width: fittingWidth, height: contentHeight)
 
-        let maxCodeHeight: CGFloat = 400 - topOffset - 12
+        // [B28 R7] 400pt 封顶删除：展开态高度=代码真实长度。
         let bottomPadding: CGFloat = 12
         let metrics = CodeLayoutMetrics(
             fullWidth: width, inset: inset, contentWidth: contentWidth, topOffset: topOffset,
             fullHeight: contentHeight, fittingWidth: wrapEnabled ? contentWidth : gutterW + fittingWidth,
-            collapsedHeight: min(measurePrefixHeight(lines: Self.collapsedVisibleLines,
-                                                     wrapWidth: wrapEnabled ? availableCodeWidth : nil),
-                                 maxCodeHeight),
-            maxCodeHeight: maxCodeHeight, bottomPadding: bottomPadding,
+            collapsedHeight: measurePrefixHeight(lines: Self.collapsedVisibleLines,
+                                                 wrapWidth: wrapEnabled ? availableCodeWidth : nil),
+            bottomPadding: bottomPadding,
             language: language, theme: theme, gutterWidth: gutterW)
         metrics.wrapEnabled = wrapEnabled
         objc_setAssociatedObject(wrapper, &Self.metricsKey, metrics, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
@@ -1968,13 +1983,16 @@ final class CodeBlockAttachment: NSTextAttachment {
         container.addSubview(scrollView)
         wrapper.addSubview(container)
 
-        // Collapsed fade mask (static gradient — never animated, so no
-        // CAGradientLayer colorspace race; see ShimmerOverlay's note).
+        // Collapsed fade mask. [B28 R7 黑线] 以前这里用 UITraitCollection.current
+        // resolve 背景色——makeView 不在 layout pass 里，那个值是遗留的，经常
+        // 解成黑色，就是截断处那条黑线。现在初值直接用容器自己的背景色，
+        // applyCollapsedLayout 每次布局还会再刷一遍（主题切换也跟得上）。
         let fade = UIView()
         fade.tag = Self.fadeViewTag
         fade.isUserInteractionEnabled = false
         let gradient = CAGradientLayer()
-        let resolvedBg = theme.codeBlockBackground.resolvedColor(with: UITraitCollection.current)
+        let resolvedBg = container.backgroundColor?
+            .resolvedColor(with: container.traitCollection) ?? .clear
         gradient.colors = [UIColor.clear.cgColor, resolvedBg.cgColor]
         fade.layer.addSublayer(gradient)
         container.addSubview(fade)
@@ -2164,15 +2182,15 @@ final class CodeBlockAttachment: NSTextAttachment {
         // right after this returns to lay out the TextKit attachment slot +
         // the enclosing cell — animating that would desync the code frame
         // from the text flow. Only the visible children animate.
-        let oldVisible = wrapperCollapsed ? metrics.collapsedHeight : min(metrics.fullHeight, metrics.maxCodeHeight)
+        let oldVisible = wrapperCollapsed ? metrics.collapsedHeight : metrics.fullHeight
         let oldTotal = metrics.topOffset + oldVisible + metrics.bottomPadding
         metrics.fullHeight = fitting.height
         metrics.fittingWidth = wrapEnabled ? metrics.contentWidth : gutterW + fitting.width
         metrics.gutterWidth = gutterW
-        metrics.collapsedHeight = min(measurePrefixHeight(lines: Self.collapsedVisibleLines,
-                                                          wrapWidth: wrapEnabled ? max(60, metrics.contentWidth - gutterW) : nil),
-                                      metrics.maxCodeHeight)
-        let newTotal = metrics.topOffset + min(metrics.fullHeight, metrics.maxCodeHeight) + metrics.bottomPadding
+        metrics.collapsedHeight = measurePrefixHeight(lines: Self.collapsedVisibleLines,
+                                                      wrapWidth: wrapEnabled ? max(60, metrics.contentWidth - gutterW) : nil)
+        // [B28 R7] 展开=全量高度（与 attachmentBounds / applyCollapsedLayout 同式）。
+        let newTotal = metrics.topOffset + metrics.fullHeight + metrics.bottomPadding
         let heightGrew = newTotal > oldTotal + 0.5
         Self.applyCollapsedLayout(to: wrapper, collapsed: wrapperCollapsed, animated: heightGrew)
 

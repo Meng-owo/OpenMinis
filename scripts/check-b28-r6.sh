@@ -6,11 +6,15 @@ fail=0
 ok()  { printf 'OK   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fail=$((fail+1)); }
 
-# R6-1 liveSampleCard：一处定义，两处使用（气泡页、配色页）
-if [ "$(rg -c 'liveSampleCard' "$V")" -ge 3 ]; then ok R6-1; else bad "R6-1 样张卡没做到两处共享"; fi
+# R6-1 样张按页分开（[B28 R7 醒醒 10-23] 三页共用一张=全部一个样，她否了）：
+# 配色页、气泡页、背景页各有自己那张，且旧共享卡 liveSampleCard 必须下线。
+if rg -q 'private var paletteSampleCard' "$V" \
+   && rg -q 'private var bubblesSampleCard' "$V" \
+   && rg -q 'private var backdropSampleCard' "$V" \
+   && ! rg -q 'liveSampleCard' "$V"; then ok R6-1; else bad "R6-1 样张没按页分开"; fi
 
-# R6-2 配色页真的挂了样张
-if rg -A2 'private var palettePage' "$V" | rg -q liveSampleCard; then ok R6-2; else bad "R6-2 配色页没有样张"; fi
+# R6-2 配色页挂的是自己的样张
+if rg -A3 'private var palettePage' "$V" | rg -q paletteSampleCard; then ok R6-2; else bad "R6-2 配色页没挂自己的样张"; fi
 
 # R6-3 分类行的禁用 ColorPicker 摘干净（死字段不摆活控件）
 if rg -q 'ColorPicker.*categoryColorBinding' "$V"; then bad "R6-3 假色板还挂着"; else ok R6-3; fi

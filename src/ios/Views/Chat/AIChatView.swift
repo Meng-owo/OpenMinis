@@ -4850,7 +4850,9 @@ struct AIChatView: View {
 /// the same finding as the FAB conversion). The sub-26 branch keeps the original
 /// fill and BOTH shadows byte-for-byte, including the dark-mode-only top shadow
 /// that lifts the bar off the message list.
-private struct ComposerSurface: ViewModifier {
+/// [B28 R7 醒醒分类] 输入栏样张要用真皮肤，不能复刻一份假的。
+/// 从 private 放开到 internal：装扮页的气泡页样张直接复用这一份。
+struct ComposerSurface: ViewModifier {
     @ObservedObject private var appearanceStudio = AppearanceStudio.shared
 
     private var shape: MinisBubbleShape { MinisThemeShape.inputBar }

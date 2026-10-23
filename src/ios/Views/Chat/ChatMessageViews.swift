@@ -156,6 +156,121 @@ private struct ContextMenuPreviewSurface: ViewModifier {
 /// disappear (the FAB regression).
 // [B28 R5] internal（原 private）：装扮页样张复用真气泡皮肤本体 ——
 // 平铺/气泡/文稿三形态和 Liquid Glass 判定全在这里，复制=双维护=撒谎。
+// MARK: - 代码识别
+
+enum UserCodeFencing {
+    /// 一行像不像代码。宁可保守：宁可漏判成普通文字，也不要把散文错认成代码。
+    static func looksLikeCode(_ rawLine: String) -> Bool {
+        let line = rawLine.trimmingCharacters(in: .whitespaces)
+        guard !line.isEmpty else { return false }
+        // 缩进块（两个空格以上）本身是强信号
+        if rawLine.hasPrefix("    ") || rawLine.hasPrefix("\t") { return true }
+        if line.hasSuffix("{") || line.hasSuffix("}") || line.hasSuffix(";") { return true }
+        let markers = ["def ", "func ", "class ", "struct ", "import ", "return ",
+                       "print(", "console.log", "var ", "let ", "const ", "#include",
+                       "SELECT ", "INSERT ", "<?", "</", "=>", "->", "==", "!=",
+                       "for (", "while (", "if (", "elif ", "async ", "await "]
+        if markers.contains(where: { line.hasPrefix($0) || line.contains($0) }) { return true }
+        // x = y 形态的赋值
+        if line.contains(" = "), !line.hasSuffix("。"), !line.hasSuffix("！") { return true }
+        return false
+    }
+
+    /// 把连续 3 行以上的代码段补上 ``` 栅栏。已经有栅栏就原样返回。
+    static func autoFenced(_ text: String) -> String {
+        guard !text.contains("```") else { return text }
+        let lines = text.components(separatedBy: "\n")
+        guard lines.count >= 3 else { return text }
+        var out: [String] = []
+        var run: [String] = []
+
+        func flushRun() {
+            guard !run.isEmpty else { return }
+            let codeLines = run.filter { looksLikeCode($0) }.count
+            let isCode = run.count >= 3 && Double(codeLines) / Double(run.count) >= 0.6
+            if isCode {
+                out.append("```")
+                out.append(contentsOf: run)
+                out.append("```")
+            } else {
+                out.append(contentsOf: run)
+            }
+            run.removeAll()
+        }
+
+        for line in lines {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty {
+                flushRun()
+                out.append(line)
+            } else if looksLikeCode(line) {
+                run.append(line)
+            } else {
+                flushRun()
+                out.append(line)
+            }
+        }
+        flushRun()
+        return out.joined(separator: "\n")
+    }
+}
+
+// MARK: - 正文视图
+
+struct UserMessageText: View {
+    let text: String
+    let isQueued: Bool
+    var isDelivering: Bool = false
+
+    @State private var expanded = false
+    @ObservedObject private var appearanceStudio = AppearanceStudio.shared
+
+    private var fenced: String { UserCodeFencing.autoFenced(text) }
+    /// 有代码就走 markdown（代码块可折叠），没有就保持纯文本（不擅自改排版）。
+    private var hasCode: Bool { fenced != text }
+    private var lines: [String] { text.components(separatedBy: "\n") }
+    private var isLong: Bool {
+        guard !hasCode else { return false }   // 代码块自己会折
+        return lines.count > 12 || text.count > 320
+    }
+    private var collapsedText: String {
+        if lines.count > 8 { return lines.prefix(8).joined(separator: "\n") + "\n…" }
+        return String(text.prefix(280)) + "…"
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if hasCode {
+                SelectableMarkdownView(markdown: fenced)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .modifier(MinisOpenURLHandler())
+                    .id(appearanceStudio.themePackRevision)
+            } else {
+                Text(isLong && !expanded ? collapsedText : text)
+                    .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
+                    .foregroundStyle(isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
+                    .id(appearanceStudio.themePackRevision)
+            }
+            if isLong {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { expanded.toggle() }
+                } label: {
+                    Text(expanded ? AppLocalized("收起") : AppLocalized("展开全文"))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(ChatColors.accent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .modifier(UserBubbleSurface(isQueued: isQueued))
+        .modifier(QueuedStatusDot(isQueued: isQueued, isDelivering: isDelivering))
+    }
+}
+
+// MARK: - 用户气泡皮肤
+
 struct UserBubbleSurface: ViewModifier {
     let isQueued: Bool
 
@@ -552,15 +667,10 @@ struct ChatMessageRow: View {
                         }
                     } else {
                         HStack(spacing: 6) {
-                            Text(userDisplayText)
-                                .font(MinisThemeShape.fontFamily.font(size: FontSettings.shared.scaledMessage(16.5)))
-                                .foregroundStyle(message.isQueued ? ChatColors.secondaryText : ChatColors.primaryText)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 10)
-                                .modifier(UserBubbleSurface(isQueued: message.isQueued))
-                                .modifier(QueuedStatusDot(isQueued: message.isQueued,
-                                                          isDelivering: message.isDelivering))
-                                .id(appearanceStudio.themePackRevision)
+                            // [B28 R7] 代码自动成可折叠块 + 长文可折，都在这个组件里。
+                            UserMessageText(text: userDisplayText,
+                                            isQueued: message.isQueued,
+                                            isDelivering: message.isDelivering)
 
                             if message.isQueued {
                                 if let onWithdraw {
