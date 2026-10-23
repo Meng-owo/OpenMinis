@@ -14,8 +14,14 @@ L=src/ios/Agent/MessageList/MessageListLayout.swift
 S=src/ios/Views/Chat/SelectableMarkdownView.swift
 
 # R8-1 自带围栏的代码也要走代码块（旧判据只认 autoFenced 改动过文本）
-if rg -qF 'private var hasCode: Bool { text.contains("```") || fenced != text }' "$C"; then
+if rg -qF 'text.contains("```") || UserCodeFencing.autoFenced(text) != text' "$C"; then
   ok R8-1; else bad "R8-1 用户自带三反引号的代码还会被当纯文本"; fi
+
+# R8-1b 视图和列表预计算共用同一个代码判据（只改一边=高度对不上）
+if rg -qF 'static func hasCode(_ text: String) -> Bool' "$C" \
+   && rg -qF '!UserMessageText.hasCode(text)' "$V3" \
+   && ! rg -qF 'UserCodeFencing.autoFenced(text) == text' "$V3"; then
+  ok R8-1b; else bad "R8-1b 预计算和视图的代码判据不一致"; fi
 
 # R8-2 展开/收起保留旧高度当占位（删缓存会先画一帧错高度 = 那一跳）
 if rg -qF 'func invalidateHeightKeepingPlaceholder' "$L" \
@@ -33,8 +39,8 @@ if rg -qF 'let target = postY - screenY' "$V3" \
   ok R8-4; else bad "R8-4 settle 仍只恢复数字 offset"; fi
 
 # R8-5 滚动中只放行视口下方的高度变化
-if rg -qF 'if originalAttributes.frame.minY < viewportBottom {' "$L" \
-   && ! rg -qF 'if preferred <= original + 0.5 {' "$L"; then
+if rg -qF 'if originalAttributes.frame.minY < viewportBottom,' "$L" \
+   && ! rg -qF 'preferred <= original + 0.5' "$L"; then
   ok R8-5; else bad "R8-5 滚动中仍放行视口内增长"; fi
 
 # R8-6 代码块折叠后失效 TextKit 布局，否则 sizeThatFits 还是旧高度

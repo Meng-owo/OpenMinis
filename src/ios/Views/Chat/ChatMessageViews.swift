@@ -321,7 +321,13 @@ struct UserMessageText: View {
     /// [10-23 醒醒 问题4] 她自己粘的带 ``` 的代码，autoFenced 原样返回，
     /// 旧判据 `fenced != text` 于是判成「没代码」→ 整段按纯文本渲染，
     /// 三个反引号照字面显示，代码块消失。原文自带围栏也是代码。
-    private var hasCode: Bool { text.contains("```") || fenced != text }
+    ///
+    /// 视图和列表的预计算必须用**同一个**判据：只改一边的话，格子先按
+    /// 折叠长文留高、视图按代码块铺开，滚动时就对不上（那一跳的另一种来源）。
+    static func hasCode(_ text: String) -> Bool {
+        text.contains("```") || UserCodeFencing.autoFenced(text) != text
+    }
+    private var hasCode: Bool { Self.hasCode(text) }
     // [10-23 醒醒] 折叠判定与折叠后的样子只写一份：视图用、列表预计算也用。
     // 预计算不知道折叠态的话，格子先按全文高度占位、再缩回去，就是那一跳。
     static func isLongText(_ text: String) -> Bool {

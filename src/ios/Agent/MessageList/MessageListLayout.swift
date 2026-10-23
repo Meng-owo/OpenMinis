@@ -398,7 +398,10 @@ final class MessageListLayout: UICollectionViewLayout {
                 // 滚动中只放行视口下方的格子：看不见，改了也不影响她。
                 let viewportBottom = (collectionView?.contentOffset.y ?? 0)
                     + (collectionView?.bounds.height ?? 0)
-                if originalAttributes.frame.minY < viewportBottom {
+                // 流式中的 cell 例外：它的内容正在长，压住会裁掉新出的字，
+                // 而流式时用户基本停在底部（autoScrolling 不在这条分支里）。
+                if originalAttributes.frame.minY < viewportBottom,
+                   !isStreamingCell(index) {
                     if abs(preferred - original) > 0.5 {
                         deferredHeights[index] = preferred
                     }

@@ -3877,7 +3877,7 @@ extension CollectionViewMessageListV3 {
             // [10-23 醒醒] 长文折叠态要参与预计算：布局先按全文预留、格子再缩，
             // 展开/收起时会跳一下。含代码的消息不折（代码块自己会折），跳过。
             if UserMessageText.isLongText(text),
-               UserCodeFencing.autoFenced(text) == text,
+               !UserMessageText.hasCode(text),
                !UserBubbleExpansion.shared.isExpanded(message.id) {
                 text = UserMessageText.collapsedPreview(of: text)
             }
