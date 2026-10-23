@@ -1548,7 +1548,7 @@ enum ChatAddressing {
     /// [B28 R11] 优先级：通讯录「我自己」档案里的「怎么称呼」
     /// → 外观工作室填的称呼 → 中性词。哪来的就用哪来的，绝不写死名字。
     static func user() -> String {
-        let fromProfile = SoulStore.userProfileAddressingName()
+        let fromProfile = SystemPromptBuilder.userProfileAddressingName()
         if !fromProfile.isEmpty { return fromProfile }
         let n = AppearanceStudio.shared.userDisplayName
         return n.isEmpty ? AppLocalized("你") : n
@@ -1556,7 +1556,7 @@ enum ChatAddressing {
 
     /// 说话的人叫什么（注入给模型的提示词用）。
     static func userForModel() -> String {
-        let fromProfile = SoulStore.userProfileAddressingName()
+        let fromProfile = SystemPromptBuilder.userProfileAddressingName()
         if !fromProfile.isEmpty { return fromProfile }
         let n = AppearanceStudio.shared.userDisplayName
         return n.isEmpty ? AppLocalized("用户") : n

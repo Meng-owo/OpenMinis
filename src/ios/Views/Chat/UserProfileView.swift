@@ -29,7 +29,7 @@ struct UserProfileView: View {
 
     /// 称呼：档案里的「怎么称呼」优先，界面文案才跟着变。
     private var addressingName: String {
-        let n = SoulStore.userProfileAddressingName(for: profileId)
+        let n = SystemPromptBuilder.userProfileAddressingName(for: profileId)
         return n.isEmpty ? (persona?.name ?? "我自己") : n
     }
 
@@ -93,8 +93,8 @@ struct UserProfileView: View {
 
             Section {
                 Toggle("把 NSFW 小节给 AI 看", isOn: Binding(
-                    get: { SoulStore.userProfileNSFWInjectionEnabled },
-                    set: { SoulStore.userProfileNSFWInjectionEnabled = $0 }
+                    get: { SystemPromptBuilder.userProfileNSFWInjectionEnabled },
+                    set: { SystemPromptBuilder.userProfileNSFWInjectionEnabled = $0 }
                 ))
             } header: {
                 Text("注入范围")
@@ -124,7 +124,7 @@ struct UserProfileView: View {
 
     /// 落盘「怎么称呼」。空串也算一次有效修改（清掉叫法）。
     private func commitName() {
-        let current = SoulStore.userProfileAddressingName(for: profileId)
+        let current = SystemPromptBuilder.userProfileAddressingName(for: profileId)
         guard nameDraft != current else { return }
         setFieldValue("怎么称呼", to: nameDraft.trimmingCharacters(in: .whitespaces))
     }
@@ -134,14 +134,14 @@ struct UserProfileView: View {
         let text = (file?.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         draft = text.isEmpty ? PersonaStore.userProfileSoulTemplate() : text
         loadedBody = draft
-        nameDraft = SoulStore.userProfileAddressingName(for: profileId)
+        nameDraft = SystemPromptBuilder.userProfileAddressingName(for: profileId)
     }
 
     /// 小节填写进度，给"档案内容"那行当副标题。
     private func fieldSummary() -> String {
         let file = SoulStore.load(for: profileId)
         guard let text = file?.body, !text.isEmpty else { return "未填写" }
-        let filled = SoulStore.userProfileSection(from: file)
+        let filled = SystemPromptBuilder.userProfileSection(from: file)
         let sections = filled.components(separatedBy: "## ").filter { $0.count > 1 }.count
         return sections > 0 ? "已填 \(sections) 节" : "未填写"
     }
@@ -216,9 +216,9 @@ private struct UserProfilePreview: View {
     let personaId: String
     var body: some View {
         ScrollView {
-            Text(SoulStore.userProfileSection(for: personaId).isEmpty
+            Text(SystemPromptBuilder.userProfileSection(for: personaId).isEmpty
                  ? AppLocalized("档案还是空的，暂时不会给 AI 加任何内容。")
-                 : SoulStore.userProfileSection(for: personaId))
+                 : SystemPromptBuilder.userProfileSection(for: personaId))
                 .font(.system(size: 12, design: .monospaced))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)

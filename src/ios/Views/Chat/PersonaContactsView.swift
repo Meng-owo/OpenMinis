@@ -66,7 +66,7 @@ struct PersonaContactsView: View {
     /// [B28 R11] 卡片标题：档案显示她档案里填的称呼，人设显示人设名。
     static func displayName(for persona: Persona) -> String {
         guard persona.isUserProfile else { return persona.name }
-        let called = SoulStore.userProfileAddressingName()
+        let called = SystemPromptBuilder.userProfileAddressingName()
         return called.isEmpty ? persona.name : called
     }
 

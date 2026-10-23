@@ -25,5 +25,7 @@ chk R11-12 "rg -q 'struct UserProfileView' $UP && rg -q 'UserProfileView()' $CT"
 chk R11-13 "rg -q 'UserProfileView.swift' $PB"
 chk R11-14 "rg -q 'static func profileSummaryText' $CT && rg -q 'profileSummaryText\\(\\)' $CT"
 chk R11-15 "rg -q 'displayName\\(for persona: Persona\\)' $CT || rg -q 'displayName\\(for:' $CT"
+chk R11-16 "! rg -q 'SoulStore\\.userProfile' -g '*.swift' src/ios"
+chk R11-17 "rg -q 'SystemPromptBuilder\\.userProfile' src/ios/Shared/AppearanceStudio.swift"
 echo "----"
 [ $fails -eq 0 ] && echo "全部通过" || exit 1
