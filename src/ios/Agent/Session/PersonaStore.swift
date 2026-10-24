@@ -687,6 +687,8 @@ final class PersonaStore: ObservableObject {
         WidgetProfileBridge.refresh()
         save(list)
         self.personas = list.sorted { $0.sortOrder < $1.sortOrder }
+        // 头像对齐要在 personas 就位之后，否则遍历的是空列表。
+        migrateAvatarSource()
         if UserDefaults.standard.string(forKey: Self.currentIDKey) == nil {
             currentPersonaID = Self.defaultPersonaID
         }
@@ -889,6 +891,27 @@ final class PersonaStore: ObservableObject {
     }
 
     /// 切换当前人设。
+    /// [B28 R18] 头像真源统一到 Persona.avatar，SOUL.md 的 icon 只做镜像。
+    /// 老数据里两边可能指着不同的文件（情头页留下的 soul-xxx.png），
+    /// 启动时对齐一次：通讯录有值就以它为准写进 SOUL；通讯录空就反过来把
+    /// SOUL 的图接过来，别让她以前的头像凭空消失。
+    func migrateAvatarSource() {
+        for p in personas {
+            let soul = SoulStore.load(for: p.id)
+            let soulIcon = soul?.metadata.icon ?? ""
+            let avatar = p.avatar ?? ""
+            if !avatar.isEmpty, soulIcon != avatar {
+                guard var file = soul else { continue }
+                file.metadata.icon = avatar
+                try? SoulStore.save(file, for: p.id)
+            } else if avatar.isEmpty, !soulIcon.isEmpty {
+                var updated = p
+                updated.avatar = soulIcon
+                updatePersona(updated)
+            }
+        }
+    }
+
     /// [B28 R14] 人设变了只发通知不够——桌面小组件也要跟着换字。
     /// 原来只有档案页手动刷，改名/换头像时小组件还挂着旧名字。
     private func broadcastPersonaChange() {
@@ -951,7 +974,10 @@ final class PersonaStore: ObservableObject {
             if old.name != p.name {
                 soul.metadata.name = p.name
             }
-            if old.avatar != p.avatar {
+            // [B28 R18] 不比较 old/new：同名文件换图时路径不变，
+            // 比较会判定"没变"而跳过，SOUL 就停在旧路径上。
+            // 只要和 SOUL 里存的不一样就对齐，一样就省一次写盘。
+            if soul.metadata.icon != (p.avatar ?? "") {
                 soul.metadata.icon = p.avatar ?? ""
             }
             try? SoulStore.save(soul, for: p.id)

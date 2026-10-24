@@ -159,6 +159,17 @@ struct SoulSettingsView: View {
     // Standard Form row — the insetGrouped section provides the rounded
     // card chrome automatically, so we only render content here. Matches
     // the visual width of every other section on the page.
+    /// [B28 R18] 头像真源是 Persona.avatar（通讯录那份）。SOUL.md 的 icon
+    /// 只是镜像，老数据可能还指着旧文件，所以这里也以通讯录为准。
+    private var displayIcon: String {
+        let pid = PersonaStore.currentID()
+        if let stored = PersonaStore.shared.personas.first(where: { $0.id == pid })?.avatar,
+           !stored.isEmpty {
+            return stored
+        }
+        return icon
+    }
+
     private var previewCard: some View {
         HStack(alignment: .center, spacing: 12) {
             // [T-soul-custom-icon] Tappable, and it has to LOOK tappable: a
@@ -168,59 +179,22 @@ struct SoulSettingsView: View {
             // is the same treatment the category badges elsewhere in Settings
             // use. It doubles as a backdrop for transparent PNG icons, whose
             // whole point is having no background of their own.
-            Button {
-                showIconOptions = true
-            } label: {
-                // Inset inside the 52pt button so the grey disc stays visible
-                // as a ring even when the icon is an image, which otherwise
-                // fills the whole frame and hides the affordance entirely.
-                SoulIconView(icon: icon, size: SoulIconImage.renderPoints)
-                    .frame(width: 44, height: 44)
-                    .frame(width: 52, height: 52)
-                    .background(Circle().fill(Color.secondary.opacity(0.12)))
-                    .overlay(
-                        Circle().strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.5)
-                    )
-                    // The badge sits INSIDE the circle's bounds rather than
-                    // straddling its edge. Overhanging it (even with padding)
-                    // gets clipped to a sliver by the enclosing Button label,
-                    // which is what made the pencil hard to see.
-                    //
-                    // Drawn as an explicit filled Circle + pencil glyph rather
-                    // than `pencil.circle.fill` with .palette: that symbol's
-                    // "circle" layer is the BACKGROUND, so on the white card it
-                    // rendered as an invisible disc with a bare diagonal stroke
-                    // floating over it. Compositing it ourselves also lets the
-                    // badge keep a contrasting ring against a dark icon image.
-                    .overlay(alignment: .bottomTrailing) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Color.white)
-                            .frame(width: 18, height: 18)
-                            .background(Circle().fill(MinisTheme.accent))
-                            .overlay(Circle().strokeBorder(AppearanceStudio.shared.color(.surface, scope: .settings), lineWidth: 1.5))
-                            .offset(x: 1, y: 1)
-                    }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(AppLocalized("Change icon"))
-            // [T-soul-custom-icon] Attached to the BUTTON, not to the whole
-            // page. A confirmationDialog anchors its popover to the view it
-            // is attached to, so hanging it off the Form (as this first did)
-            // pointed the arrow at the middle of the page — visibly at the
-            // Style row — instead of at the icon the user tapped. Only the
-            // dialog needs the anchor; the alerts and the photo picker are
-            // centered/full-screen and stay at page level.
-            .confirmationDialog(AppLocalized("Change icon"), isPresented: $showIconOptions) {
-                Button(AppLocalized("Choose Image…")) { showPhotoPicker = true }
-                if !icon.isEmpty {
-                    Button(AppLocalized("Use Default"), role: .destructive) { icon = "" }
-                }
-                Button(AppLocalized("Cancel"), role: .cancel) {}
-            }
+            // [B28 R18] 头像只有一个入口：通讯录。这里只显示，不给改——
+            // 两处都能改就必然两套存储，AI 也会分不清该动哪条命令。
+            SoulIconView(icon: displayIcon, size: SoulIconImage.renderPoints)
+                .frame(width: 44, height: 44)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.secondary.opacity(0.12)))
+                .overlay(
+                    Circle().strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.5)
+                )
+                .accessibilityLabel(AppLocalized("Icon"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(name.isEmpty ? "嘟嘟" : name)
                     .font(.title3.weight(.semibold))
+                Text(AppLocalized("头像在通讯录里换"))
+                    .font(.caption2)
+                    .foregroundStyle(MinisTheme.secondaryText)
                 if !style.trimmingCharacters(in: .whitespaces).isEmpty {
                     Text(style)
                         .font(.footnote)
