@@ -394,7 +394,7 @@ final class PersonaStore: ObservableObject {
     @Published var currentPersonaID: String = PersonaStore.readCurrentID() {
         didSet {
             UserDefaults.standard.set(currentPersonaID, forKey: Self.currentIDKey)
-            NotificationCenter.default.post(name: .personaDidChange, object: nil)
+            broadcastPersonaChange()
         }
     }
 
@@ -690,7 +690,7 @@ final class PersonaStore: ObservableObject {
         if UserDefaults.standard.string(forKey: Self.currentIDKey) == nil {
             currentPersonaID = Self.defaultPersonaID
         }
-        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+        broadcastPersonaChange()
     }
 
     private static func isDailyLogName(_ name: String) -> Bool {
@@ -854,7 +854,7 @@ final class PersonaStore: ObservableObject {
         Task.detached {
             await ChatStore.shared.deleteSessions(forPersonaId: id)
         }
-        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+        broadcastPersonaChange()
     }
 
     /// 重命名（同步写回该人设 SOUL.md 的 frontmatter，保持一处真相）。
@@ -878,7 +878,7 @@ final class PersonaStore: ObservableObject {
         if id == currentPersonaID {
             SoulStore.refreshCache()
         }
-        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+        broadcastPersonaChange()
     }
 
     /// 排序（拖拽）。
@@ -889,6 +889,13 @@ final class PersonaStore: ObservableObject {
     }
 
     /// 切换当前人设。
+    /// [B28 R14] 人设变了只发通知不够——桌面小组件也要跟着换字。
+    /// 原来只有档案页手动刷，改名/换头像时小组件还挂着旧名字。
+    private func broadcastPersonaChange() {
+        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+        WidgetProfileBridge.refresh()
+    }
+
     func setCurrent(_ id: String) {
         // [B28 R11] 「我自己」描述的是用户，永远不能当当前聊天人设——
         // 选中它等于让 AI 用她的档案当自己的性格。这里硬挡，不靠 UI 自觉。
@@ -923,7 +930,7 @@ final class PersonaStore: ObservableObject {
         }
         guard changed else { return }
         persist()
-        NotificationCenter.default.post(name: .personaDidChange, object: nil)
+        broadcastPersonaChange()
     }
 
     /// 更新某人设的白名单 / 模型绑定；名字或头像有变化时同步到对话侧显示源。

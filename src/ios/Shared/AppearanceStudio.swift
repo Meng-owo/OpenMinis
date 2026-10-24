@@ -1238,6 +1238,8 @@ struct PersonAvatarView: View {
     /// 传进来之后按会话绑定的人设取，跟列表同源。
     var personaID: String?
     @ObservedObject private var studio = AppearanceStudio.shared
+    // 人设一改（换头像）就让所有头像视图重画，不等重进页面。
+    @ObservedObject private var personaStore = PersonaStore.shared
     @State private var soulIcon = SoulStore.cachedMetadata.icon
 
     /// [10-18 醒醒 第五轮] 头像形状跟着主题包走。
@@ -1248,6 +1250,12 @@ struct PersonAvatarView: View {
     private var resolvedIcon: String? {
         guard let pid = personaID else {
             return soulIcon.isEmpty ? nil : soulIcon
+        }
+        // [B28 R14] 通讯录改的头像存在 Persona.avatar，聊天这边原来只读 SOUL.md 的
+        // icon —— 两套存储，改了头像对话框不动。现在以通讯录为准，SOUL 兜底。
+        if let stored = PersonaStore.shared.personas.first(where: { $0.id == pid })?.avatar,
+           !stored.isEmpty {
+            return stored
         }
         return SoulStore.displayIcon(for: pid)
     }

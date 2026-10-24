@@ -221,14 +221,27 @@ struct AssistantBlockView: View {
                                  actionContent: String) -> some View {
         let display = AppearanceChatDisplay.parse(
             AppearanceStudio.shared.currentThemePack().chatDisplay)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .prose(let text):
                     if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        // [B28 R14] 正文各段自己带气泡底，不再让整条消息套一层。
+                        // 这样代码卡片才能从气泡里"脱"出来，是独立的卡。
                         textBlockView(markdown: text)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                MinisThemeShape.assistantBubble.fill(ChatColors.assistantBubble)
+                            )
+                            .overlay(
+                                MinisThemeShape.assistantBubble.fill(
+                                    ChatColors.accent.opacity(isHighlighted ? 0.10 : 0))
+                            )
+                            .clipShape(MinisThemeShape.assistantBubble)
                     }
                 case .code(let language, let code, let codeIndex):
+                    // 代码是独立卡片：自己的圆角、边框、阴影，不吃气泡底。
                     ChatCodeBlockView(
                         code: code,
                         language: language,
@@ -238,6 +251,7 @@ struct AssistantBlockView: View {
                         blockId: block.id
                     )
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 2)
                 }
             }
             if let sticker {
@@ -248,7 +262,7 @@ struct AssistantBlockView: View {
                 actionBar(forBlockContent: actionContent)
             }
         }
-        .modifier(AssistantBubbleChrome(display: display, isHighlighted: isHighlighted))
+        .padding(.vertical, display == .flat || display == .document ? 4 : 0)
         .id(appearanceStudio.themePackRevision)
     }
 
@@ -561,6 +575,8 @@ struct ChatCodeBlockView: View {
         .frame(height: Self.cardHeight, alignment: .top)
         .background(Color(uiColor: theme.codeBlockBackground))
         .clipShape(RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous))
+        // [B28 R14] 独立卡片：给一点浮起来的阴影，跟气泡分开读。
+        .shadow(color: .black.opacity(0.07), radius: 8, x: 0, y: 3)
         .overlay(
             RoundedRectangle(cornerRadius: theme.codeBlockCornerRadius, style: .continuous)
                 .stroke(Color(uiColor: theme.codeBlockTextColor).opacity(0.08), lineWidth: 0.5)

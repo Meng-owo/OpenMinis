@@ -134,6 +134,13 @@ struct PlayHubView: View {
                 }
                 try? studio.setAssistantAvatar(image)
                 soulIcon = SoulStore.cachedMetadata.icon
+                // [B28 R14] 反向同步：这里只写了 SOUL.md，通讯录读的是 Persona.avatar，
+                // 不补这一步就成了"Play 换了头像、通讯录还是旧的"。
+                if var p = PersonaStore.shared.personas.first(where: { $0.id == PersonaStore.currentID() }),
+                   p.avatar != soulIcon {
+                    p.avatar = soulIcon
+                    PersonaStore.shared.updatePersona(p)
+                }
                 avatarItem = nil
             }
         }

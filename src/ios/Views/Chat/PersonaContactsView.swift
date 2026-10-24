@@ -36,6 +36,7 @@ struct PersonaContactsView: View {
     @State private var newName = ""
     @State private var deleteTarget: Persona?
     @State private var appeared = false
+    @State private var refreshTick = 0
 
     private var filteredPersonas: [Persona] {
         if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -103,7 +104,7 @@ struct PersonaContactsView: View {
                                     // pulse，合成器驱动不烧 CPU，语义一字没改。
                                     if persona.isUserProfile {
                                         // 「我自己」不是聊天对象，标出来免得她被算进联系人。
-                                        Text("我的资料")
+                                        Text("我自己")
                                             .font(.system(size: 10, weight: .medium))
                                             .padding(.horizontal, 7)
                                             .padding(.vertical, 2.5)
@@ -154,7 +155,7 @@ struct PersonaContactsView: View {
             } header: {
                 Text("所有联系人")
             } footer: {
-                Text("点击进入人设微调主页，左滑可复制或删除人设。")
+                Text("点进去微调；左滑可复制或删除。最上面的「我自己」是你的档案，不能复制或删。")
             }
         }
         .listStyle(.insetGrouped)
@@ -163,6 +164,11 @@ struct PersonaContactsView: View {
         .offset(y: appeared ? 0 : 6)
         .animation(.easeOut(duration: 0.28), value: appeared)
         .onAppear { appeared = true }
+        // 档案内容改了不会动 personas 数组，列表不会自己重画——
+        // 副标题"已填 N 项"就会停在旧数字上。这里跟着通知重算一次。
+        .onReceive(NotificationCenter.default.publisher(for: .personaDidChange)) { _ in
+            refreshTick += 1
+        }
         // [B28 R4] 接进主题系统：通讯录有独立壁纸槽位（.persona）。
         .appearancePage(.persona)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索联系人")
@@ -222,6 +228,8 @@ struct PersonaContactsView: View {
     }
 
     private func personaBio(for persona: Persona) -> String {
+        // 读一下 tick：档案改了、personas 没变，也要让这行重新算。
+        _ = refreshTick
         // [B28 R11] 档案的正文是一堆小节标题，直接当副标题会糊成一片，
         // 所以给它单独一句：填了几项、还差什么。
         if persona.isUserProfile {

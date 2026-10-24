@@ -3986,15 +3986,15 @@ extension CollectionViewMessageListV3 {
                         switch segment {
                         case .prose(let prose):
                             guard !prose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
-                            total += SelectableMarkdownView.measureMarkdownHeight(prose, width: usableTextWidth)
+                            total += SelectableMarkdownView.measureMarkdownHeight(prose, width: usableTextWidth) + 16
                             count += 1
                         case .code:
-                            total += ChatCodeBlockView.cardHeight
+                            total += ChatCodeBlockView.cardHeight + 4
                             count += 1
                         }
                     }
                     if count > 1 {
-                        total += CGFloat(count - 1) * 8
+                        total += CGFloat(count - 1) * 10
                     }
                     return total
                 }
