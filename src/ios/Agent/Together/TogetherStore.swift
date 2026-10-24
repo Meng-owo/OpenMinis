@@ -71,7 +71,7 @@ final class TogetherStore {
         let probe = shared.appendingPathComponent(".probe")
         if (try? Data("ok".utf8).write(to: probe)) != nil {
             try? fm.removeItem(at: probe)
-            rootDecision = "共享 \/var/minis/shared/together"
+            rootDecision = "shared /var/minis/shared/together"
             return shared
         }
 
