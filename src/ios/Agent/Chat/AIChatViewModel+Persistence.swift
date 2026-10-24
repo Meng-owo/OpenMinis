@@ -781,6 +781,12 @@ extension AIChatViewModel {
         let mountElapsed = (CFAbsoluteTimeGetCurrent() - mountStart) * 1000
         logger.info("🔍MOUNT loadSession Phase4 done in \(String(format: "%.1f", mountElapsed))ms")
 
+        // [B28 R21] 后台清一次没人引用的截图/快照，每天最多一次。
+        // 不阻塞会话加载，也不碰用户上传的原件。
+        Task.detached(priority: .background) { [sessionId] in
+            await ChatStore.shared.pruneIfDue(sessionId: sessionId)
+        }
+
         // If the session already has a title, skip further generation attempts.
         // Also cache `session.modelId` so resolveCurrentEntry can fall back to
         // the session's persisted model when no in-memory binding exists
@@ -1448,9 +1454,24 @@ extension AIChatViewModel {
                     toolUseId: id, output: content, success: !isError, mediaRef: mediaRef, snapshot: snap, pageURL: truncatedURL, status: statusStr
                 )))
             case .imageData(let data, let mimeType, let linuxPath):
-                // [batch2 / W3A-01] Never append a ref for a file that failed to
-                // land — degrade to a text placeholder so the turn still goes.
-                if let ref = try? await ChatStore.shared.saveMedia(
+                // [B28 R21] 原件已经在 session 目录里（uploads/）→ 只登记引用，
+                // 不再把压缩版另存一份带 UUID 的文件。历史重载时会按 ref
+                // 现压一次给模型，所以模型那边照样看得到图。
+                var existing: MediaRef?
+                if let lp = linuxPath,
+                   let url = await ChatStore.shared.mediaURL(forLinuxPath: lp, sessionId: sessionId),
+                   await ChatStore.shared.isInsideSessionStore(url),
+                   FileManager.default.fileExists(atPath: url.path) {
+                    existing = try? await ChatStore.shared.registerExistingMedia(
+                        at: url,
+                        mimeType: ChatStore.mimeType(forFileExtension: url.pathExtension),
+                        sessionId: sessionId,
+                        linuxPath: lp
+                    )
+                }
+                if let ref = existing {
+                    parts.append(.mediaRef(ref))
+                } else if let ref = try? await ChatStore.shared.saveMedia(
                     data: data, mimeType: mimeType, sessionId: sessionId,
                     linuxPath: linuxPath
                 ) {

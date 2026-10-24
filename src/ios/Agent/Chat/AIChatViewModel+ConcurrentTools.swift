@@ -1425,7 +1425,26 @@ extension AIChatViewModel {
             return nil
         }()
 
-        // Create snapshot from tool output.
+        /// [B28 R21] 工具产物的引用。文件本来就在 session 目录里就只登记，
+    /// 不再复制一份带 UUID 的副本——截图和 read_image 以前每次都翻倍。
+    private func snapshotMediaRef(
+        fileURL: URL, data: Data, mimeType: String, sessionId: String,
+        originalFileName: String?, subdir: String, linuxPath: String?
+    ) async -> MediaRef? {
+        if await ChatStore.shared.isInsideSessionStore(fileURL),
+           let ref = try? await ChatStore.shared.registerExistingMedia(
+               at: fileURL, mimeType: mimeType, sessionId: sessionId,
+               originalFileName: originalFileName, linuxPath: linuxPath
+           ) {
+            return ref
+        }
+        return try? await ChatStore.shared.saveMedia(
+            data: data, mimeType: mimeType, sessionId: sessionId,
+            originalFileName: originalFileName, subdir: subdir, linuxPath: linuxPath
+        )
+    }
+
+    // Create snapshot from tool output.
         let snapshot: ToolSnapshot
         switch tu.name {
         case "browser_use":
@@ -1435,8 +1454,9 @@ extension AIChatViewModel {
                let sid = sessionId {
                 // [batch2 / W3A-01] Save can fail (disk full, sandbox denial) —
                 // degrade to the text snapshot instead of a ghost media ref.
-                if let ref = try? await ChatStore.shared.saveMedia(
-                    data: imageData, mimeType: "image/jpeg", sessionId: sid,
+                if let ref = await snapshotMediaRef(
+                    fileURL: URL(fileURLWithPath: imagePath), data: imageData,
+                    mimeType: "image/jpeg", sessionId: sid,
                     originalFileName: "browser_snapshot.jpg", subdir: "browser",
                     linuxPath: toolImageLinuxPath
                 ) {
@@ -1459,8 +1479,9 @@ extension AIChatViewModel {
                 let fileURL = URL(fileURLWithPath: imagePath)
                 let mime = Self.detectImageMime(imageData)
                 // [batch2 / W3A-01] Degrade to text when the write fails.
-                if let ref = try? await ChatStore.shared.saveMedia(
-                    data: imageData, mimeType: mime, sessionId: sid,
+                if let ref = await snapshotMediaRef(
+                    fileURL: fileURL, data: imageData,
+                    mimeType: mime, sessionId: sid,
                     originalFileName: fileURL.lastPathComponent, subdir: "images",
                     linuxPath: toolImageLinuxPath
                 ) {

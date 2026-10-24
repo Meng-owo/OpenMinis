@@ -3888,10 +3888,192 @@ actor ChatStore {
         minisBaseURL.appendingPathComponent(ref.relativePath)
     }
 
+    // MARK: - [B28 R21] 登记已有文件（不复制字节）
+
+    /// 文件已经在 minis 目录里了（工具产物、用户原件），只需要一张"引用"，
+    /// 不要再写一份字节。这是这次统一的根：一份实体 + 一条引用。
+    ///
+    /// - 相对路径必须落在 `minisBaseURL` 之内，否则抛错（外部文件请先 copy 进来）。
+    /// - 同一个文件反复登记，返回的 ref 是同一个（id 由相对路径派生，稳定），
+    ///   所以 UI 不会因为"又登记了一次"而重新加载图片。
+    func registerExistingMedia(
+        at fileURL: URL, mimeType: String, sessionId: String,
+        originalFileName: String? = nil, linuxPath: String? = nil
+    ) throws -> MediaRef {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: fileURL.path) else {
+            throw NSError(domain: "ChatStore.Media", code: 404,
+                          userInfo: [NSLocalizedDescriptionKey: "media file not found: \(fileURL.path)"])
+        }
+
+        let base = minisBaseURL.standardizedFileURL.path
+        let full = fileURL.standardizedFileURL.path
+        guard full.hasPrefix(base + "/") else {
+            throw NSError(domain: "ChatStore.Media", code: 400,
+                          userInfo: [NSLocalizedDescriptionKey: "media file is outside the session store: \(full)"])
+        }
+        let relativePath = String(full.dropFirst(base.count + 1))
+
+        // id 由相对路径派生：同一文件 = 同一 id，重复登记不会让 UI 以为换了图。
+        let fileId = Self.stableMediaId(for: relativePath)
+
+        let ref = MediaRef(
+            id: fileId,
+            relativePath: relativePath,
+            mimeType: mimeType,
+            originalFileName: originalFileName ?? fileURL.lastPathComponent,
+            linuxPath: linuxPath
+        )
+
+        // iCloud：新设备要能按这条 ref 把文件拉下来。历史上漏过这一步，
+        // 结果 ref 有了、文件没同步，图是空白。
+        if let range = relativePath.range(of: "/") {
+            let subdirAndFile = String(relativePath[range.upperBound...])
+            markDirty(recordType: "SessionFile", recordId: "\(sessionId):\(subdirAndFile)")
+        }
+
+        return ref
+    }
+
+    /// 相对路径 → 稳定 id。FNV-1a 32 位，够用且不引依赖。
+    static func stableMediaId(for relativePath: String) -> String {
+        var hash: UInt32 = 2166136261
+        for byte in relativePath.utf8 {
+            hash ^= UInt32(byte)
+            hash = hash &* 16777619
+        }
+        return String(hash, radix: 16)
+    }
+
+    /// `/var/minis/attachments/uploads/x.jpg` → `<sid>/attachments/uploads/x.jpg`。
+    /// iSH 里看到的 /var/minis 就是这个 session 目录的挂载，所以两者一一对应。
+    func mediaURL(forLinuxPath linuxPath: String, sessionId: String) -> URL? {
+        let prefix = "/var/minis/"
+        guard linuxPath.hasPrefix(prefix) else { return nil }
+        let tail = String(linuxPath.dropFirst(prefix.count))
+        guard !tail.isEmpty, !tail.contains("..") else { return nil }
+        return minisBaseURL.appendingPathComponent("\(sessionId)/\(tail)")
+    }
+
+    /// 从文件扩展名推 MIME。登记已有文件时用，比沿用调用方的 mime 更准
+    /// （用户发的可能是 PNG，模型版却是 JPEG，两者不能混为一谈）。
+    static func mimeType(forFileExtension ext: String) -> String {
+        switch ext.lowercased() {
+        case "png": return "image/png"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "heic": return "image/heic"
+        case "gif": return "image/gif"
+        case "webp": return "image/webp"
+        case "tiff", "tif": return "image/tiff"
+        case "mp4": return "video/mp4"
+        case "mov": return "video/quicktime"
+        case "m4a": return "audio/m4a"
+        case "mp3": return "audio/mpeg"
+        case "wav": return "audio/wav"
+        case "pdf": return "application/pdf"
+        default: return "application/octet-stream"
+        }
+    }
+
+    /// 这个文件是不是已经在这个 session 的目录里了（工具产物就地登记用）。
+    func isInsideSessionStore(_ fileURL: URL) -> Bool {
+        let base = minisBaseURL.standardizedFileURL.path
+        let full = fileURL.standardizedFileURL.path
+        return full.hasPrefix(base + "/")
+    }
+
     /// Load media data from a MediaRef.
     func loadMediaData(_ ref: MediaRef) -> Data? {
         let url = mediaFileURL(for: ref)
         return try? Data(contentsOf: url)
+    }
+
+    /// [B28 R21] 清掉没人引用的临时媒体。
+    ///
+    /// 只碰 `browser/` 和 `images/` 两个子目录——用户上传的原件（attachments/）
+    /// 永不自动删，那是她的东西。判据是双保险：
+    ///   1. 没有任何一条消息的 parts_json 提到这个文件名；
+    ///   2. 文件本身超过 keepDays 天没动过。
+    /// 两个条件同时满足才删，宁可留一点垃圾，也不删正在用的图。
+    @discardableResult
+    func pruneUnreferencedMedia(sessionId: String, keepDays: Int = 7) -> (deleted: Int, bytes: Int) {
+        let fm = FileManager.default
+        let sessionDir = minisBaseURL.appendingPathComponent(sessionId)
+
+        // 1. 收齐所有消息正文里出现过的文件名
+        var referenced = Set<String>()
+        let sql = "SELECT parts_json FROM messages WHERE session_id = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 0) {
+                    let json = String(cString: c)
+                    for name in Self.fileNamesMentioned(inJSON: json) {
+                        referenced.insert(name)
+                    }
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+
+        // 2. 扫两个临时目录
+        let cutoff = Date().addingTimeInterval(-Double(keepDays) * 86_400)
+        var deleted = 0
+        var bytes = 0
+        // attachments/ 只清"直接躺着的旧 UUID 文件"（历史遗留的压缩版），
+        // uploads/ 是原件目录，整目录跳过。
+        for subdir in ["browser", "images", "attachments"] {
+            let dir = sessionDir.appendingPathComponent(subdir)
+            guard let entries = try? fm.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey]
+            ) else { continue }
+            for url in entries {
+                if (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true { continue }
+                guard !referenced.contains(url.lastPathComponent) else { continue }
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                let modified = values?.contentModificationDate ?? .distantPast
+                // 附件目录给更长的宽限期：宁可多留几天，也不删刚发的图。
+                let grace = subdir == "attachments" ? Double(keepDays * 4) : Double(keepDays)
+                let limit = Date().addingTimeInterval(-grace * 86_400)
+                guard modified < limit else { continue }
+                let size = values?.fileSize ?? 0
+                if (try? fm.removeItem(at: url)) != nil {
+                    deleted += 1
+                    bytes += size
+                }
+            }
+        }
+        if deleted > 0 {
+            logger.info("[Media] pruned \(deleted) unreferenced files (\(bytes) bytes) session=\(sessionId.prefix(8))")
+        }
+        return (deleted, bytes)
+    }
+
+    /// 每个会话每天最多清一次，别每次开会话都扫目录。
+    func pruneIfDue(sessionId: String) {
+        let key = "media.prune.last.\(sessionId)"
+        let now = Date().timeIntervalSince1970
+        guard now - UserDefaults.standard.double(forKey: key) > 86_400 else { return }
+        UserDefaults.standard.set(now, forKey: key)
+        pruneUnreferencedMedia(sessionId: sessionId)
+    }
+
+    /// 从 parts_json 里挑出所有像文件名的片段（"xxx/yyy.jpg" 的 yyy 部分）。
+    /// 不做完整 JSON 解析：这里只要"保守地多收"，收多了只是不删，安全。
+    static func fileNamesMentioned(inJSON json: String) -> [String] {
+        var names: [String] = []
+        let separators = CharacterSet(charactersIn: "/\"\\, ")
+        for token in json.components(separatedBy: separators) {
+            guard let dot = token.lastIndex(of: ".") else { continue }
+            let ext = token[token.index(after: dot)...].lowercased()
+            guard ["jpg", "jpeg", "png", "heic", "gif", "webp", "tiff", "mp4", "mov", "pdf"].contains(ext) else { continue }
+            let name = String(token)
+            if name.count > 4, !name.hasPrefix("{"), !name.hasPrefix("[") {
+                names.append(name)
+            }
+        }
+        return names
     }
 
     /// Delete all media for a session.

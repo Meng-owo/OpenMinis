@@ -34,5 +34,10 @@ chk R13-4 "rg -q 'AgentProfileWidget()' src/ios/AgentWidget/AgentWidgetBundle.sw
 chk R13-5 "rg -q 'WidgetProfileBridge' src/ios/Agent/Session/PersonaStore.swift"
 chk R13-6 "rg -q 'AgentProfileWidget.swift' src/ios/Minis.xcodeproj/project.pbxproj && rg -q 'WidgetProfileBridge.swift' src/ios/Minis.xcodeproj/project.pbxproj"
 chk R13-7 "! rg -q 'case avatars|avatarsPage' src/ios/Views/Settings/AppearanceStudioView.swift"
+chk R21-1 "rg -q 'func registerExistingMedia' src/ios/Agent/Chat/ChatStore.swift"
+chk R21-2 "rg -q 'snapshotMediaRef' src/ios/Agent/Chat/AIChatViewModel+ConcurrentTools.swift"
+chk R21-3 "rg -q 'registerExistingMedia' src/ios/Agent/Chat/AIChatViewModel+Persistence.swift"
+chk R21-4 "rg -q 'func pruneUnreferencedMedia' src/ios/Agent/Chat/ChatStore.swift"
+chk R21-5 "rg -q 'pruneIfDue' src/ios/Agent/Chat/AIChatViewModel+Persistence.swift"
 echo "----"
 [ $fails -eq 0 ] && echo "全部通过" || exit 1
