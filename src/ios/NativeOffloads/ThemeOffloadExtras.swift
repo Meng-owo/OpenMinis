@@ -97,18 +97,20 @@ import UIKit
     }
 
     /// 把图落盘，再把路径写进 Persona.avatar —— 界面、聊天、通讯录读的都是它。
+    @MainActor
     private static func storeAvatar(_ image: UIImage, personaID: String,
-                                    role: String, fallback: Persona) -> NSDictionary {
+                                    role: String, fallback: Persona) -> [String: Any] {
         let name = SoulIconImage.storedName(prefix: "persona", id: personaID)
         guard case .success(let path) = SoulIconImage.store(image, named: name) else {
-            return fail("save_failed", "Could not store the image.") as NSDictionary
+            return fail("save_failed", "Could not store the image.")
         }
         var target = PersonaStore.shared.personas.first(where: { $0.id == personaID }) ?? fallback
         target.avatar = path
         PersonaStore.shared.updatePersona(target)
-        return ["ok": true, "avatar": role, "path": path] as NSDictionary
+        return ["ok": true, "avatar": role, "path": path]
     }
 
+    @MainActor
     private static func clearAvatar(personaID: String) {
         guard var target = PersonaStore.shared.personas.first(where: { $0.id == personaID })
         else { return }
