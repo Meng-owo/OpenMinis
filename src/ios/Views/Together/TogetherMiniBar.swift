@@ -71,13 +71,13 @@ struct TogetherMiniBar: View {
             cover
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(player.track?.title ?? "一起听")
-                    .font(.system(size: 11, weight: .medium))
+                Text(player.track?.title ?? TogetherCopy.title)
+                    .font(ChatFont.font(size: 11, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .lineLimit(1)
 
                 Text(movingLine)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(ChatFont.font(size: 13, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .lineLimit(1)
                     .id(movingLine)
@@ -92,7 +92,7 @@ struct TogetherMiniBar: View {
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(ChatFont.font(size: 13, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
                     .frame(width: 30, height: 30)
                     .background(CSSThemeVariables.accent(scope: .chat))
@@ -102,7 +102,7 @@ struct TogetherMiniBar: View {
 
             Button { nextTrack() } label: {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(ChatFont.font(size: 12, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .frame(width: 24, height: 30)
             }
@@ -119,7 +119,7 @@ struct TogetherMiniBar: View {
                 .strokeBorder(CSSThemeVariables.optionBorder(scope: .chat), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomLeading) { progressHairline }
-        .shadow(color: .black.opacity(0.10), radius: 14, x: 0, y: 6)
+        .shadow(color: TogetherSkin.shadowSoft, radius: 14, x: 0, y: 6)
     }
 
     /// 收起态：一根竖条，只留进度和暂停。
@@ -138,7 +138,7 @@ struct TogetherMiniBar: View {
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(ChatFont.font(size: 11, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
             }
             .buttonStyle(.plain)
@@ -171,7 +171,7 @@ struct TogetherMiniBar: View {
             .frame(width: 44, height: 44)
             .overlay(
                 Image(systemName: "music.note")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(ChatFont.font(size: 16, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.9))
             )
     }

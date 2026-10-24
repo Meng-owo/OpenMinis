@@ -56,27 +56,30 @@ final class TogetherStore {
         return (dataRoot as NSString).appendingPathComponent(relative)
     }
 
-    /// 共享目录优先，不可用降级到沙盒。
-    lazy var rootURL: URL = {
-        let shared = URL(fileURLWithPath: TogetherStore.hostPath(forGuestPath: "/var/minis/shared/together"))
-        let local = URL(fileURLWithPath:
-            (NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first
-                ?? NSHomeDirectory()))
-            .appendingPathComponent("together", isDirectory: true)
+    /// 用哪个目录、为什么。面板空状态会把这一行显示出来，路径错了要一眼看得见。
+    private(set) var rootDecision: String = "未解析"
 
+    /// 共享目录优先，不可写才降级到沙盒。
+    ///
+    /// 这里不靠"目录存在"来判断：rootfs 可能还没挂，存在性检查会骗人。
+    /// 直接建目录 + 试写一个探针文件，写成功才算通。
+    lazy var rootURL: URL = {
+        let shared = FakefsBridge.hostURL(forLinuxPath: "/var/minis/shared/together")
         let fm = FileManager.default
-        // 共享根存在（rootfs 已挂载）才用；否则别在 Documents 里凭空造一个假的 /var/minis
-        let sharedRoot = URL(fileURLWithPath: TogetherStore.hostPath(forGuestPath: "/var/minis/shared"))
-        if fm.fileExists(atPath: sharedRoot.path) {
-            try? fm.createDirectory(at: shared, withIntermediateDirectories: true)
-            if fm.isWritableFile(atPath: shared.path) {
-                return shared
-            }
-            togetherLogger.error("[Together] 共享目录不可写，降级到沙盒：\(shared.path)")
-        } else {
-            togetherLogger.info("[Together] 没有共享根，用沙盒：\(local.path)")
+
+        try? fm.createDirectory(at: shared, withIntermediateDirectories: true)
+        let probe = shared.appendingPathComponent(".probe")
+        if (try? Data("ok".utf8).write(to: probe)) != nil {
+            try? fm.removeItem(at: probe)
+            rootDecision = "共享 \/var/minis/shared/together"
+            return shared
         }
+
+        let local = URL(fileURLWithPath: FakefsBridge.documentsPath)
+            .appendingPathComponent("together", isDirectory: true)
         try? fm.createDirectory(at: local, withIntermediateDirectories: true)
+        rootDecision = "降级沙盒 Documents/together"
+        togetherLogger.error("[Together] 共享目录写不进，降级：\(shared.path)")
         return local
     }()
 
@@ -206,7 +209,20 @@ final class TogetherStore {
 
     @discardableResult
     private func writeLocked(_ state: TogetherState) -> Bool {
-        Self.encode(state, to: stateURL)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        guard let data = try? encoder.encode(state) else {
+            togetherLogger.error("[Together] 编码 state 失败")
+            return false
+        }
+        // 共享目录要往 fakefs 的 meta.db 登记，iSH 那边才看得见。
+        // 降级到沙盒的时候不必登记（Linux 本来也看不到）。
+        if rootDecision.hasPrefix("共享") {
+            let linux = "/var/minis/shared/together/\(stateURL.lastPathComponent)"
+            if FakefsBridge.write(data, toLinuxPath: linux) { return true }
+            togetherLogger.error("[Together] fakefs 写入失败，退回直接写")
+        }
+        return Self.atomicWrite(data, to: stateURL)
     }
 
     static func encode<T: Encodable>(_ value: T, to url: URL) -> Bool {
