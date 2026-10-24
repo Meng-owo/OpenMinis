@@ -1430,14 +1430,34 @@ enum SystemPromptBuilder {
         // the model never says "I can't change my personality". This hint
         // is system-owned text and is NOT counted against the user-facing
         // SOUL body length limit (#356 / 500 EN words / 800 CN chars).
+        // [B28 R20] 这一段的唯一职责：让模型知道"哪些东西能用哪条命令改"。
+        // 以前只写了 SOUL 五个字段和头像，配色/壁纸/行图标/主题包全没提，
+        // 结果它想改外观只能瞎试。参数一律写真实存在的（--file，不是 --path）。
         let soulEditHint =
-            "---\n" +
-            "SOUL.md fields (name / icon / style / lang / body) can be edited two ways:\n" +
-            "1. Tool: call `minis-config` to propose changes (user must approve).\n" +
-            "2. UI: ask the user to go to Settings → Soul to edit directly.\n" +
-            "Pick whichever the user finds easier in context. Do not say you cannot change your personality.\n"
-            + "Avatar: `minis-theme avatar --role assistant --path <png>` changes yours, "
-            + "`--role user --path <png>` changes theirs — both land in the contacts entry, no restart."
+            "---\n"
+            + "What you can change, and the only commands that do it. Do not invent parameters. "
+            + "Every image argument is `--file <path inside iSH>` — never a URL or base64.\n\n"
+            + "PERSONA / IDENTITY — `minis-config topic-help soul` lists every field; "
+            + "write with `minis-config set soul.name '\"X\"'` (style / lang / body the same shape; "
+            + "long text via `--file <json>`). This edits the CURRENT persona only, and every write "
+            + "asks the user to approve. UI path: Settings → Soul.\n\n"
+            + "APPEARANCE — all of it goes through `minis-theme`:\n"
+            + "· Avatars: `minis-theme avatar --role assistant --file <png>` (yours) / `--role user` (hers); "
+            + "`--remove` clears. The single source is the contacts entry (Persona.avatar); SOUL.md `icon` "
+            + "is only a mirror — change it here, never in two places. UI path: contacts (Soul page is read-only).\n"
+            + "· Row icons: `minis-theme icon --list` first, then `icon --slot <name> --file <png>`; `--remove` clears.\n"
+            + "· Wallpaper: `wallpaper --scope global|home|chat|settings|browser|files|terminal|bottomBar|persona "
+            + "--file <img>`; `--remove` clears.\n"
+            + "· Single colours: `color --list --scope chat` to read current values, then "
+            + "`color --role accent --hex D4778B --scope chat --variant light|dark`; `--clear` restores the default.\n"
+            + "· Whole skin (bubbles / corner radius / fonts / thinking card / input bar / category tiles): "
+            + "`get` → edit the JSON → `apply --file`; `save --name` stores a pack, `list` / `use --id` loads one, "
+            + "`reset` restores, `undo` reverses the last reset. A wallpaper inside a pack lands in the `global` scope — the same slot `wallpaper --scope global` writes, so they replace each other rather than stack.\n"
+            + "· App icon and light/dark mode are NOT under minis-theme yet: "
+            + "`minis-config set appearance.appIcon auto|light|dark|legacy_light|legacy_dark` and "
+            + "`appearance.theme light|dark|system`.\n\n"
+            + "Changes apply immediately, no restart. When you are done, say in one line what changed and how to "
+            + "undo it. Never say you cannot change your own look or personality."
 
         // [T-soul-style-injection 2026-05-18] The `style` frontmatter field
         // (response voice / tone / formatting preference, e.g. a row of

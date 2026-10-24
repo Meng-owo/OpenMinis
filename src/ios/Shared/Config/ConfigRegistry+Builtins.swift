@@ -92,7 +92,7 @@ extension ConfigRegistry {
         r.register(ClosureField(
             path: "soul.name",
             displayName: "Soul name",
-            description: "Assistant display name. Shown in the sidebar title, chat bubble header, and substituted into the identity line of the system prompt (`You are <name>, a capable AI assistant ...`).",
+            description: "Assistant display name (applies to the CURRENT persona only — switching persona switches the name). Shown in the sidebar title, chat bubble header, and substituted into the identity line of the system prompt (`You are <name>, a capable AI assistant ...`).",
             valueSchema: .string(maxLength: 64),
             risk: .normal, revertable: true,
             reader: { .string(currentFile().metadata.name) },
@@ -109,7 +109,7 @@ extension ConfigRegistry {
         r.register(ClosureField(
             path: "soul.style",
             displayName: "Soul style",
-            description: "Short voice / style tag shown in the SOUL.md frontmatter (e.g. \"Warm, direct, opinionated\"). Stored verbatim; not directly injected into the prompt.",
+            description: "Short voice / style tag (e.g. \"Warm, direct, opinionated\"). Stored in the SOUL.md frontmatter and injected into the system prompt as a HARD response-style constraint on every reply.",
             valueSchema: .string(maxLength: 200),
             risk: .normal, revertable: true,
             reader: { .string(currentFile().metadata.style) },
@@ -155,9 +155,11 @@ extension ConfigRegistry {
             // formats were checked against ImageIO on-device rather than
             // assumed, and SVG is absent because it genuinely does not decode.
             description: "The Soul's identity icon — also called its avatar, its persona image, or its "
-                + "character image (中文：角色形象 / 图标 / 头像). All of those refer to THIS one setting; "
-                + "there is no separate avatar field. Shown beside the assistant name in the chat header "
-                + "and on the Soul settings card. Accepts an image only — emoji are not accepted.\n"
+                + "character image (中文：角色形象 / 图标 / 头像). They all mean the same picture. "
+                + "The single source of truth is the contacts entry (`Persona.avatar`); this `soul.icon` is a "
+                + "MIRROR that stays in sync automatically, so `minis-theme avatar` is the preferred way to write it. "
+                + "Shown beside the assistant name in the chat header and on the Soul settings card "
+                + "(read-only there — the editable entry is contacts). Accepts an image only — emoji are not accepted.\n"
                 + "\n"
                 + "IMAGE — any of these forms:\n"
                 + "  • data URI (imported — converted to a local file on write, never stored inline):\n"
@@ -260,7 +262,7 @@ extension ConfigRegistry {
         r.register(ClosureField(
             path: "soul.lang",
             displayName: "Soul language preference",
-            description: "Preferred reply language hint: auto / zh / en. Stored in SOUL.md frontmatter for forward use; the agent should respect it when set non-auto.",
+            description: "Reply language: auto / zh / en. Injected into the system prompt as a HARD reply-language constraint; `auto` injects nothing and falls back to matching the user's language.",
             valueSchema: .stringEnum(["auto", "zh", "en"]),
             risk: .normal, revertable: true,
             reader: {
@@ -1126,8 +1128,8 @@ extension ConfigRegistry {
     private static func registerAppearance(into r: ConfigRegistry) {
         r.register(AppStorageIntCodedEnumField(
             path: "appearance.theme",
-            displayName: "Theme",
-            description: "Light / Dark / System color scheme.",
+            displayName: "Light/Dark appearance",
+            description: "Light / dark / system appearance mode. NOT the theme pack — bubbles, fonts and wallpapers live in `minis-theme`.",
             userDefaultsKey: "appearanceMode",
             cases: ["system", "light", "dark"],
             defaultIndex: 0
@@ -1135,7 +1137,7 @@ extension ConfigRegistry {
         r.register(AppStorageIntCodedEnumField(
             path: "appearance.appIcon",
             displayName: "App icon",
-            description: "Home screen icon variant.",
+            description: "Home screen icon variant. This is the only entry for the app icon (minis-theme does not cover it): auto | light | dark | legacy_light | legacy_dark.",
             userDefaultsKey: "appIconMode",
             cases: ["auto", "light", "dark", "legacy_light", "legacy_dark"],
             defaultIndex: 0
