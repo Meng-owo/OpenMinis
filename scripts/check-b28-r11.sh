@@ -27,5 +27,12 @@ chk R11-14 "rg -q 'static func profileSummaryText' $CT && rg -q 'profileSummaryT
 chk R11-15 "rg -q 'displayName\\(for persona: Persona\\)' $CT || rg -q 'displayName\\(for:' $CT"
 chk R11-16 "! rg -q 'SoulStore\\.userProfile' -g '*.swift' src/ios"
 chk R11-17 "rg -q 'SystemPromptBuilder\\.userProfile' src/ios/Shared/AppearanceStudio.swift"
+chk R13-1 "rg -F -q 'cornerRadius: 22' src/ios/Views/Chat/UserProfileView.swift"
+chk R13-2 "rg -q 'presentationDetents' src/ios/Views/Chat/UserProfileView.swift"
+chk R13-3 "rg -q 'struct AgentProfileWidget' src/ios/AgentWidget/AgentProfileWidget.swift"
+chk R13-4 "rg -q 'AgentProfileWidget()' src/ios/AgentWidget/AgentWidgetBundle.swift"
+chk R13-5 "rg -q 'WidgetProfileBridge' src/ios/Agent/Session/PersonaStore.swift"
+chk R13-6 "rg -q 'AgentProfileWidget.swift' src/ios/Minis.xcodeproj/project.pbxproj && rg -q 'WidgetProfileBridge.swift' src/ios/Minis.xcodeproj/project.pbxproj"
+chk R13-7 "! rg -q 'case avatars|avatarsPage' src/ios/Views/Settings/AppearanceStudioView.swift"
 echo "----"
 [ $fails -eq 0 ] && echo "全部通过" || exit 1

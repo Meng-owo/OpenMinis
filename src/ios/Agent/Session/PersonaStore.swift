@@ -683,6 +683,8 @@ final class PersonaStore: ObservableObject {
                     localToolIds: nil, sortOrder: 1, isBuiltIn: true),
         ]
         Self.seedUserProfileSoulIfNeeded()
+        // 首装就把小组件要的几行字铺好，免得桌面上空着。
+        WidgetProfileBridge.refresh()
         save(list)
         self.personas = list.sorted { $0.sortOrder < $1.sortOrder }
         if UserDefaults.standard.string(forKey: Self.currentIDKey) == nil {

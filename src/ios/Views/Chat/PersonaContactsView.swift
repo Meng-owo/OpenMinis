@@ -35,6 +35,7 @@ struct PersonaContactsView: View {
     @State private var showNewSheet = false
     @State private var newName = ""
     @State private var deleteTarget: Persona?
+    @State private var appeared = false
 
     private var filteredPersonas: [Persona] {
         if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -157,6 +158,11 @@ struct PersonaContactsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // 进场：整页淡入 + 轻微上移。跟系统设置那种"啪一下出现"不一样。
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared ? 0 : 6)
+        .animation(.easeOut(duration: 0.28), value: appeared)
+        .onAppear { appeared = true }
         // [B28 R4] 接进主题系统：通讯录有独立壁纸槽位（.persona）。
         .appearancePage(.persona)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "搜索联系人")

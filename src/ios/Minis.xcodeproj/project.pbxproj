@@ -26,6 +26,7 @@
 		E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */; };
 		E5CBK0002 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0012 /* UserProfileView.swift */; };
 		E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */; };
+		E5CBK0003 /* WidgetProfileBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0013 /* WidgetProfileBridge.swift */; };
 		E5SCH0001 /* ScheduledJobRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0011 /* ScheduledJobRunner.swift */; };
 		E5SCH0002 /* ScheduledOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0012 /* ScheduledOffload.m */; };
 		E5SCH0003 /* ScheduledOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH0013 /* ScheduledOffloadBridge.swift */; };
@@ -332,6 +333,7 @@
 		E5GWF0004 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5H000001 /* AgentWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000011 /* AgentWidgetBundle.swift */; };
 		E5H000002 /* AgentLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000012 /* AgentLiveActivityWidget.swift */; };
+		E5H000004 /* AgentProfileWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000016 /* AgentProfileWidget.swift */; };
 		E5H000003 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5H000009 /* AgentWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E5H000010 /* AgentWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		E5I000001 /* SpeechRecognitionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5I000011 /* SpeechRecognitionManager.swift */; };
@@ -756,6 +758,7 @@
 		E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+ProgrammaticPrompt.swift"; path = "Agent/Chat/AIChatViewModel+ProgrammaticPrompt.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0012 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "UserProfileView.swift"; path = "Views/Chat/UserProfileView.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+CodeBlockEditing.swift"; path = "Agent/Chat/AIChatViewModel+CodeBlockEditing.swift"; sourceTree = SOURCE_ROOT; };
+		E5CBK0013 /* WidgetProfileBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "WidgetProfileBridge.swift"; path = "Agent/Session/WidgetProfileBridge.swift"; sourceTree = SOURCE_ROOT; };
 		E5SCH0011 /* ScheduledJobRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledJobRunner.swift"; path = "Agent/Jobs/ScheduledJobRunner.swift"; sourceTree = SOURCE_ROOT; };
 		E5SCH0012 /* ScheduledOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = "ScheduledOffload.m"; path = "NativeOffloads/ScheduledOffload.m"; sourceTree = SOURCE_ROOT; };
 		E5SCH0013 /* ScheduledOffloadBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ScheduledOffloadBridge.swift"; path = "NativeOffloads/ScheduledOffloadBridge.swift"; sourceTree = SOURCE_ROOT; };
@@ -1105,6 +1108,7 @@
 		E5H000010 /* AgentWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AgentWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5H000011 /* AgentWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentWidgetBundle.swift; sourceTree = "<group>"; };
 		E5H000012 /* AgentLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLiveActivityWidget.swift; sourceTree = "<group>"; };
+		E5H000016 /* AgentProfileWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentProfileWidget.swift; sourceTree = "<group>"; };
 		E5H000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E5H000014 /* AgentWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AgentWidget.entitlements; sourceTree = "<group>"; };
 		E5I000011 /* SpeechRecognitionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechRecognitionManager.swift; sourceTree = "<group>"; };
@@ -2188,6 +2192,7 @@
 			children = (
 				E5H000011 /* AgentWidgetBundle.swift */,
 				E5H000012 /* AgentLiveActivityWidget.swift */,
+				E5H000016 /* AgentProfileWidget.swift */,
 				E5H000013 /* Info.plist */,
 				E5H000014 /* AgentWidget.entitlements */,
 			);
@@ -2596,6 +2601,7 @@
 				E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */,
 				E5CBK0012 /* UserProfileView.swift */,
 				E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */,
+				E5CBK0013 /* WidgetProfileBridge.swift */,
 				E5SCH0011 /* ScheduledJobRunner.swift */,
 				E5SCH0012 /* ScheduledOffload.m */,
 				E5SCH0013 /* ScheduledOffloadBridge.swift */,
@@ -3126,6 +3132,7 @@
 				E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */,
 				E5CBK0002 /* UserProfileView.swift in Sources */,
 				E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */,
+				E5CBK0003 /* WidgetProfileBridge.swift in Sources */,
 				E5SCH0001 /* ScheduledJobRunner.swift in Sources */,
 				E5SCH0002 /* ScheduledOffload.m in Sources */,
 				E5SCH0003 /* ScheduledOffloadBridge.swift in Sources */,
@@ -3699,6 +3706,7 @@
 			files = (
 				E5H000001 /* AgentWidgetBundle.swift in Sources */,
 				E5H000002 /* AgentLiveActivityWidget.swift in Sources */,
+				E5H000004 /* AgentProfileWidget.swift in Sources */,
 				E5H000003 /* AgentActivityAttributes.swift in Sources */,
 				E5AT00003 /* AudioTogglePlaybackIntent.swift in Sources */,
 			);

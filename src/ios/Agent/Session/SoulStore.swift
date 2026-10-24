@@ -1320,6 +1320,12 @@ enum SystemPromptBuilder {
         return userProfileFieldValue(in: file, keys: ["怎么称呼", "称呼"])
     }
 
+    /// 取档案里某个字段的值（"正在做""最近状态"这类）。小组件用。
+    /// 没填返回空串，调用方自己决定回落。
+    static func userProfileField(key: String) -> String {
+        userProfileFieldValue(in: SoulStore.load(for: PersonaStore.userProfilePersonaID), keys: [key])
+    }
+
     /// 便捷版：固定读「我自己」。
     static func userProfileAddressingName() -> String {
         userProfileAddressingName(for: PersonaStore.userProfilePersonaID)
