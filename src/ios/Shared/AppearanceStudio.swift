@@ -1254,7 +1254,13 @@ struct PersonAvatarView: View {
 
     var body: some View {
         Group {
-            let icon = kind == .user ? studio.userAvatar : (resolvedIcon ?? "")
+            // [B28 R12] 她自己的头像以通讯录「我自己」档案为准——
+            // 情头页删掉后 userAvatar 没有入口了，只能回退用。
+            let meAvatar = PersonaStore.shared.personas
+                .first { $0.id == PersonaStore.userProfilePersonaID }?.avatar ?? ""
+            let icon = kind == .user
+                ? (meAvatar.isEmpty ? studio.userAvatar : meAvatar)
+                : (resolvedIcon ?? "")
             // [avatar] Only an image counts as an avatar. A legacy
             // non-image value (an emoji stored by an older build) is
             // treated as unset and falls through to the default tile.
