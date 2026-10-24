@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import UIKit
 
 /// [B28 R11/R13] 通讯录里「我自己」的编辑页。
 ///
