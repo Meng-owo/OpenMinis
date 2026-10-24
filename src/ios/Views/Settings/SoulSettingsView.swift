@@ -181,13 +181,9 @@ struct SoulSettingsView: View {
             // whole point is having no background of their own.
             // [B28 R18] 头像只有一个入口：通讯录。这里只显示，不给改——
             // 两处都能改就必然两套存储，AI 也会分不清该动哪条命令。
-            SoulIconView(icon: displayIcon, size: SoulIconImage.renderPoints)
-                .frame(width: 44, height: 44)
-                .frame(width: 52, height: 52)
-                .background(Circle().fill(Color.secondary.opacity(0.12)))
-                .overlay(
-                    Circle().strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.5)
-                )
+            // [B28 R19] 用和通讯录同一个视图渲染：同一张图、同一种裁切（圆形填充），
+            // 不再出现"方图塞进圆框"的两种长相。
+            PersonaAvatarView(iconRef: displayIcon, size: 52)
                 .accessibilityLabel(AppLocalized("Icon"))
             VStack(alignment: .leading, spacing: 2) {
                 Text(name.isEmpty ? "嘟嘟" : name)
