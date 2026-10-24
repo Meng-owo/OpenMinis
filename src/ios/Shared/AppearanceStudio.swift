@@ -1254,10 +1254,12 @@ struct PersonAvatarView: View {
         // [B28 R14] 通讯录改的头像存在 Persona.avatar，聊天这边原来只读 SOUL.md 的
         // icon —— 两套存储，改了头像对话框不动。现在以通讯录为准，SOUL 兜底。
         if let stored = PersonaStore.shared.personas.first(where: { $0.id == pid })?.avatar,
-           !stored.isEmpty {
+           !stored.isEmpty, avatarFileExists(stored) {
             return stored
         }
-        return SoulStore.displayIcon(for: pid)
+        let soul = SoulStore.displayIcon(for: pid)
+        // 路径指向的文件可能早没了（换过图又清过缓存），当没有处理，别留白块。
+        return soul.flatMap { avatarFileExists($0) ? $0 : nil }
     }
 
     /// 只有真能读到的图才算头像。
