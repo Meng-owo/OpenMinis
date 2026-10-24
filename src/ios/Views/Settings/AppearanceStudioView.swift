@@ -169,7 +169,7 @@ struct AppearanceStudioView: View {
         // `ScrollView` + 自绘卡片堆，那是安卓的做法。
         List {
             Section {
-                ForEach([AppearanceStudioPage.palette, .bubbles, .backdrop, .avatars, .icons]) { item in
+                ForEach([AppearanceStudioPage.palette, .bubbles, .backdrop, .icons]) { item in
                     NavigationLink {
                         pageContent(item)
                     } label: {
@@ -276,7 +276,7 @@ struct AppearanceStudioView: View {
         if showResetConfirm {
             // [B28 R2-4] 旧文案没提三个透明度滑杆 —— 点完才发现压色、
             // 卡片透明度也被清了。功能必须诚实具备它描述的样子（醒醒 10-23）。
-            return AppLocalized("Colors, bubble shapes, stickers, and the three opacity sliders go back to default. Wallpaper and couple avatars stay.")
+            return AppLocalized("Colors, bubble shapes, stickers, and the three opacity sliders go back to default. Wallpaper and avatars stay.")
         }
         if showSTWarnings {
             return stWarnings.joined(separator: "\n")
@@ -641,7 +641,6 @@ struct AppearanceStudioView: View {
                 case .palette:   palettePage
                 case .bubbles:   bubblesPage
                 case .backdrop:  backdropPage
-                case .avatars:   avatarsPage
                 case .icons:     iconsPage
                 case .library:   libraryPage
                 case .behaviour: behaviourPage
@@ -1185,7 +1184,7 @@ struct AppearanceStudioView: View {
                     ForEach(AppearanceAvatarShape.allCases) { Text($0.title).tag($0) }
                 }
                 .tint(studio.color(.accent, variant: variant))
-                Text(AppLocalized("头像形状同时作用于聊天、列表和情头预览。"))
+                Text(AppLocalized("头像形状同时作用于聊天、列表和通讯录。"))
                     .font(.system(size: 10.5))
                     .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.8))
             }
@@ -1419,96 +1418,6 @@ struct AppearanceStudioView: View {
             }
             .modifier(StudioCard(variant: variant))
         }
-    }
-
-    // MARK: - 情头
-
-    private var avatarsPage: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(AppLocalized("情头"))
-            HStack(spacing: 14) {
-                Spacer()
-                VStack(spacing: 7) {
-                    PersonAvatarView(kind: .assistant, size: 60)
-                    Text(aiName)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                }
-                Image(systemName: "link")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(studio.color(.accent, variant: variant).opacity(0.7))
-                VStack(spacing: 7) {
-                    PersonAvatarView(kind: .user, size: 60)
-                    // [B28 R10] 她给自己填了称呼就显示她填的，没填回落到"你"。
-                    Text(studio.userDisplayName.isEmpty
-                         ? AppLocalized("你")
-                         : studio.userDisplayName)
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
-                        .foregroundStyle(studio.color(.secondaryText, variant: variant))
-                }
-                Spacer()
-            }
-            .padding(.vertical, 8)
-
-            Button {
-                pickerTarget = .userAvatar
-                isPickerPresented = true
-            } label: {
-                Label(AppLocalized("选我的头像"), systemImage: "person.crop.square").font(.system(size: 13))
-            }
-            .buttonStyle(.plain)
-            if !studio.userAvatar.isEmpty {
-                Button(AppLocalized("去掉我的头像")) { studio.removeUserAvatar() }
-                    .font(.system(size: 12))
-                    .foregroundStyle(studio.color(.destructive, variant: variant))
-            }
-
-            // [B28 R10] 自定义称呼。App 里所有"提到说话的人"的文案都从这里取，
-            // 不写死任何名字。留空 = 用中性的"你"。
-            HStack(spacing: 8) {
-                TextField(String(format: AppLocalized("%@怎么称呼你"), aiName),
-                          text: $userDisplayNameDraft)
-                    .font(.system(size: 13))
-                    .textFieldStyle(.roundedBorder)
-                    .submitLabel(.done)
-                    .onSubmit { studio.setUserDisplayName(userDisplayNameDraft) }
-                    .frame(maxWidth: 220)
-                if !studio.userDisplayName.isEmpty {
-                    Button(AppLocalized("清除")) {
-                        userDisplayNameDraft = ""
-                        studio.setUserDisplayName("")
-                    }
-                    .font(.system(size: 12))
-                    .foregroundStyle(studio.color(.destructive, variant: variant))
-                }
-            }
-
-            Button {
-                pickerTarget = .assistantAvatar
-                isPickerPresented = true
-            } label: {
-                Label(String(format: AppLocalized("选%@的头像"), aiName),
-                      systemImage: "sparkles.rectangle.stack")
-                    .font(.system(size: 13))
-            }
-            .buttonStyle(.plain)
-            if !SoulStore.cachedMetadata.icon.isEmpty {
-                Button(String(format: AppLocalized("去掉%@的头像"), aiName)) {
-                    do { try studio.removeAssistantAvatar() }
-                    catch { fail(error.localizedDescription) }
-                }
-                .font(.system(size: 12))
-                .foregroundStyle(studio.color(.destructive, variant: variant))
-            }
-
-            Text(String(format: AppLocalized("两张都会裁成方的，存在这台手机上。%@的头像同时就是 Soul 图标。"), aiName))
-                .font(.system(size: 10.5))
-                .lineSpacing(1.5)
-                .foregroundStyle(studio.color(.secondaryText, variant: variant).opacity(0.75))
-        }
-        .onAppear { userDisplayNameDraft = studio.userDisplayName }
-        .modifier(StudioCard(variant: variant))
     }
 
     // MARK: - 图标
@@ -2301,14 +2210,13 @@ struct AppearanceStudioView: View {
 // `ScrollView` + 自绘卡片堆出来的，看着像安卓。改成 iOS 设置页的做法：
 // 根页是一个 `List`，每个分区用 `NavigationLink` 进子页。
 enum AppearanceStudioPage: String, CaseIterable, Identifiable {
-    case palette, bubbles, backdrop, avatars, icons, library, behaviour
+    case palette, bubbles, backdrop, icons, library, behaviour
     var id: String { rawValue }
     var title: String {
         switch self {
         case .palette: return AppLocalized("配色")
         case .bubbles: return AppLocalized("气泡与文字")
         case .backdrop: return AppLocalized("背景")
-        case .avatars: return AppLocalized("情头")
         case .icons: return AppLocalized("图标")
         case .library: return AppLocalized("主题库")
         case .behaviour: return AppLocalized("行为")
@@ -2319,7 +2227,6 @@ enum AppearanceStudioPage: String, CaseIterable, Identifiable {
         case .palette: return "paintpalette.fill"
         case .bubbles: return "bubble.left.and.bubble.right.fill"
         case .backdrop: return "photo.fill"
-        case .avatars: return "person.2.fill"
         case .icons: return "square.grid.2x2.fill"
         case .library: return "books.vertical.fill"
         case .behaviour: return "switch.2"
@@ -2335,7 +2242,6 @@ enum AppearanceStudioPage: String, CaseIterable, Identifiable {
         case .palette: return AppLocalized("Colors, contrast, roll a palette")
         case .bubbles: return AppLocalized("Bubble shape, message style, visual novel")
         case .backdrop: return AppLocalized("Wallpaper & shade")
-        case .avatars: return AppLocalized("Your avatar and the AI's")
         case .icons: return AppLocalized("App icon and list icons")
         case .library: return AppLocalized("Save, import and export themes")
         case .behaviour: return AppLocalized("Language, text size, input")

@@ -14,6 +14,7 @@ struct UserProfileView: View {
 
     @State private var draft: String = ""
     @State private var nameDraft: String = ""
+    @State private var photoItem: PhotosPickerItem?
     @State private var loadedBody: String = ""
 
     private let profileId = PersonaStore.userProfilePersonaID
@@ -38,7 +39,24 @@ struct UserProfileView: View {
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // 头像在这里换：情头页删了，头像的入口归通讯录。
+                    PhotosPicker(selection: $photoItem, matching: .images) {
+                        HStack(spacing: 12) {
+                            PersonaAvatarView(iconRef: persona?.avatar, size: 64)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.secondary.opacity(0.2), lineWidth: 1))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(AppLocalized("换头像"))
+                                    .font(.system(size: 13, weight: .medium))
+                                Text(AppLocalized("点一下选图"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(ChatColors.secondaryText)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
                     Text(addressingName)
                         .font(.system(size: 22, weight: .bold))
                     Text("这份档案描述的是你，不是任何一只 AI。你写进去的东西，AI 每次对话都会读到；它也可以在长期互动里补充。")
@@ -120,6 +138,24 @@ struct UserProfileView: View {
         .navigationTitle("我自己")
         .onAppear { reload() }
         .onDisappear { commitName() }
+        .onChange(of: photoItem) { item in
+            guard let item else { return }
+            // persona 是主线程隔离的，进 Task 之前先取出来。
+            guard let p = persona else { return }
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self),
+                      let image = ThumbnailCache.downsampledImage(from: data, maxEdge: 512) else { return }
+                let name = SoulIconImage.storedName(prefix: "persona", id: profileId)
+                if case .success(let path) = SoulIconImage.store(image, named: name) {
+                    await MainActor.run {
+                        var updated = p
+                        updated.avatar = path
+                        store.updatePersona(updated)
+                        Self.publishProfileChange()
+                    }
+                }
+            }
+        }
     }
 
     /// 落盘「怎么称呼」。空串也算一次有效修改（清掉叫法）。
