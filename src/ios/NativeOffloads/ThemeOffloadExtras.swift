@@ -63,15 +63,15 @@ import UIKit
         return onMain {
             switch role {
             case "user":
-                AppearanceStudio.shared.setUserAvatar(image)
-                return ["ok": true, "avatar": "user"]
+                // [B28 R16] 以前只写 studio.userAvatar，而界面读的是 Persona.avatar，
+                // 所以命令回 ok、界面不动 —— 看着像空实现。现在写同一个源。
+                return storeAvatar(image, personaID: PersonaStore.userProfilePersonaID,
+                                   role: "user", fallback: PersonaStore.makeUserProfilePersona())
             case "assistant":
-                do {
-                    try AppearanceStudio.shared.setAssistantAvatar(image)
-                    return ["ok": true, "avatar": "assistant"]
-                } catch {
-                    return fail("save_failed", error.localizedDescription)
-                }
+                let pid = PersonaStore.currentID()
+                guard let existing = PersonaStore.shared.personas.first(where: { $0.id == pid })
+                else { return fail("no_persona", "No persona \(pid).") }
+                return storeAvatar(image, personaID: pid, role: "assistant", fallback: existing)
             default:
                 return fail("bad_role", "role must be user or assistant.")
             }
@@ -82,19 +82,38 @@ import UIKit
         onMain {
             switch role {
             case "user":
+                clearAvatar(personaID: PersonaStore.userProfilePersonaID)
                 AppearanceStudio.shared.removeUserAvatar()
                 return ["ok": true, "avatar": "user", "removed": true]
             case "assistant":
-                do {
-                    try AppearanceStudio.shared.removeAssistantAvatar()
-                    return ["ok": true, "avatar": "assistant", "removed": true]
-                } catch {
-                    return fail("save_failed", error.localizedDescription)
-                }
+                let pid = PersonaStore.currentID()
+                clearAvatar(personaID: pid)
+                try? AppearanceStudio.shared.removeAssistantAvatar()
+                return ["ok": true, "avatar": "assistant", "removed": true]
             default:
                 return fail("bad_role", "role must be user or assistant.")
             }
         }
+    }
+
+    /// 把图落盘，再把路径写进 Persona.avatar —— 界面、聊天、通讯录读的都是它。
+    private static func storeAvatar(_ image: UIImage, personaID: String,
+                                    role: String, fallback: Persona) -> NSDictionary {
+        let name = SoulIconImage.storedName(prefix: "persona", id: personaID)
+        guard case .success(let path) = SoulIconImage.store(image, named: name) else {
+            return fail("save_failed", "Could not store the image.") as NSDictionary
+        }
+        var target = PersonaStore.shared.personas.first(where: { $0.id == personaID }) ?? fallback
+        target.avatar = path
+        PersonaStore.shared.updatePersona(target)
+        return ["ok": true, "avatar": role, "path": path] as NSDictionary
+    }
+
+    private static func clearAvatar(personaID: String) {
+        guard var target = PersonaStore.shared.personas.first(where: { $0.id == personaID })
+        else { return }
+        target.avatar = nil
+        PersonaStore.shared.updatePersona(target)
     }
 
     // MARK: - Replaceable row icons

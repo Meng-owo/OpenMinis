@@ -1435,7 +1435,9 @@ enum SystemPromptBuilder {
             "SOUL.md fields (name / icon / style / lang / body) can be edited two ways:\n" +
             "1. Tool: call `minis-config` to propose changes (user must approve).\n" +
             "2. UI: ask the user to go to Settings → Soul to edit directly.\n" +
-            "Pick whichever the user finds easier in context. Do not say you cannot change your personality."
+            "Pick whichever the user finds easier in context. Do not say you cannot change your personality.\n"
+            + "Avatar: `minis-theme avatar --role assistant --path <png>` changes yours, "
+            + "`--role user --path <png>` changes theirs — both land in the contacts entry, no restart."
 
         // [T-soul-style-injection 2026-05-18] The `style` frontmatter field
         // (response voice / tone / formatting preference, e.g. a row of
