@@ -81,6 +81,11 @@ struct UserProfileView: View {
                         .submitLabel(.done)
                         .onSubmit { commitName() }
                 }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        .padding(.vertical, 3)
+                )
             } header: {
                 Text("叫法")
             } footer: {
@@ -103,6 +108,11 @@ struct UserProfileView: View {
                             .lineLimit(1)
                     }
                 }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        .padding(.vertical, 3)
+                )
             } header: {
                 Text("内容")
             } footer: {
@@ -114,6 +124,11 @@ struct UserProfileView: View {
                     get: { SystemPromptBuilder.userProfileNSFWInjectionEnabled },
                     set: { SystemPromptBuilder.userProfileNSFWInjectionEnabled = $0 }
                 ))
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        .padding(.vertical, 3)
+                )
             } header: {
                 Text("注入范围")
             } footer: {
@@ -134,7 +149,10 @@ struct UserProfileView: View {
                 Text("看到的就是下次对话真正进模型的那段文字。")
             }
         }
-        .listStyle(.insetGrouped)
+        // [B28 R13] 卡片流第一步：行不再是系统分组样式，改成独立圆角卡片，
+        // 卡片之间留白、去掉分隔线。可爱感来自留白和圆角，不是加边框。
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .navigationTitle("我自己")
         .onAppear { reload() }
         .onDisappear { commitName() }
