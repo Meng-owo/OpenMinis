@@ -1260,12 +1260,20 @@ struct PersonAvatarView: View {
         return SoulStore.displayIcon(for: pid)
     }
 
+    /// 只有真能读到的图才算头像。
+    private func avatarFileExists(_ value: String) -> Bool {
+        guard SoulIconImage.isPathReference(value) else { return true }
+        guard let url = SoulIconImage.fileURL(forReference: value) else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     var body: some View {
         Group {
             // [B28 R12] 她自己的头像以通讯录「我自己」档案为准——
             // 情头页删掉后 userAvatar 没有入口了，只能回退用。
-            let meAvatar = PersonaStore.shared.personas
+            let meAvatarRaw = PersonaStore.shared.personas
                 .first { $0.id == PersonaStore.userProfilePersonaID }?.avatar ?? ""
+            let meAvatar = avatarFileExists(meAvatarRaw) ? meAvatarRaw : ""
             let icon = kind == .user
                 ? (meAvatar.isEmpty ? studio.userAvatar : meAvatar)
                 : (resolvedIcon ?? "")
