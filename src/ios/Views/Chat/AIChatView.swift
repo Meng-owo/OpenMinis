@@ -6220,7 +6220,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .files: return "folder.fill"
         case .gauge: return "gauge.with.needle.fill"
         case .share: return "square.and.arrow.up.fill"
-        case .compactHistory: return "arrow.down.doc"
+        case .compactHistory: return "arrow.down.right.and.arrow.up.left"
         case .clearChat: return "trash"
         }
     }
@@ -6353,6 +6353,8 @@ public struct ChatPlusPanel: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 6)
+                // 格子少的那页别居中飘着：一律贴顶，和第一页第一排同高。
+                .frame(maxHeight: .infinity, alignment: .top)
                 .tag(0)
 
                 // Page 2
@@ -6366,6 +6368,8 @@ public struct ChatPlusPanel: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 6)
+                // 格子少的那页别居中飘着：一律贴顶，和第一页第一排同高。
+                .frame(maxHeight: .infinity, alignment: .top)
                 .tag(1)
 
                 // Page 3
@@ -6379,6 +6383,8 @@ public struct ChatPlusPanel: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 16)
                 .padding(.bottom, 6)
+                // 格子少的那页别居中飘着：一律贴顶，和第一页第一排同高。
+                .frame(maxHeight: .infinity, alignment: .top)
                 .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
