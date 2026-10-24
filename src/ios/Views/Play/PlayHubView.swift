@@ -1025,11 +1025,74 @@ struct PlayHubMediaScanner {
             }
         }
 
-        result.images = Array(result.images.sorted { $0.modified > $1.modified }.prefix(caps.images))
+        // [B28 R22] 同一张图在磁盘上可能有多份副本（历史遗留的 UUID 压缩版）。
+        // 媒体库按内容去重：一样的内容只列一次，优先列 uploads 里的原件。
+        result.images = Array(Self.dedupeByContent(result.images)
+            .sorted { $0.modified > $1.modified }.prefix(caps.images))
         result.videos = Array(result.videos.sorted { $0.modified > $1.modified }.prefix(caps.videos))
         result.audio = Array(result.audio.sorted { $0.modified > $1.modified }.prefix(caps.audio))
         result.files = Array(result.files.sorted { $0.modified > $1.modified }.prefix(caps.files))
         return result
+    }
+
+    // MARK: - [B28 R22] 内容去重
+
+    /// 先按文件大小分组，只有大小相同的才真的去读字节算指纹——
+    /// 600 张图里绝大多数大小都不一样，实际读盘的只有少数。
+    static func dedupeByContent(_ hits: [Hit]) -> [Hit] {
+        var bySize: [Int: [Hit]] = [:]
+        for h in hits { bySize[h.size, default: []].append(h) }
+
+        var kept: [Hit] = []
+        for (_, group) in bySize {
+            if group.count == 1 {
+                kept.append(contentsOf: group)
+                continue
+            }
+            var byFingerprint: [String: Hit] = [:]
+            for h in group {
+                let key = fingerprint(h) ?? "path:\(h.id)"
+                if let current = byFingerprint[key] {
+                    byFingerprint[key] = preferred(current, h)
+                } else {
+                    byFingerprint[key] = h
+                }
+            }
+            kept.append(contentsOf: byFingerprint.values)
+        }
+        return kept
+    }
+
+    /// 读前 64KB + 文件大小做指纹。读不到就返回 nil（调用方按路径当独立文件）。
+    static func fingerprint(_ hit: Hit) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: hit.url) else { return nil }
+        defer { try? handle.close() }
+        let head = (try? handle.read(upToCount: 65_536)) ?? Data()
+        var hash: UInt64 = 1469598103934665603
+        for byte in head {
+            hash ^= UInt64(byte)
+            hash = hash &* 1099511628211
+        }
+        return "\(hit.size):\(hash)"
+    }
+
+    /// 两份同内容文件里选哪个：uploads 原件优先，其次文件名不像 UUID 的。
+    static func preferred(_ a: Hit, _ b: Hit) -> Hit {
+        func score(_ h: Hit) -> Int {
+            var s = 0
+            if h.url.path.contains("/uploads/") { s += 4 }
+            if !isUUIDLike(h.name) { s += 2 }
+            return s
+        }
+        return score(b) > score(a) ? b : a
+    }
+
+    /// 32 位十六进制 + 短横线那种裸 UUID 文件名。
+    static func isUUIDLike(_ name: String) -> Bool {
+        let stem = (name as NSString).deletingPathExtension
+        let parts = stem.split(separator: "-")
+        guard parts.count >= 1 else { return false }
+        return stem.count >= 32 && stem.allSatisfy { $0.isHexDigit || $0 == "-" }
     }
 }
 
