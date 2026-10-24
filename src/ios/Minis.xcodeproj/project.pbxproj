@@ -24,6 +24,8 @@
 		E5AJR0003 /* ModelTierResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AJR0013 /* ModelTierResolver.swift */; };
 		E5AMI0001 /* HelperModelIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AMI0011 /* HelperModelIdentity.swift */; };
 		E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */; };
+		E5TG0001 /* TogetherState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TG0011 /* TogetherState.swift */; };
+		E5TG0002 /* TogetherStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TG0012 /* TogetherStore.swift */; };
 		E5CBK0002 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0012 /* UserProfileView.swift */; };
 		E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */; };
 		E5CBK0003 /* WidgetProfileBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CBK0013 /* WidgetProfileBridge.swift */; };
@@ -756,6 +758,8 @@
 		E5AJR0013 /* ModelTierResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "ModelTierResolver.swift"; path = "Agent/Jobs/ModelTierResolver.swift"; sourceTree = SOURCE_ROOT; };
 		E5AMI0011 /* HelperModelIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "HelperModelIdentity.swift"; path = "Agent/Jobs/HelperModelIdentity.swift"; sourceTree = SOURCE_ROOT; };
 		E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+ProgrammaticPrompt.swift"; path = "Agent/Chat/AIChatViewModel+ProgrammaticPrompt.swift"; sourceTree = SOURCE_ROOT; };
+		E5TG0011 /* TogetherState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "TogetherState.swift"; path = "Agent/Together/TogetherState.swift"; sourceTree = SOURCE_ROOT; };
+		E5TG0012 /* TogetherStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "TogetherStore.swift"; path = "Agent/Together/TogetherStore.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0012 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "UserProfileView.swift"; path = "Views/Chat/UserProfileView.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "AIChatViewModel+CodeBlockEditing.swift"; path = "Agent/Chat/AIChatViewModel+CodeBlockEditing.swift"; sourceTree = SOURCE_ROOT; };
 		E5CBK0013 /* WidgetProfileBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = "WidgetProfileBridge.swift"; path = "Agent/Session/WidgetProfileBridge.swift"; sourceTree = SOURCE_ROOT; };
@@ -2599,6 +2603,8 @@
 				E5AJR0013 /* ModelTierResolver.swift */,
 				E5AMI0011 /* HelperModelIdentity.swift */,
 				E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */,
+				E5TG0011 /* TogetherState.swift */,
+				E5TG0012 /* TogetherStore.swift */,
 				E5CBK0012 /* UserProfileView.swift */,
 				E5CBK0011 /* AIChatViewModel+CodeBlockEditing.swift */,
 				E5CBK0013 /* WidgetProfileBridge.swift */,
@@ -3130,6 +3136,8 @@
 				E5AJR0001 /* AgentJobRegistry.swift in Sources */,
 				E5AJN0001 /* AgentJobCompletionNotice.swift in Sources */,
 				E5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */,
+				E5TG0001 /* TogetherState.swift in Sources */,
+				E5TG0002 /* TogetherStore.swift in Sources */,
 				E5CBK0002 /* UserProfileView.swift in Sources */,
 				E5CBK0001 /* AIChatViewModel+CodeBlockEditing.swift in Sources */,
 				E5CBK0003 /* WidgetProfileBridge.swift in Sources */,
