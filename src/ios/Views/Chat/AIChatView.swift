@@ -293,6 +293,9 @@ struct AIChatView: View {
     @State private var showTerminal = false
     @State private var terminalInitCommand: String?
     @State private var showAttachmentMenu = false
+    // [R24] 一起听：全屏空间。叉掉之后不是关掉，是缩成悬浮卡继续放。
+    @State private var showTogether = false
+    @ObservedObject private var togetherPlayer = TogetherPlayer.shared
     @State private var showPlusPanel = false
     @State private var showStickerPanel = false
     /// [K-2] The tile the user tapped, while the drawer is still animating out
@@ -1197,6 +1200,15 @@ struct AIChatView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showTogether) {
+            TogetherPanelView()
+        }
+        // [R24] 叉掉面板不等于关掉：播放器还活着就浮出小卡，音乐继续。
+        .overlay(alignment: .bottom) {
+            if togetherPlayer.isActive && !showTogether {
+                TogetherMiniBar()
+            }
+        }
         .fullScreenCover(isPresented: $showTerminal) {
             terminalInitCommand = nil
         } content: {
@@ -2063,6 +2075,8 @@ struct AIChatView: View {
             vm.compactAll()
         case .clearChat:
             vm.clearChatConfirmRequested = true
+        case .together:
+            showTogether = true
         }
     }
 
@@ -6176,6 +6190,9 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
     case compactHistory = "compactHistory" // 压缩上下文
     case clearChat = "clearChat"           // 清空当前对话
 
+    // [R24] 一起听：两个人的音乐空间
+    case together = "together"
+
     public var id: String { rawValue }
 
     public var title: String {
@@ -6198,6 +6215,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "导出会话"
         case .compactHistory: return "压缩上下文"
         case .clearChat: return "清空当前对话"
+        case .together: return "一起听"
         }
     }
 
@@ -6222,6 +6240,7 @@ public enum PlusPanelItemType: String, CaseIterable, Identifiable {
         case .share: return "square.and.arrow.up.fill"
         case .compactHistory: return "arrow.down.right.and.arrow.up.left"
         case .clearChat: return "trash"
+        case .together: return "headphones"
         }
     }
 }
@@ -6299,9 +6318,11 @@ public struct ChatPlusPanel: View {
     // 快速模式 / 增强缓存」。前两项斜杠菜单里本来就有，后两项按模型能力
     // 决定要不要出现、点不支持时只弹一句「不支持」——都不该占磁贴。
     // 快速模式/增强缓存搬进模型选择页，移动到…改成 /move 斜杠命令。
+    // [R24] 一起听占一个常驻位；斜杠指令下放到第三页（它本来也有 / 键入口）。
+    // 第一页布局定死 4 列 × 2 行，第 9 个会顶到第三行压掉消息区，所以是换位不是加位。
     private let page1Items: [PlusPanelItemType] = [
         .photo, .camera, .doc, .sticker,
-        .voice, .sparkles, .newChat, .slash
+        .voice, .sparkles, .newChat, .together
     ]
     private let page2Items: [PlusPanelItemType] = [
         .skills, .mcps, .memory, .terminal,
@@ -6309,7 +6330,7 @@ public struct ChatPlusPanel: View {
     ]
     // [B28 R10] 会话空间整理放回加号，不再只藏在斜杠命令里。
     private let page3Items: [PlusPanelItemType] = [
-        .compactHistory, .clearChat
+        .compactHistory, .clearChat, .slash
     ]
     private let columns = [
         GridItem(.flexible(), spacing: 10),

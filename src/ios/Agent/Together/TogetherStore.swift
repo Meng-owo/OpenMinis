@@ -111,9 +111,16 @@ final class TogetherStore {
     }
 
     /// 播到某句时的歌词。没有歌词文件返回 nil，面板显示歌名。
+    /// `.lrc` 按通用格式解析（抓来的都是这种），`.json` 走解码。
     func lyrics(for track: TogetherTrack) -> TogetherLyrics? {
         guard let rel = track.lyrics, !rel.isEmpty else { return nil }
         let url = rootURL.appendingPathComponent(rel)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        if url.pathExtension.lowercased() == "lrc" {
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+            let parsed = TogetherLyrics.parseLRC(text, trackId: track.id)
+            return parsed.lines.isEmpty ? nil : parsed
+        }
         return Self.decode(TogetherLyrics.self, at: url)
     }
 

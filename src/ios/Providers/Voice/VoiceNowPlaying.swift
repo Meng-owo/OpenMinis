@@ -28,6 +28,17 @@ final class VoiceNowPlaying {
     func refresh() {
         let reader = VoiceOutputPlayer.shared
         let bubble = GlobalAudioPlayer.shared
+        // [R24] 一起听优先：音乐是长时间播放，锁屏和控制中心该显示歌名，
+        // 而不是被一条还没播完的语音消息顶掉。
+        if TogetherPlayer.shared.isActive {
+            let t = TogetherPlayer.shared
+            publish(title: t.nowPlayingTitle,
+                    artist: t.nowPlayingArtist,
+                    duration: t.duration,
+                    position: t.currentTime,
+                    rate: t.isPlaying ? 1 : 0)
+            return
+        }
         if reader.hasLivePlayer {
             // [AUD8-04] `isPlaying` means "holds a live player" — it stays true
             // while paused, so the lock screen showed "playing" (with a live
@@ -64,11 +75,12 @@ final class VoiceNowPlaying {
         return name.isEmpty ? "Minis" : name
     }
 
-    private func publish(title: String, duration: TimeInterval, position: TimeInterval, rate: Float) {
+    private func publish(title: String, artist: String? = nil,
+                         duration: TimeInterval, position: TimeInterval, rate: Float) {
         registerCommandsIfNeeded()
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: title,
-            MPMediaItemPropertyArtist: Self.artistCredit,
+            MPMediaItemPropertyArtist: artist ?? Self.artistCredit,
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
             MPNowPlayingInfoPropertyPlaybackRate: rate,
@@ -119,6 +131,11 @@ final class VoiceNowPlaying {
     }
 
     private func handleToggle() {
+        if TogetherPlayer.shared.isActive {
+            TogetherPlayer.shared.toggle()
+            refresh()
+            return
+        }
         if targetIsReader() {
             VoiceOutputPlayer.shared.togglePlayPause()
         } else {
@@ -128,6 +145,11 @@ final class VoiceNowPlaying {
     }
 
     private func handlePlay() {
+        if TogetherPlayer.shared.isActive {
+            TogetherPlayer.shared.play()
+            refresh()
+            return
+        }
         if targetIsReader() {
             VoiceOutputPlayer.shared.resume()
         } else {
@@ -138,6 +160,11 @@ final class VoiceNowPlaying {
     }
 
     private func handlePause() {
+        if TogetherPlayer.shared.isActive {
+            TogetherPlayer.shared.pause()
+            refresh()
+            return
+        }
         if targetIsReader() {
             VoiceOutputPlayer.shared.pause()
         } else {
@@ -148,6 +175,11 @@ final class VoiceNowPlaying {
     }
 
     private func handleSeek(to time: TimeInterval) {
+        if TogetherPlayer.shared.isActive {
+            TogetherPlayer.shared.seek(to: time)
+            refresh()
+            return
+        }
         if targetIsReader() {
             let r = VoiceOutputPlayer.shared
             let d = r.playbackDuration

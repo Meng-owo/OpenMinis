@@ -446,3 +446,59 @@ struct TogetherLyrics: Codable, Equatable {
         return idx
     }
 }
+
+// MARK: - LRC 解析
+
+extension TogetherLyrics {
+
+    /// 解析标准 LRC。带时间轴的行才要，`[ti:]` `[ar:]` 这类元数据行跳过。
+    /// 一行里有多条时间戳（`[00:12.00][01:20.00]同一句`）也都展开。
+    static func parseLRC(_ text: String, trackId: String = "") -> TogetherLyrics {
+        var lines: [TogetherLyricLine] = []
+        var offset: Double = 0
+
+        func seconds(from stamp: String) -> Double? {
+            // mm:ss.xx 或 mm:ss
+            let parts = stamp.split(separator: ":")
+            guard parts.count >= 2,
+                  let minutes = Double(parts[0]) else { return nil }
+            let secPart = parts[1].split(separator: ".")
+            guard let seconds = Double(secPart[0]) else { return nil }
+            var frac = 0.0
+            if secPart.count > 1, let raw = Double("0." + String(secPart[1])) { frac = raw }
+            return minutes * 60 + seconds + frac
+        }
+
+        for raw in text.components(separatedBy: .newlines) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+
+            if line.hasPrefix("[offset:") {
+                let value = line.dropFirst(8).dropLast()
+                if let v = Double(value) { offset = -v / 1000.0 }
+                continue
+            }
+            guard line.hasPrefix("[") else { continue }
+
+            var timestamps: [Double] = []
+            var remainder = Substring(line)
+            while remainder.hasPrefix("["), let close = remainder.firstIndex(of: "]") {
+                let stamp = remainder[remainder.index(after: remainder.startIndex)..<close]
+                if stamp.contains(":") && !stamp.contains("ti") && !stamp.contains("ar")
+                    && !stamp.contains("al") && !stamp.contains("by") {
+                    if let t = seconds(from: String(stamp)) { timestamps.append(t) }
+                }
+                remainder = remainder[remainder.index(after: close)...]
+            }
+            let content = remainder.trimmingCharacters(in: .whitespaces)
+            guard !timestamps.isEmpty else { continue }
+            for t in timestamps {
+                lines.append(TogetherLyricLine(at: t, text: content))
+            }
+        }
+
+        lines.sort { $0.at < $1.at }
+        return TogetherLyrics(trackId: trackId, timed: !lines.isEmpty,
+                              source: "lrc", lines: lines, offset: offset)
+    }
+}

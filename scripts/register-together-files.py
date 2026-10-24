@@ -6,6 +6,9 @@ src = io.open(P, encoding='utf-8').read()
 FILES = [
     ('E5TG0001', 'E5TG0011', 'TogetherState.swift', 'Agent/Together/TogetherState.swift'),
     ('E5TG0002', 'E5TG0012', 'TogetherStore.swift', 'Agent/Together/TogetherStore.swift'),
+    ('E5TG0003', 'E5TG0013', 'TogetherPlayer.swift', 'Agent/Together/TogetherPlayer.swift'),
+    ('E5TG0004', 'E5TG0014', 'TogetherPanelView.swift', 'Views/Together/TogetherPanelView.swift'),
+    ('E5TG0005', 'E5TG0015', 'TogetherMiniBar.swift', 'Views/Together/TogetherMiniBar.swift'),
 ]
 
 anchor_build = "\t\tE5PPR0001 /* AIChatViewModel+ProgrammaticPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5PPR0011 /* AIChatViewModel+ProgrammaticPrompt.swift */; };\n"
