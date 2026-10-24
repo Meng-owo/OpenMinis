@@ -71,6 +71,13 @@ import UIKit
                 let pid = PersonaStore.currentID()
                 guard let existing = PersonaStore.shared.personas.first(where: { $0.id == pid })
                 else { return fail("no_persona", "No persona \(pid).") }
+                // 两边都写：SOUL.md 的 icon 是给旧读取路径的镜像，
+                // Persona.avatar 是界面/聊天真正读的那一份。
+                do {
+                    try AppearanceStudio.shared.setAssistantAvatar(image)
+                } catch {
+                    return fail("save_failed", error.localizedDescription)
+                }
                 return storeAvatar(image, personaID: pid, role: "assistant", fallback: existing)
             default:
                 return fail("bad_role", "role must be user or assistant.")
