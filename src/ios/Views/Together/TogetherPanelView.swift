@@ -77,7 +77,7 @@ struct TogetherPanelView: View {
         HStack {
             Button { dismiss() } label: {
                 Image(systemName: "chevron.down")
-                    .font(ChatFont.font(size: 14, weight: .semibold))
+                    .font(ChatFont.font( 14, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .frame(width: 34, height: 34)
                     .background(CSSThemeVariables.optionBg(scope: .chat))
@@ -88,7 +88,7 @@ struct TogetherPanelView: View {
             Spacer()
 
             Text(TogetherCopy.title)
-                .font(ChatFont.font(size: 11, weight: .medium))
+                .font(ChatFont.font( 11, weight: .medium))
                 .tracking(2)
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
 
@@ -111,7 +111,7 @@ struct TogetherPanelView: View {
             }
 
             Text("\(aiName) & \(userName)")
-                .font(ChatFont.font(size: 11, weight: .medium))
+                .font(ChatFont.font( 11, weight: .medium))
                 .tracking(1.4)
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
         }
@@ -153,7 +153,7 @@ struct TogetherPanelView: View {
 
                     (Text(aiName).fontWeight(.semibold)
                         + Text("  ") + Text(note.text))
-                        .font(ChatFont.font(size: 12.5))
+                        .font(ChatFont.font( 12.5))
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                         .lineLimit(1)
                 }
@@ -165,7 +165,7 @@ struct TogetherPanelView: View {
                 .transition(.opacity)
             } else if let line = currentLyricText {
                 Text(line)
-                    .font(ChatFont.font(size: 13, weight: .medium))
+                    .font(ChatFont.font( 13, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.85))
                     .lineLimit(1)
                     .frame(height: 20)
@@ -185,66 +185,12 @@ struct TogetherPanelView: View {
     // MARK: 唱片
 
     private func disc(_ s: CGFloat) -> some View {
-        let size = 250 * s
-        return ZStack {
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [
-                                TogetherSkin.vinyl.opacity(0.92),
-                                TogetherSkin.vinyl,
-                                TogetherSkin.vinyl
-                            ],
-                            center: .center, startRadius: 10, endRadius: size / 2
-                        )
-                    )
-
-                // 纹路：一圈一圈的细线，越往外越密
-                ForEach(1..<26, id: \.self) { i in
-                    Circle()
-                        .strokeBorder(
-                            TogetherSkin.vinylRing,
-                            lineWidth: 1
-                        )
-                        .padding(size / 2 * CGFloat(i) / 26 * 0.94)
-                }
-
-                Circle()
-                    .fill(CSSThemeVariables.card(scope: .chat))
-                    .frame(width: size * 0.552, height: size * 0.552)
-                    .overlay(
-                        Image(systemName: "headphones")
-                            .font(ChatFont.font(size: size * 0.16, weight: .light))
-                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                    )
-                    .overlay(
-                        Circle().strokeBorder(
-                            CSSThemeVariables.bg(scope: .chat).opacity(0.25), lineWidth: 0.8)
-                    )
-
-                Circle()
-                    .fill(CSSThemeVariables.bg(scope: .chat).opacity(0.9))
-                    .frame(width: 6, height: 6)
-            }
-            .frame(width: size, height: size)
-            .rotationEffect(.degrees(player.currentTime / 22.0 * 360))
-            .animation(.linear(duration: 0.5), value: player.currentTime)
-            .shadow(color: TogetherSkin.shadowDeep, radius: 26, x: 0, y: 16)
-            .onTapGesture { player.toggle() }
-
-            // 唱臂：右上角一根斜杆
-            HStack {
-                Spacer()
-                Capsule()
-                    .fill(CSSThemeVariables.textMain(scope: .chat).opacity(0.35))
-                    .frame(width: 2.5 * s, height: 96 * s)
-                    .rotationEffect(.degrees(21))
-                    .offset(x: -6 * s, y: -size * 0.30)
-            }
-            .frame(width: size + 26 * s)
+        TogetherDiscView(size: 250 * s,
+                         spinDegrees: player.currentTime / 22.0 * 360,
+                         isPlaying: player.isPlaying) {
+            player.toggle()
         }
-        .frame(height: size + 10)
+        .frame(height: 250 * s + 10)
     }
 
     // MARK: 歌名
@@ -252,20 +198,20 @@ struct TogetherPanelView: View {
     private func titleBlock(_ t: TogetherTrack, _ s: CGFloat) -> some View {
         VStack(spacing: 5 * s) {
             Text(t.title)
-                .font(ChatFont.font(size: 26 * s, weight: .semibold))
+                .font(ChatFont.font( 26 * s, weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
             if let en = t.titleEn, !en.isEmpty {
                 Text(en)
-                    .font(ChatFont.font(size: 13.5 * s, design: .serif))
+                    .font(ChatFont.font( 13.5 * s, design: .serif))
                     .italic()
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.85))
             }
 
             Text(t.artist)
-                .font(ChatFont.font(size: 11.5 * s, weight: .medium))
+                .font(ChatFont.font( 11.5 * s, weight: .medium))
                 .tracking(1.4)
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
         }
@@ -332,7 +278,7 @@ struct TogetherPanelView: View {
                 Spacer()
                 Text(mmss(player.duration))
             }
-            .font(ChatFont.font(size: 10.5, weight: .medium))
+            .font(ChatFont.font( 10.5, weight: .medium))
             .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.75))
         }
     }
@@ -356,7 +302,7 @@ struct TogetherPanelView: View {
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(ChatFont.font(size: 25 * s, weight: .semibold))
+                    .font(ChatFont.font( 25 * s, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
                     .frame(width: 68 * s, height: 68 * s)
                     .background(CSSThemeVariables.accent(scope: .chat))
@@ -375,7 +321,7 @@ struct TogetherPanelView: View {
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(ChatFont.font(size: size, weight: .medium))
+                .font(ChatFont.font( size, weight: .medium))
                 .foregroundStyle(
                     active
                         ? CSSThemeVariables.accent(scope: .chat)
@@ -413,9 +359,9 @@ struct TogetherPanelView: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: symbol)
-                    .font(ChatFont.font(size: 17, weight: .medium))
+                    .font(ChatFont.font( 17, weight: .medium))
                 Text(title)
-                    .font(ChatFont.font(size: 9.5, weight: .medium))
+                    .font(ChatFont.font( 9.5, weight: .medium))
                     .tracking(0.6)
             }
             .foregroundStyle(
@@ -435,7 +381,7 @@ struct TogetherPanelView: View {
     private var noteComposer: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("\(TogetherCopy.leaveNoteTitle) \(mmss(player.currentTime))")
-                .font(ChatFont.font(size: 15, weight: .semibold))
+                .font(ChatFont.font( 15, weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
 
             TextField(TogetherCopy.leaveNotePlaceholder, text: $noteDraft, axis: .vertical)
@@ -457,7 +403,7 @@ struct TogetherPanelView: View {
                     noteDraft = ""
                     showNoteComposer = false
                 }
-                .font(ChatFont.font(size: 14, weight: .semibold))
+                .font(ChatFont.font( 14, weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
                 .padding(.horizontal, 18)
                 .padding(.vertical, 9)
@@ -476,13 +422,13 @@ struct TogetherPanelView: View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "headphones")
-                .font(ChatFont.font(size: 40, weight: .light))
+                .font(ChatFont.font( 40, weight: .light))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.6))
             Text(TogetherCopy.emptyTitle)
-                .font(ChatFont.font(size: 15, weight: .medium))
+                .font(ChatFont.font( 15, weight: .medium))
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
             Text(TogetherCopy.emptyHint)
-                .font(ChatFont.font(size: 12.5))
+                .font(ChatFont.font( 12.5))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
 
             VStack(spacing: 3) {
@@ -492,7 +438,7 @@ struct TogetherPanelView: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .font(ChatFont.font(size: 9, design: .monospaced))
+            .font(ChatFont.font( 9, design: .monospaced))
             .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.65))
             .padding(.horizontal, 24)
             .padding(.top, 14)
@@ -550,5 +496,86 @@ struct TogetherPanelView: View {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let total = Int(seconds.rounded())
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+// MARK: - 唱片
+//
+// 单独拆出来：一个函数里塞五层叠加 + 26 圈纹路，编译器会拒绝做类型检查。
+// 拆开之后每层都短，也能单独预览。
+
+struct TogetherDiscView: View {
+    let size: CGFloat
+    let spinDegrees: Double
+    let isPlaying: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        ZStack {
+            disc
+                .rotationEffect(.degrees(spinDegrees))
+                .animation(.linear(duration: 0.5), value: spinDegrees)
+                .shadow(color: TogetherSkin.shadowDeep, radius: 26, x: 0, y: 16)
+                .onTapGesture(perform: onTap)
+
+            arm
+        }
+    }
+
+    private var disc: some View {
+        ZStack {
+            Circle().fill(vinylFill)
+            rings
+            label
+            hole
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var vinylFill: RadialGradient {
+        RadialGradient(colors: [TogetherSkin.vinyl.opacity(0.92),
+                                TogetherSkin.vinyl,
+                                TogetherSkin.vinyl],
+                       center: .center, startRadius: 10, endRadius: size / 2)
+    }
+
+    private var rings: some View {
+        ForEach(1..<26, id: \.self) { i in
+            Circle()
+                .strokeBorder(TogetherSkin.vinylRing, lineWidth: 1)
+                .padding(size / 2 * CGFloat(i) / 26 * 0.94)
+        }
+    }
+
+    private var label: some View {
+        Circle()
+            .fill(CSSThemeVariables.card(scope: .chat))
+            .frame(width: size * 0.552, height: size * 0.552)
+            .overlay(
+                Image(systemName: "headphones")
+                    .font(ChatFont.font(size * 0.16, weight: .light))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            )
+            .overlay(
+                Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat).opacity(0.25), lineWidth: 0.8)
+            )
+    }
+
+    private var hole: some View {
+        Circle()
+            .fill(CSSThemeVariables.bg(scope: .chat).opacity(0.9))
+            .frame(width: 6, height: 6)
+    }
+
+    private var arm: some View {
+        HStack {
+            Spacer()
+            Capsule()
+                .fill(CSSThemeVariables.textMain(scope: .chat).opacity(0.35))
+                .frame(width: 2.5, height: size * 0.384)
+                .rotationEffect(.degrees(21))
+                .offset(x: -6, y: -size * 0.30)
+        }
+        .frame(width: size + 26)
     }
 }

@@ -72,12 +72,12 @@ struct TogetherMiniBar: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(player.track?.title ?? TogetherCopy.title)
-                    .font(ChatFont.font(size: 11, weight: .medium))
+                    .font(ChatFont.font( 11, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .lineLimit(1)
 
                 Text(movingLine)
-                    .font(ChatFont.font(size: 13, weight: .medium))
+                    .font(ChatFont.font( 13, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .lineLimit(1)
                     .id(movingLine)
@@ -92,7 +92,7 @@ struct TogetherMiniBar: View {
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(ChatFont.font(size: 13, weight: .semibold))
+                    .font(ChatFont.font( 13, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
                     .frame(width: 30, height: 30)
                     .background(CSSThemeVariables.accent(scope: .chat))
@@ -102,7 +102,7 @@ struct TogetherMiniBar: View {
 
             Button { nextTrack() } label: {
                 Image(systemName: "forward.fill")
-                    .font(ChatFont.font(size: 12, weight: .semibold))
+                    .font(ChatFont.font( 12, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .frame(width: 24, height: 30)
             }
@@ -138,7 +138,7 @@ struct TogetherMiniBar: View {
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(ChatFont.font(size: 11, weight: .semibold))
+                    .font(ChatFont.font( 11, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
             }
             .buttonStyle(.plain)
@@ -171,7 +171,7 @@ struct TogetherMiniBar: View {
             .frame(width: 44, height: 44)
             .overlay(
                 Image(systemName: "music.note")
-                    .font(ChatFont.font(size: 16, weight: .medium))
+                    .font(ChatFont.font( 16, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.9))
             )
     }
