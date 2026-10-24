@@ -40,6 +40,8 @@ struct TogetherSkinValues: Codable, Equatable {
     }
 }
 
+/// 颜色从主题派生，而主题的取值入口是 @MainActor 的，这里跟着标。
+@MainActor
 enum TogetherSkin {
 
     static var values: TogetherSkinValues {
