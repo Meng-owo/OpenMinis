@@ -405,7 +405,9 @@ extension AIChatViewModel {
         if let r = norm.range(of: marker) {
             let pid = String(norm[r.upperBound...].prefix(while: { $0 != "/" }))
             let current = sessionPersonaId ?? PersonaStore.currentID()
-            if !pid.isEmpty, pid != current {
+            // [B28 R15] 「我自己」是她的档案，不是"别人的人设"。AI 改它跟改自己的
+            // SOUL 是同一件事——放行，否则它会以为自己被系统拦住了。
+            if !pid.isEmpty, pid != current, pid != PersonaStore.userProfilePersonaID {
                 return "Error: refusing to write another persona's memory (persona=\(pid), current=\(current))."
             }
         }
@@ -430,7 +432,8 @@ extension AIChatViewModel {
         var searchStart = command.startIndex
         while let r = command.range(of: marker, range: searchStart..<command.endIndex) {
             let pid = String(command[r.upperBound...].prefix(while: { $0 != "/" && $0 != " " && $0 != "\n" && $0 != "'" && $0 != "\"" }))
-            if !pid.isEmpty, !pid.hasPrefix("$"), !pid.hasPrefix("\\("), pid != current, hasWrite {
+            if !pid.isEmpty, !pid.hasPrefix("$"), !pid.hasPrefix("\\("),
+               pid != current, pid != PersonaStore.userProfilePersonaID, hasWrite {
                 return "Error: refusing to write another persona's memory via shell (persona=\(pid), current=\(current))."
             }
             searchStart = r.upperBound

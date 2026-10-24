@@ -80,6 +80,11 @@ struct UserProfileView: View {
             appeared = true
         }
         .onDisappear { commitName() }
+        // AI 是用 shell 直接写 SOUL.md 的，不会走 SoulStore.save，也就没有通知。
+        // 回到前台就重读一次，别让她看着旧内容。
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if !hasUnsavedChanges { reload() }
+        }
         // 小抽屉：从底部滑出、带拖拽条，不整页推走——她要看的是"翻开一页"，不是"离开"。
         .sheet(isPresented: $showBodyDrawer) {
             NavigationStack {
