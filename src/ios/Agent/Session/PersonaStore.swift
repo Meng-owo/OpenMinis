@@ -890,7 +890,7 @@ final class PersonaStore: ObservableObject {
     func setCurrent(_ id: String) {
         // [B28 R11] 「我自己」描述的是用户，永远不能当当前聊天人设——
         // 选中它等于让 AI 用她的档案当自己的性格。这里硬挡，不靠 UI 自觉。
-        guard !isUserProfileID(id) else { return }
+        guard !Self.isUserProfileID(id) else { return }
         guard personas.contains(where: { $0.id == id }), id != currentPersonaID else { return }
         currentPersonaID = id
         SoulStore.refreshCache()
