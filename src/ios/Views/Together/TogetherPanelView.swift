@@ -722,42 +722,33 @@ struct TogetherInlineLyricsView: View {
     }
 
     var body: some View {
-        ZStack {
+        GeometryReader { geo in
+            let half = max(90, geo.size.height / 2)
+
             if let lines = timedLines, !lines.isEmpty {
                 ScrollViewReader { proxy in
                     ScrollView(showsIndicators: false) {
-                        LazyVStack(spacing: 20) {
-                            ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
-                                let isCurrent = idx == currentIndex
+                        LazyVStack(spacing: 22) {
+                            // 上方留白：第一句也能停在正中间；点一下收回黑胶
+                            Color.clear
+                                .frame(height: half - 40)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onToggleDisc() }
 
-                                Text(line.text)
-                                    .font(ChatFont.font(isCurrent ? 18 : 14, weight: isCurrent ? .bold : .regular))
-                                    .foregroundStyle(
-                                        isCurrent
-                                            ? CSSThemeVariables.textMain(scope: .chat)
-                                            : CSSThemeVariables.textDim(scope: .chat).opacity(0.45)
-                                    )
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: .infinity)
-                                    .scaleEffect(isCurrent ? 1.05 : 0.95)
-                                    .animation(.easeOut(duration: 0.28), value: currentIndex)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onSeek(line.at) }
+                            ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                                lyricLine(line, isCurrent: idx == currentIndex)
                                     .id(idx)
                             }
+
+                            Color.clear
+                                .frame(height: half - 40)
+                                .contentShape(Rectangle())
+                                .onTapGesture { onToggleDisc() }
                         }
                         .padding(.horizontal, 28)
-                        .padding(.vertical, 120)
                     }
-                    .onAppear {
-                        if currentIndex >= 0 { proxy.scrollTo(currentIndex, anchor: .center) }
-                    }
-                    .onChange(of: currentIndex) { idx in
-                        guard idx >= 0 else { return }
-                        withAnimation(.easeOut(duration: 0.38)) {
-                            proxy.scrollTo(idx, anchor: .center)
-                        }
-                    }
+                    .onAppear { center(proxy, animated: false) }
+                    .onChange(of: currentIndex) { _ in center(proxy, animated: true) }
                 }
             } else {
                 VStack(spacing: 12) {
@@ -772,12 +763,40 @@ struct TogetherInlineLyricsView: View {
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     Spacer()
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { onToggleDisc() }
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // 点击歌词空白区域切回黑胶
-            onToggleDisc()
+    }
+
+    private func lyricLine(_ line: TogetherLyricLine, isCurrent: Bool) -> some View {
+        Text(line.text)
+            .font(ChatFont.font(isCurrent ? 18 : 14, weight: isCurrent ? .bold : .regular))
+            .foregroundStyle(
+                isCurrent
+                    ? CSSThemeVariables.textMain(scope: .chat)
+                    : CSSThemeVariables.textDim(scope: .chat).opacity(0.45)
+            )
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .scaleEffect(isCurrent ? 1.04 : 0.96)
+            .animation(.easeOut(duration: 0.26), value: isCurrent)
+            .contentShape(Rectangle())
+            .onTapGesture { onSeek(line.at) }
+    }
+
+    /// 布局完成后再滚，否则 onAppear 时还没有尺寸，滚不动。
+    private func center(_ proxy: ScrollViewProxy, animated: Bool) {
+        let idx = currentIndex
+        guard idx >= 0 else { return }
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeOut(duration: 0.38)) {
+                    proxy.scrollTo(idx, anchor: .center)
+                }
+            } else {
+                proxy.scrollTo(idx, anchor: .center)
+            }
         }
     }
 }
