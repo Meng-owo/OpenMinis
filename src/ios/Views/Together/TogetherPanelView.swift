@@ -72,15 +72,25 @@ struct TogetherPanelView: View {
                     topBar(s)
 
                     if let t = track {
-                        // 中间视觉区：黑胶 ⇄ 歌词 原位平滑切换
-                        middleVisualSection(t, s: s, height: h * 0.52)
+                        // 我们的头像，回到 C 位
+                        duoHeader(s)
 
-                        Spacer(minLength: 8)
+                        // 中间大视觉区：弹性撑开，黑胶/歌词居中，歌名在下
+                        VStack(spacing: 0) {
+                            noteStrip(s)
+                                .padding(.top, 4 * s)
 
-                        // 底部控制区（整体下沉贴底）
+                            middleVisualSection(t, s: s)
+
+                            titleBlock(t, s)
+                                .padding(.bottom, 4 * s)
+                        }
+                        .frame(maxHeight: .infinity)
+
+                        // 底部控制区：贴底
                         bottomControlSuite(t, s: s)
                             .padding(.horizontal, 24)
-                            .padding(.bottom, max(18, geo.safeAreaInsets.bottom))
+                            .padding(.bottom, max(8, geo.safeAreaInsets.bottom))
                     } else {
                         emptyState
                     }
@@ -156,26 +166,10 @@ struct TogetherPanelView: View {
 
             Spacer()
 
-            // 居中歌名与歌手 + 双人微挂件
-            VStack(spacing: 2) {
-                HStack(spacing: 6) {
-                    // 双人小挂件（点一下心动共振）
-                    duoMiniBadge
-                        .onTapGesture { triggerHeartbeat() }
-
-                    Text(track?.title ?? TogetherCopy.title)
-                        .font(ChatFont.font(15, weight: .bold))
-                        .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                        .lineLimit(1)
-                }
-
-                if let artist = track?.artist, !artist.isEmpty {
-                    Text(artist)
-                        .font(ChatFont.font(11))
-                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                        .lineLimit(1)
-                }
-            }
+            Text(TogetherCopy.title)
+                .font(ChatFont.font(11, weight: .medium))
+                .tracking(3)
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
 
             Spacer()
 
@@ -226,7 +220,7 @@ struct TogetherPanelView: View {
 
     // MARK: - 中间核心视觉区（黑胶 ⇄ 原位歌词）
 
-    private func middleVisualSection(_ t: TogetherTrack, s: CGFloat, height: CGFloat) -> some View {
+    private func middleVisualSection(_ t: TogetherTrack, s: CGFloat) -> some View {
         ZStack {
             if isLyricsMode {
                 // 图1同款：原位滚动歌词
@@ -252,8 +246,7 @@ struct TogetherPanelView: View {
                     .transition(.opacity)
             }
         }
-        .frame(height: height)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
     }
 
@@ -276,6 +269,123 @@ struct TogetherPanelView: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+
+    // MARK: - 我们的头像
+
+    private func duoHeader(_ s: CGFloat) -> some View {
+        VStack(spacing: 9 * s) {
+            HStack(spacing: -14 * s) {
+                avatar(TogetherIdentity.aiIcon, size: 104 * s, ring: 3 * s)
+                    .zIndex(1)
+                avatar(TogetherIdentity.userIcon, size: 104 * s, ring: 3 * s)
+            }
+            .onTapGesture { triggerHeartbeat() }
+
+            Text("\(aiName) & \(userName)")
+                .font(ChatFont.font(11, weight: .medium))
+                .tracking(1.4)
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+        }
+        .padding(.top, 10 * s)
+    }
+
+    private func avatar(_ iconRef: String?, size: CGFloat, ring: CGFloat) -> some View {
+        PersonaAvatarView(iconRef: iconRef, size: size)
+            .frame(width: size, height: size)
+            .clipShape(Circle())
+            .overlay(
+                Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat), lineWidth: ring)
+            )
+    }
+
+    // MARK: - 我留的话
+
+    private func noteStrip(_ s: CGFloat) -> some View {
+        Group {
+            if let note = noteNearPlayhead {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(CSSThemeVariables.accent(scope: .chat))
+                        .frame(width: 5, height: 5)
+
+                    (Text(aiName).fontWeight(.semibold)
+                        + Text("  ") + Text(note.text))
+                        .font(ChatFont.font(12.5))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(CSSThemeVariables.optionBg(scope: .chat).opacity(0.7))
+                )
+                .transition(.opacity)
+            } else if let line = currentLyricText {
+                Text(line)
+                    .font(ChatFont.font(13, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.85))
+                    .lineLimit(1)
+                    .id(line)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .animation(.easeOut(duration: 0.18), value: line)
+            } else {
+                Color.clear.frame(height: 20)
+            }
+        }
+        .frame(height: 36 * s)
+    }
+
+    // MARK: - 歌名
+
+    private func titleBlock(_ t: TogetherTrack, _ s: CGFloat) -> some View {
+        VStack(spacing: 5 * s) {
+            Text(t.title)
+                .font(ChatFont.font(26 * s, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+
+            if let en = t.titleEn, !en.isEmpty {
+                Text(en)
+                    .font(ChatFont.font(13.5 * s, design: .serif))
+                    .italic()
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.85))
+            }
+
+            Text(t.artist)
+                .font(ChatFont.font(11.5 * s, weight: .medium))
+                .tracking(1.4)
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+        }
+        .padding(.top, 8 * s)
+        .padding(.horizontal, 24)
+    }
+
+    private var currentLyricText: String? {
+        if let lyr = lyrics, lyr.timed, let trackId = track?.id,
+           lyr.trackId.isEmpty || lyr.trackId == trackId,
+           let line = lyr.line(at: effectivePosition)?.text,
+           !line.trimmingCharacters(in: .whitespaces).isEmpty {
+            return line
+        }
+        if let id = track?.id, let loop = state.loopLines[id],
+           !loop.trimmingCharacters(in: .whitespaces).isEmpty {
+            return loop
+        }
+        return nil
+    }
+
+    private var noteNearPlayhead: TogetherNote? {
+        guard let trackId = track?.id else { return nil }
+        let pos = effectivePosition
+        return state.notes
+            .filter { $0.trackId == trackId && abs($0.at - pos) <= 12 }
+            .min(by: { abs($0.at - pos) < abs($1.at - pos) })
     }
 
     // MARK: - 底部控制套件（沉底布局）
