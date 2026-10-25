@@ -131,3 +131,24 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 - 目标目录未建/未登记 fakefs meta.db，copyItem 静默失败
 - saveLibrary 写 index.json 的路径与 library() 读取路径是否一致
 - 视频/非 mp3 走 AVAssetExportSession 失败后 fallback 是否真的成功
+
+---
+
+## R34 需求清单（她口述，2026-10-25）
+
+1. **路径统一（最重要，不然两套系统打架）**：复用内置 `/var/minis/shared/music`，删自造路径。
+2. **本地上传进不去**：`.fileImporter` 侧载失效 → 换 `DocumentCopyPicker`（asCopy）。
+3. **悬浮球改输入栏上方微控条**：删悬浮球；38pt 条：迷你黑胶(转)+音波+歌词窗+上一首/播放/下一首。固定贴输入栏上方，不再自由拖。参考 `attachments/uploads/index.html`。
+4. （并入 3）要有上一首。
+5. **没歌词 → AI 写台词**：每首歌 AI 写一份"台词本"存 state，可互动/聊歌背景/感受；有词显词，无词轮播台词；AI 有工具随时改。
+6. 先调研说计划不动手（已完成，她批准按最稳顺序做）。
+7. **进度条/按钮偏高 → 往下调**。
+8. **点唱片 → 翻成整页滚动歌词**：当前句高亮居中、点句跳转、再点翻回、过渡动画。
+- 我自己补：微控条加细进度线；面板底部「添加/音量」灰按钮接上；歌词页显示歌名歌手+AI 写的背景。
+
+### 根因（已查实）
+- **两套音乐目录**：内置 `shared/music` = AppGroup/MinisFileProvider/shared/music（真 bind-mount，apple-player 认）；我的 `shared/together/music` = alpine-rootfs/data 下（靠 FakefsBridge 手登记 meta.db）。→ 统一到 `AIChatViewModel.minisSharedPersistentDir`（AppGroup 或 Application Support/OpenMinisClone 回退），这才是 bind-mount 真源，**不需要再登记 meta.db**。
+- **曲库两套来源**：我读 index.json，目录有歌但 index 没登记就空库。→ 改成扫目录为准，index 当缓存。
+- **上传**：`DocumentCopyPicker.swift` 注释已写明侧载 `.fileImporter` 选文件没反应。
+
+### 开工顺序（她批准）：批次一 = 1+2+3 地基，出包确认；再批次二 = UI(3/4/7/8)；再批次三 = 5 AI 台词本 + 补全。
