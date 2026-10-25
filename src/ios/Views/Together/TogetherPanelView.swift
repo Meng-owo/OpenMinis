@@ -1012,7 +1012,7 @@ struct TogetherQueueDrawerView: View {
                                     .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
                                     .frame(width: 20)
                             } else {
-                                Text("\(tracks.firstIndex(of: track).map { $0 + 1 } ?? 1)")
+                                Text(trackOrder(track))
                                     .font(ChatFont.font(12, weight: .medium))
                                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                                     .frame(width: 20)
@@ -1066,6 +1066,13 @@ struct TogetherQueueDrawerView: View {
                 tracks = TogetherStore.shared.library().tracks
             }
         }
+    }
+
+    private func trackOrder(_ track: TogetherTrack) -> String {
+        if let idx = tracks.firstIndex(of: track) {
+            return "\(idx + 1)"
+        }
+        return "1"
     }
 }
 

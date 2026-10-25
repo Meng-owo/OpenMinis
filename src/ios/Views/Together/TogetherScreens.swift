@@ -941,9 +941,7 @@ struct TogetherPlaylistEditor: View {
                                 .background(Color.clear)
                                 .frame(height: 110)
                                 .padding(6)
-                                .onChange(of: desc) { val in
-                                    if val.count > 1000 { desc = String(val.prefix(1000)) }
-                                }
+                                .onChange(of: desc, perform: onDescChanged)
                         }
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -1072,6 +1070,12 @@ struct TogetherPlaylistEditor: View {
                 .background(Capsule().fill(bgColor))
         }
         .buttonStyle(.plain)
+    }
+
+    private func onDescChanged(_ val: String) {
+        if val.count > 1000 {
+            desc = String(val.prefix(1000))
+        }
     }
 
     private func reload() {
