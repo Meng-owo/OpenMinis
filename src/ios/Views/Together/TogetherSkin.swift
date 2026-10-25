@@ -143,7 +143,8 @@ enum TogetherCopy {
     static var changeCover: String { AppLocalized("Change cover", comment: "一起听 · 换封面") }
     static var resetCover: String { AppLocalized("Reset cover", comment: "一起听 · 恢复默认封面") }
     static var changeWallpaper: String { AppLocalized("Change wallpaper", comment: "一起听 · 换壁纸") }
-    static var oneLineOnly: String { AppLocalized("One line per listen — this one is already yours", comment: "一起听 · 本轮已经刻过一句") }    static var playlistInfo: String { AppLocalized("Playlist Info", comment: "一起听 · 歌单信息") }
+    static var oneLineOnly: String { AppLocalized("One line per listen — this one is already yours", comment: "一起听 · 本轮已经刻过一句") }
+    static var playlistInfo: String { AppLocalized("Playlist Info", comment: "一起听 · 歌单信息") }
     static var changeCoverTitle: String { AppLocalized("Change cover", comment: "一起听 · 更换封面") }
     static var tags: String { AppLocalized("Tags", comment: "一起听 · 标签") }
     static var noTags: String { AppLocalized("None", comment: "一起听 · 暂无") }
