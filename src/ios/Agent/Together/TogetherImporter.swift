@@ -63,15 +63,12 @@ final class LocalFileImporter: MusicImporter {
             id = "\(id)-\(Int(Date().timeIntervalSince1970))"
         }
 
-        let destName = "\(id).mp3"
-        let dest = store.musicDirectory.appendingPathComponent(destName)
-        try? FileManager.default.createDirectory(at: store.musicDirectory, withIntermediateDirectories: true)
-
-        let ok = await convertToMp3(from: url, to: dest, isVideo: Self.videoExtensions.contains(ext))
-        guard ok else {
-            logger.error("[TogetherImport] 转码失败 \(url.lastPathComponent)")
+        // 落到内置 shared/music，扩展名按真实编码来。
+        guard let dest = await writeIntoLibrary(from: url, id: id) else {
+            logger.error("[TogetherImport] 落地失败 \(url.lastPathComponent)")
             return nil
         }
+        let destName = dest.lastPathComponent
 
         let duration = await Self.duration(of: dest)
         let asset = AVURLAsset(url: url)
@@ -98,40 +95,48 @@ final class LocalFileImporter: MusicImporter {
         return track
     }
 
-    // MARK: 转码
+    // MARK: 落地
 
-    private func convertToMp3(from source: URL, to destination: URL, isVideo: Bool) async -> Bool {
-        // mp3 且非视频：直接搬，不重编码
-        if source.pathExtension.lowercased() == "mp3" && !isVideo {
-            try? FileManager.default.removeItem(at: destination)
+    /// 把选中的文件放进 shared/music。
+    /// mp3 原样搬；其它先试抽成 m4a；抽不出来就原样搬并保留原扩展名——
+    /// 不能给 m4a 的字节起个 .mp3 的名。
+    private func writeIntoLibrary(from source: URL, id: String) async -> URL? {
+        let fm = FileManager.default
+        let dir = TogetherStore.shared.musicDirectory
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let srcExt = source.pathExtension.lowercased()
+
+        if srcExt == "mp3" {
+            let dest = dir.appendingPathComponent("\(id).mp3")
+            try? fm.removeItem(at: dest)
             do {
-                try FileManager.default.copyItem(at: source, to: destination)
-                return true
+                try fm.copyItem(at: source, to: dest)
+                return dest
             } catch {
-                return false
+                return nil
             }
         }
-        // 其它格式交给 AVAssetExportSession；抽不出来就原样搬（播放器多半也能读）
-        let asset = AVURLAsset(url: source)
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
-            return Self.copyFallback(source, to: destination)
-        }
-        session.outputURL = destination
-        session.outputFileType = .m4a
-        await session.export()
-        if session.status == .completed, FileManager.default.fileExists(atPath: destination.path) {
-            return true
-        }
-        return Self.copyFallback(source, to: destination)
-    }
 
-    private static func copyFallback(_ source: URL, to destination: URL) -> Bool {
-        try? FileManager.default.removeItem(at: destination)
+        let asset = AVURLAsset(url: source)
+        if let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) {
+            let dest = dir.appendingPathComponent("\(id).m4a")
+            try? fm.removeItem(at: dest)
+            session.outputURL = dest
+            session.outputFileType = .m4a
+            await session.export()
+            if session.status == .completed, fm.fileExists(atPath: dest.path) {
+                return dest
+            }
+        }
+
+        let ext = srcExt.isEmpty ? "audio" : srcExt
+        let dest = dir.appendingPathComponent("\(id).\(ext)")
+        try? fm.removeItem(at: dest)
         do {
-            try FileManager.default.copyItem(at: source, to: destination)
-            return true
+            try fm.copyItem(at: source, to: dest)
+            return dest
         } catch {
-            return false
+            return nil
         }
     }
 

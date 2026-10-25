@@ -50,11 +50,10 @@ final class TogetherPlayer: ObservableObject {
 
     /// 换一首。position 是起始秒数。
     func load(_ newTrack: TogetherTrack, from position: Double = 0) {
-        guard let relative = newTrack.file, !relative.isEmpty else {
+        guard let url = store.audioURL(for: newTrack) else {
             logger.error("[Together] \(newTrack.title) 没有音频文件")
             return
         }
-        let url = store.rootURL.appendingPathComponent(relative)
         guard FileManager.default.fileExists(atPath: url.path) else {
             logger.error("[Together] 文件不存在：\(url.path)")
             return
@@ -89,6 +88,19 @@ final class TogetherPlayer: ObservableObject {
         p.play()
         isPlaying = true
         VoiceNowPlaying.shared.refresh()
+
+        // 扫目录进来的歌没有时长，读一次回填，列表就不会一直显示 0:00。
+        let trackId = newTrack.id
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let d = try? await item.asset.load(.duration) {
+                let secs = d.seconds
+                if secs.isFinite, secs > 0 {
+                    if self.duration < secs { self.duration = secs }
+                    self.store.updateDuration(trackId: trackId, duration: secs)
+                }
+            }
+        }
     }
 
     func play() {

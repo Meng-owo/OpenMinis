@@ -135,4 +135,5 @@ enum TogetherCopy {
     static var importFailed: String { AppLocalized("Couldn't read that file", comment: "一起听 · 导入失败") }
     static var handoff: String { AppLocalized("Hand the remote to", comment: "一起听 · 递遥控器") }
     static var noSongsYet: String { AppLocalized("Nothing here yet", comment: "一起听 · 空列表") }
+    static var allSongs: String { AppLocalized("All songs", comment: "一起听 · 全部歌曲（目录直读）") }
 }

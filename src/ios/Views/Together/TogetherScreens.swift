@@ -110,6 +110,8 @@ struct TogetherLibraryView: View {
     @State private var newName = ""
     @State private var showImporter = false
     @State private var importing = false
+    /// copy 模式选择器先落到这里，等 sheet 收起再开始导入。
+    @State private var pendingPicks: [URL] = []
     private let importer = LocalFileImporter()
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
@@ -134,6 +136,31 @@ struct TogetherLibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.trailing, 14)
+                    // 侧载包上 .fileImporter 会「选中了但点了没反应」——那是
+                    // FileProvider 的 security-scope 授权被静默拒了。
+                    // DocumentCopyPicker 走 asCopy，把文件拷进 tmp 再给普通 URL。
+                    .sheet(isPresented: $showImporter) {
+                        DocumentCopyPicker(contentTypes: importer.allowedTypes,
+                                           allowsMultipleSelection: true) { urls in
+                            pendingPicks = urls
+                        } onDone: {
+                            showImporter = false
+                            let urls = pendingPicks
+                            pendingPicks = []
+                            guard !urls.isEmpty else { return }
+                            importing = true
+                            Task {
+                                let added = await importer.importFiles(urls)
+                                importing = false
+                                playlists = TogetherStore.shared.livePlaylists()
+                                if added.isEmpty {
+                                    MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+                                } else {
+                                    MinisToast.show("\(added.count) \(TogetherCopy.importDone)")
+                                }
+                            }
+                        }
+                    }
 
                     Button {
                         newName = ""
@@ -151,6 +178,10 @@ struct TogetherLibraryView: View {
                 .padding(.horizontal, 22)
                 .padding(.top, 22)
 
+                allSongsEntry
+                    .padding(.horizontal, 22)
+                    .padding(.top, 14)
+
                 if playlists.isEmpty {
                     emptyPlaylists
                 } else {
@@ -166,22 +197,11 @@ struct TogetherLibraryView: View {
             .padding(.bottom, 24)
         }
         .onAppear { playlists = TogetherStore.shared.livePlaylists() }
-        .navigationDestination(for: String.self) { playlistId in
-            TogetherPlaylistDetail(playlistId: playlistId)
-        }
-        .fileImporter(isPresented: $showImporter,
-                      allowedContentTypes: importer.allowedTypes,
-                      allowsMultipleSelection: true) { result in
-            guard case .success(let urls) = result else { return }
-            importing = true
-            Task {
-                let added = await importer.importFiles(urls)
-                importing = false
-                if added.isEmpty {
-                    MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
-                } else {
-                    MinisToast.show("\(added.count) \(TogetherCopy.importDone)")
-                }
+        .navigationDestination(for: String.self) { id in
+            if id == TogetherAllSongsView.routeID {
+                TogetherAllSongsView()
+            } else {
+                TogetherPlaylistDetail(playlistId: id)
             }
         }
         .sheet(isPresented: $showNew) {
@@ -248,6 +268,39 @@ struct TogetherLibraryView: View {
         .buttonStyle(.plain)
     }
 
+    /// 目录里的歌都能在这儿直接播。歌单只是分类，不是唯一入口。
+    private var allSongsEntry: some View {
+        NavigationLink(value: TogetherAllSongsView.routeID) {
+            HStack(spacing: 12) {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(TogetherCover.fill("cover-1"))
+                    .frame(width: 46, height: 46)
+                    .overlay(
+                        Image(systemName: "music.note.list")
+                            .font(ChatFont.font(16, weight: .medium))
+                            .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.9))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(TogetherCopy.allSongs)
+                        .font(ChatFont.font(14, weight: .medium))
+                        .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    Text("\(TogetherStore.shared.library().tracks.count) \(TogetherCopy.songs)")
+                        .font(ChatFont.font(11.5))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(ChatFont.font(12, weight: .semibold))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.7))
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     private var playingBars: some View {
         HStack(spacing: 2) {
             ForEach(0..<3, id: \.self) { i in
@@ -300,6 +353,63 @@ struct TogetherLibraryView: View {
             }
         }
         .padding(22)
+    }
+}
+
+// MARK: - 全部歌曲
+
+/// 直接读 shared/music：目录里有什么就列什么。
+/// 歌单是分类，不是唯一入口——不然导进来的歌没地方找。
+struct TogetherAllSongsView: View {
+
+    static let routeID = "all-songs"
+
+    @State private var tracks: [TogetherTrack] = []
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                Text(TogetherCopy.allSongs)
+                    .font(ChatFont.font(21, weight: .semibold))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .padding(.top, 26)
+
+                Text("\(tracks.count) \(TogetherCopy.songs)")
+                    .font(ChatFont.font(11.5))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    .padding(.top, 6)
+
+                VStack(spacing: 0) {
+                    ForEach(tracks) { track in
+                        TogetherTrackRow(
+                            track: track,
+                            isPlaying: TogetherPlayer.shared.track?.id == track.id,
+                            noteCount: 0,
+                            onTap: {
+                                TogetherPlayer.shared.load(track)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                            }
+                        )
+                        Divider()
+                            .overlay(CSSThemeVariables.divider(scope: .chat))
+                            .padding(.leading, 52)
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
+
+                if tracks.isEmpty {
+                    Text(TogetherCopy.emptyHint)
+                        .font(ChatFont.font(12.5))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 40)
+                }
+            }
+            .padding(.bottom, 24)
+        }
+        .onAppear { tracks = TogetherStore.shared.library().tracks }
     }
 }
 

@@ -4,13 +4,16 @@
 //
 //  一起听 · 状态读写。
 //
-//  只有一份文件：<root>/state.json。面板、App、我（shell 里的 together 命令）
-//  写的是同一份。所有写操作走同一把文件锁 + 原子替换，revision 单调递增。
+//  只有一份文件：<root>/state.json。面板、App、我（shell）写的是同一份。
+//  所有写操作走同一把文件锁 + 原子替换，revision 单调递增。
 //
-//  根目录解析：优先和 shell 共用的 /var/minis/shared/together。
-//  App 侧的真实路径是 Documents/alpine-rootfs/data/var/minis/shared/together。
-//  拿不到那个目录（没装 rootfs、权限没了）就降到 App 自己的 Documents/together——
-//  一份能写的数据比一个漂亮的路径重要。
+//  路径只有一套，和内置音乐目录共用：
+//    音乐    /var/minis/shared/music     ← apple-player 播的就是这里
+//    元数据  /var/minis/shared/together/state.json
+//
+//  App 侧真源是 AIChatViewModel.minisSharedPersistentDir：iSH 里 /var/minis/shared
+//  就是它的 bind-mount。所以不用自己造路径，也不用往 meta.db 登记——写进去
+//  shell 就看得见，Files app 也看得见。
 //
 
 import Foundation
@@ -43,54 +46,46 @@ final class TogetherStore {
     }
 
     // MARK: 路径
+    //
+    // 一套系统，不是两套。
+    //
+    // 音乐放内置的 /var/minis/shared/music。App 侧就是 minisSharedPersistentDir/music
+    // （AppGroup 的 MinisFileProvider/shared/music；没 AppGroup 时回退
+    // Application Support/OpenMinisClone/MinisFileProvider/shared/music）。
+    // 这正是 iSH 里 /var/minis/shared 的 bind-mount 真源，也是 apple-player
+    // 和 Files app 看到的那一批文件——不造第二条路径，也不登记 meta.db。
 
-    /// shell 侧看到的路径 → App 侧真实路径。
-    static func hostPath(forGuestPath guest: String) -> String {
-        let documents = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first
-            ?? NSHomeDirectory()
-        let dataRoot = (documents as NSString).appendingPathComponent("alpine-rootfs/data")
-        var relative = guest
-        while relative.hasPrefix("/") {
-            relative = String(relative.dropFirst())
-        }
-        return (dataRoot as NSString).appendingPathComponent(relative)
+    /// 共享根。App 侧就是 /var/minis/shared 的真源。
+    static var sharedRootURL: URL {
+        AIChatViewModel.minisSharedPersistentDir
     }
 
-    /// 用哪个目录、为什么。面板空状态会把这一行显示出来，路径错了要一眼看得见。
+    /// 用哪个目录。面板空状态会把这一行显示出来，路径错了要一眼看得见。
     private(set) var rootDecision: String = "未解析"
-    /// 是否真的落在 shell 能看到的共享目录。写盘要按这个决定是否登记 fakefs。
-    private(set) var isSharedRoot = false
 
-    /// 共享目录优先，不可写才降级到沙盒。
-    ///
-    /// 这里不靠"目录存在"来判断：rootfs 可能还没挂，存在性检查会骗人。
-    /// 直接建目录 + 试写一个探针文件，写成功才算通。
+    /// 一起听的元数据目录：shared/together。
     lazy var rootURL: URL = {
-        let shared = FakefsBridge.hostURL(forLinuxPath: "/var/minis/shared/together")
-        let fm = FileManager.default
-
-        try? fm.createDirectory(at: shared, withIntermediateDirectories: true)
-        let probe = shared.appendingPathComponent(".probe")
-        if (try? Data("ok".utf8).write(to: probe)) != nil {
-            try? fm.removeItem(at: probe)
-            rootDecision = "shared /var/minis/shared/together"
-            isSharedRoot = true
-            return shared
-        }
-
-        let local = URL(fileURLWithPath: FakefsBridge.documentsPath)
-            .appendingPathComponent("together", isDirectory: true)
-        try? fm.createDirectory(at: local, withIntermediateDirectories: true)
-        rootDecision = "fallback Documents/together"
-        isSharedRoot = false
-        togetherLogger.error("[Together] 共享目录写不进，降级：\(shared.path)")
-        return local
+        let url = Self.sharedRootURL.appendingPathComponent("together", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        rootDecision = "shared/music · shared/together"
+        return url
     }()
 
     var stateURL: URL { rootURL.appendingPathComponent("state.json") }
-    var libraryURL: URL { rootURL.appendingPathComponent("music/index.json") }
-    var musicDirectory: URL { rootURL.appendingPathComponent("music", isDirectory: true) }
+    /// 音乐目录就是内置那个，apple-player 播的是同一批文件。
+    var musicDirectory: URL { Self.sharedRootURL.appendingPathComponent("music", isDirectory: true) }
+    var libraryURL: URL { rootURL.appendingPathComponent("index.json") }
     var lyricsDirectory: URL { rootURL.appendingPathComponent("lyrics", isDirectory: true) }
+
+    /// 音频按 shared 根解析：`music/x.mp3` → `/var/minis/shared/music/x.mp3`。
+    func audioURL(for track: TogetherTrack) -> URL? {
+        guard let rel = track.file, !rel.isEmpty else { return nil }
+        return Self.sharedRootURL.appendingPathComponent(rel)
+    }
+
+    static let audioExtensions: Set<String> = [
+        "mp3", "m4a", "aac", "wav", "flac", "aiff", "aif", "caf", "opus", "ogg"
+    ]
 
     @discardableResult
     func ensureDirectories() -> Bool {
@@ -113,8 +108,16 @@ final class TogetherStore {
         queue.sync { loadLocked() }
     }
 
+    /// 曲库以目录为准：shared/music 里有什么音频就有什么歌。
+    /// index.json 只当元数据缓存（标题/歌手/时长/歌词），目录里新出现的自动补进来。
     func library() -> TogetherLibrary {
-        queue.sync { loadLibraryLocked() }
+        queue.sync {
+            var lib = loadLibraryLocked()
+            if reconcileLibraryLocked(&lib) {
+                _ = saveLibraryLocked(lib)
+            }
+            return lib
+        }
     }
 
     /// 播到某句时的歌词。没有歌词文件返回 nil，面板显示歌名。
@@ -151,17 +154,13 @@ final class TogetherStore {
 
     @discardableResult
     func saveLibrary(_ library: TogetherLibrary) -> Bool {
-        queue.sync {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-            guard let data = try? encoder.encode(library) else { return false }
-            if isSharedRoot {
-                let linux = "/var/minis/shared/together/music/index.json"
-                if FakefsBridge.write(data, toLinuxPath: linux) { return true }
-            }
-            try? FileManager.default.createDirectory(at: musicDirectory, withIntermediateDirectories: true)
-            return Self.atomicWrite(data, to: libraryURL)
-        }
+        queue.sync { saveLibraryLocked(library) }
+    }
+
+    @discardableResult
+    private func saveLibraryLocked(_ library: TogetherLibrary) -> Bool {
+        try? FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        return Self.encode(library, to: libraryURL)
     }
 
     private func loadLibraryLocked() -> TogetherLibrary {
@@ -169,6 +168,109 @@ final class TogetherStore {
             return TogetherLibrary()
         }
         return Self.decode(TogetherLibrary.self, at: libraryURL) ?? TogetherLibrary()
+    }
+
+    /// 扫一遍音乐目录，把目录里有、index 里没有的歌补进来。
+    /// 返回是否改动过（改动才回写，别每次读库都写盘）。
+    private func reconcileLibraryLocked(_ lib: inout TogetherLibrary) -> Bool {
+        let fm = FileManager.default
+        guard let items = try? fm.contentsOfDirectory(
+            at: musicDirectory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return false }
+
+        var known = Set(lib.tracks.compactMap { $0.file })
+        var changed = false
+
+        for url in items.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+            guard Self.audioExtensions.contains(url.pathExtension.lowercased()) else { continue }
+            let rel = "music/\(url.lastPathComponent)"
+            guard !known.contains(rel) else { continue }
+
+            let base = url.deletingPathExtension().lastPathComponent
+            let (title, artist) = Self.splitDisplayName(base)
+            let id = Self.stableTrackID(rel)
+            var lyrics: String?
+            if let lrc = Self.sidecarLRC(beside: url), copyLyricsFile(lrc, id: id) {
+                lyrics = "lyrics/\(id).lrc"
+            }
+
+            lib.tracks.append(TogetherTrack(
+                id: id,
+                title: title,
+                artist: artist,
+                duration: 0,
+                cover: nil,
+                file: rel,
+                lyrics: lyrics
+            ))
+            known.insert(rel)
+            changed = true
+        }
+
+        // 文件被删了/改名了，index 里那条也别留着当幽灵。
+        let before = lib.tracks.count
+        lib.tracks.removeAll { track in
+            guard let f = track.file, f.hasPrefix("music/") else { return false }
+            return !fm.fileExists(atPath: Self.sharedRootURL.appendingPathComponent(f).path)
+        }
+        if lib.tracks.count != before { changed = true }
+
+        return changed
+    }
+
+    /// 把旁挂的 .lrc 收进 lyrics/。已经收过就当作成功。
+    private func copyLyricsFile(_ source: URL, id: String) -> Bool {
+        let fm = FileManager.default
+        try? fm.createDirectory(at: lyricsDirectory, withIntermediateDirectories: true)
+        let dest = lyricsDirectory.appendingPathComponent("\(id).lrc")
+        if fm.fileExists(atPath: dest.path) { return true }
+        do {
+            try fm.copyItem(at: source, to: dest)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// 播放器学到真实时长后回填一次，列表不用一直显示 0:00。
+    func updateDuration(trackId: String, duration: Double) {
+        guard duration.isFinite, duration > 0 else { return }
+        queue.sync {
+            var lib = loadLibraryLocked()
+            guard let i = lib.tracks.firstIndex(where: { $0.id == trackId }) else { return }
+            if abs(lib.tracks[i].duration - duration) < 0.5 { return }
+            lib.tracks[i].duration = (duration * 100).rounded() / 100
+            _ = saveLibraryLocked(lib)
+        }
+    }
+
+    /// "再等冬天 - h3R3" → 标题 + 歌手。
+    static func splitDisplayName(_ raw: String) -> (String, String) {
+        for sep in [" - ", " – ", " — "] {
+            if let r = raw.range(of: sep) {
+                let title = String(raw[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+                let artist = String(raw[r.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if !title.isEmpty { return (title, artist) }
+            }
+        }
+        return (raw.trimmingCharacters(in: .whitespaces), "")
+    }
+
+    /// 稳定的 id：同一个文件每次算出同一个，跟中文/拼音无关。
+    static func stableTrackID(_ relativePath: String) -> String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in relativePath.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return "t_" + String(hash, radix: 36)
+    }
+
+    static func sidecarLRC(beside audio: URL) -> URL? {
+        let lrc = audio.deletingPathExtension().appendingPathExtension("lrc")
+        return FileManager.default.fileExists(atPath: lrc.path) ? lrc : nil
     }
 
     // MARK: 写
@@ -228,20 +330,8 @@ final class TogetherStore {
 
     @discardableResult
     private func writeLocked(_ state: TogetherState) -> Bool {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-        guard let data = try? encoder.encode(state) else {
-            togetherLogger.error("[Together] 编码 state 失败")
-            return false
-        }
-        // 共享目录要往 fakefs 的 meta.db 登记，iSH 那边才看得见。
-        // 降级到沙盒的时候不必登记（Linux 本来也看不到）。
-        if isSharedRoot {
-            let linux = "/var/minis/shared/together/\(stateURL.lastPathComponent)"
-            if FakefsBridge.write(data, toLinuxPath: linux) { return true }
-            togetherLogger.error("[Together] fakefs 写入失败，退回直接写")
-        }
-        return Self.atomicWrite(data, to: stateURL)
+        // shared/ 是系统 bind-mount，直接写就是 shell 能看见的那份，不用登记 meta.db。
+        Self.encode(state, to: stateURL)
     }
 
     static func encode<T: Encodable>(_ value: T, to url: URL) -> Bool {
