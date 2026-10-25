@@ -15,7 +15,7 @@ import Foundation
 
 // MARK: - Track
 
-struct TogetherTrack: Codable, Equatable {
+struct TogetherTrack: Codable, Equatable, Identifiable {
     var id: String = ""
     var title: String = ""
     var titleEn: String?

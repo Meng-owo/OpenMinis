@@ -129,6 +129,8 @@ enum TogetherCopy {
     static var playlistName: String { AppLocalized("Playlist name", comment: "一起听 · 歌单名") }
     static var coverBackground: String { AppLocalized("Cover", comment: "一起听 · 封面背景") }
     static var songs: String { AppLocalized("Songs", comment: "一起听 · 歌曲") }
+    static var importDone: String { AppLocalized("added", comment: "一起听 · 导入成功") }
+    static var importFailed: String { AppLocalized("Couldn't read that file", comment: "一起听 · 导入失败") }
     static var handoff: String { AppLocalized("Hand the remote to", comment: "一起听 · 递遥控器") }
     static var noSongsYet: String { AppLocalized("Nothing here yet", comment: "一起听 · 空列表") }
 }

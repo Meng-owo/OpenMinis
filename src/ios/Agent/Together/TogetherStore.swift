@@ -145,6 +145,21 @@ final class TogetherStore {
         return state
     }
 
+    @discardableResult
+    func saveLibrary(_ library: TogetherLibrary) -> Bool {
+        queue.sync {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+            guard let data = try? encoder.encode(library) else { return false }
+            if rootDecision.hasPrefix("shared") {
+                let linux = "/var/minis/shared/together/music/index.json"
+                if FakefsBridge.write(data, toLinuxPath: linux) { return true }
+            }
+            try? FileManager.default.createDirectory(at: musicDirectory, withIntermediateDirectories: true)
+            return Self.atomicWrite(data, to: libraryURL)
+        }
+    }
+
     private func loadLibraryLocked() -> TogetherLibrary {
         guard FileManager.default.fileExists(atPath: libraryURL.path) else {
             return TogetherLibrary()

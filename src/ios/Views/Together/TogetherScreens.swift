@@ -14,6 +14,7 @@ import SwiftUI
 
 // MARK: - 共用：封面
 
+@MainActor
 enum TogetherCover {
     /// 五档灰度，明度递减。背景永远从主题里长出来，不写死色值。
     static func fill(_ key: String?) -> LinearGradient {
@@ -107,6 +108,9 @@ struct TogetherLibraryView: View {
     @State private var playlists: [TogetherPlaylist] = []
     @State private var showNew = false
     @State private var newName = ""
+    @State private var showImporter = false
+    @State private var importing = false
+    private let importer = LocalFileImporter()
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -121,6 +125,16 @@ struct TogetherLibraryView: View {
                         .font(ChatFont.font(15, weight: .semibold))
                         .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     Spacer()
+                    Button { showImporter = true } label: {
+                        if importing {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "square.and.arrow.down")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 14)
+
                     Button {
                         newName = ""
                         showNew = true
@@ -152,6 +166,21 @@ struct TogetherLibraryView: View {
             .padding(.bottom, 24)
         }
         .onAppear { playlists = TogetherStore.shared.livePlaylists() }
+        .fileImporter(isPresented: $showImporter,
+                      allowedContentTypes: importer.allowedTypes,
+                      allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result else { return }
+            importing = true
+            Task {
+                let added = await importer.importFiles(urls)
+                importing = false
+                if added.isEmpty {
+                    MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+                } else {
+                    MinisToast.show("\(added.count) \(TogetherCopy.importDone)")
+                }
+            }
+        }
         .sheet(isPresented: $showNew) {
             newPlaylistSheet
                 .presentationDetents([.height(220)])
@@ -398,6 +427,7 @@ struct TogetherSyncView: View {
 
     @State private var state = TogetherState()
     @State private var pulse = false
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -434,6 +464,10 @@ struct TogetherSyncView: View {
         .onAppear {
             state = TogetherStore.shared.load()
             pulse = true
+        }
+        .onReceive(ticker) { _ in
+            let fresh = TogetherStore.shared.load()
+            if fresh.revision != state.revision { state = fresh }
         }
     }
 

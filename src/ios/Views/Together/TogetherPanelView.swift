@@ -25,6 +25,8 @@ struct TogetherPanelView: View {
     @State private var repeatOne = false
     @State private var showNoteComposer = false
     @State private var noteDraft = ""
+    /// 每 2 秒看一眼 state.json：我在 shell 里改了东西，她这边不重启也能看见。
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     private var aiName: String { ChatAddressing.assistant() }
     private var userName: String { ChatAddressing.user() }
@@ -63,6 +65,12 @@ struct TogetherPanelView: View {
             }
         }
         .onAppear(perform: bootstrap)
+        .onReceive(ticker) { _ in
+            let fresh = TogetherStore.shared.load()
+            if fresh.revision != state.revision {
+                state = fresh
+            }
+        }
         .onChange(of: player.track?.id) { _ in
             state = TogetherStore.shared.load()
             lyrics = player.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
