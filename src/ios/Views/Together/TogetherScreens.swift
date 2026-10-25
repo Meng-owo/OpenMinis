@@ -851,6 +851,10 @@ struct TogetherPlaylistEditor: View {
         tags.isEmpty ? CSSThemeVariables.textDim(scope: .chat) : CSSThemeVariables.accent(scope: .chat)
     }
 
+    private var descCountString: String {
+        "\(desc.count)/1000"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -958,7 +962,7 @@ struct TogetherPlaylistEditor: View {
 
                         HStack {
                             Spacer()
-                            Text("\(desc.count)/1000")
+                            Text(descCountString)
                                 .font(ChatFont.font(11))
                                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                         }

@@ -1071,12 +1071,17 @@ private struct TogetherQueueRow: View {
 
             Spacer()
 
-            Text(track.durationString)
+            Text(durationText)
                 .font(ChatFont.font(11))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
+    }
+
+    private var durationText: String {
+        let total = max(0, Int(track.duration.rounded()))
+        return String(format: "%02d:%02d", total / 60, total % 60)
     }
 }
 
