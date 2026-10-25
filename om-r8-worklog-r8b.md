@@ -84,3 +84,40 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 无词的两首用 `loopLines` 循环一句我写的话。
 `together-fetch.py`：import（视频抽音轨）/ lyrics（lrclib 带时间轴）/ search / list。
 抓不到歌词就留空，不编。
+
+---
+
+## 当前状态交接（压缩上下文前落盘）
+
+### 已完成并推送
+- 分支 drawer-113，HEAD 含 R22–R33 全部提交
+- 最新成功出包：run 40155500109（R33）→ `/var/minis/attachments/OpenMinis-一起听.ipa`
+- 一起听六屏 + 播放引擎 + 悬浮小卡 + 状态层 + AI 工具面，代码全在
+- `/var/minis/shared/together/test/acceptance.py` 41 项自检全绿（在 agent 沙盒里跑）
+
+### 关键认知纠正（很重要）
+- **agent 的 /var/minis 和她手机上 OpenMinis 的容器不是同一个沙盒。**
+  我这边是另一个 App（嘟嘟）的沙盒，看不到她运行时的 state.json。
+  所以：只有她 App 里 AI 跑出来的输出，才是我能看到的运行时事实。
+  我这边 `/var/minis/shared/together/` 的曲库和 state 只是我的副本，不会随 IPA 发出去。
+
+### 未解决的问题（按怀疑顺序）
+1. **【最可能】曲库和 state 没随 IPA 打包。**
+   我把歌种在自己沙盒的 /var/minis/shared/together/，但 IPA 里没有这些文件。
+   她装上打开必然"还没有歌"。需要在 App 首次启动时自举：
+   建目录 + 写一份默认 index.json（带 1-2 首随包资源）+ 默认 state.json。
+2. **App 建目录没登记 fakefs meta.db。**
+   TogetherStore.ensureDirectories 只 createDirectory，没调 FakefsBridge.registerParents，
+   里面的 shell 可能看不到这些目录。目录已存在时也要补登记。
+3. **首次启动的共享目录探测。**
+   rootURL 用试写探针判断，但若 shared 根不存在会降级沙盒，
+   降级后 AI 的 shell 就读不到 → 需要首次就把 /var/minis/shared/together 建好并登记。
+4. 她反馈"我自己这边确实遇到问题了"，但**具体现象还没说**（空/有歌点不动/闪退）。
+   等她一句话描述再定，不要猜着修。
+
+### 她的偏好（延续，别丢）
+- 不急、一步一步、质量优先；只验收最终成果，不要中间包
+- 一个一个问题解决，不要一次全推
+- 不贴长汇报；有问题直接修，不道歉不复盘
+- 可见文案不写死人名，全走 ChatAddressing
+- 颜色零裸色值，全走主题变量
