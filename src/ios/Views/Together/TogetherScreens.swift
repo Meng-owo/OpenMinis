@@ -478,7 +478,7 @@ struct TogetherAllSongsView: View {
                             onTap: {
                                 TogetherPlayer.shared.load(track)
                                 TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
-                                                           queue: filteredTracks.map { $0.id })
+                                                           queue: filtered.map { $0.id })
                             }
                         )
                         .contextMenu {
@@ -604,7 +604,7 @@ struct TogetherLikedView: View {
                             onTap: {
                                 TogetherPlayer.shared.load(track)
                                 TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
-                                                           queue: filteredTracks.map { $0.id })
+                                                           queue: liked.map { $0.id })
                             }
                         )
                         Divider()
@@ -1247,66 +1247,7 @@ struct TogetherPlaylistDetail: View {
 
                 VStack(spacing: 0) {
                     ForEach(filteredTracks) { track in
-                        TogetherTrackRow(
-                            track: track,
-                            isPlaying: TogetherPlayer.shared.track?.id == track.id,
-                            noteCount: noteCount(for: track.id),
-                            trailing: AnyView(
-                                HStack(spacing: 12) {
-                                    Button {
-                                        TogetherStore.shared.toggleLike(trackId: track.id, by: .user)
-                                        state = TogetherStore.shared.load()
-                                    } label: {
-                                        Image(systemName: state.liked.contains(track.id) ? "heart.fill" : "heart")
-                                            .font(ChatFont.font(14))
-                                            .foregroundStyle(state.liked.contains(track.id) ? Color.red : CSSThemeVariables.textDim(scope: .chat))
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    Menu {
-                                        Button(TogetherCopy.removeFromPlaylist, role: .destructive) {
-                                            TogetherStore.shared.removeTrack(track.id, from: playlistId)
-                                            reload()
-                                        }
-                                        Button(TogetherCopy.deletePermanently, role: .destructive) {
-                                            deleteTrack(track)
-                                            reload()
-                                        }
-                                    } label: {
-                                        Image(systemName: "ellipsis")
-                                            .font(ChatFont.font(14))
-                                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                                            .frame(width: 24, height: 24)
-                                    }
-                                }
-                            ),
-                            onTap: {
-                                TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
-                                                           queue: tracks.map { $0.id })
-                            }
-                        )
-                        .contextMenu {
-                            Button {
-                                TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
-                                                           queue: tracks.map { $0.id })
-                            } label: {
-                                Label("播放", systemImage: "play.fill")
-                            }
-                            Button(role: .destructive) {
-                                TogetherStore.shared.removeTrack(track.id, from: playlistId)
-                                reload()
-                            } label: {
-                                Label(TogetherCopy.removeFromPlaylist, systemImage: "minus.circle")
-                            }
-                            Button(role: .destructive) {
-                                deleteTrack(track)
-                                reload()
-                            } label: {
-                                Label(TogetherCopy.deletePermanently, systemImage: "trash")
-                            }
-                        }
+                        playlistTrackRow(track)
                         Divider()
                             .overlay(CSSThemeVariables.divider(scope: .chat))
                             .padding(.leading, 52)
@@ -1432,6 +1373,78 @@ struct TogetherPlaylistDetail: View {
 
     private func noteCount(for trackId: String) -> Int {
         state.notes.filter { $0.trackId == trackId }.count
+    }
+
+    private func playlistTrackRow(_ track: TogetherTrack) -> some View {
+        TogetherTrackRow(
+            track: track,
+            isPlaying: TogetherPlayer.shared.track?.id == track.id,
+            noteCount: noteCount(for: track.id),
+            trailing: AnyView(rowTrailing(track)),
+            onTap: {
+                TogetherPlayer.shared.load(track)
+                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user, queue: tracks.map { $0.id })
+            }
+        )
+        .contextMenu { rowContextMenu(track) }
+    }
+
+    private func rowTrailing(_ track: TogetherTrack) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                TogetherStore.shared.toggleLike(trackId: track.id, by: .user)
+                state = TogetherStore.shared.load()
+            } label: {
+                Image(systemName: state.liked.contains(track.id) ? "heart.fill" : "heart")
+                    .font(ChatFont.font(14))
+                    .foregroundStyle(state.liked.contains(track.id) ? Color.red : CSSThemeVariables.textDim(scope: .chat))
+            }
+            .buttonStyle(.plain)
+
+            Menu {
+                Button(TogetherCopy.removeFromPlaylist, role: .destructive) {
+                    TogetherStore.shared.removeTrack(track.id, from: playlistId)
+                    reload()
+                }
+                Button(TogetherCopy.deletePermanently, role: .destructive) {
+                    deleteTrack(track)
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(ChatFont.font(14))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    .frame(width: 24, height: 24)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(_ track: TogetherTrack) -> some View {
+        Button {
+            TogetherPlayer.shared.load(track)
+            TogetherStore.shared.play(trackId: track.id, at: 0, by: .user, queue: tracks.map { $0.id })
+        } label: {
+            Label("播放", systemImage: "play.fill")
+        }
+        Button(role: .destructive) {
+            TogetherStore.shared.removeTrack(track.id, from: playlistId)
+            reload()
+        } label: {
+            Label(TogetherCopy.removeFromPlaylist, systemImage: "minus.circle")
+        }
+        Button(role: .destructive) {
+            deleteTrack(track)
+        } label: {
+            Label(TogetherCopy.deletePermanently, systemImage: "trash")
+        }
+    }
+
+    private func deleteTrack(_ track: TogetherTrack) {
+        if TogetherPlayer.shared.track?.id == track.id {
+            TogetherPlayer.shared.stop()
+        }
+        TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+        reload()
     }
 
     private func reload() {

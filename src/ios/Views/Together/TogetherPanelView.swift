@@ -47,6 +47,11 @@ struct TogetherPanelView: View {
 
     private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
     private var track: TogetherTrack? { state.track ?? player.track }
+    private var aiName: String { ChatAddressing.assistant() }
+    private var userName: String { ChatAddressing.user() }
+    private var effectivePosition: Double {
+        isDragging ? optimisticPosition : player.currentTime
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -374,11 +379,11 @@ struct TogetherPanelView: View {
         if let lyr = lyrics, lyr.timed, let trackId = track?.id,
            lyr.trackId.isEmpty || lyr.trackId == trackId,
            let line = lyr.line(at: effectivePosition)?.text,
-           !line.trimmingCharacters(in: .whitespaces).isEmpty {
+           !line.trimmingCharacters(in: CharacterSet.whitespaces).isEmpty {
             return line
         }
         if let id = track?.id, let loop = state.loopLines[id],
-           !loop.trimmingCharacters(in: .whitespaces).isEmpty {
+           !loop.trimmingCharacters(in: CharacterSet.whitespaces).isEmpty {
             return loop
         }
         return nil
