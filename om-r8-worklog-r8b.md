@@ -204,3 +204,20 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 ### R34c 出包成功（run 40185046034 success）
 - 修复类型推断超时与编译报错：封装 onDescChanged、trackOrder、拆解 TogetherPlaylistEditor body、补齐 TogetherCopy.save。
 - CI 全绿通过，产物 66,513,080 字节 -> `attachments/OpenMinis-现代播放器全面闭环.ipa`。
+
+### R35 一轮修复（run 40198263499 success）
+1. 大头像归位（黑胶上方），歌名歌手下移回黑胶下方
+2. 底部动作行/进度条/控制行贴底，不再悬空
+3. 歌词当前句严格居中，首尾各留半屏，布局完成后滚动
+4. 歌单列表恢复 22pt 水平内边距
+5. 换图改走 PhotosPicker（相册），不再跳文件夹
+6. 气泡=回声墙、笔=当场刻字
+7. All songs 补 ··· 与长按删除
+8. 遥控器：followTick 认 playback.by；handoff 带接收方；在线状态真实
+9. 后端 together now：歌名/秒数/遥控器归属/本轮开始时间
+10. 语音播报开始音乐暂停、结束续播（只恢复自己暂停的）
+11. 微控条焊进输入栏 VStack；歌词走马灯；只在播放时显示
+12. 队列真实化（playback.queue）、封面 NSCache
+13. 删正在播的歌先 stop；All songs 搜索
+- 编译修复：aiName/userName/effectivePosition 缺失、filteredTracks 作用域、类型推断超时（拆 playlistTrackRow/rowTrailing/rowContextMenu）
+- 产物 66,548,411 → attachments/OpenMinis-一轮修复.ipa
