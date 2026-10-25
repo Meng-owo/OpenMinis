@@ -1201,7 +1201,7 @@ struct AIChatView: View {
             }
         }
         .fullScreenCover(isPresented: $showTogether) {
-            TogetherPanelView()
+            TogetherRootView()
         }
         // [R24] 叉掉面板不等于关掉：播放器还活着就浮出小卡，音乐继续。
         .overlay(alignment: .bottom) {

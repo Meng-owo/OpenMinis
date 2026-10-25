@@ -9,6 +9,8 @@ FILES = [
     ('E5TG0003', 'E5TG0013', 'TogetherPlayer.swift', 'Agent/Together/TogetherPlayer.swift'),
     ('E5TG0006', 'E5TG0016', 'FakefsBridge.swift', 'Agent/Together/FakefsBridge.swift'),
     ('E5TG0007', 'E5TG0017', 'TogetherSkin.swift', 'Views/Together/TogetherSkin.swift'),
+    ('E5TG0008', 'E5TG0018', 'TogetherRootView.swift', 'Views/Together/TogetherRootView.swift'),
+    ('E5TG0009', 'E5TG0019', 'TogetherScreens.swift', 'Views/Together/TogetherScreens.swift'),
     ('E5TG0004', 'E5TG0014', 'TogetherPanelView.swift', 'Views/Together/TogetherPanelView.swift'),
     ('E5TG0005', 'E5TG0015', 'TogetherMiniBar.swift', 'Views/Together/TogetherMiniBar.swift'),
 ]

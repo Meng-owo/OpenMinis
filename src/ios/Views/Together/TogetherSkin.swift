@@ -74,6 +74,29 @@ enum TogetherSkin {
     static var cardRadius: CGFloat { CGFloat(values.cardRadius) }
 }
 
+// MARK: - 身份
+//
+// 头像引用只在这里取一次。AI 走通讯录当前人设（SOUL.icon 只是镜像），
+// 用户走「我自己」档案。别的地方不许再各写一套取法。
+
+@MainActor
+enum TogetherIdentity {
+    static var aiIcon: String? {
+        let id = SoulStore.displayPersonaId(nil)
+        if let p = PersonaStore.shared.personas.first(where: { $0.id == id }),
+           let a = p.avatar, !a.isEmpty {
+            return a
+        }
+        return SoulStore.cachedMetadata.icon
+    }
+
+    static var userIcon: String? {
+        PersonaStore.shared.personas
+            .first(where: { $0.id == PersonaStore.userProfilePersonaID })?
+            .avatar
+    }
+}
+
 // MARK: - 文案
 //
 // 一处集中，全部走本地化。改文案只改这里，不在六个视图里找。
@@ -95,4 +118,17 @@ enum TogetherCopy {
     }
     static var leaveNoteAction: String { AppLocalized("Leave it", comment: "一起听 · 留言提交") }
     static var nowPlaying: String { AppLocalized("Now playing", comment: "一起听 · 顶栏") }
+    static var untitledPlaylist: String { AppLocalized("Untitled", comment: "一起听 · 新歌单默认名") }
+    static var newPlaylist: String { AppLocalized("New playlist", comment: "一起听 · 新建") }
+    static var myPlaylists: String { AppLocalized("My playlists", comment: "一起听 · 歌单库标题") }
+    static var playAll: String { AppLocalized("Play all", comment: "一起听 · 播放全部") }
+    static var shuffle: String { AppLocalized("Shuffle", comment: "一起听 · 随机") }
+    static var edit: String { AppLocalized("Edit", comment: "一起听 · 编辑") }
+    static var done: String { AppLocalized("Done", comment: "一起听 · 完成") }
+    static var deletePlaylist: String { AppLocalized("Delete this playlist", comment: "一起听 · 删歌单") }
+    static var playlistName: String { AppLocalized("Playlist name", comment: "一起听 · 歌单名") }
+    static var coverBackground: String { AppLocalized("Cover", comment: "一起听 · 封面背景") }
+    static var songs: String { AppLocalized("Songs", comment: "一起听 · 歌曲") }
+    static var handoff: String { AppLocalized("Hand the remote to", comment: "一起听 · 递遥控器") }
+    static var noSongsYet: String { AppLocalized("Nothing here yet", comment: "一起听 · 空列表") }
 }

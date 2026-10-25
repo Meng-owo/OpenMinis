@@ -427,3 +427,78 @@ extension TogetherStore {
         return allowed && result != nil
     }
 }
+// MARK: - 歌单
+
+extension TogetherStore {
+
+    @discardableResult
+    func createPlaylist(name: String, by actor: TogetherActor = .user) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmed.isEmpty ? TogetherCopy.untitledPlaylist : trimmed
+        let id = "p_\(TogetherStore.now())"
+        let ok = mutate(by: actor, event: "playlist.new",
+                        detail: TogetherEventDetail(text: finalName)) { state in
+            state.playlists.append(TogetherPlaylist(
+                id: id, name: finalName, bg: "cover-1", tracks: [],
+                updatedBy: actor.rawValue, ts: TogetherStore.now()
+            ))
+        }
+        return ok != nil ? id : nil
+    }
+
+    func renamePlaylist(id: String, to name: String, by actor: TogetherActor = .user) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        mutate(by: actor, event: "playlist.rename", detail: TogetherEventDetail(text: trimmed)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].name = trimmed
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+
+    /// 软删除。真删会被集合并集捞回来，这一条规矩在 SYNC.md 里定死了。
+    func deletePlaylist(id: String, by actor: TogetherActor = .user) {
+        mutate(by: actor, event: "playlist.delete") { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].deleted = true
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+
+    func setPlaylistBackground(id: String, bg: String, by actor: TogetherActor = .user) {
+        mutate(by: actor, event: "playlist.bg", detail: TogetherEventDetail(text: bg)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].bg = bg
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+
+    func addTrack(_ trackId: String, to playlistId: String, by actor: TogetherActor = .user) {
+        mutate(by: actor, event: "playlist.add",
+               detail: TogetherEventDetail(trackId: trackId)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == playlistId }) else { return }
+            guard !state.playlists[i].tracks.contains(trackId) else { return }
+            state.playlists[i].tracks.append(trackId)
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+
+    func removeTrack(_ trackId: String, from playlistId: String, by actor: TogetherActor = .user) {
+        mutate(by: actor, event: "playlist.remove",
+               detail: TogetherEventDetail(trackId: trackId)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == playlistId }) else { return }
+            state.playlists[i].tracks.removeAll { $0 == trackId }
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+
+    /// 界面只认没被软删的那批。
+    func livePlaylists() -> [TogetherPlaylist] {
+        load().playlists.filter { !$0.deleted }
+    }
+}

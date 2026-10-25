@@ -14,7 +14,6 @@ import SwiftUI
 
 struct TogetherPanelView: View {
 
-    @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var player = TogetherPlayer.shared
 
@@ -74,26 +73,15 @@ struct TogetherPanelView: View {
     // MARK: 顶栏
 
     private func topBar(_ s: CGFloat) -> some View {
+        // 关闭按钮由根容器统一给，这里只占位，保证标题在正中间。
         HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.down")
-                    .font(ChatFont.font( 14, weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                    .frame(width: 34, height: 34)
-                    .background(CSSThemeVariables.optionBg(scope: .chat))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-
+            Color.clear.frame(width: 34, height: 34)
             Spacer()
-
             Text(TogetherCopy.title)
-                .font(ChatFont.font( 11, weight: .medium))
+                .font(ChatFont.font(11, weight: .medium))
                 .tracking(2)
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-
             Spacer()
-
             Color.clear.frame(width: 34, height: 34)
         }
         .padding(.horizontal, 22)
@@ -105,9 +93,9 @@ struct TogetherPanelView: View {
     private func duoHeader(_ s: CGFloat) -> some View {
         VStack(spacing: 10 * s) {
             HStack(spacing: -14 * s) {
-                avatar(Self.aiIcon, size: 104 * s, ring: 3 * s)
+                avatar(TogetherIdentity.aiIcon, size: 104 * s, ring: 3 * s)
                     .zIndex(1)
-                avatar(Self.userIcon, size: 104 * s, ring: 3 * s)
+                avatar(TogetherIdentity.userIcon, size: 104 * s, ring: 3 * s)
             }
 
             Text("\(aiName) & \(userName)")
@@ -125,20 +113,6 @@ struct TogetherPanelView: View {
             .overlay(
                 Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat), lineWidth: ring)
             )
-    }
-
-    private static var aiIcon: String? {
-        let id = SoulStore.displayPersonaId(nil)
-        if let p = PersonaStore.shared.personas.first(where: { $0.id == id }), let a = p.avatar, !a.isEmpty {
-            return a
-        }
-        return SoulStore.cachedMetadata.icon
-    }
-
-    private static var userIcon: String? {
-        PersonaStore.shared.personas
-            .first(where: { $0.id == PersonaStore.userProfilePersonaID })?
-            .avatar
     }
 
     // MARK: 我留的话
