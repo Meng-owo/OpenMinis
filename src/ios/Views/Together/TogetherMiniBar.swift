@@ -2,188 +2,180 @@
 //  TogetherMiniBar.swift
 //  MinisApp
 //
-//  一起听 · 悬浮小卡。
+//  一起听 · 输入栏上方的伴听微控条。
 //
-//  叉掉全屏面板之后它不是关掉，是缩成这张卡继续放。
-//  外形照语音卡那套来（圆角、描边、播放键尺寸），省得再造一套语言；
-//  中间那块换成"一句歌词"，因为唱歌的和说话的不是一回事。
-//
-//  收起态贴屏幕侧边成一根竖条，点一下弹回来。
-//  只贴左右两侧：聊天页的侧滑和抽屉都在边缘，上下贴边会抢手势。
+//  照 attachments/uploads/index.html 的 slim-bar 抄：38pt 高、19 圆角、
+//  迷你黑胶（转）+ 三根音波 + 歌词视窗 + 上一首/播放/下一首，底下一条细进度线。
+//  贴输入栏正上方，固定位置——不再做悬浮球，也不再自由拖。
 //
 
 import SwiftUI
 
 struct TogetherMiniBar: View {
 
+    /// 点歌词区打开全屏面板。
+    var onOpen: () -> Void = {}
+
     @ObservedObject private var player = TogetherPlayer.shared
 
     @State private var state = TogetherState()
     @State private var lyrics: TogetherLyrics?
-    @State private var collapsed = false
-    @State private var alignedRight = true
-    @State private var dragY: CGFloat = 0
-    @State private var dragging = false
+    @State private var wavePhase = false
 
-    private let cardWidth: CGFloat = 250
-    private let cardHeight: CGFloat = 72
+    private let barHeight: CGFloat = 38
 
     var body: some View {
-        GeometryReader { geo in
-            let maxY = max(0, geo.size.height - cardHeight - 140)
-            HStack {
-                if alignedRight { Spacer(minLength: 0) }
-                bar
-                    .offset(y: clampedY(maxY))
-                    .gesture(dragGesture(maxY: maxY))
-                if !alignedRight { Spacer(minLength: 0) }
-            }
-            .padding(alignedRight ? .trailing : .leading, collapsed ? 0 : 14)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        HStack(spacing: 9) {
+            miniVinyl
+            waveDots
+            lyricBox
+            controls
         }
-        .onAppear(perform: reload)
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .frame(height: barHeight)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: barHeight / 2, style: .continuous)
+                .fill(CSSThemeVariables.card(scope: .chat).opacity(0.86))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: barHeight / 2, style: .continuous)
+                .strokeBorder(CSSThemeVariables.bg(scope: .chat).opacity(0.95), lineWidth: 0.5)
+        )
+        .overlay(alignment: .bottomLeading) { progressHairline }
+        .shadow(color: TogetherSkin.shadowSoft.opacity(0.75), radius: 16, x: 0, y: 4)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+        .onAppear {
+            reload()
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                wavePhase = true
+            }
+        }
         .onChange(of: player.track?.id) { _ in reload() }
     }
 
-    private func clampedY(_ maxY: CGFloat) -> CGFloat {
-        min(max(0, dragY), maxY)
+    // MARK: 迷你黑胶
+
+    private var miniVinyl: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            TogetherSkin.vinyl.opacity(0.95),
+                            TogetherSkin.vinyl,
+                            CSSThemeVariables.textMain(scope: .chat).opacity(0.85)
+                        ],
+                        center: .center,
+                        startRadius: 1,
+                        endRadius: 12
+                    )
+                )
+            Circle()
+                .fill(CSSThemeVariables.textDim(scope: .chat))
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle().strokeBorder(TogetherSkin.vinyl, lineWidth: 1.5)
+                )
+        }
+        .frame(width: 24, height: 24)
+        .rotationEffect(.degrees(player.currentTime / 4.0 * 360))
+        .animation(.linear(duration: 0.5), value: player.currentTime)
+        .shadow(color: .black.opacity(0.2), radius: 3, x: 0, y: 2)
     }
 
-    // MARK: 卡片
+    // MARK: 音波
 
-    private var bar: some View {
-        Group {
-            if collapsed {
-                collapsedBar
-            } else {
-                expandedBar
+    private var waveDots: some View {
+        HStack(alignment: .center, spacing: 1.5) {
+            ForEach(0..<3, id: \.self) { i in
+                Capsule()
+                    .fill(CSSThemeVariables.textDim(scope: .chat).opacity(0.85))
+                    .frame(width: 2, height: i == 1 ? 10 : (i == 0 ? 6 : 5))
+                    .scaleEffect(x: 1, y: wavePhase ? 1 : 0.4, anchor: .center)
+                    .animation(
+                        .easeInOut(duration: 0.9)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.15),
+                        value: wavePhase
+                    )
             }
         }
-        .onTapGesture {
-            if collapsed {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { collapsed = false }
-            }
-        }
+        .frame(width: 10)
+        .opacity(player.isPlaying ? 1 : 0.35)
     }
 
-    private var expandedBar: some View {
-        HStack(spacing: 10) {
-            cover
+    // MARK: 歌词视窗
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(player.track?.title ?? TogetherCopy.title)
-                    .font(ChatFont.font( 11, weight: .medium))
-                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                    .lineLimit(1)
-
-                Text(movingLine)
-                    .font(ChatFont.font( 13, weight: .medium))
+    private var lyricBox: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 6) {
+                Text(lineText)
+                    .font(ChatFont.font(11.5))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .lineLimit(1)
-                    .id(movingLine)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity),
-                        removal: .move(edge: .top).combined(with: .opacity)
-                    ))
-                    .animation(.easeOut(duration: 0.18), value: movingLine)
-            }
+                    .truncationMode(.tail)
+                    .id(lineText)
+                    .transition(.opacity)
 
-            Spacer(minLength: 0)
-
-            Button { player.toggle() } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(ChatFont.font( 13, weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
-                    .frame(width: 30, height: 30)
-                    .background(CSSThemeVariables.accent(scope: .chat))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-
-            Button { nextTrack() } label: {
-                Image(systemName: "forward.fill")
-                    .font(ChatFont.font( 12, weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                    .frame(width: 24, height: 30)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(.horizontal, 12)
-        .frame(width: cardWidth, height: cardHeight)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(CSSThemeVariables.card(scope: .chat))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(CSSThemeVariables.optionBorder(scope: .chat), lineWidth: 0.5)
-        )
-        .overlay(alignment: .bottomLeading) { progressHairline }
-        .shadow(color: TogetherSkin.shadowSoft, radius: 14, x: 0, y: 6)
-    }
-
-    /// 收起态：一根竖条，只留进度和暂停。
-    private var collapsedBar: some View {
-        VStack(spacing: 10) {
-            GeometryReader { geo in
-                let ratio = progressRatio
-                ZStack(alignment: .top) {
-                    Capsule().fill(CSSThemeVariables.divider(scope: .chat))
-                    Capsule()
-                        .fill(CSSThemeVariables.accent(scope: .chat))
-                        .frame(height: geo.size.height * ratio)
+                if !tagText.isEmpty {
+                    Text(tagText)
+                        .font(ChatFont.font(8.5))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .fill(CSSThemeVariables.textMain(scope: .chat).opacity(0.06))
+                        )
+                        .lineLimit(1)
                 }
             }
-            .frame(width: 3, height: 54)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 控制
+
+    private var controls: some View {
+        HStack(spacing: 10) {
+            Button { step(-1) } label: {
+                Image(systemName: "backward.fill")
+                    .font(ChatFont.font(11, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            }
+            .buttonStyle(.plain)
 
             Button { player.toggle() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(ChatFont.font( 11, weight: .semibold))
+                    .font(ChatFont.font(12, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
             }
             .buttonStyle(.plain)
+
+            Button { step(1) } label: {
+                Image(systemName: "forward.fill")
+                    .font(ChatFont.font(11, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.vertical, 12)
-        .frame(width: 12, height: 104)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: alignedRight ? 10 : 0,
-                bottomLeadingRadius: alignedRight ? 10 : 0,
-                bottomTrailingRadius: alignedRight ? 0 : 10,
-                topTrailingRadius: alignedRight ? 0 : 10,
-                style: .continuous
-            )
-            .fill(CSSThemeVariables.card(scope: .chat))
-        )
+        .frame(width: 74)
     }
 
-    private var cover: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        CSSThemeVariables.textMain(scope: .chat).opacity(0.18),
-                        CSSThemeVariables.textMain(scope: .chat).opacity(0.42)
-                    ],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: 44, height: 44)
-            .overlay(
-                Image(systemName: "music.note")
-                    .font(ChatFont.font( 16, weight: .medium))
-                    .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.9))
-            )
-    }
+    // MARK: 进度
 
     private var progressHairline: some View {
         GeometryReader { geo in
-            Rectangle()
+            Capsule()
                 .fill(CSSThemeVariables.accent(scope: .chat).opacity(0.55))
                 .frame(width: geo.size.width * progressRatio, height: 1.5)
         }
         .frame(height: 1.5)
-        .padding(.horizontal, 1)
     }
 
     private var progressRatio: CGFloat {
@@ -193,9 +185,10 @@ struct TogetherMiniBar: View {
 
     // MARK: 文字
 
-    /// 这一行给谁：有歌词就歌词，没有就我留过的话，再没有就歌名。
-    private var movingLine: String {
-        if let lyr = lyrics, lyr.timed, let line = lyr.line(at: player.currentTime)?.text,
+    /// 有词显词，没词显我写的那句循环，都没有就显歌手。
+    private var lineText: String {
+        if let lyr = lyrics, lyr.timed,
+           let line = lyr.line(at: player.currentTime)?.text,
            !line.trimmingCharacters(in: .whitespaces).isEmpty {
             return line
         }
@@ -203,40 +196,12 @@ struct TogetherMiniBar: View {
            !loop.trimmingCharacters(in: .whitespaces).isEmpty {
             return loop
         }
-        if let note = nearestNote { return note.text }
-        return player.track?.artist.isEmpty == false ? (player.track?.artist ?? "") : "一起听"
+        return player.track?.title ?? TogetherCopy.title
     }
 
-    private var nearestNote: TogetherNote? {
-        guard let trackId = player.track?.id else { return nil }
-        let pos = player.currentTime
-        return state.notes
-            .filter { $0.trackId == trackId && abs($0.at - pos) <= 14 }
-            .min(by: { abs($0.at - pos) < abs($1.at - pos) })
-    }
-
-    // MARK: 手势
-
-    private func dragGesture(maxY: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 8)
-            .onChanged { value in
-                dragging = true
-                dragY += value.translation.height
-                dragY = min(max(0, dragY), maxY)
-            }
-            .onEnded { value in
-                dragging = false
-                // 横向拖过 60pt 换边
-                if value.predictedEndTranslation.width < -60 {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { alignedRight = false }
-                } else if value.predictedEndTranslation.width > 60 {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { alignedRight = true }
-                }
-                // 往边上甩（纵向），或者甩得够快，就收起
-                if value.predictedEndTranslation.height > 160 || abs(value.predictedEndTranslation.width) > 200 {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { collapsed = true }
-                }
-            }
+    private var tagText: String {
+        guard let artist = player.track?.artist, !artist.isEmpty else { return "" }
+        return artist
     }
 
     // MARK: 数据
@@ -246,12 +211,20 @@ struct TogetherMiniBar: View {
         lyrics = player.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
     }
 
-    private func nextTrack() {
+    private func step(_ delta: Int) {
         let lib = TogetherStore.shared.library()
         guard !lib.tracks.isEmpty else { return }
-        let ids = lib.tracks.map { $0.id }
-        let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
-        let next = lib.tracks[(idx + 1) % lib.tracks.count]
+
+        var next: TogetherTrack
+        if state.playback.shuffle {
+            let pool = lib.tracks.filter { $0.id != player.track?.id }
+            next = pool.randomElement() ?? lib.tracks[0]
+        } else {
+            let ids = lib.tracks.map { $0.id }
+            let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
+            next = lib.tracks[(idx + delta + ids.count) % ids.count]
+        }
+
         player.load(next)
         TogetherStore.shared.play(trackId: next.id, at: 0, by: .user)
         reload()

@@ -390,6 +390,7 @@ extension TogetherStore {
             togetherLogger.error("[Together] 曲库里没有 \(trackId)")
             return
         }
+        beginListenIfNeeded(trackId: trackId)
         mutate(by: actor, event: "play",
                detail: TogetherEventDetail(trackId: trackId, position: position)) { state in
             state.track = track
@@ -451,6 +452,11 @@ extension TogetherStore {
         guard let target = trackId ?? load().track?.id, !target.isEmpty else { return false }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+        // 一轮只听一首，一轮里她和我各只能刻一句。
+        guard canStamp(by: actor, trackId: target) else {
+            togetherLogger.info("[Together] 这一轮 \(actor.rawValue) 已经刻过了")
+            return false
+        }
         return mutate(by: actor, event: "note",
                       detail: TogetherEventDetail(trackId: target, position: second)) { state in
             state.notes.append(TogetherNote(
@@ -461,6 +467,10 @@ extension TogetherStore {
                 text: trimmed,
                 ts: TogetherStore.now()
             ))
+            if state.listen.trackId == target {
+                if actor == .user { state.listen.userSpoke = true }
+                else { state.listen.aiSpoke = true }
+            }
         } != nil
     }
 
@@ -524,6 +534,10 @@ extension TogetherStore {
         }
         let day = TogetherStore.today()
         var allowed = false
+        if let tid = load().track?.id, !tid.isEmpty, !canStamp(by: .ai, trackId: tid) {
+            togetherLogger.info("[Together] 这一轮我已经刻过了")
+            return false
+        }
         let result = mutate(by: .ai, event: "reply",
                             detail: TogetherEventDetail(text: trimmed)) { state in
             if state.me.spokenDay != day {
@@ -536,6 +550,7 @@ extension TogetherStore {
             state.me.lastSpokeAt = TogetherStore.now()
             let trackId = state.track?.id ?? ""
             guard !trackId.isEmpty else { return }
+            if state.listen.trackId == trackId { state.listen.aiSpoke = true }
             state.notes.append(TogetherNote(
                 id: "n_\(TogetherStore.now())_\(state.revision + 1)",
                 trackId: trackId,
@@ -621,5 +636,145 @@ extension TogetherStore {
     /// 界面只认没被软删的那批。
     func livePlaylists() -> [TogetherPlaylist] {
         load().playlists.filter { !$0.deleted }
+    }
+}
+
+// MARK: - 播放选项
+
+extension TogetherStore {
+
+    func setShuffle(_ on: Bool) {
+        mutate(by: .user, event: "") { $0.playback.shuffle = on }
+    }
+
+    func setRepeatOne(_ on: Bool) {
+        mutate(by: .user, event: "") { $0.playback.repeatOne = on }
+    }
+}
+
+// MARK: - 一轮收听
+//
+// 每次听同一首歌算"这一轮"。一轮里，她和我各只能刻一句。
+// 换歌或隔了半小时以上，就重开一轮。
+
+extension TogetherStore {
+
+    func beginListenIfNeeded(trackId: String) {
+        let now = TogetherStore.now()
+        let state = load()
+        if state.listen.trackId == trackId, now - state.listen.startedAt < 30 * 60 { return }
+        mutate(by: .user, event: "") { s in
+            s.listen = TogetherListen(trackId: trackId, startedAt: now)
+        }
+    }
+
+    func canStamp(by actor: TogetherActor, trackId: String) -> Bool {
+        let state = load()
+        guard state.listen.trackId == trackId else { return true }
+        return !state.listen.spoke(actor)
+    }
+}
+
+// MARK: - 自定义图片
+//
+// 槽位就是固定文件名：shared/together/images/<slot>.<ext>
+// 她能在界面上换，我也能直接把图 cp 进去——不用额外命令。
+// 没有图就回落到主题渐变，不会空一块。
+
+enum TogetherImages {
+
+    static let lyricsCover = "lyrics-cover"
+    static let wallpaperNow = "wallpaper-now"
+    static let wallpaperLibrary = "wallpaper-library"
+    static let wallpaperSync = "wallpaper-sync"
+    static let wallpaperLiked = "wallpaper-liked"
+
+    static let slots = [lyricsCover, wallpaperNow, wallpaperLibrary, wallpaperSync, wallpaperLiked,
+                        "cover-1", "cover-2", "cover-3", "cover-4", "cover-now"]
+
+    static let extensions = ["jpg", "jpeg", "png", "heic", "webp"]
+
+    static var directory: URL {
+        TogetherStore.shared.rootURL.appendingPathComponent("images", isDirectory: true)
+    }
+
+    static func url(for slot: String) -> URL? {
+        let fm = FileManager.default
+        for ext in extensions {
+            let candidate = directory.appendingPathComponent("\(slot).\(ext)")
+            if fm.fileExists(atPath: candidate.path) { return candidate }
+        }
+        return nil
+    }
+}
+
+extension TogetherStore {
+
+    /// 把一张图放进槽位。返回相对 shared 根的路径。
+    @discardableResult
+    func setImage(slot: String, from source: URL) -> String? {
+        let fm = FileManager.default
+        let dir = TogetherImages.directory
+        try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let ext = source.pathExtension.lowercased()
+        let finalExt = ext.isEmpty ? "jpg" : ext
+        // 一个槽位只留一份：其它扩展名的先清掉
+        for old in TogetherImages.extensions where old != finalExt {
+            try? fm.removeItem(at: dir.appendingPathComponent("\(slot).\(old)"))
+        }
+        let dest = dir.appendingPathComponent("\(slot).\(finalExt)")
+        try? fm.removeItem(at: dest)
+        do {
+            try fm.copyItem(at: source, to: dest)
+        } catch {
+            togetherLogger.error("[Together] 换图失败 \(slot)：\(error.localizedDescription)")
+            return nil
+        }
+        let rel = "together/images/\(dest.lastPathComponent)"
+        mutate(by: .user, event: "image") { $0.images[slot] = rel }
+        return rel
+    }
+
+    func clearImage(slot: String) {
+        let fm = FileManager.default
+        for ext in TogetherImages.extensions {
+            try? fm.removeItem(at: TogetherImages.directory.appendingPathComponent("\(slot).\(ext)"))
+        }
+        mutate(by: .user, event: "image") { $0.images.removeValue(forKey: slot) }
+    }
+
+    /// 相对 shared 根的图片路径 → URL。文件不在就当没有。
+    func imageURL(_ relative: String?) -> URL? {
+        guard let rel = relative, !rel.isEmpty else { return nil }
+        let url = Self.sharedRootURL.appendingPathComponent(rel)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+}
+
+// MARK: - 歌单封面
+
+extension TogetherStore {
+
+    /// 给某个歌单换封面。图落在 images/playlist-<id>.<ext>。
+    @discardableResult
+    func setPlaylistImage(id: String, from source: URL) -> Bool {
+        guard let rel = setImage(slot: "playlist-\(id)", from: source) else { return false }
+        mutate(by: .user, event: "playlist.bg", detail: TogetherEventDetail(text: rel)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].image = rel
+            state.playlists[i].updatedBy = TogetherActor.user.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        }
+        return true
+    }
+
+    func clearPlaylistImage(id: String) {
+        clearImage(slot: "playlist-\(id)")
+        mutate(by: .user, event: "playlist.bg") { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].image = nil
+            state.playlists[i].ts = TogetherStore.now()
+        }
     }
 }

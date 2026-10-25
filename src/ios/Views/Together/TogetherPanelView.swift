@@ -11,6 +11,8 @@
 //
 
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 struct TogetherPanelView: View {
 
@@ -21,9 +23,17 @@ struct TogetherPanelView: View {
     @State private var lyrics: TogetherLyrics?
     @State private var optimisticPosition: Double = 0
     @State private var isDragging = false
-    @State private var shuffle = false
-    @State private var repeatOne = false
     @State private var showNoteComposer = false
+    /// 点胶片翻到歌词页，再点回来。
+    @State private var showLyrics = false
+    /// 回声气泡：同一时间只放一个，放完再接下一个。
+    @State private var echoOn = true
+    @State private var echoBubbles: [EchoBubble] = []
+    @State private var echoQueue: [TogetherNote] = []
+    @State private var echoLastPosition: Double = 0
+    @State private var echoCorner: Int = 0
+    @State private var showWallpaperPicker = false
+    @State private var pendingWallpaper: [URL] = []
     @State private var noteDraft = ""
     /// 每 2 秒看一眼 state.json：我在 shell 里改了东西，她这边不重启也能看见。
     private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -37,7 +47,7 @@ struct TogetherPanelView: View {
             let s = min(1.15, max(0.82, geo.size.height / 852))
 
             ZStack(alignment: .top) {
-                CSSThemeVariables.bg(scope: .chat).ignoresSafeArea()
+                pageBackground
 
                 VStack(spacing: 0) {
                     topBar(s)
@@ -49,13 +59,26 @@ struct TogetherPanelView: View {
                         disc(s)
                             .padding(.top, 6 * s)
                         titleBlock(t, s)
+                            .sheet(isPresented: $showWallpaperPicker) {
+                                DocumentCopyPicker(contentTypes: [.image],
+                                                   allowsMultipleSelection: false) { urls in
+                                    pendingWallpaper = urls
+                                } onDone: {
+                                    showWallpaperPicker = false
+                                    if let url = pendingWallpaper.first {
+                                        _ = TogetherStore.shared.setImage(slot: TogetherImages.wallpaperNow, from: url)
+                                    }
+                                    pendingWallpaper = []
+                                    state = TogetherStore.shared.load()
+                                }
+                            }
                         progressRow(s)
-                            .padding(.top, 18 * s)
+                            .padding(.top, 34 * s)
                             .padding(.horizontal, 28)
                         controls(s)
-                            .padding(.top, 22 * s)
+                            .padding(.top, 30 * s)
                         bottomActions(s)
-                            .padding(.top, 20 * s)
+                            .padding(.top, 26 * s)
                     } else {
                         emptyState
                     }
@@ -74,8 +97,36 @@ struct TogetherPanelView: View {
         .onChange(of: player.track?.id) { _ in
             state = TogetherStore.shared.load()
             lyrics = player.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
+            echoBubbles.removeAll()
+            echoQueue.removeAll()
+            echoLastPosition = player.currentTime
+        }
+        .onChange(of: player.currentTime) { pos in
+            checkEcho(at: pos)
         }
         .sheet(isPresented: $showNoteComposer) { noteComposer }
+        .overlay {
+            if showLyrics, let t = track {
+                TogetherLyricsPage(track: t,
+                                   lyrics: lyrics,
+                                   loopLine: state.loopLines[t.id],
+                                   position: player.currentTime,
+                                   onSeek: { target in
+                                       player.seek(to: target)
+                                       TogetherStore.shared.seek(to: target, by: .user)
+                                   },
+                                   onClose: {
+                                       withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                                           showLyrics = false
+                                       }
+                                   })
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 1.04)),
+                        removal: .opacity
+                    ))
+                    .zIndex(10)
+            }
+        }
     }
 
     // MARK: 顶栏
@@ -90,7 +141,26 @@ struct TogetherPanelView: View {
                 .tracking(2)
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
             Spacer()
-            Color.clear.frame(width: 34, height: 34)
+            Button {
+                echoOn.toggle()
+                if !echoOn {
+                    echoBubbles.removeAll()
+                    echoQueue.removeAll()
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: echoOn ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+                    Text(echoOn ? TogetherCopy.echoOn : TogetherCopy.echoOff)
+                }
+                .font(ChatFont.font(9, weight: .medium))
+                .foregroundStyle(echoOn
+                    ? CSSThemeVariables.accent(scope: .chat)
+                    : CSSThemeVariables.textDim(scope: .chat).opacity(0.8))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(CSSThemeVariables.optionBg(scope: .chat)))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 22)
         .padding(.top, 10 * s)
@@ -167,10 +237,22 @@ struct TogetherPanelView: View {
     // MARK: 唱片
 
     private func disc(_ s: CGFloat) -> some View {
-        TogetherDiscView(size: 250 * s,
-                         spinDegrees: player.currentTime / 22.0 * 360,
-                         isPlaying: player.isPlaying) {
-            player.toggle()
+        ZStack {
+            TogetherDiscView(size: 250 * s,
+                             spinDegrees: player.currentTime / 22.0 * 360,
+                             isPlaying: player.isPlaying) {
+                // 点胶片翻到歌词页——不是暂停。
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.88)) {
+                    showLyrics = true
+                }
+            }
+
+            // 回声：黑胶周围，一次只显一个
+            ForEach(echoBubbles) { bubble in
+                EchoBubbleView(bubble: bubble)
+                    .offset(x: bubble.dx * s, y: bubble.dy * s)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(height: 250 * s + 10)
     }
@@ -199,6 +281,27 @@ struct TogetherPanelView: View {
         }
         .padding(.top, 14 * s)
         .padding(.horizontal, 24)
+        .contextMenu {
+            Button(TogetherCopy.changeWallpaper) { showWallpaperPicker = true }
+            Button(TogetherCopy.resetCover, role: .destructive) {
+                TogetherStore.shared.clearImage(slot: TogetherImages.wallpaperNow)
+            }
+        }
+    }
+
+    private var pageBackground: some View {
+        ZStack {
+            CSSThemeVariables.bg(scope: .chat)
+            if let url = TogetherImages.url(for: TogetherImages.wallpaperNow),
+               let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(0.82))
+                    .clipped()
+            }
+        }
+        .ignoresSafeArea()
     }
 
     // MARK: 进度
@@ -278,7 +381,10 @@ struct TogetherPanelView: View {
     private func controls(_ s: CGFloat) -> some View {
         HStack(spacing: 26 * s) {
             iconButton("shuffle", size: 19 * s,
-                       active: shuffle) { shuffle.toggle() }
+                       active: state.playback.shuffle) {
+                TogetherStore.shared.setShuffle(!state.playback.shuffle)
+                state = TogetherStore.shared.load()
+            }
 
             iconButton("backward.fill", size: 24 * s, active: false) { step(-1) }
 
@@ -295,7 +401,10 @@ struct TogetherPanelView: View {
 
             iconButton("forward.fill", size: 24 * s, active: false) { step(1) }
 
-            iconButton("repeat.1", size: 19 * s, active: repeatOne) { repeatOne.toggle() }
+            iconButton("repeat.1", size: 19 * s, active: state.playback.repeatOne) {
+                TogetherStore.shared.setRepeatOne(!state.playback.repeatOne)
+                state = TogetherStore.shared.load()
+            }
         }
     }
 
@@ -380,7 +489,12 @@ struct TogetherPanelView: View {
                 Button(TogetherCopy.leaveNoteAction) {
                     let text = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !text.isEmpty else { return }
-                    TogetherStore.shared.addNote(at: player.currentTime, text: text, by: .user)
+                    // 一轮一首歌，每个人只能刻一句。
+                    let ok = TogetherStore.shared.addNote(at: player.currentTime, text: text, by: .user)
+                    guard ok else {
+                        MinisToast.show(TogetherCopy.oneLineOnly, systemImage: "exclamationmark.circle")
+                        return
+                    }
                     state = TogetherStore.shared.load()
                     noteDraft = ""
                     showNoteComposer = false
@@ -465,6 +579,50 @@ struct TogetherPanelView: View {
             if !state.playback.playing {
                 player.pause()
             }
+        }
+    }
+
+    // MARK: 回声
+
+    /// 唱到某一句的那一秒才浮出来。
+    /// 只在"往前走"时触发；拖回去、跳太远都不补发，免得一拖一堆。
+    private func checkEcho(at pos: Double) {
+        defer { echoLastPosition = pos }
+        guard echoOn, let trackId = track?.id else { return }
+        if pos < echoLastPosition - 1.5 || pos - echoLastPosition > 5 { return }
+
+        let due = state.notes.filter { note in
+            note.trackId == trackId && note.at > echoLastPosition && note.at <= pos
+        }
+        guard !due.isEmpty else { return }
+        echoQueue.append(contentsOf: due)
+        pumpEchoQueue(trackId: trackId)
+    }
+
+    private func pumpEchoQueue(trackId: String) {
+        guard echoBubbles.isEmpty, !echoQueue.isEmpty else { return }
+        let note = echoQueue.removeFirst()
+        let corners: [(CGFloat, CGFloat)] = [(-72, -118), (78, -86), (-84, 74), (74, 104)]
+        let corner = corners[echoCorner % corners.count]
+        echoCorner += 1
+
+        let bubble = EchoBubble(
+            id: note.id,
+            text: note.text,
+            name: note.from == TogetherActor.ai.rawValue
+                ? ChatAddressing.assistant()
+                : ChatAddressing.user(),
+            time: TogetherEchoClock.label(note.ts),
+            isAI: note.from == TogetherActor.ai.rawValue,
+            dx: corner.0,
+            dy: corner.1
+        )
+        echoBubbles = [bubble]
+
+        // 气泡活 4.6 秒，化完再接下一个——同一时间只一个。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.65) {
+            echoBubbles.removeAll()
+            pumpEchoQueue(trackId: trackId)
         }
     }
 
@@ -573,5 +731,266 @@ struct TogetherDiscView: View {
                 .offset(x: -6, y: -size * 0.30)
         }
         .frame(width: size + 26)
+    }
+}
+
+
+// MARK: - 回声气泡
+//
+// 照 reference 的 whisperFlow：0% 缩到 0.35、下移 12、模糊 4、透明；
+// 50% 回到 1、清晰；100% 缩到 0.4、上移 14、模糊 3、透明。
+// 4.6 秒一笔贯通，纯椭圆，没有对话框小角。
+
+struct EchoBubble: Identifiable, Equatable {
+    let id: String
+    let text: String
+    let name: String
+    let time: String
+    let isAI: Bool
+    let dx: CGFloat
+    let dy: CGFloat
+}
+
+struct EchoBubbleView: View {
+    let bubble: EchoBubble
+
+    @State private var t: CGFloat = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(bubble.name).fontWeight(.semibold)
+                Text(bubble.time)
+            }
+            .font(ChatFont.font(9))
+            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+
+            Text(bubble.text)
+                .font(ChatFont.font(12.5))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .lineLimit(4)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 230, alignment: .leading)
+        .background(
+            Capsule().fill(
+                bubble.isAI
+                    ? CSSThemeVariables.card(scope: .chat).opacity(0.94)
+                    : CSSThemeVariables.optionBg(scope: .chat)
+            )
+        )
+        .overlay(
+            Capsule().strokeBorder(CSSThemeVariables.bg(scope: .chat).opacity(0.95), lineWidth: 0.5)
+        )
+        .shadow(color: TogetherSkin.shadowSoft, radius: 16, x: 0, y: 12)
+        .scaleEffect(scaleValue)
+        .opacity(opacityValue)
+        .blur(radius: blurValue)
+        .offset(y: riseValue)
+        .onAppear {
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 4.6)) { t = 1 }
+        }
+    }
+
+    private var seg: CGFloat { t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5 }
+    private var scaleValue: CGFloat { t < 0.5 ? 0.35 + 0.65 * seg : 1 - 0.6 * seg }
+    private var opacityValue: Double { t < 0.5 ? Double(seg) : Double(1 - seg) }
+    private var blurValue: CGFloat { t < 0.5 ? 4 - 4 * seg : 3 * seg }
+    private var riseValue: CGFloat { t < 0.5 ? 12 - 12 * seg : -14 * seg }
+}
+
+// MARK: - 时间
+
+enum TogetherEchoClock {
+    static func label(_ ts: Int) -> String {
+        guard ts > 0 else { return "" }
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm"
+        f.locale = Locale(identifier: "zh_CN")
+        return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts)))
+    }
+}
+
+// MARK: - 歌词页
+
+/// 点胶片翻过来的整页歌词：当前句高亮居中，点一句跳到那句。
+/// 没歌词就显示我写的那句循环——不许编假词。
+struct TogetherLyricsPage: View {
+    let track: TogetherTrack
+    let lyrics: TogetherLyrics?
+    let loopLine: String?
+    let position: Double
+    let onSeek: (Double) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack {
+            background
+
+            VStack(spacing: 0) {
+                header
+                cover
+                    .padding(.top, 18)
+                if let lines = timedLines, !lines.isEmpty {
+                    lyricsScroll(lines)
+                        .padding(.top, 22)
+                } else {
+                    fallback
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: 背景
+
+    private var background: some View {
+        ZStack {
+            CSSThemeVariables.bg(scope: .chat)
+            if let url = TogetherImages.url(for: TogetherImages.wallpaperNow),
+               let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(0.78))
+                    .clipped()
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: 顶栏
+
+    private var header: some View {
+        HStack {
+            Button(action: onClose) {
+                Image(systemName: "chevron.down")
+                    .font(ChatFont.font(14, weight: .semibold))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .frame(width: 34, height: 34)
+                    .background(CSSThemeVariables.optionBg(scope: .chat))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text(track.title)
+                    .font(ChatFont.font(12, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .lineLimit(1)
+                if !track.artist.isEmpty {
+                    Text(track.artist)
+                        .font(ChatFont.font(10))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            Color.clear.frame(width: 34, height: 34)
+        }
+        .padding(.horizontal, 22)
+        .padding(.top, 54)
+    }
+
+    // MARK: 封面
+
+    private var cover: some View {
+        Group {
+            if let url = TogetherImages.url(for: TogetherImages.lyricsCover),
+               let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 92, height: 92)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .shadow(color: TogetherSkin.shadowSoft, radius: 12, x: 0, y: 6)
+            } else {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(TogetherCover.fill(track.cover))
+                    .frame(width: 92, height: 92)
+                    .overlay(
+                        Image(systemName: "music.note")
+                            .font(ChatFont.font(26, weight: .light))
+                            .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.85))
+                    )
+            }
+        }
+    }
+
+    // MARK: 歌词
+
+    private var timedLines: [TogetherLyricLine]? {
+        guard let lyr = lyrics, lyr.timed, !lyr.lines.isEmpty else { return nil }
+        return lyr.lines
+    }
+
+    private var currentIndex: Int {
+        guard let lyr = lyrics, lyr.timed, !lyr.lines.isEmpty else { return -1 }
+        let t = position - lyr.offset
+        var hit = -1
+        for (i, line) in lyr.lines.enumerated() {
+            if line.at <= t { hit = i } else { break }
+        }
+        return hit
+    }
+
+    private func lyricsScroll(_ lines: [TogetherLyricLine]) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: 18) {
+                    ForEach(Array(lines.enumerated()), id: \.offset) { idx, line in
+                        Text(line.text)
+                            .font(ChatFont.font(idx == currentIndex ? 17 : 14,
+                                                weight: idx == currentIndex ? .semibold : .regular))
+                            .foregroundStyle(
+                                idx == currentIndex
+                                    ? CSSThemeVariables.textMain(scope: .chat)
+                                    : CSSThemeVariables.textDim(scope: .chat).opacity(0.65)
+                            )
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .scaleEffect(idx == currentIndex ? 1 : 0.96)
+                            .animation(.easeOut(duration: 0.28), value: currentIndex)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onSeek(line.at) }
+                            .id(idx)
+                    }
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 180)
+            }
+            .onAppear {
+                if currentIndex >= 0 { proxy.scrollTo(currentIndex, anchor: .center) }
+            }
+            .onChange(of: currentIndex) { idx in
+                guard idx >= 0 else { return }
+                withAnimation(.easeOut(duration: 0.4)) {
+                    proxy.scrollTo(idx, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private var fallback: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Text(loopLine ?? TogetherCopy.noLyrics)
+                .font(ChatFont.font(17, weight: .medium))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 36)
+            Text(TogetherCopy.noLyricsHint)
+                .font(ChatFont.font(11.5))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            Spacer()
+            Spacer()
+        }
     }
 }

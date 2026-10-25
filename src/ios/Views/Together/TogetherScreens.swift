@@ -11,6 +11,8 @@
 //
 
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 
 // MARK: - 共用：封面
 
@@ -37,6 +39,30 @@ enum TogetherCover {
     static let keys = ["cover-1", "cover-2", "cover-3", "cover-4", "cover-now"]
 }
 
+/// 封面：槽位里有图就用图，没有才回落到主题渐变。
+/// 图是 shared/together/images/<slot>.<ext>，我和她都能换。
+struct TogetherCoverView: View {
+    let key: String?
+    var corner: CGFloat = 12
+    /// 歌单自己的封面优先
+    var imagePath: String? = nil
+
+    var body: some View {
+        ZStack {
+            if let url = TogetherStore.shared.imageURL(imagePath),
+               let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else if let key, let url = TogetherImages.url(for: key),
+                      let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img).resizable().scaledToFill()
+            } else {
+                TogetherCover.fill(key)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+    }
+}
+
 // MARK: - 共用：一行歌
 
 struct TogetherTrackRow: View {
@@ -49,8 +75,7 @@ struct TogetherTrackRow: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(TogetherCover.fill(track.cover))
+                TogetherCoverView(key: track.cover, corner: 9)
                     .frame(width: 40, height: 40)
                     .overlay(
                         Image(systemName: "music.note")
@@ -112,6 +137,8 @@ struct TogetherLibraryView: View {
     @State private var importing = false
     /// copy 模式选择器先落到这里，等 sheet 收起再开始导入。
     @State private var pendingPicks: [URL] = []
+    /// 正在换封面的那个歌单
+    @State private var coverTarget: TogetherPlaylist?
     private let importer = LocalFileImporter()
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
@@ -192,6 +219,16 @@ struct TogetherLibraryView: View {
                     }
                     .padding(.horizontal, 22)
                     .padding(.top, 14)
+                    .sheet(item: $coverTarget) { playlist in
+                        DocumentCopyPicker(contentTypes: [.image],
+                                           allowsMultipleSelection: false) { urls in
+                            guard let url = urls.first else { return }
+                            _ = TogetherStore.shared.setPlaylistImage(id: playlist.id, from: url)
+                        } onDone: {
+                            coverTarget = nil
+                            playlists = TogetherStore.shared.livePlaylists()
+                        }
+                    }
                 }
             }
             .padding(.bottom, 24)
@@ -245,8 +282,7 @@ struct TogetherLibraryView: View {
     private func playlistCard(_ playlist: TogetherPlaylist) -> some View {
         NavigationLink(value: playlist.id) {
             VStack(alignment: .leading, spacing: 8) {
-                RoundedRectangle(cornerRadius: 19, style: .continuous)
-                    .fill(TogetherCover.fill(playlist.bg))
+                TogetherCoverView(key: playlist.bg, corner: 19, imagePath: playlist.image)
                     .aspectRatio(1, contentMode: .fit)
                     .overlay(alignment: .topTrailing) {
                         if playlist.tracks.contains(TogetherPlayer.shared.track?.id ?? "") {
@@ -266,14 +302,22 @@ struct TogetherLibraryView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(TogetherCopy.changeCover) { coverTarget = playlist }
+            if playlist.image != nil {
+                Button(TogetherCopy.resetCover, role: .destructive) {
+                    TogetherStore.shared.clearPlaylistImage(id: playlist.id)
+                    playlists = TogetherStore.shared.livePlaylists()
+                }
+            }
+        }
     }
 
     /// 目录里的歌都能在这儿直接播。歌单只是分类，不是唯一入口。
     private var allSongsEntry: some View {
         NavigationLink(value: TogetherAllSongsView.routeID) {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(TogetherCover.fill("cover-1"))
+                TogetherCoverView(key: "cover-1", corner: 12)
                     .frame(width: 46, height: 46)
                     .overlay(
                         Image(systemName: "music.note.list")

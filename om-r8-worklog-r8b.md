@@ -171,3 +171,18 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
   `together now/play/note/lib/...`，但仓库里没有任何脚本或原生 offload 实现它
   （grep loopline 只命中 Swift）。→ AI 现在无法真正操控一起听。
   建议做成原生 offload（像 apple-player），直接读写 TogetherStore。
+
+### R34b 交互与视觉（未出包，按她要求不跑 CI）
+- **自动续播**：`TogetherPlayer.handleTrackEnd()` 一首放完 → 单曲循环重放 / 随机 / 顺序下一首（到底回绕），并 `store.play` 落盘同步。
+- **播放选项进状态**：`TogetherPlayback.shuffle / repeatOne`，面板和自动续播读同一份，不再各存一套。
+- **点胶片 = 翻歌词页**（不再暂停）：`TogetherLyricsPage` 整页滚动，当前句高亮居中，点某句 seek，chevron 返回。
+- **按钮下移**：progress 18→34、controls 22→30、bottom 20→26（×s）。
+- **悬浮球换成输入栏上方微控条**：`TogetherMiniBar` 重写——38pt、19 圆角、迷你黑胶（转）+ 三根音波 + 歌词窗 + 上一首/播放/下一首 + 细进度线；`AIChatView` 里 `.padding(.bottom, inputBarHeight)` 贴着输入栏。
+- **回声弹幕**：`EchoBubble` / `EchoBubbleView` 照 HTML whisperFlow（0%→0.35 缩放+下移12+模糊4+透明；50%→1；100%→0.4+上移14+模糊3），4.6s 一笔贯通、纯 Capsule 无小角；唱到 `note.at` 那一秒才触发，一次只显一个，四角轮换；顶栏「回声」可关。
+- **每轮各一句**：`TogetherListen`（trackId/startedAt/userSpoke/aiSpoke），`beginListenIfNeeded` 在 `play()` 里重开一轮（换歌或隔 30 分钟），`addNote`/`speak` 都吃额度；超出弹 toast。
+- **自定义图片**：`TogetherImages` 槽位约定 `shared/together/images/<slot>.<ext>`，槽位 lyrics-cover / wallpaper-now / wallpaper-library / wallpaper-sync / wallpaper-liked / cover-1..4 / cover-now / playlist-<id>；`TogetherCoverView` 有图用图、没图回落主题渐变；歌单卡长按换封面，播放页标题长按换壁纸。
+- `TogetherStore` 新增 `setImage` / `clearImage` / `imageURL` / `setPlaylistImage` / `clearPlaylistImage` / `setShuffle` / `setRepeatOne`。
+
+### 待做
+- 输入栏：话筒并进发送键（无文字=语音，有文字=发送）。
+- 输入栏外观对齐 index.html（可选，动 ChatInputBar 风险高，等一次可编译验证再做）。

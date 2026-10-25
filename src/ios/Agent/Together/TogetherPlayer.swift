@@ -250,13 +250,45 @@ final class TogetherPlayer: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self else { return }
-                self.isPlaying = false
-                self.currentTime = self.duration
-                self.reportProgress(force: true)
-                VoiceNowPlaying.shared.refresh()
+                self?.handleTrackEnd()
             }
         }
+    }
+
+    /// 一首放完：单曲循环就重放；否则顺序（或随机）接着下一首。
+    /// 跟音乐 App 一样，别停在最后一句等人点。
+    private func handleTrackEnd() {
+        let state = store.load()
+
+        if state.playback.repeatOne {
+            seek(to: 0)
+            play()
+            store.reportProgress(position: 0)
+            return
+        }
+
+        let lib = store.library()
+        guard !lib.tracks.isEmpty else {
+            isPlaying = false
+            currentTime = duration
+            reportProgress(force: true)
+            VoiceNowPlaying.shared.refresh()
+            return
+        }
+
+        let currentId = track?.id ?? ""
+        let next: TogetherTrack
+        if state.playback.shuffle {
+            let pool = lib.tracks.filter { $0.id != currentId }
+            next = pool.randomElement() ?? lib.tracks[0]
+        } else if let i = lib.tracks.firstIndex(where: { $0.id == currentId }) {
+            next = lib.tracks[(i + 1) % lib.tracks.count]
+        } else {
+            next = lib.tracks[0]
+        }
+
+        load(next, from: 0)
+        store.play(trackId: next.id, at: 0, by: .user)
     }
 
     private func reportProgress(force: Bool = false) {

@@ -62,6 +62,9 @@ struct TogetherPlayback: Codable, Equatable {
     /// "user" / "ai"，不是名字——名字会变
     var by: String?
     var updatedAt: Int = 0
+    /// 顺序 / 单曲循环。面板和自动续播读同一份，不然两边各有一套。
+    var shuffle: Bool = false
+    var repeatOne: Bool = false
 
     init() {}
 
@@ -71,6 +74,8 @@ struct TogetherPlayback: Codable, Equatable {
         playing = (try? c.decodeIfPresent(Bool.self, forKey: .playing)) ?? false
         by = try? c.decodeIfPresent(String.self, forKey: .by)
         updatedAt = (try? c.decodeIfPresent(Int.self, forKey: .updatedAt)) ?? 0
+        shuffle = (try? c.decodeIfPresent(Bool.self, forKey: .shuffle)) ?? false
+        repeatOne = (try? c.decodeIfPresent(Bool.self, forKey: .repeatOne)) ?? false
     }
 }
 
@@ -116,19 +121,22 @@ struct TogetherPlaylist: Codable, Equatable, Identifiable {
     var tracks: [String] = []
     var updatedBy: String?
     var ts: Int = 0
+    /// 自定义封面：相对 shared 根的图片路径（images/xxx.jpg）
+    var image: String?
     /// 软删除。真删会被并集合并捞回来。
     var deleted: Bool = false
 
     init() {}
 
     init(id: String, name: String, bg: String? = nil, tracks: [String] = [],
-         updatedBy: String? = nil, ts: Int = 0) {
+         updatedBy: String? = nil, ts: Int = 0, image: String? = nil) {
         self.id = id
         self.name = name
         self.bg = bg
         self.tracks = tracks
         self.updatedBy = updatedBy
         self.ts = ts
+        self.image = image
     }
 
     init(from decoder: Decoder) throws {
@@ -139,6 +147,7 @@ struct TogetherPlaylist: Codable, Equatable, Identifiable {
         tracks = (try? c.decodeIfPresent([String].self, forKey: .tracks)) ?? []
         updatedBy = try? c.decodeIfPresent(String.self, forKey: .updatedBy)
         ts = (try? c.decodeIfPresent(Int.self, forKey: .ts)) ?? 0
+        image = try? c.decodeIfPresent(String.self, forKey: .image)
         deleted = (try? c.decodeIfPresent(Bool.self, forKey: .deleted)) ?? false
     }
 }
@@ -323,6 +332,11 @@ struct TogetherState: Codable, Equatable {
     var me = TogetherMe()
     var events: [TogetherEvent] = []
     var devices = TogetherDevices()
+    /// 自定义图片槽位：key → 相对 shared 根的路径（images/xxx.jpg）。
+    /// 键的约定见 TogetherImages：lyrics-cover / wallpaper-now / cover-1 …
+    var images: [String: String] = [:]
+    /// 这一轮"听这首歌"的刻录额度：每次听，你和我各只能刻一句。
+    var listen = TogetherListen()
 
     init() {}
 
@@ -340,6 +354,8 @@ struct TogetherState: Codable, Equatable {
         me = (try? c.decodeIfPresent(TogetherMe.self, forKey: .me)) ?? TogetherMe()
         events = (try? c.decodeIfPresent([TogetherEvent].self, forKey: .events)) ?? []
         devices = (try? c.decodeIfPresent(TogetherDevices.self, forKey: .devices)) ?? TogetherDevices()
+        images = (try? c.decodeIfPresent([String: String].self, forKey: .images)) ?? [:]
+        listen = (try? c.decodeIfPresent(TogetherListen.self, forKey: .listen)) ?? TogetherListen()
     }
 
     /// 当前这首歌上、已经播过的那几条留言。
@@ -349,6 +365,39 @@ struct TogetherState: Codable, Equatable {
             if let p = position { return note.at <= p }
             return true
         }
+    }
+}
+
+// MARK: - 一轮收听
+//
+// 每次听同一首歌是一个新的"这一轮"。一轮里，她和我各只能刻一句。
+// 换歌或隔太久就重开一轮。
+
+struct TogetherListen: Codable, Equatable {
+    var trackId: String = ""
+    var startedAt: Int = 0
+    var userSpoke: Bool = false
+    var aiSpoke: Bool = false
+
+    init() {}
+
+    init(trackId: String, startedAt: Int, userSpoke: Bool = false, aiSpoke: Bool = false) {
+        self.trackId = trackId
+        self.startedAt = startedAt
+        self.userSpoke = userSpoke
+        self.aiSpoke = aiSpoke
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        trackId = (try? c.decodeIfPresent(String.self, forKey: .trackId)) ?? ""
+        startedAt = (try? c.decodeIfPresent(Int.self, forKey: .startedAt)) ?? 0
+        userSpoke = (try? c.decodeIfPresent(Bool.self, forKey: .userSpoke)) ?? false
+        aiSpoke = (try? c.decodeIfPresent(Bool.self, forKey: .aiSpoke)) ?? false
+    }
+
+    func spoke(_ actor: TogetherActor) -> Bool {
+        actor == .user ? userSpoke : aiSpoke
     }
 }
 

@@ -1204,9 +1204,12 @@ struct AIChatView: View {
             TogetherRootView()
         }
         // [R24] 叉掉面板不等于关掉：播放器还活着就浮出小卡，音乐继续。
+        // [R34] 浮球改成输入栏上方的微控条：贴着输入栏，跟着它的高度走。
         .overlay(alignment: .bottom) {
             if togetherPlayer.isActive && !showTogether {
-                TogetherMiniBar()
+                TogetherMiniBar(onOpen: { showTogether = true })
+                    .padding(.bottom, inputBarHeight)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .fullScreenCover(isPresented: $showTerminal) {

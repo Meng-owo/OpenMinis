@@ -136,4 +136,12 @@ enum TogetherCopy {
     static var handoff: String { AppLocalized("Hand the remote to", comment: "一起听 · 递遥控器") }
     static var noSongsYet: String { AppLocalized("Nothing here yet", comment: "一起听 · 空列表") }
     static var allSongs: String { AppLocalized("All songs", comment: "一起听 · 全部歌曲（目录直读）") }
+    static var echoOn: String { AppLocalized("Echo", comment: "一起听 · 回声开") }
+    static var echoOff: String { AppLocalized("Echo off", comment: "一起听 · 回声关") }
+    static var noLyrics: String { AppLocalized("No lyrics for this one", comment: "一起听 · 没有歌词") }
+    static var noLyricsHint: String { AppLocalized("Leave a line and it will loop here", comment: "一起听 · 没歌词时的提示") }
+    static var changeCover: String { AppLocalized("Change cover", comment: "一起听 · 换封面") }
+    static var resetCover: String { AppLocalized("Reset cover", comment: "一起听 · 恢复默认封面") }
+    static var changeWallpaper: String { AppLocalized("Change wallpaper", comment: "一起听 · 换壁纸") }
+    static var oneLineOnly: String { AppLocalized("One line per listen — this one is already yours", comment: "一起听 · 本轮已经刻过一句") }
 }
