@@ -137,6 +137,18 @@ final class TogetherPlayer: ObservableObject {
         VoiceNowPlaying.shared.refresh()
     }
 
+    /// App 重开时把上次那首装回来。
+    /// 只有 state 记着"在放"才真的响——记着暂停就装好不响，别自己冒出来。
+    func restoreIfNeeded() {
+        guard !isActive else { return }
+        let state = store.load()
+        guard let t = state.track, t.file != nil else { return }
+        load(t, from: state.playback.position)
+        if !state.playback.playing {
+            pause()
+        }
+    }
+
     // MARK: 跟随 AI
     //
     // 我把遥控器递过去之后，她那边得真的换歌——面板关着也要跟。

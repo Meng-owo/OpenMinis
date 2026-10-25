@@ -1338,6 +1338,11 @@ struct AIChatView: View {
         }
         .onAppear {
             refreshSoulName()
+            // [R33] 冷启动把上次那首歌装回来：暂停的就装好不响，不自己冒出来。
+            // 稍微延后，别和首屏加载抢主线程。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                TogetherPlayer.shared.restoreIfNeeded()
+            }
             let sinceInit = (CFAbsoluteTimeGetCurrent() - AIChatViewModel.onAppearTimestamp) * 1000
             minisLogger.info("[SessionLoad] onAppear T+\(String(format: "%.0f", sinceInit))ms isNew=\(cached.isNew) msgs=\(vm.messages.count)")
             // [T-inputbar-stale-across-reentry] Re-arm the leading-edge seed on
