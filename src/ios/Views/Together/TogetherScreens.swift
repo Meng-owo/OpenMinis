@@ -51,10 +51,10 @@ struct TogetherCoverView: View {
     var body: some View {
         ZStack {
             if let url = TogetherStore.shared.imageURL(imagePath),
-               let img = UIImage(contentsOfFile: url.path) {
+               let img = TogetherImages.cachedImage(for: url) {
                 Image(uiImage: img).resizable().scaledToFill()
             } else if let key, let url = TogetherImages.url(for: key),
-                      let img = UIImage(contentsOfFile: url.path) {
+                      let img = TogetherImages.cachedImage(for: url) {
                 Image(uiImage: img).resizable().scaledToFill()
             } else {
                 TogetherCover.fill(key)
@@ -477,7 +477,8 @@ struct TogetherAllSongsView: View {
                             ),
                             onTap: {
                                 TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
+                                                           queue: filteredTracks.map { $0.id })
                             }
                         )
                         .contextMenu {
@@ -602,7 +603,8 @@ struct TogetherLikedView: View {
                             ),
                             onTap: {
                                 TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
+                                                           queue: filteredTracks.map { $0.id })
                             }
                         )
                         Divider()
@@ -1280,13 +1282,15 @@ struct TogetherPlaylistDetail: View {
                             ),
                             onTap: {
                                 TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
+                                                           queue: tracks.map { $0.id })
                             }
                         )
                         .contextMenu {
                             Button {
                                 TogetherPlayer.shared.load(track)
-                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user,
+                                                           queue: tracks.map { $0.id })
                             } label: {
                                 Label("播放", systemImage: "play.fill")
                             }

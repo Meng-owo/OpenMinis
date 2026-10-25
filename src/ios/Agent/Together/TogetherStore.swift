@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import UIKit
 import Darwin
 
 private let togetherLogger = AppLogger(category: "Together")
@@ -395,12 +396,14 @@ final class TogetherStore {
 extension TogetherStore {
 
     /// 她或者我按了播放。
-    func play(trackId: String, at position: Double = 0, by actor: TogetherActor) {
+    func play(trackId: String, at position: Double = 0, by actor: TogetherActor,
+              queue: [String]? = nil) {
         guard let track = library().track(id: trackId) else {
             togetherLogger.error("[Together] 曲库里没有 \(trackId)")
             return
         }
         beginListenIfNeeded(trackId: trackId)
+        // 从哪个列表点进来的，就把那个列表当队列；没给就保持原样。
         mutate(by: actor, event: "play",
                detail: TogetherEventDetail(trackId: trackId, position: position)) { state in
             state.track = track
@@ -408,6 +411,7 @@ extension TogetherStore {
             state.playback.playing = true
             state.playback.by = actor.rawValue
             state.playback.updatedAt = TogetherStore.now()
+            if let q = queue, !q.isEmpty { state.playback.queue = q }
             state.me.presence.listening = true
             state.me.presence.updatedAt = TogetherStore.now()
             state.devices.ai.online = true
@@ -709,6 +713,24 @@ enum TogetherImages {
         TogetherStore.shared.rootURL.appendingPathComponent("images", isDirectory: true)
     }
 
+    /// 封面小图缓存：列表滚动时不要每次都读盘。
+    private static let cache = NSCache<NSString, UIImage>()
+
+    static func cachedImage(for url: URL) -> UIImage? {
+        let key = url.path as NSString
+        if let hit = cache.object(forKey: key) { return hit }
+        guard let img = UIImage(contentsOfFile: url.path) else { return nil }
+        cache.setObject(img, forKey: key)
+        return img
+    }
+
+    static func invalidate(_ slot: String) {
+        for ext in extensions {
+            let key = directory.appendingPathComponent("\(slot).\(ext)").path as NSString
+            cache.removeObject(forKey: key)
+        }
+    }
+
     static func url(for slot: String) -> URL? {
         let fm = FileManager.default
         for ext in extensions {
@@ -743,6 +765,7 @@ extension TogetherStore {
             return nil
         }
         let rel = "together/images/\(dest.lastPathComponent)"
+        TogetherImages.invalidate(slot)
         mutate(by: .user, event: "image") { $0.images[slot] = rel }
         return rel
     }

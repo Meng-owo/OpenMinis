@@ -65,6 +65,8 @@ struct TogetherPlayback: Codable, Equatable {
     /// 顺序 / 单曲循环。面板和自动续播读同一份，不然两边各有一套。
     var shuffle: Bool = false
     var repeatOne: Bool = false
+    /// 真正的播放队列（trackId 顺序）。空就按曲库顺序播。
+    var queue: [String] = []
 
     init() {}
 
@@ -76,6 +78,7 @@ struct TogetherPlayback: Codable, Equatable {
         updatedAt = (try? c.decodeIfPresent(Int.self, forKey: .updatedAt)) ?? 0
         shuffle = (try? c.decodeIfPresent(Bool.self, forKey: .shuffle)) ?? false
         repeatOne = (try? c.decodeIfPresent(Bool.self, forKey: .repeatOne)) ?? false
+        queue = (try? c.decodeIfPresent([String].self, forKey: .queue)) ?? []
     }
 }
 

@@ -682,14 +682,17 @@ struct TogetherPanelView: View {
         let lib = TogetherStore.shared.library()
         guard !lib.tracks.isEmpty else { return }
 
+        // 有队列按队列走，没有才退回整个曲库。
+        let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
+        let pool = ids.compactMap { lib.track(id: $0) }
+        guard !pool.isEmpty else { return }
+
         var next: TogetherTrack
         if state.playback.shuffle {
-            let pool = lib.tracks.filter { $0.id != player.track?.id }
-            next = pool.randomElement() ?? lib.tracks[0]
+            next = pool.filter { $0.id != player.track?.id }.randomElement() ?? pool[0]
         } else {
-            let ids = lib.tracks.map { $0.id }
             let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
-            next = lib.tracks[(idx + delta + ids.count) % ids.count]
+            next = pool[(idx + delta + pool.count) % pool.count]
         }
 
         player.load(next)
@@ -1233,7 +1236,10 @@ struct TogetherQueueDrawerView: View {
                 }
             }
             .onAppear {
-                tracks = TogetherStore.shared.library().tracks
+                let lib = TogetherStore.shared.library()
+                let ids = TogetherStore.shared.load().playback.queue
+                let queued = ids.compactMap { lib.track(id: $0) }
+                tracks = queued.isEmpty ? lib.tracks : queued
             }
         }
     }
@@ -1392,7 +1398,7 @@ struct TogetherThemeCenterView: View {
         return VStack(alignment: .leading, spacing: 8) {
             ZStack(alignment: .topTrailing) {
                 if let url = TogetherImages.url(for: slot.id),
-                   let img = UIImage(contentsOfFile: url.path) {
+                   let img = TogetherImages.cachedImage(for: url) {
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFill()

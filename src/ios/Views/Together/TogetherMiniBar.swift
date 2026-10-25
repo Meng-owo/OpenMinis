@@ -215,14 +215,16 @@ struct TogetherMiniBar: View {
         let lib = TogetherStore.shared.library()
         guard !lib.tracks.isEmpty else { return }
 
+        let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
+        let queue = ids.compactMap { lib.track(id: $0) }
+        guard !queue.isEmpty else { return }
+
         var next: TogetherTrack
         if state.playback.shuffle {
-            let pool = lib.tracks.filter { $0.id != player.track?.id }
-            next = pool.randomElement() ?? lib.tracks[0]
+            next = queue.filter { $0.id != player.track?.id }.randomElement() ?? queue[0]
         } else {
-            let ids = lib.tracks.map { $0.id }
             let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
-            next = lib.tracks[(idx + delta + ids.count) % ids.count]
+            next = queue[(idx + delta + queue.count) % queue.count]
         }
 
         player.load(next)

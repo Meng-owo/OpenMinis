@@ -194,8 +194,13 @@ struct AIChatView: View {
     @State private var inputBarHeight: CGFloat = 0
 
     /// 一起听微控条占的高度：38 条 + 2 间距。
+    private var showTogetherBar: Bool {
+        // 只在真的在放的时候出现；暂停/没播就收回去，别挡选项。
+        togetherPlayer.isActive && togetherPlayer.isPlaying && !showTogether
+    }
+
     private var togetherBarInset: CGFloat {
-        (togetherPlayer.isActive && !showTogether) ? 42 : 0
+        showTogetherBar ? 42 : 0
     }
     @State private var inputBarHeightDebounce: Task<Void, Never>?
     /// [T-inputbar-stretch] Delay before the plus drawer opens after a keyboard
@@ -623,7 +628,7 @@ struct AIChatView: View {
                         // 一起听微控条：跟输入栏同一个 VStack，
                         // 谁也别想让它跟着气泡飘走。
                         VStack(spacing: 2) {
-                            if togetherPlayer.isActive && !showTogether {
+                            if showTogetherBar {
                                 TogetherMiniBar(onOpen: { showTogether = true })
                                     .transition(.opacity)
                             }
