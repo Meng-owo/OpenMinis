@@ -859,136 +859,9 @@ struct TogetherPlaylistEditor: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // 表单分组卡片（图3风格）
-                    VStack(spacing: 0) {
-                        // 1. 更换封面行
-                        HStack {
-                            Text(TogetherCopy.changeCoverTitle)
-                                .font(ChatFont.font(14, weight: .medium))
-                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                            Spacer()
-                            Button {
-                                showCoverPicker = true
-                            } label: {
-                                HStack(spacing: 8) {
-                                    TogetherCoverView(key: bg, corner: 8, imagePath: playlist.image)
-                                        .frame(width: 44, height: 44)
-                                    Image(systemName: "chevron.right")
-                                        .font(ChatFont.font(12))
-                                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-
-                        Divider().overlay(CSSThemeVariables.divider(scope: .chat)).padding(.leading, 16)
-
-                        // 2. 名称行
-                        HStack {
-                            Text(TogetherCopy.playlistName)
-                                .font(ChatFont.font(14, weight: .medium))
-                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                            Spacer()
-                            TextField(TogetherCopy.playlistName, text: $name)
-                                .font(ChatFont.font(14))
-                                .multilineTextAlignment(.trailing)
-                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                                .frame(maxWidth: 180)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-
-                        Divider().overlay(CSSThemeVariables.divider(scope: .chat)).padding(.leading, 16)
-
-                        // 3. 标签行
-                        HStack {
-                            Text(TogetherCopy.tags)
-                                .font(ChatFont.font(14, weight: .medium))
-                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                            Spacer()
-                            Button {
-                                showTagSheet = true
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Text(tagsLabel)
-                                        .font(ChatFont.font(13))
-                                        .foregroundStyle(tagsColor)
-                                        .lineLimit(1)
-                                    Image(systemName: "chevron.right")
-                                        .font(ChatFont.font(12))
-                                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 14)
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(CSSThemeVariables.card(scope: .chat))
-                    )
-
-                    // 4. 简介区域（图3风格，支持1000字）
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(TogetherCopy.descTitle)
-                            .font(ChatFont.font(13, weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-
-                        ZStack(alignment: .topLeading) {
-                            if desc.isEmpty {
-                                Text(TogetherCopy.descPlaceholder)
-                                    .font(ChatFont.font(13.5))
-                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.6))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 10)
-                            }
-
-                            TextEditor(text: $desc)
-                                .font(ChatFont.font(13.5))
-                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                                .scrollContentBackground(.hidden)
-                                .background(Color.clear)
-                                .frame(height: 110)
-                                .padding(6)
-                                .onChange(of: desc, perform: onDescChanged)
-                        }
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(CSSThemeVariables.optionBg(scope: .chat))
-                        )
-
-                        HStack {
-                            Spacer()
-                            Text(descCountString)
-                                .font(ChatFont.font(11))
-                                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                        }
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(CSSThemeVariables.card(scope: .chat))
-                    )
-
-                    // 5. 删除歌单
-                    Button {
-                        confirmDelete = true
-                    } label: {
-                        Text(TogetherCopy.deletePlaylist)
-                            .font(ChatFont.font(14, weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.danger(scope: .chat))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(CSSThemeVariables.dangerSoft(scope: .chat))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 10)
+                    cardSection
+                    descSection
+                    deleteSection
                 }
                 .padding(20)
             }
@@ -1036,6 +909,137 @@ struct TogetherPlaylistEditor: View {
                     .presentationBackground(CSSThemeVariables.bg(scope: .chat))
             }
         }
+    }
+
+    private var cardSection: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(TogetherCopy.changeCoverTitle)
+                    .font(ChatFont.font(14, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                Spacer()
+                Button {
+                    showCoverPicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        TogetherCoverView(key: bg, corner: 8, imagePath: playlist.image)
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "chevron.right")
+                            .font(ChatFont.font(12))
+                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
+            Divider().overlay(CSSThemeVariables.divider(scope: .chat)).padding(.leading, 16)
+
+            HStack {
+                Text(TogetherCopy.playlistName)
+                    .font(ChatFont.font(14, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                Spacer()
+                TextField(TogetherCopy.playlistName, text: $name)
+                    .font(ChatFont.font(14))
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .frame(maxWidth: 180)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Divider().overlay(CSSThemeVariables.divider(scope: .chat)).padding(.leading, 16)
+
+            HStack {
+                Text(TogetherCopy.tags)
+                    .font(ChatFont.font(14, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                Spacer()
+                Button {
+                    showTagSheet = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(tagsLabel)
+                            .font(ChatFont.font(13))
+                            .foregroundStyle(tagsColor)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.right")
+                            .font(ChatFont.font(12))
+                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(CSSThemeVariables.card(scope: .chat))
+        )
+    }
+
+    private var descSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(TogetherCopy.descTitle)
+                .font(ChatFont.font(13, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+
+            ZStack(alignment: .topLeading) {
+                if desc.isEmpty {
+                    Text(TogetherCopy.descPlaceholder)
+                        .font(ChatFont.font(13.5))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.6))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                }
+
+                TextEditor(text: $desc)
+                    .font(ChatFont.font(13.5))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .scrollContentBackground(.hidden)
+                    .background(Color.clear)
+                    .frame(height: 110)
+                    .padding(6)
+                    .onChange(of: desc, perform: onDescChanged)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(CSSThemeVariables.optionBg(scope: .chat))
+            )
+
+            HStack {
+                Spacer()
+                Text(descCountString)
+                    .font(ChatFont.font(11))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(CSSThemeVariables.card(scope: .chat))
+        )
+    }
+
+    private var deleteSection: some View {
+        Button {
+            confirmDelete = true
+        } label: {
+            Text(TogetherCopy.deletePlaylist)
+                .font(ChatFont.font(14, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.danger(scope: .chat))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(CSSThemeVariables.dangerSoft(scope: .chat))
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 10)
     }
 
     private var tagSelectionSheet: some View {
