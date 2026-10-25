@@ -108,14 +108,14 @@ struct TogetherPanelView: View {
                     player.seek(to: target)
                     TogetherStore.shared.seek(to: target, by: .user)
                 }
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                
+                
             }
         }
         .sheet(isPresented: $showQueueDrawer) {
             TogetherQueueDrawerView()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                
+                
         }
         .sheet(isPresented: $showThemeCenter) {
             TogetherThemeCenterView()
@@ -741,4 +741,509 @@ enum TogetherEchoClock {
         f.locale = Locale(identifier: "zh_CN")
         return f.string(from: Date(timeIntervalSince1970: TimeInterval(ts)))
     }
+}
+
+
+struct TogetherDiscView: View {
+    let size: CGFloat
+    let spinDegrees: Double
+    let isPlaying: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        ZStack {
+            disc
+                .rotationEffect(.degrees(spinDegrees))
+                .animation(.linear(duration: 0.5), value: spinDegrees)
+                .shadow(color: TogetherSkin.shadowDeep, radius: 26, x: 0, y: 16)
+                .onTapGesture(perform: onTap)
+
+            arm
+        }
+    }
+
+    private var disc: some View {
+        ZStack {
+            Circle().fill(vinylFill)
+            rings
+            label
+            hole
+        }
+        .frame(width: size, height: size)
+    }
+
+    private var vinylFill: RadialGradient {
+        RadialGradient(colors: [TogetherSkin.vinyl.opacity(0.92),
+                                TogetherSkin.vinyl,
+                                TogetherSkin.vinyl],
+                       center: .center, startRadius: 10, endRadius: size / 2)
+    }
+
+    private var rings: some View {
+        ForEach(1..<26, id: \.self) { i in
+            Circle()
+                .strokeBorder(TogetherSkin.vinylRing, lineWidth: 1)
+                .padding(size / 2 * CGFloat(i) / 26 * 0.94)
+        }
+    }
+
+    private var label: some View {
+        Circle()
+            .fill(CSSThemeVariables.card(scope: .chat))
+            .frame(width: size * 0.552, height: size * 0.552)
+            .overlay(
+                Image(systemName: "headphones")
+                    .font(ChatFont.font(size * 0.16, weight: .light))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            )
+            .overlay(
+                Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat).opacity(0.25), lineWidth: 0.8)
+            )
+    }
+
+    private var hole: some View {
+        Circle()
+            .fill(CSSThemeVariables.bg(scope: .chat).opacity(0.9))
+            .frame(width: 6, height: 6)
+    }
+
+    private var arm: some View {
+        HStack {
+            Spacer()
+            Capsule()
+                .fill(CSSThemeVariables.textMain(scope: .chat).opacity(0.35))
+                .frame(width: 2.5, height: size * 0.384)
+                .rotationEffect(.degrees(21))
+                .offset(x: -6, y: -size * 0.30)
+        }
+        .frame(width: size + 26)
+    }
+}
+
+
+
+
+
+//
+//  TogetherDrawers.swift
+//  MinisApp
+//
+//  一起听 · 底部抽屉组件：
+//  1. 历史回声墙（整首歌我们所有的刻字，点击直达回声，底部带输入框）
+//  2. 播放队列（查看下一首放什么，点歌切歌）
+//
+
+
+// MARK: - 1. 历史回声墙抽屉
+
+struct TogetherEchoDrawerView: View {
+
+    let track: TogetherTrack
+    let onSeek: (Double) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var state = TogetherStore.shared.load()
+    @State private var draft = ""
+
+    private var notes: [TogetherNote] {
+        state.notes
+            .filter { $0.trackId == track.id }
+            .sorted { $0.at < $1.at }
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                if notes.isEmpty {
+                    emptyView
+                } else {
+                    list
+                }
+
+                Divider().overlay(CSSThemeVariables.divider(scope: .chat))
+                inputBar
+            }
+            .background(CSSThemeVariables.bg(scope: .chat).ignoresSafeArea())
+            .navigationTitle("\(TogetherCopy.historyEchoes) (\(notes.count))")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalized("Close", comment: "关闭")) { dismiss() }
+                        .font(ChatFont.font(14, weight: .medium))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                }
+            }
+        }
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(ChatFont.font(40))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.4))
+            Text("这首歌还没有刻过字")
+                .font(ChatFont.font(14, weight: .medium))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            Text("在下面留下一句，播到那一秒时就会浮现回声")
+                .font(ChatFont.font(11.5))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.8))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var list: some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(notes) { note in
+                    HStack(alignment: .top, spacing: 12) {
+                        Button {
+                            onSeek(note.at)
+                            dismiss()
+                        } label: {
+                            Text(mmss(note.at))
+                                .font(ChatFont.font(11, weight: .bold))
+                                .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(CSSThemeVariables.accent(scope: .chat).opacity(0.12)))
+                        }
+                        .buttonStyle(.plain)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 6) {
+                                Text(note.from == TogetherActor.ai.rawValue ? ChatAddressing.assistant() : ChatAddressing.user())
+                                    .font(ChatFont.font(11, weight: .semibold))
+                                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                                Text(TogetherEchoClock.label(note.ts))
+                                    .font(ChatFont.font(9.5))
+                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                            }
+
+                            Text(note.text)
+                                .font(ChatFont.font(13))
+                                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(CSSThemeVariables.card(scope: .chat))
+                    )
+                }
+            }
+            .padding(18)
+        }
+    }
+
+    private var inputBar: some View {
+        HStack(spacing: 10) {
+            TextField("在这一秒留下你的一句话...", text: $draft)
+                .textFieldStyle(.plain)
+                .font(ChatFont.font(13.5))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(CSSThemeVariables.optionBg(scope: .chat))
+                )
+
+            Button {
+                sendNote()
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(ChatFont.font(26))
+                    .foregroundStyle(draft.trimmingCharacters(in: .whitespaces).isEmpty
+                        ? CSSThemeVariables.textDim(scope: .chat).opacity(0.4)
+                        : CSSThemeVariables.accent(scope: .chat))
+            }
+            .buttonStyle(.plain)
+            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private func sendNote() {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let currentPos = TogetherPlayer.shared.currentTime
+        let ok = TogetherStore.shared.addNote(at: currentPos, text: text, by: .user, trackId: track.id)
+        if ok {
+            state = TogetherStore.shared.load()
+            draft = ""
+        } else {
+            MinisToast.show(TogetherCopy.oneLineOnly, systemImage: "exclamationmark.circle")
+        }
+    }
+
+    private func mmss(_ s: Double) -> String {
+        let total = max(0, Int(s.rounded()))
+        return String(format: "%02d:%02d", total / 60, total % 60)
+    }
+}
+
+// MARK: - 2. 播放队列抽屉
+
+struct TogetherQueueDrawerView: View {
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var player = TogetherPlayer.shared
+
+    @State private var tracks: [TogetherTrack] = []
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(tracks) { track in
+                        let isCurrent = player.track?.id == track.id
+
+                        HStack(spacing: 12) {
+                            if isCurrent {
+                                Image(systemName: "speaker.wave.2.fill")
+                                    .font(ChatFont.font(13))
+                                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                                    .frame(width: 20)
+                            } else {
+                                Text("\(tracks.firstIndex(of: track).map { $0 + 1 } ?? 1)")
+                                    .font(ChatFont.font(12, weight: .medium))
+                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                                    .frame(width: 20)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(track.title)
+                                    .font(ChatFont.font(13.5, weight: isCurrent ? .semibold : .regular))
+                                    .foregroundStyle(isCurrent
+                                        ? CSSThemeVariables.accent(scope: .chat)
+                                        : CSSThemeVariables.textMain(scope: .chat))
+                                    .lineLimit(1)
+
+                                Text(track.artist)
+                                    .font(ChatFont.font(10.5))
+                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            Text(track.durationString)
+                                .font(ChatFont.font(11))
+                                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            player.load(track)
+                            TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                            dismiss()
+                        }
+                    }
+                } header: {
+                    Text("当前列表共 \(tracks.count) 首歌曲")
+                        .font(ChatFont.font(11))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                }
+            }
+            .listStyle(.plain)
+            .background(CSSThemeVariables.bg(scope: .chat).ignoresSafeArea())
+            .navigationTitle(TogetherCopy.queueTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalized("Done", comment: "完成")) { dismiss() }
+                        .font(ChatFont.font(14, weight: .semibold))
+                        .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                }
+            }
+            .onAppear {
+                tracks = TogetherStore.shared.library().tracks
+            }
+        }
+    }
+}
+
+//
+//  TogetherThemeCenterView.swift
+//  MinisApp
+//
+//  一起听 · 独立装扮与壁纸中心。
+//  彻底告别长按隐蔽手势。我和醒醒都能随时换，AI 在后台也能通过 together wallpaper 一键换。
+//
+
+
+struct TogetherThemeCenterView: View {
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var state = TogetherStore.shared.load()
+    @State private var activeSlot: String?
+    @State private var pendingImage: [URL] = []
+
+    private let slots: [(id: String, title: String, subtitle: String)] = [
+        (TogetherImages.wallpaperNow, TogetherCopy.nowPlayingWallpaper, "播放主界面的全屏氛围大壁纸"),
+        (TogetherImages.lyricsCover, TogetherCopy.lyricsWallpaper, "歌词页面的背景与专属封面"),
+        (TogetherImages.wallpaperLibrary, TogetherCopy.libraryWallpaper, "所有歌单列表的背景壁纸"),
+        (TogetherImages.wallpaperSync, TogetherCopy.syncWallpaper, "双人伴听同步页面的背景"),
+        (TogetherImages.wallpaperLiked, TogetherCopy.likedWallpaper, "红心喜欢歌曲列表的背景"),
+        (TogetherImages.wallpaperSweet, TogetherCopy.sweetWallpaper, "小梦给醒醒挑的私藏壁纸"),
+    ]
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    headerBanner
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(slots, id: \.id) { slot in
+                            slotCard(slot)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+            .background(CSSThemeVariables.bg(scope: .chat).ignoresSafeArea())
+            .navigationTitle(TogetherCopy.themeCenter)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(AppLocalized("Done", comment: "完成")) {
+                        dismiss()
+                    }
+                    .font(ChatFont.font(14, weight: .semibold))
+                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                }
+            }
+            .sheet(item: Binding<SlotItem?>(
+                get: { activeSlot.map { SlotItem(id: $0) } },
+                set: { activeSlot = $0?.id }
+            )) { item in
+                DocumentCopyPicker(contentTypes: [.image], allowsMultipleSelection: false) { urls in
+                    pendingImage = urls
+                } onDone: {
+                    if let first = pendingImage.first {
+                        _ = TogetherStore.shared.setImage(slot: item.id, from: first)
+                    }
+                    pendingImage = []
+                    activeSlot = nil
+                    state = TogetherStore.shared.load()
+                }
+            }
+        }
+    }
+
+    private var headerBanner: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "sparkles")
+                .font(ChatFont.font(24))
+                .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("我们俩的音乐专属装扮")
+                    .font(ChatFont.font(14, weight: .semibold))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                Text("点击直接更换，或者让我在后台随时为你挑一张换上")
+                    .font(ChatFont.font(11))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(CSSThemeVariables.card(scope: .chat))
+        )
+    }
+
+    private func slotCard(_ slot: (id: String, title: String, subtitle: String)) -> some View {
+        let hasCustom = TogetherImages.url(for: slot.id) != nil
+
+        return VStack(alignment: .leading, spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                if let url = TogetherImages.url(for: slot.id),
+                   let img = UIImage(contentsOfFile: url.path) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                } else {
+                    TogetherCover.fill(slot.id)
+                        .frame(height: 120)
+                        .frame(maxWidth: .infinity)
+                        .overlay(
+                            Image(systemName: "photo.on.rectangle")
+                                .font(ChatFont.font(26))
+                                .foregroundStyle(CSSThemeVariables.card(scope: .chat).opacity(0.8))
+                        )
+                }
+
+                if hasCustom {
+                    Button {
+                        TogetherStore.shared.clearImage(slot: slot.id)
+                        state = TogetherStore.shared.load()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(ChatFont.font(18))
+                            .foregroundStyle(CSSThemeVariables.danger(scope: .chat))
+                            .background(Circle().fill(Color.white))
+                            .padding(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(slot.title)
+                    .font(ChatFont.font(12, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .lineLimit(1)
+                Text(slot.subtitle)
+                    .font(ChatFont.font(9.5))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    .lineLimit(1)
+            }
+
+            Button {
+                activeSlot = slot.id
+            } label: {
+                Text(TogetherCopy.changeCoverTitle)
+                    .font(ChatFont.font(11, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(CSSThemeVariables.optionBg(scope: .chat))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(CSSThemeVariables.card(scope: .chat))
+        )
+    }
+}
+
+private struct SlotItem: Identifiable {
+    let id: String
 }

@@ -1036,21 +1036,7 @@ struct TogetherPlaylistEditor: View {
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 10) {
                 ForEach(presetTags, id: \.self) { t in
-                    let isSelected = tags.contains(t)
-                    Button {
-                        if isSelected { tags.removeAll { $0 == t } }
-                        else { tags.append(t) }
-                    } label: {
-                        Text(t)
-                            .font(ChatFont.font(12, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(isSelected ? CSSThemeVariables.accent(scope: .chat) : CSSThemeVariables.textMain(scope: .chat))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .background(
-                                Capsule().fill(isSelected ? CSSThemeVariables.accent(scope: .chat).opacity(0.15) : CSSThemeVariables.optionBg(scope: .chat))
-                            )
-                    }
-                    .buttonStyle(.plain)
+                    tagPill(t)
                 }
             }
 
@@ -1064,6 +1050,28 @@ struct TogetherPlaylistEditor: View {
                 .background(Capsule().fill(CSSThemeVariables.optionBg(scope: .chat)))
         }
         .padding(22)
+    }
+
+    private func tagPill(_ t: String) -> some View {
+        let isSelected = tags.contains(t)
+        let fgColor = isSelected ? CSSThemeVariables.accent(scope: .chat) : CSSThemeVariables.textMain(scope: .chat)
+        let bgColor = isSelected ? CSSThemeVariables.accent(scope: .chat).opacity(0.15) : CSSThemeVariables.optionBg(scope: .chat)
+
+        return Button {
+            if isSelected {
+                tags.removeAll { $0 == t }
+            } else {
+                tags.append(t)
+            }
+        } label: {
+            Text(t)
+                .font(ChatFont.font(12, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(fgColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Capsule().fill(bgColor))
+        }
+        .buttonStyle(.plain)
     }
 
     private func reload() {

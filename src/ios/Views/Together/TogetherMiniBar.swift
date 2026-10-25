@@ -41,7 +41,7 @@ struct TogetherMiniBar: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: barHeight / 2, style: .continuous)
-                .strokeBorder(CSSThemeVariables.border(scope: .chat).opacity(0.4), lineWidth: 0.5)
+                .strokeBorder(CSSThemeVariables.divider(scope: .chat).opacity(0.4), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomLeading) { progressHairline }
         .shadow(color: TogetherSkin.shadowSoft, radius: 10, x: 0, y: 3)
