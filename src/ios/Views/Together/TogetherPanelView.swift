@@ -459,7 +459,12 @@ struct TogetherPanelView: View {
         lyrics = state.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
 
         if !player.isActive, let t = state.track, t.file != nil {
+            // 冷启动接着放：位置接上，但放不放按 state 里记的来。
+            // 上次是暂停的就别自己响起来。
             player.load(t, from: state.playback.position)
+            if !state.playback.playing {
+                player.pause()
+            }
         }
     }
 

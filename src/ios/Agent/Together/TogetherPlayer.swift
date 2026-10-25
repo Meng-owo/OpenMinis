@@ -38,8 +38,9 @@ final class TogetherPlayer: ObservableObject {
     private var endToken: NSObjectProtocol?
     private var lastReportedSecond: Double = -1
     private var didSuspendSilentAudio = false
-    /// 跟随：上一次处理过的 state revision
-    private var seenRevision = 0
+    /// 跟随：上一次处理过的事件 id。
+    /// 不能用 revision——播放进度回写也会涨 revision，会把同一条 play 反复触发。
+    private var seenEventId = ""
     private var followTimer: Timer?
     private var didStartFollow = false
     private let store = TogetherStore.shared
@@ -145,7 +146,7 @@ final class TogetherPlayer: ObservableObject {
     func startFollowing() {
         guard !didStartFollow else { return }
         didStartFollow = true
-        seenRevision = store.load().revision
+        seenEventId = store.load().events.last?.id ?? ""
         followTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.followTick() }
         }
@@ -159,11 +160,12 @@ final class TogetherPlayer: ObservableObject {
 
     private func followTick() {
         let state = store.load()
-        guard state.revision != seenRevision else { return }
-        seenRevision = state.revision
+        guard let last = state.events.last else { return }
+        guard last.id != seenEventId else { return }
+        seenEventId = last.id
 
         // 只跟 AI 做的动作
-        guard let last = state.events.last, last.by == "ai" else { return }
+        guard last.by == "ai" else { return }
 
         switch last.type {
         case "play", "radio":
