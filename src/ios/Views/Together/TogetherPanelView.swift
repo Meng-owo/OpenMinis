@@ -631,7 +631,7 @@ struct TogetherPanelView: View {
         guard !lib.tracks.isEmpty else { return }
 
         var next: TogetherTrack
-        if shuffle {
+        if state.playback.shuffle {
             let pool = lib.tracks.filter { $0.id != track?.id }
             next = pool.randomElement() ?? lib.tracks[0]
         } else {
