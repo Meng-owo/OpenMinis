@@ -1228,8 +1228,10 @@ struct TogetherPlaylistDetail: View {
                             .padding(.leading, 52)
                     }
                 }
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
 
-if tracks.isEmpty {
+                if tracks.isEmpty {
                     VStack(spacing: 10) {
                         Text(TogetherCopy.noSongsYet)
                             .font(ChatFont.font(13))
