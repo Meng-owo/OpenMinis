@@ -199,6 +199,10 @@ struct TogetherMiniBar: View {
            !line.trimmingCharacters(in: .whitespaces).isEmpty {
             return line
         }
+        if let id = player.track?.id, let loop = state.loopLines[id],
+           !loop.trimmingCharacters(in: .whitespaces).isEmpty {
+            return loop
+        }
         if let note = nearestNote { return note.text }
         return player.track?.artist.isEmpty == false ? (player.track?.artist ?? "") : "一起听"
     }

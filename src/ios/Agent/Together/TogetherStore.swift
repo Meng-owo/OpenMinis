@@ -392,6 +392,18 @@ extension TogetherStore {
         } != nil
     }
 
+    /// 没歌词的歌，我写一句放进去循环。她也能改。
+    func setLoopLine(trackId: String, text: String, by actor: TogetherActor = .ai) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        mutate(by: actor, event: "loopline", detail: TogetherEventDetail(trackId: trackId, text: trimmed)) { state in
+            if trimmed.isEmpty {
+                state.loopLines.removeValue(forKey: trackId)
+            } else {
+                state.loopLines[trackId] = trimmed
+            }
+        }
+    }
+
     func setMood(_ word: String, intensity: Int = 3) {
         let clamped = min(5, max(1, intensity))
         mutate(by: .ai, event: "mood") { state in

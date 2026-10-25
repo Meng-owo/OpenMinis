@@ -20,7 +20,10 @@ import Combine
 final class TogetherPlayer: ObservableObject {
 
     static let shared = TogetherPlayer()
-    private init() {}
+    private init() {
+        // 一启动就跟：面板关着的时候我换歌，她那边也该听见。
+        startFollowing()
+    }
 
     @Published private(set) var isPlaying = false
     @Published private(set) var currentTime: Double = 0
@@ -35,6 +38,10 @@ final class TogetherPlayer: ObservableObject {
     private var endToken: NSObjectProtocol?
     private var lastReportedSecond: Double = -1
     private var didSuspendSilentAudio = false
+    /// 跟随：上一次处理过的 state revision
+    private var seenRevision = 0
+    private var followTimer: Timer?
+    private var didStartFollow = false
     private let store = TogetherStore.shared
     private let logger = AppLogger(category: "TogetherPlayer")
 
@@ -127,6 +134,62 @@ final class TogetherPlayer: ObservableObject {
         currentTime = 0
         duration = 0
         VoiceNowPlaying.shared.refresh()
+    }
+
+    // MARK: 跟随 AI
+    //
+    // 我把遥控器递过去之后，她那边得真的换歌——面板关着也要跟。
+    // 不轮询进度（进度是本机播出来的事实，反过来写会把播放器拽回去），
+    // 只跟三个动作：换歌 / 播停 / 拖动。这三个的 by == "ai" 才动。
+
+    func startFollowing() {
+        guard !didStartFollow else { return }
+        didStartFollow = true
+        seenRevision = store.load().revision
+        followTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.followTick() }
+        }
+    }
+
+    func stopFollowing() {
+        followTimer?.invalidate()
+        followTimer = nil
+        didStartFollow = false
+    }
+
+    private func followTick() {
+        let state = store.load()
+        guard state.revision != seenRevision else { return }
+        seenRevision = state.revision
+
+        // 只跟 AI 做的动作
+        guard let last = state.events.last, last.by == "ai" else { return }
+
+        switch last.type {
+        case "play", "radio":
+            guard let t = state.track else { return }
+            let target = state.playback.position
+            if track?.id != t.id {
+                load(t, from: target)
+            } else if abs(currentTime - target) > 2 {
+                seek(to: target)
+            }
+            if !isPlaying { play() }
+
+        case "pause":
+            if isPlaying { pause() }
+
+        case "resume":
+            if !isPlaying { play() }
+
+        case "seek":
+            if let pos = last.detail?.position, abs(currentTime - pos) > 1.5 {
+                seek(to: pos)
+            }
+
+        default:
+            break
+        }
     }
 
     // MARK: 内部

@@ -431,10 +431,19 @@ struct TogetherPanelView: View {
 
     // MARK: 数据
 
+    /// 一句歌词。抓不到时间轴就用我写的那句循环——她说过，没词我得自己写。
     private var currentLyricText: String? {
-        guard let lyr = lyrics, lyr.timed, let trackId = track?.id else { return nil }
-        guard lyr.trackId.isEmpty || lyr.trackId == trackId else { return nil }
-        return lyr.line(at: effectivePosition)?.text
+        if let lyr = lyrics, lyr.timed, let trackId = track?.id,
+           lyr.trackId.isEmpty || lyr.trackId == trackId,
+           let line = lyr.line(at: effectivePosition)?.text,
+           !line.trimmingCharacters(in: .whitespaces).isEmpty {
+            return line
+        }
+        if let id = track?.id, let loop = state.loopLines[id],
+           !loop.trimmingCharacters(in: .whitespaces).isEmpty {
+            return loop
+        }
+        return nil
     }
 
     private var noteNearPlayhead: TogetherNote? {

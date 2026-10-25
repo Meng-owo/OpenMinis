@@ -318,6 +318,8 @@ struct TogetherState: Codable, Equatable {
     var liked: [String] = []
     var playlists: [TogetherPlaylist] = []
     var notes: [TogetherNote] = []
+    /// 没歌词的歌，我写一句放这儿循环。键是 trackId。
+    var loopLines: [String: String] = [:]
     var me = TogetherMe()
     var events: [TogetherEvent] = []
     var devices = TogetherDevices()
@@ -334,6 +336,7 @@ struct TogetherState: Codable, Equatable {
         liked = (try? c.decodeIfPresent([String].self, forKey: .liked)) ?? []
         playlists = (try? c.decodeIfPresent([TogetherPlaylist].self, forKey: .playlists)) ?? []
         notes = (try? c.decodeIfPresent([TogetherNote].self, forKey: .notes)) ?? []
+        loopLines = (try? c.decodeIfPresent([String: String].self, forKey: .loopLines)) ?? [:]
         me = (try? c.decodeIfPresent(TogetherMe.self, forKey: .me)) ?? TogetherMe()
         events = (try? c.decodeIfPresent([TogetherEvent].self, forKey: .events)) ?? []
         devices = (try? c.decodeIfPresent(TogetherDevices.self, forKey: .devices)) ?? TogetherDevices()
