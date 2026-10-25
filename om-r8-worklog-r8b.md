@@ -190,3 +190,13 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 ### R34b 出包（run 40170773892 success）
 - 先失败一次：`TogetherPanelView.swift:634 cannot find 'shuffle'` —— step() 里残留旧 @State，改 `state.playback.shuffle`。
 - 403b834 重跑全绿，产物 66,460,185 → `attachments/OpenMinis-交互批次.ipa`
+
+### R34c 现代播放器闭环与全面体验重构（按醒醒需求 + 原生体验）
+- **原位歌词切换（图1）**：彻底废弃全屏遮罩 `TogetherLyricsPage`；顶栏与底栏常驻不动，中间大视觉区在黑胶与居中滚动歌词（`TogetherInlineLyricsView`）间原位平滑淡入淡出，点歌词空白无缝翻回黑胶。
+- **控件整体沉底（图2）**：彻底解决控件悬空问题；动作行 + 进度条 + 播放控制行贴底排布，与底部保持黄金间距。
+- **歌单信息完整设置页（图3）**：全新 `TogetherPlaylistEditor`，支持更换封面缩略图、名称、多选标签（tags）、1000字简介（desc）与实时字数统计。
+- **歌单内删歌与级联清理**：详情页增加实时搜索；歌曲行提供右侧 `···` 菜单与长按菜单（从歌单移除 / 彻底删除）；底层 `deleteTrackPermanently` 级联清理音频文件、歌词、index.json、所有歌单引用和 liked 引用，杜绝孤儿ID。
+- **输入栏微控条纯色化**：去除 `opacity(0.86)`，采用实体纯色背景，底部间隙收紧至 3pt 贴紧输入栏。
+- **独立装扮中心（取代长按）**：推出 `TogetherThemeCenterView`，管理 6 个槽位；砍掉隐蔽长按；后台 `together wallpaper` CLI 接口补齐。
+- **抽屉组件（`TogetherDrawers.swift`）**：历史回声墙抽屉（查看当前歌曲全部历史刻字，点击直达秒数，底部一键留言） + 播放队列抽屉（查看当前列表并随时切歌）。
+- **小惊喜（心动共振）**：顶栏微挂件触碰时，全屏扩散粉色微光，向对方传递心跳与低语。

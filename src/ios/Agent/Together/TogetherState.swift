@@ -125,11 +125,16 @@ struct TogetherPlaylist: Codable, Equatable, Identifiable {
     var image: String?
     /// 软删除。真删会被并集合并捞回来。
     var deleted: Bool = false
+    /// 歌单标签（图3）
+    var tags: [String] = []
+    /// 歌单简介（图3，最多1000字）
+    var desc: String = ""
 
     init() {}
 
     init(id: String, name: String, bg: String? = nil, tracks: [String] = [],
-         updatedBy: String? = nil, ts: Int = 0, image: String? = nil) {
+         updatedBy: String? = nil, ts: Int = 0, image: String? = nil,
+         tags: [String] = [], desc: String = "") {
         self.id = id
         self.name = name
         self.bg = bg
@@ -137,6 +142,9 @@ struct TogetherPlaylist: Codable, Equatable, Identifiable {
         self.updatedBy = updatedBy
         self.ts = ts
         self.image = image
+        self.deleted = false
+        self.tags = tags
+        self.desc = desc
     }
 
     init(from decoder: Decoder) throws {
@@ -149,6 +157,8 @@ struct TogetherPlaylist: Codable, Equatable, Identifiable {
         ts = (try? c.decodeIfPresent(Int.self, forKey: .ts)) ?? 0
         image = try? c.decodeIfPresent(String.self, forKey: .image)
         deleted = (try? c.decodeIfPresent(Bool.self, forKey: .deleted)) ?? false
+        tags = (try? c.decodeIfPresent([String].self, forKey: .tags)) ?? []
+        desc = (try? c.decodeIfPresent(String.self, forKey: .desc)) ?? ""
     }
 }
 
@@ -335,6 +345,8 @@ struct TogetherState: Codable, Equatable {
     /// 自定义图片槽位：key → 相对 shared 根的路径（images/xxx.jpg）。
     /// 键的约定见 TogetherImages：lyrics-cover / wallpaper-now / cover-1 …
     var images: [String: String] = [:]
+    /// 心动共振（小梦和醒醒的小秘密）
+    var resonance: TogetherResonance?
     /// 这一轮"听这首歌"的刻录额度：每次听，你和我各只能刻一句。
     var listen = TogetherListen()
 
@@ -553,4 +565,13 @@ extension TogetherLyrics {
         return TogetherLyrics(trackId: trackId, timed: !lines.isEmpty,
                               source: "lrc", lines: lines, offset: offset)
     }
+}
+
+
+/// 小惊喜：小梦和醒醒的心动共振。
+/// 轻触双人小挂件时，屏幕扩散心动微光，给对方发一段心跳和低语。
+struct TogetherResonance: Codable, Equatable {
+    var from: String = ""
+    var whisper: String = ""
+    var ts: Int = 0
 }

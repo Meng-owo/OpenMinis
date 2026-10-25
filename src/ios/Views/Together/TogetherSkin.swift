@@ -143,5 +143,23 @@ enum TogetherCopy {
     static var changeCover: String { AppLocalized("Change cover", comment: "一起听 · 换封面") }
     static var resetCover: String { AppLocalized("Reset cover", comment: "一起听 · 恢复默认封面") }
     static var changeWallpaper: String { AppLocalized("Change wallpaper", comment: "一起听 · 换壁纸") }
-    static var oneLineOnly: String { AppLocalized("One line per listen — this one is already yours", comment: "一起听 · 本轮已经刻过一句") }
+    static var oneLineOnly: String { AppLocalized("One line per listen — this one is already yours", comment: "一起听 · 本轮已经刻过一句") }    static var playlistInfo: String { AppLocalized("Playlist Info", comment: "一起听 · 歌单信息") }
+    static var changeCoverTitle: String { AppLocalized("Change cover", comment: "一起听 · 更换封面") }
+    static var tags: String { AppLocalized("Tags", comment: "一起听 · 标签") }
+    static var noTags: String { AppLocalized("None", comment: "一起听 · 暂无") }
+    static var descTitle: String { AppLocalized("Description", comment: "一起听 · 简介") }
+    static var descPlaceholder: String { AppLocalized("Write a brief introduction...", comment: "一起听 · 简介占位") }
+    static var removeFromPlaylist: String { AppLocalized("Remove from playlist", comment: "一起听 · 从歌单移除") }
+    static var deletePermanently: String { AppLocalized("Delete file permanently", comment: "一起听 · 彻底删除") }
+    static var searchSongOrArtist: String { AppLocalized("Search title or artist", comment: "一起听 · 搜索歌名或歌手") }
+    static var resonanceHeartbeat: String { AppLocalized("Heartbeat resonance", comment: "一起听 · 心动共振") }
+    static var themeCenter: String { AppLocalized("Theme Center", comment: "一起听 · 装扮中心") }
+    static var nowPlayingWallpaper: String { AppLocalized("Now Playing Wallpaper", comment: "一起听 · 播放页壁纸") }
+    static var lyricsWallpaper: String { AppLocalized("Lyrics Cover & Wallpaper", comment: "一起听 · 歌词页背景") }
+    static var libraryWallpaper: String { AppLocalized("Playlist Library Wallpaper", comment: "一起听 · 歌单库壁纸") }
+    static var syncWallpaper: String { AppLocalized("Together Wallpaper", comment: "一起听 · 伴听页壁纸") }
+    static var likedWallpaper: String { AppLocalized("Liked Songs Wallpaper", comment: "一起听 · 喜欢页壁纸") }
+    static var sweetWallpaper: String { AppLocalized("Xiaomeng Secret Wallpaper", comment: "一起听 · 小梦的私藏壁纸") }
+    static var queueTitle: String { AppLocalized("Playing Queue", comment: "一起听 · 播放队列") }
+    static var historyEchoes: String { AppLocalized("Echo Wall", comment: "一起听 · 历史回声墙") }
 }

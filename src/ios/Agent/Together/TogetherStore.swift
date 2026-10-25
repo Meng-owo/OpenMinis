@@ -211,11 +211,21 @@ final class TogetherStore {
 
         // 文件被删了/改名了，index 里那条也别留着当幽灵。
         let before = lib.tracks.count
+        var deadTrackIds = Set<String>()
         lib.tracks.removeAll { track in
             guard let f = track.file, f.hasPrefix("music/") else { return false }
-            return !fm.fileExists(atPath: Self.sharedRootURL.appendingPathComponent(f).path)
+            let exists = fm.fileExists(atPath: Self.sharedRootURL.appendingPathComponent(f).path)
+            if !exists { deadTrackIds.insert(track.id) }
+            return !exists
         }
         if lib.tracks.count != before { changed = true }
+
+        // 级联清理：如果磁盘文件被删了，歌单和喜欢列表里的孤儿ID必须连根拔除
+        if !deadTrackIds.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                self?.cleanupOrphanTracks(deadTrackIds)
+            }
+        }
 
         return changed
     }
@@ -689,7 +699,8 @@ enum TogetherImages {
     static let wallpaperSync = "wallpaper-sync"
     static let wallpaperLiked = "wallpaper-liked"
 
-    static let slots = [lyricsCover, wallpaperNow, wallpaperLibrary, wallpaperSync, wallpaperLiked,
+    static let wallpaperSweet = "wallpaper-sweet"
+    static let slots = [lyricsCover, wallpaperNow, wallpaperLibrary, wallpaperSync, wallpaperLiked, wallpaperSweet,
                         "cover-1", "cover-2", "cover-3", "cover-4", "cover-now"]
 
     static let extensions = ["jpg", "jpeg", "png", "heic", "webp"]
@@ -775,6 +786,86 @@ extension TogetherStore {
             guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
             state.playlists[i].image = nil
             state.playlists[i].ts = TogetherStore.now()
+        }
+    }
+}
+
+
+// MARK: - 歌单信息设置与级联清理
+
+extension TogetherStore {
+
+    /// 图3：保存歌单的完整信息（名称、标签、简介）
+    @discardableResult
+    func updatePlaylistInfo(id: String, name: String, tags: [String], desc: String, by actor: TogetherActor = .user) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return false }
+        return mutate(by: actor, event: "playlist.update", detail: TogetherEventDetail(text: trimmedName)) { state in
+            guard let i = state.playlists.firstIndex(where: { $0.id == id }) else { return }
+            state.playlists[i].name = trimmedName
+            state.playlists[i].tags = tags
+            state.playlists[i].desc = desc
+            state.playlists[i].updatedBy = actor.rawValue
+            state.playlists[i].ts = TogetherStore.now()
+        } != nil
+    }
+
+    /// 彻底连根拔起一首歌：
+    /// 1. 物理音频文件
+    /// 2. 歌词文件
+    /// 3. index.json 元数据
+    /// 4. 所有歌单里的 trackId
+    /// 5. 喜欢列表、刻字、单句循环
+    func deleteTrackPermanently(_ trackId: String, by actor: TogetherActor = .user) {
+        let fm = FileManager.default
+        let lib = library()
+        if let t = lib.track(id: trackId), let rel = t.file {
+            let audioPath = Self.sharedRootURL.appendingPathComponent(rel)
+            try? fm.removeItem(at: audioPath)
+            if let lrc = t.lyrics {
+                try? fm.removeItem(at: rootURL.appendingPathComponent(lrc))
+            }
+        }
+
+        // 强行刷一遍 library 触发 reconcile
+        queue.sync {
+            var currentLib = loadLibraryLocked()
+            currentLib.tracks.removeAll { $0.id == trackId }
+            _ = saveLibraryLocked(currentLib)
+        }
+
+        // 级联清理所有 state 引用
+        cleanupOrphanTracks(Set([trackId]))
+    }
+
+    /// 内部级联清理孤儿引用
+    func cleanupOrphanTracks(_ deadIds: Set<String>) {
+        guard !deadIds.isEmpty else { return }
+        mutate(by: .ai, event: "clean_orphans") { state in
+            for i in 0..<state.playlists.count {
+                state.playlists[i].tracks.removeAll { deadIds.contains($0) }
+            }
+            state.liked.removeAll { deadIds.contains($0) }
+            for tid in deadIds {
+                state.loopLines.removeValue(forKey: tid)
+            }
+            state.notes.removeAll { deadIds.contains($0.trackId) }
+            if let current = state.track?.id, deadIds.contains(current) {
+                state.track = nil
+                state.playback.playing = false
+                state.playback.position = 0
+            }
+        }
+    }
+
+    /// 小惊喜：小梦和醒醒的心动共振
+    func triggerResonance(from actor: TogetherActor, whisper: String) {
+        mutate(by: actor, event: "resonance") { state in
+            state.resonance = TogetherResonance(
+                from: actor.rawValue,
+                whisper: whisper,
+                ts: TogetherStore.now()
+            )
         }
     }
 }

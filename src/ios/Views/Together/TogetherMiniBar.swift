@@ -37,16 +37,16 @@ struct TogetherMiniBar: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: barHeight / 2, style: .continuous)
-                .fill(CSSThemeVariables.card(scope: .chat).opacity(0.86))
+                .fill(CSSThemeVariables.card(scope: .chat))
         )
         .overlay(
             RoundedRectangle(cornerRadius: barHeight / 2, style: .continuous)
-                .strokeBorder(CSSThemeVariables.bg(scope: .chat).opacity(0.95), lineWidth: 0.5)
+                .strokeBorder(CSSThemeVariables.border(scope: .chat).opacity(0.4), lineWidth: 0.5)
         )
         .overlay(alignment: .bottomLeading) { progressHairline }
-        .shadow(color: TogetherSkin.shadowSoft.opacity(0.75), radius: 16, x: 0, y: 4)
+        .shadow(color: TogetherSkin.shadowSoft, radius: 10, x: 0, y: 3)
         .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.bottom, 3)
         .onAppear {
             reload()
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
