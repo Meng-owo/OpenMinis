@@ -35,6 +35,8 @@ struct TogetherPanelView: View {
 
     /// 抽屉与中心弹窗
     @State private var showEchoDrawer = false
+    @State private var showNoteComposer = false
+    @State private var noteDraft = ""
     @State private var showQueueDrawer = false
     @State private var showThemeCenter = false
 
@@ -122,6 +124,7 @@ struct TogetherPanelView: View {
                 
             }
         }
+        .sheet(isPresented: $showNoteComposer) { noteComposer }
         .sheet(isPresented: $showQueueDrawer) {
             TogetherQueueDrawerView()
                 
@@ -437,9 +440,9 @@ struct TogetherPanelView: View {
             }
             .buttonStyle(.plain)
 
-            // 刻字留言输入
+            // 直接刻字（在这一秒留一句）
             Button {
-                showEchoDrawer = true
+                showNoteComposer = true
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(ChatFont.font(19 * s))
@@ -578,6 +581,65 @@ struct TogetherPanelView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - 刻字
+
+    private var noteComposer: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(String(format: "刻在 %@", mmss(player.currentTime)))
+                .font(ChatFont.font(15, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+
+            TextField("这一秒你想留一句什么", text: $noteDraft, axis: .vertical)
+                .font(ChatFont.font(14))
+                .lineLimit(1...3)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(CSSThemeVariables.optionBg(scope: .chat))
+                )
+
+            HStack(spacing: 10) {
+                Button(AppLocalized("Cancel", comment: "取消")) {
+                    noteDraft = ""
+                    showNoteComposer = false
+                }
+                .font(ChatFont.font(14))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(CSSThemeVariables.optionBg(scope: .chat)))
+
+                Button(AppLocalized("Save", comment: "保存")) {
+                    commitNote()
+                }
+                .font(ChatFont.font(14, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(CSSThemeVariables.accent(scope: .chat)))
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(22)
+        .presentationDetents([.height(240)])
+        .presentationBackground(CSSThemeVariables.bg(scope: .chat))
+        .presentationDragIndicator(.visible)
+    }
+
+    private func commitNote() {
+        let text = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let ok = TogetherStore.shared.addNote(at: player.currentTime, text: text, by: .user)
+        guard ok else {
+            MinisToast.show(TogetherCopy.oneLineOnly, systemImage: "exclamationmark.circle")
+            return
+        }
+        state = TogetherStore.shared.load()
+        noteDraft = ""
+        showNoteComposer = false
     }
 
     private var playModeIcon: String {
