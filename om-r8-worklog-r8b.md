@@ -121,3 +121,13 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 - 不贴长汇报；有问题直接修，不道歉不复盘
 - 可见文案不写死人名，全走 ChatAddressing
 - 颜色零裸色值，全走主题变量
+
+### 【她实测反馈 · 2026-10-25】上传本地文件进不去
+现象原文：可以选中文件，但是进不去。其他没测，因为没音乐所以无法播放、无法进入下一步。
+影响：这是第一个卡点，挡住后面所有验证。
+排查方向（未确认）：
+- fileImporter 完成回调只 guard success，失败/空结果静默 return，没有报错提示
+- security-scoped resource 取用与 async 拷贝的时序
+- 目标目录未建/未登记 fakefs meta.db，copyItem 静默失败
+- saveLibrary 写 index.json 的路径与 library() 读取路径是否一致
+- 视频/非 mp3 走 AVAssetExportSession 失败后 fallback 是否真的成功
