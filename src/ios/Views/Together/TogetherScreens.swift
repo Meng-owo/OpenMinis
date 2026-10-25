@@ -104,7 +104,6 @@ struct TogetherTrackRow: View {
 struct TogetherLibraryView: View {
 
     @Binding var editing: TogetherPlaylist?
-    @State private var detail: TogetherPlaylist?
 
     @State private var playlists: [TogetherPlaylist] = []
     @State private var showNew = false
@@ -167,8 +166,8 @@ struct TogetherLibraryView: View {
             .padding(.bottom, 24)
         }
         .onAppear { playlists = TogetherStore.shared.livePlaylists() }
-        .navigationDestination(item: $detail) { playlist in
-            TogetherPlaylistDetail(playlistId: playlist.id)
+        .navigationDestination(for: String.self) { playlistId in
+            TogetherPlaylistDetail(playlistId: playlistId)
         }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: importer.allowedTypes,
@@ -224,7 +223,7 @@ struct TogetherLibraryView: View {
     }
 
     private func playlistCard(_ playlist: TogetherPlaylist) -> some View {
-        Button { detail = playlist } label: {
+        NavigationLink(value: playlist.id) {
             VStack(alignment: .leading, spacing: 8) {
                 RoundedRectangle(cornerRadius: 19, style: .continuous)
                     .fill(TogetherCover.fill(playlist.bg))
