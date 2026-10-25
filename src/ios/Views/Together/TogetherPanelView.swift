@@ -736,6 +736,16 @@ struct TogetherPanelView: View {
 
     private func bootstrap() {
         state = TogetherStore.shared.load()
+
+        // 面板开着就说明两边都在线，别让"在线"永远停在离开。
+        if !state.devices.user.online || !state.devices.ai.online {
+            TogetherStore.shared.mutate(by: .user, event: "presence") { s in
+                s.devices.user.online = true
+                s.devices.user.lastSeen = TogetherStore.now()
+                s.devices.ai.online = true
+            }
+            state = TogetherStore.shared.load()
+        }
         lyrics = player.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
     }
 

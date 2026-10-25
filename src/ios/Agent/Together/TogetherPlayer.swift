@@ -188,8 +188,14 @@ final class TogetherPlayer: ObservableObject {
         guard last.id != seenEventId else { return }
         seenEventId = last.id
 
-        // 只跟 AI 做的动作
-        guard last.by == "ai" else { return }
+        // 遥控器在谁手里，就听谁的。
+        // 之前只看事件是谁发的，递给我之后她那边还会被 AI 的事件拽走。
+        let controller = state.playback.by
+
+        // 递遥控器本身就是一条事件：谁接手，本机就归谁。
+        if last.type == "handoff" { return }
+
+        guard controller == "ai", last.by == "ai" else { return }
 
         switch last.type {
         case "play", "radio":

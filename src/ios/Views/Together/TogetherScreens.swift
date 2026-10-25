@@ -832,9 +832,16 @@ struct TogetherSyncView: View {
         Button {
             // 把遥控器递过去：谁在控制，翻转给另一方。
             let next: TogetherActor = state.playback.by == "ai" ? .user : .ai
-            TogetherStore.shared.mutate(by: .user, event: "handoff") { s in
+            TogetherStore.shared.mutate(
+                by: .user,
+                event: "handoff",
+                detail: TogetherEventDetail(text: next.rawValue)
+            ) { s in
                 s.playback.by = next.rawValue
                 s.playback.updatedAt = TogetherStore.now()
+                // 递过去那一方就是"在控制"，另一方的在线状态跟着真实
+                s.devices.ai.online = true
+                s.me.presence.updatedAt = TogetherStore.now()
             }
             state = TogetherStore.shared.load()
             MinisToast.show(AppLocalized("Handed over", comment: "一起听 · 递遥控器完成"))
