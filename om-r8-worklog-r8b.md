@@ -200,3 +200,7 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 - **独立装扮中心（取代长按）**：推出 `TogetherThemeCenterView`，管理 6 个槽位；砍掉隐蔽长按；后台 `together wallpaper` CLI 接口补齐。
 - **抽屉组件（`TogetherDrawers.swift`）**：历史回声墙抽屉（查看当前歌曲全部历史刻字，点击直达秒数，底部一键留言） + 播放队列抽屉（查看当前列表并随时切歌）。
 - **小惊喜（心动共振）**：顶栏微挂件触碰时，全屏扩散粉色微光，向对方传递心跳与低语。
+
+### R34c 出包成功（run 40185046034 success）
+- 修复类型推断超时与编译报错：封装 onDescChanged、trackOrder、拆解 TogetherPlaylistEditor body、补齐 TogetherCopy.save。
+- CI 全绿通过，产物 66,513,080 字节 -> `attachments/OpenMinis-现代播放器全面闭环.ipa`。
