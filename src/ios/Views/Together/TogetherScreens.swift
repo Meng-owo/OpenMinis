@@ -12,6 +12,7 @@
 
 import SwiftUI
 import UIKit
+import PhotosUI
 import UniformTypeIdentifiers
 
 // MARK: - 共用：封面
@@ -864,7 +865,7 @@ struct TogetherPlaylistEditor: View {
     @State private var desc: String = ""
     @State private var bg: String = "cover-1"
     @State private var showCoverPicker = false
-    @State private var pendingCover: [URL] = []
+    @State private var coverItem: PhotosPickerItem?
     @State private var showTagSheet = false
     @State private var confirmDelete = false
 
@@ -918,15 +919,14 @@ struct TogetherPlaylistEditor: View {
                 }
                 Button(AppLocalized("Cancel", comment: "取消"), role: .cancel) {}
             }
-            .sheet(isPresented: $showCoverPicker) {
-                DocumentCopyPicker(contentTypes: [.image], allowsMultipleSelection: false) { urls in
-                    pendingCover = urls
-                } onDone: {
-                    showCoverPicker = false
-                    if let first = pendingCover.first {
-                        _ = TogetherStore.shared.setPlaylistImage(id: playlist.id, from: first)
-                    }
-                    pendingCover = []
+            .photosPicker(isPresented: $showCoverPicker,
+                          selection: $coverItem,
+                          matching: .images)
+            .onChange(of: coverItem) { item in
+                guard let item else { return }
+                Task {
+                    await TogetherPhotoImport.toPlaylist(item, id: playlist.id)
+                    coverItem = nil
                     reload()
                 }
             }
@@ -1436,6 +1436,45 @@ struct TogetherAddSongsSheet: View {
         }
         .onAppear {
             all = TogetherStore.shared.library().tracks
+        }
+    }
+}
+
+
+// MARK: - 相册选图
+
+/// 从相册选一张，直接落到一起听的图片槽位。
+/// 以前走的是文件选择器，会跳去「最近项目/文件夹」，这里改成真正的相册。
+@MainActor
+enum TogetherPhotoImport {
+
+    static func data(_ item: PhotosPickerItem) async -> Data? {
+        try? await item.loadTransferable(type: Data.self)
+    }
+
+    static func toSlot(_ item: PhotosPickerItem, slot: String) async {
+        guard let bytes = await data(item) else { return }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("together-\(slot)-\(UUID().uuidString).jpg")
+        do {
+            try bytes.write(to: tmp)
+            _ = TogetherStore.shared.setImage(slot: slot, from: tmp)
+            try? FileManager.default.removeItem(at: tmp)
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
+        }
+    }
+
+    static func toPlaylist(_ item: PhotosPickerItem, id: String) async {
+        guard let bytes = await data(item) else { return }
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("together-playlist-\(id)-\(UUID().uuidString).jpg")
+        do {
+            try bytes.write(to: tmp)
+            _ = TogetherStore.shared.setPlaylistImage(id: id, from: tmp)
+            try? FileManager.default.removeItem(at: tmp)
+        } catch {
+            try? FileManager.default.removeItem(at: tmp)
         }
     }
 }

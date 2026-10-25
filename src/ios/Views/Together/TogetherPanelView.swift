@@ -12,6 +12,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import PhotosUI
 
 struct TogetherPanelView: View {
 
@@ -1291,7 +1292,7 @@ struct TogetherThemeCenterView: View {
 
     @State private var state = TogetherStore.shared.load()
     @State private var activeSlot: String?
-    @State private var pendingImage: [URL] = []
+    @State private var pickerItem: PhotosPickerItem?
 
     private let slots: [(id: String, title: String, subtitle: String)] = [
         (TogetherImages.wallpaperNow, TogetherCopy.nowPlayingWallpaper, "播放主界面的全屏氛围大壁纸"),
@@ -1336,17 +1337,15 @@ struct TogetherThemeCenterView: View {
                     .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
                 }
             }
-            .sheet(item: Binding<SlotItem?>(
-                get: { activeSlot.map { SlotItem(id: $0) } },
-                set: { activeSlot = $0?.id }
-            )) { item in
-                DocumentCopyPicker(contentTypes: [.image], allowsMultipleSelection: false) { urls in
-                    pendingImage = urls
-                } onDone: {
-                    if let first = pendingImage.first {
-                        _ = TogetherStore.shared.setImage(slot: item.id, from: first)
-                    }
-                    pendingImage = []
+            .photosPicker(isPresented: Binding<Bool>(
+                get: { activeSlot != nil },
+                set: { if !$0 { activeSlot = nil } }
+            ), selection: $pickerItem, matching: .images)
+            .onChange(of: pickerItem) { item in
+                guard let item, let slot = activeSlot else { return }
+                Task {
+                    await TogetherPhotoImport.toSlot(item, slot: slot)
+                    pickerItem = nil
                     activeSlot = nil
                     state = TogetherStore.shared.load()
                 }
