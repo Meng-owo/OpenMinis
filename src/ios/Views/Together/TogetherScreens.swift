@@ -104,6 +104,7 @@ struct TogetherTrackRow: View {
 struct TogetherLibraryView: View {
 
     @Binding var editing: TogetherPlaylist?
+    @State private var detail: TogetherPlaylist?
 
     @State private var playlists: [TogetherPlaylist] = []
     @State private var showNew = false
@@ -166,6 +167,9 @@ struct TogetherLibraryView: View {
             .padding(.bottom, 24)
         }
         .onAppear { playlists = TogetherStore.shared.livePlaylists() }
+        .navigationDestination(item: $detail) { playlist in
+            TogetherPlaylistDetail(playlistId: playlist.id)
+        }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: importer.allowedTypes,
                       allowsMultipleSelection: true) { result in
@@ -220,7 +224,7 @@ struct TogetherLibraryView: View {
     }
 
     private func playlistCard(_ playlist: TogetherPlaylist) -> some View {
-        Button { editing = playlist } label: {
+        Button { detail = playlist } label: {
             VStack(alignment: .leading, spacing: 8) {
                 RoundedRectangle(cornerRadius: 19, style: .continuous)
                     .fill(TogetherCover.fill(playlist.bg))
@@ -816,6 +820,243 @@ struct TogetherPlaylistEditor: View {
         }
         if bg != (playlist.bg ?? "cover-1") {
             TogetherStore.shared.setPlaylistBackground(id: playlist.id, bg: bg)
+        }
+    }
+}
+// MARK: - 歌单详情
+//
+// 跟编辑面板分开：详情是"看和听"，编辑是"改"。
+// 一条歌单点进来，第一件事是能播，不是能改。
+
+struct TogetherPlaylistDetail: View {
+
+    let playlistId: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var playlist: TogetherPlaylist?
+    @State private var tracks: [TogetherTrack] = []
+    @State private var showEditor = false
+    @State private var showAddSongs = false
+    @State private var state = TogetherState()
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                header
+                    .padding(.top, 8)
+
+                actionRow
+                    .padding(.horizontal, 22)
+                    .padding(.top, 18)
+
+                VStack(spacing: 0) {
+                    ForEach(tracks) { track in
+                        TogetherTrackRow(
+                            track: track,
+                            isPlaying: TogetherPlayer.shared.track?.id == track.id,
+                            noteCount: noteCount(for: track.id),
+                            trailing: AnyView(
+                                Button {
+                                    TogetherStore.shared.toggleLike(trackId: track.id, by: .user)
+                                    state = TogetherStore.shared.load()
+                                } label: {
+                                    Image(systemName: state.liked.contains(track.id) ? "heart.fill" : "heart")
+                                        .font(ChatFont.font(14))
+                                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                                }
+                                .buttonStyle(.plain)
+                            ),
+                            onTap: {
+                                TogetherPlayer.shared.load(track)
+                                TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
+                            }
+                        )
+                        Divider()
+                            .overlay(CSSThemeVariables.divider(scope: .chat))
+                            .padding(.leading, 52)
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+
+                if tracks.isEmpty {
+                    VStack(spacing: 10) {
+                        Text(TogetherCopy.noSongsYet)
+                            .font(ChatFont.font(13))
+                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        Button(TogetherCopy.addSongs) { showAddSongs = true }
+                            .font(ChatFont.font(13, weight: .medium))
+                            .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                    }
+                    .padding(.top, 40)
+                }
+            }
+            .padding(.bottom, 30)
+        }
+        .background(CSSThemeVariables.bg(scope: .chat).ignoresSafeArea())
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(TogetherCopy.edit) { showEditor = true }
+                    .font(ChatFont.font(14, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+            }
+        }
+        .onAppear(perform: reload)
+        .sheet(isPresented: $showEditor, onDismiss: reload) {
+            if let playlist {
+                TogetherPlaylistEditor(playlist: playlist)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(CSSThemeVariables.bg(scope: .chat))
+            }
+        }
+        .sheet(isPresented: $showAddSongs, onDismiss: reload) {
+            TogetherAddSongsSheet(playlistId: playlistId)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(CSSThemeVariables.bg(scope: .chat))
+        }
+    }
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(TogetherCover.fill(playlist?.bg))
+                .frame(width: 118, height: 118)
+                .shadow(color: TogetherSkin.shadowDeep, radius: 18, x: 0, y: 10)
+
+            Text(playlist?.name ?? "")
+                .font(ChatFont.font(22, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 7) {
+                HStack(spacing: -8) {
+                    PersonaAvatarView(iconRef: TogetherIdentity.aiIcon, size: 30)
+                        .frame(width: 30, height: 30)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat), lineWidth: 2))
+                        .zIndex(1)
+                    PersonaAvatarView(iconRef: TogetherIdentity.userIcon, size: 30)
+                        .frame(width: 30, height: 30)
+                        .clipShape(Circle())
+                        .overlay(Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat), lineWidth: 2))
+                }
+                Text("\(ChatAddressing.assistant()) & \(ChatAddressing.user()) \(TogetherCopy.editedTogether)")
+                    .font(ChatFont.font(10.5))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+            }
+        }
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 12) {
+            Button {
+                guard let first = tracks.first else { return }
+                TogetherPlayer.shared.load(first)
+                TogetherStore.shared.play(trackId: first.id, at: 0, by: .user)
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "play.fill")
+                    Text(TogetherCopy.playAll)
+                }
+                .font(ChatFont.font(13, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(CSSThemeVariables.accent(scope: .chat)))
+            }
+            .buttonStyle(.plain)
+            .disabled(tracks.isEmpty)
+
+            Button {
+                guard let pick = tracks.randomElement() else { return }
+                TogetherPlayer.shared.load(pick)
+                TogetherStore.shared.play(trackId: pick.id, at: 0, by: .user)
+            } label: {
+                Image(systemName: "shuffle")
+                    .font(ChatFont.font(14, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(CSSThemeVariables.optionBg(scope: .chat)))
+            }
+            .buttonStyle(.plain)
+
+            Button(TogetherCopy.addSongs) { showAddSongs = true }
+                .font(ChatFont.font(12.5, weight: .medium))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .overlay(Capsule().strokeBorder(CSSThemeVariables.optionBorder(scope: .chat), lineWidth: 0.8))
+
+            Spacer()
+        }
+    }
+
+    private func noteCount(for trackId: String) -> Int {
+        state.notes.filter { $0.trackId == trackId }.count
+    }
+
+    private func reload() {
+        state = TogetherStore.shared.load()
+        playlist = TogetherStore.shared.livePlaylists().first { $0.id == playlistId }
+        let lib = TogetherStore.shared.library()
+        tracks = (playlist?.tracks ?? []).compactMap { lib.track(id: $0) }
+    }
+}
+
+// MARK: - 加歌
+
+struct TogetherAddSongsSheet: View {
+
+    let playlistId: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var all: [TogetherTrack] = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(TogetherCopy.addSongs)
+                .font(ChatFont.font(16, weight: .semibold))
+                .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                .padding(.horizontal, 22)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(all) { track in
+                        Button {
+                            TogetherStore.shared.addTrack(track.id, to: playlistId)
+                        } label: {
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(TogetherCover.fill(track.cover))
+                                    .frame(width: 36, height: 36)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(track.title)
+                                        .font(ChatFont.font(13.5))
+                                        .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                                    Text(track.artist)
+                                        .font(ChatFont.font(11))
+                                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                                }
+                                Spacer()
+                                Image(systemName: "plus.circle")
+                                    .font(ChatFont.font(16))
+                                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                            }
+                            .padding(.horizontal, 22)
+                            .padding(.vertical, 9)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            all = TogetherStore.shared.library().tracks
         }
     }
 }

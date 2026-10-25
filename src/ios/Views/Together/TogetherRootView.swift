@@ -57,7 +57,7 @@ struct TogetherRootView: View {
                 case .now:
                     TogetherPanelView()
                 case .library:
-                    TogetherLibraryView(editing: $showPlaylistEditor)
+                    NavigationStack { TogetherLibraryView(editing: $showPlaylistEditor) }
                 case .sync:
                     TogetherSyncView()
                 case .liked:
