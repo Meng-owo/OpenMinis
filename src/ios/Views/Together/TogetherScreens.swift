@@ -429,11 +429,34 @@ struct TogetherAllSongsView: View {
                             track: track,
                             isPlaying: TogetherPlayer.shared.track?.id == track.id,
                             noteCount: 0,
+                            trailing: AnyView(
+                                Menu {
+                                    Button(role: .destructive) {
+                                        TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                        reload()
+                                    } label: {
+                                        Label(TogetherCopy.deletePermanently, systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis")
+                                        .font(ChatFont.font(14))
+                                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                                        .frame(width: 24, height: 24)
+                                }
+                            ),
                             onTap: {
                                 TogetherPlayer.shared.load(track)
                                 TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
                             }
                         )
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                reload()
+                            } label: {
+                                Label(TogetherCopy.deletePermanently, systemImage: "trash")
+                            }
+                        }
                         Divider()
                             .overlay(CSSThemeVariables.divider(scope: .chat))
                             .padding(.leading, 52)
@@ -453,7 +476,11 @@ struct TogetherAllSongsView: View {
             }
             .padding(.bottom, 24)
         }
-        .onAppear { tracks = TogetherStore.shared.library().tracks }
+        .onAppear { reload() }
+    }
+
+    private func reload() {
+        tracks = TogetherStore.shared.library().tracks
     }
 }
 
