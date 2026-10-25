@@ -192,6 +192,11 @@ struct AIChatView: View {
     /// composer has nothing to scroll.
     @State private var inputAtScrollBottom: Bool = true
     @State private var inputBarHeight: CGFloat = 0
+
+    /// 一起听微控条占的高度：38 条 + 2 间距。
+    private var togetherBarInset: CGFloat {
+        (togetherPlayer.isActive && !showTogether) ? 42 : 0
+    }
     @State private var inputBarHeightDebounce: Task<Void, Never>?
     /// [T-inputbar-stretch] Delay before the plus drawer opens after a keyboard
     /// dismissal. Long enough for the keyboard's own animation to finish
@@ -615,9 +620,17 @@ struct AIChatView: View {
                                     }
                                 }
                         }
-                        inputBar
+                        // 一起听微控条：跟输入栏同一个 VStack，
+                        // 谁也别想让它跟着气泡飘走。
+                        VStack(spacing: 2) {
+                            if togetherPlayer.isActive && !showTogether {
+                                TogetherMiniBar(onOpen: { showTogether = true })
+                                    .transition(.opacity)
+                            }
+                            inputBar
+                        }
                         inputPopupOverlay
-                            .padding(.bottom, inputBarHeight)
+                            .padding(.bottom, inputBarHeight + togetherBarInset)
                     }
                 }
                 .overlay {
@@ -1203,15 +1216,7 @@ struct AIChatView: View {
         .fullScreenCover(isPresented: $showTogether) {
             TogetherRootView()
         }
-        // [R24] 叉掉面板不等于关掉：播放器还活着就浮出小卡，音乐继续。
-        // [R34] 浮球改成输入栏上方的微控条：贴着输入栏，跟着它的高度走。
-        .overlay(alignment: .bottom) {
-            if togetherPlayer.isActive && !showTogether {
-                TogetherMiniBar(onOpen: { showTogether = true })
-                    .padding(.bottom, inputBarHeight)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-        }
+
         .fullScreenCover(isPresented: $showTerminal) {
             terminalInitCommand = nil
         } content: {

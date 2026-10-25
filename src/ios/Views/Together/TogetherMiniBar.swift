@@ -112,13 +112,13 @@ struct TogetherMiniBar: View {
     private var lyricBox: some View {
         Button(action: onOpen) {
             HStack(spacing: 6) {
-                Text(lineText)
-                    .font(ChatFont.font(11.5))
-                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .id(lineText)
-                    .transition(.opacity)
+                MarqueeText(
+                    text: lineText,
+                    font: ChatFont.font(11.5),
+                    color: CSSThemeVariables.textMain(scope: .chat),
+                    speed: 26
+                )
+                .frame(height: 16)
 
                 if !tagText.isEmpty {
                     Text(tagText)
@@ -228,5 +228,56 @@ struct TogetherMiniBar: View {
         player.load(next)
         TogetherStore.shared.play(trackId: next.id, at: 0, by: .user)
         reload()
+    }
+}
+
+
+// MARK: - 走马灯
+
+/// 一行歌词，太长就自己走；换到下一句就从头再走。
+struct MarqueeText: View {
+
+    let text: String
+    let font: Font
+    let color: Color
+    var speed: CGFloat = 26
+
+    @State private var textWidth: CGFloat = 0
+    @State private var animate = false
+
+    var body: some View {
+        GeometryReader { geo in
+            let overflow = max(0, textWidth - geo.size.width + 16)
+
+            Text(text)
+                .font(font)
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .background(
+                    GeometryReader { inner in
+                        Color.clear.onAppear { textWidth = inner.size.width }
+                    }
+                )
+                .offset(x: animate ? -overflow : 0)
+                .animation(
+                    overflow > 1
+                        ? .linear(duration: Double(overflow / max(speed, 1))).repeatForever(autoreverses: false)
+                        : nil,
+                    value: animate
+                )
+                .frame(width: geo.size.width, alignment: .leading)
+                .clipped()
+                .onChange(of: text) { _ in restart() }
+                .onChange(of: textWidth) { _ in restart() }
+                .onAppear { restart() }
+        }
+    }
+
+    private func restart() {
+        animate = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            animate = true
+        }
     }
 }
