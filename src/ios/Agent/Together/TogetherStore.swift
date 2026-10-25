@@ -58,6 +58,8 @@ final class TogetherStore {
 
     /// 用哪个目录、为什么。面板空状态会把这一行显示出来，路径错了要一眼看得见。
     private(set) var rootDecision: String = "未解析"
+    /// 是否真的落在 shell 能看到的共享目录。写盘要按这个决定是否登记 fakefs。
+    private(set) var isSharedRoot = false
 
     /// 共享目录优先，不可写才降级到沙盒。
     ///
@@ -72,13 +74,15 @@ final class TogetherStore {
         if (try? Data("ok".utf8).write(to: probe)) != nil {
             try? fm.removeItem(at: probe)
             rootDecision = "shared /var/minis/shared/together"
+            isSharedRoot = true
             return shared
         }
 
         let local = URL(fileURLWithPath: FakefsBridge.documentsPath)
             .appendingPathComponent("together", isDirectory: true)
         try? fm.createDirectory(at: local, withIntermediateDirectories: true)
-        rootDecision = "降级沙盒 Documents/together"
+        rootDecision = "fallback Documents/together"
+        isSharedRoot = false
         togetherLogger.error("[Together] 共享目录写不进，降级：\(shared.path)")
         return local
     }()
@@ -151,7 +155,7 @@ final class TogetherStore {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
             guard let data = try? encoder.encode(library) else { return false }
-            if rootDecision.hasPrefix("shared") {
+            if isSharedRoot {
                 let linux = "/var/minis/shared/together/music/index.json"
                 if FakefsBridge.write(data, toLinuxPath: linux) { return true }
             }
@@ -232,7 +236,7 @@ final class TogetherStore {
         }
         // 共享目录要往 fakefs 的 meta.db 登记，iSH 那边才看得见。
         // 降级到沙盒的时候不必登记（Linux 本来也看不到）。
-        if rootDecision.hasPrefix("共享") {
+        if isSharedRoot {
             let linux = "/var/minis/shared/together/\(stateURL.lastPathComponent)"
             if FakefsBridge.write(data, toLinuxPath: linux) { return true }
             togetherLogger.error("[Together] fakefs 写入失败，退回直接写")
