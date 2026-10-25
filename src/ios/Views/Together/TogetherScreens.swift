@@ -875,7 +875,7 @@ struct TogetherPlaylistEditor: View {
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(TogetherCopy.save) {
+                    Button(AppLocalized("Save", comment: "保存")) {
                         save()
                         dismiss()
                     }

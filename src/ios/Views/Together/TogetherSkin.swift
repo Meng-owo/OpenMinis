@@ -163,4 +163,5 @@ enum TogetherCopy {
     static var sweetWallpaper: String { AppLocalized("Xiaomeng Secret Wallpaper", comment: "一起听 · 小梦的私藏壁纸") }
     static var queueTitle: String { AppLocalized("Playing Queue", comment: "一起听 · 播放队列") }
     static var historyEchoes: String { AppLocalized("Echo Wall", comment: "一起听 · 历史回声墙") }
+    static var save: String { AppLocalized("Save", comment: "一起听 · 保存") }
 }
