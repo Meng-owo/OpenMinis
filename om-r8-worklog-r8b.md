@@ -186,3 +186,7 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 ### 待做
 - 输入栏：话筒并进发送键（无文字=语音，有文字=发送）。
 - 输入栏外观对齐 index.html（可选，动 ChatInputBar 风险高，等一次可编译验证再做）。
+
+### R34b 出包（run 40170773892 success）
+- 先失败一次：`TogetherPanelView.swift:634 cannot find 'shuffle'` —— step() 里残留旧 @State，改 `state.playback.shuffle`。
+- 403b834 重跑全绿，产物 66,460,185 → `attachments/OpenMinis-交互批次.ipa`
