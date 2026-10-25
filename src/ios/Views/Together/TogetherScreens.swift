@@ -410,6 +410,15 @@ struct TogetherAllSongsView: View {
     static let routeID = "all-songs"
 
     @State private var tracks: [TogetherTrack] = []
+    @State private var searchText = ""
+
+    private var filtered: [TogetherTrack] {
+        guard !searchText.isEmpty else { return tracks }
+        return tracks.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.artist.localizedCaseInsensitiveContains(searchText)
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -424,8 +433,29 @@ struct TogetherAllSongsView: View {
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .padding(.top, 6)
 
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(ChatFont.font(13))
+                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    TextField(TogetherCopy.searchSongOrArtist, text: $searchText)
+                        .font(ChatFont.font(13))
+                        .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(ChatFont.font(13))
+                                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                        }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(CSSThemeVariables.optionBg(scope: .chat)))
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
+
                 VStack(spacing: 0) {
-                    ForEach(tracks) { track in
+                    ForEach(filtered) { track in
                         TogetherTrackRow(
                             track: track,
                             isPlaying: TogetherPlayer.shared.track?.id == track.id,
@@ -433,7 +463,7 @@ struct TogetherAllSongsView: View {
                             trailing: AnyView(
                                 Menu {
                                     Button(role: .destructive) {
-                                        TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                        deleteTrack(track)
                                         reload()
                                     } label: {
                                         Label(TogetherCopy.deletePermanently, systemImage: "trash")
@@ -452,7 +482,7 @@ struct TogetherAllSongsView: View {
                         )
                         .contextMenu {
                             Button(role: .destructive) {
-                                TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                deleteTrack(track)
                                 reload()
                             } label: {
                                 Label(TogetherCopy.deletePermanently, systemImage: "trash")
@@ -482,6 +512,14 @@ struct TogetherAllSongsView: View {
 
     private func reload() {
         tracks = TogetherStore.shared.library().tracks
+    }
+
+    private func deleteTrack(_ track: TogetherTrack) {
+        if TogetherPlayer.shared.track?.id == track.id {
+            TogetherPlayer.shared.stop()
+        }
+        TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+        reload()
     }
 }
 
@@ -1128,6 +1166,14 @@ struct TogetherPlaylistEditor: View {
         }
     }
 
+    private func deleteTrack(_ track: TogetherTrack) {
+        if TogetherPlayer.shared.track?.id == track.id {
+            TogetherPlayer.shared.stop()
+        }
+        TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+        reload()
+    }
+
     private func reload() {
         let live = TogetherStore.shared.livePlaylists().first { $0.id == playlist.id } ?? playlist
         name = live.name
@@ -1221,7 +1267,7 @@ struct TogetherPlaylistDetail: View {
                                             reload()
                                         }
                                         Button(TogetherCopy.deletePermanently, role: .destructive) {
-                                            TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                            deleteTrack(track)
                                             reload()
                                         }
                                     } label: {
@@ -1251,7 +1297,7 @@ struct TogetherPlaylistDetail: View {
                                 Label(TogetherCopy.removeFromPlaylist, systemImage: "minus.circle")
                             }
                             Button(role: .destructive) {
-                                TogetherStore.shared.deleteTrackPermanently(track.id, by: .user)
+                                deleteTrack(track)
                                 reload()
                             } label: {
                                 Label(TogetherCopy.deletePermanently, systemImage: "trash")
