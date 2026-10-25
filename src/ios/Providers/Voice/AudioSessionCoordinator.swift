@@ -47,6 +47,11 @@ final class AudioSessionCoordinator {
     /// its System AVSpeechSynthesizer in response (cloud TTS is stopped directly).
     static let replyTTSPreemptedNotification = Notification.Name("AudioSession.replyTTSPreempted")
 
+    /// [R35] 语音播报开始/结束。一起听的黑胶靠这两个通知让路：
+    /// 语音一响，音乐暂停；语音说完，音乐接着放。
+    static let replyTTSStartedNotification = Notification.Name("AudioSession.replyTTSStarted")
+    static let replyTTSEndedNotification = Notification.Name("AudioSession.replyTTSEnded")
+
     /// Declare that `intent` now needs the audio session. Idempotent.
     ///
     /// The profile is applied ASYNCHRONOUSLY (see `apply`), so on return the
@@ -108,6 +113,9 @@ final class AudioSessionCoordinator {
             VoiceOutputPlayer.shared.stopAll()
             NotificationCenter.default.post(name: Self.replyTTSPreemptedNotification, object: nil)
         }
+        if intent == .replyTTS {
+            NotificationCenter.default.post(name: Self.replyTTSStartedNotification, object: nil)
+        }
         if highest != was || !sessionActive {
             apply(reason: "begin(\(intent))")
         }
@@ -117,6 +125,9 @@ final class AudioSessionCoordinator {
     func end(_ intent: Intent) {
         guard active.contains(intent) else { return }
         active.remove(intent)
+        if intent == .replyTTS, !active.contains(.replyTTS) {
+            NotificationCenter.default.post(name: Self.replyTTSEndedNotification, object: nil)
+        }
         apply(reason: "end(\(intent))")
     }
 

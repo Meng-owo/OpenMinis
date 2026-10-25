@@ -42,6 +42,9 @@ final class TogetherPlayer: ObservableObject {
     /// 不能用 revision——播放进度回写也会涨 revision，会把同一条 play 反复触发。
     private var seenEventId = ""
     private var followTimer: Timer?
+    /// 语音播报让过路：记下"是我暂停的"，说完才敢自动接着放。
+    private var duckedForVoice = false
+    private var voiceObservers: [NSObjectProtocol] = []
     private var didStartFollow = false
     private let store = TogetherStore.shared
     private let logger = AppLogger(category: "TogetherPlayer")
@@ -168,6 +171,7 @@ final class TogetherPlayer: ObservableObject {
     // 只跟三个动作：换歌 / 播停 / 拖动。这三个的 by == "ai" 才动。
 
     func startFollowing() {
+        observeVoice()
         guard !didStartFollow else { return }
         didStartFollow = true
         seenEventId = store.load().events.last?.id ?? ""
@@ -248,6 +252,37 @@ final class TogetherPlayer: ObservableObject {
         }
     }
 
+    // MARK: 语音让路
+    //
+    // 语音播报和音乐抢同一个 AVAudioSession：不处理就是语音一响音乐乱跳，
+    // 说完了也回不来。规矩是——语音开始我暂停，语音结束我接着放，
+    // 只在我本来是"在放"的时候才恢复，她手动停的不要自己响。
+
+    private func observeVoice() {
+        guard voiceObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        voiceObservers.append(center.addObserver(
+            forName: AudioSessionCoordinator.replyTTSStartedNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isPlaying else { return }
+                self.duckedForVoice = true
+                self.pause()
+            }
+        })
+        voiceObservers.append(center.addObserver(
+            forName: AudioSessionCoordinator.replyTTSEndedNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.duckedForVoice else { return }
+                self.duckedForVoice = false
+                self.play()
+            }
+        })
+    }
+
     private func addEndObserver() {
         guard let item = player?.currentItem else { return }
         endToken = NotificationCenter.default.addObserver(
@@ -304,6 +339,8 @@ final class TogetherPlayer: ObservableObject {
     }
 
     private func teardown() {
+        voiceObservers.forEach { NotificationCenter.default.removeObserver($0) }
+        voiceObservers.removeAll()
         if let token = endToken {
             NotificationCenter.default.removeObserver(token)
             endToken = nil
