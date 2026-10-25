@@ -152,3 +152,22 @@ Gymnopédie No.1、Frogs Legs Rag、Danny Boy。
 - **上传**：`DocumentCopyPicker.swift` 注释已写明侧载 `.fileImporter` 选文件没反应。
 
 ### 开工顺序（她批准）：批次一 = 1+2+3 地基，出包确认；再批次二 = UI(3/4/7/8)；再批次三 = 5 AI 台词本 + 补全。
+
+### R34a 地基（已出包 ce66918 / run 40164790151 success）
+1. **路径只留一套**：`TogetherStore.sharedRootURL = AIChatViewModel.minisSharedPersistentDir`
+   - 音乐 `shared/music`（= AppGroup/MinisFileProvider/shared/music，apple-player 同源）
+   - 元数据 `shared/together/{state.json,index.json,lyrics/}`
+   - 删掉 `FakefsBridge` 写入与 meta.db 登记（真 bind-mount 不需要；FakefsBridge.swift 保留未引用）
+   - `audioURL(for:)` 按 shared 根解析 `music/x.mp3`；TogetherPlayer 改用它
+2. **曲库以目录为准**：`library()` 每次扫 `shared/music`，把目录有/index 无的补进来（id = FNV-1a 稳定哈希），
+   文件被删/改名则从 index 清掉；同目录同名 `.lrc` 自动收进 `lyrics/`；播放器学到真实时长回填 index。
+3. **上传修好**：`TogetherLibraryView` 的 `.fileImporter` → `DocumentCopyPicker`（asCopy），
+   picker 先落 `pendingPicks`，sheet 收起后导入；`importOne` 落地扩展名按真实编码（mp3→.mp3，其它→.m4a 或原扩展名）。
+4. **补入口**：歌单库加「全部歌曲」入口 + `TogetherAllSongsView`，目录里的歌直接能播（原先只能从歌单/喜欢里进）。
+5. 编译闸门（Build tests compile gate）success，出包 66,412,902 → `attachments/OpenMinis-地基统一.ipa`
+
+### 发现但未修（下一批）
+- **`together` 这个 shell 命令根本不存在**：SoulStore 的 TOGETHER 说明书让 AI 用
+  `together now/play/note/lib/...`，但仓库里没有任何脚本或原生 offload 实现它
+  （grep loopline 只命中 Swift）。→ AI 现在无法真正操控一起听。
+  建议做成原生 offload（像 apple-player），直接读写 TogetherStore。
