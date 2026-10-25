@@ -843,6 +843,14 @@ struct TogetherPlaylistEditor: View {
 
     private let presetTags = ["流行", "伤感", "治愈", "浪漫", "夜晚", "车载", "电子", "轻音乐", "白噪音", "摇滚", "ACG", "纯音乐"]
 
+    private var tagsLabel: String {
+        tags.isEmpty ? TogetherCopy.noTags : tags.joined(separator: " · ")
+    }
+
+    private var tagsColor: Color {
+        tags.isEmpty ? CSSThemeVariables.textDim(scope: .chat) : CSSThemeVariables.accent(scope: .chat)
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -900,9 +908,9 @@ struct TogetherPlaylistEditor: View {
                                 showTagSheet = true
                             } label: {
                                 HStack(spacing: 6) {
-                                    Text(tags.isEmpty ? TogetherCopy.noTags : tags.joined(separator: " · "))
+                                    Text(tagsLabel)
                                         .font(ChatFont.font(13))
-                                        .foregroundStyle(tags.isEmpty ? CSSThemeVariables.textDim(scope: .chat) : CSSThemeVariables.accent(scope: .chat))
+                                        .foregroundStyle(tagsColor)
                                         .lineLimit(1)
                                     Image(systemName: "chevron.right")
                                         .font(ChatFont.font(12))

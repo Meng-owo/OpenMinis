@@ -1002,44 +1002,12 @@ struct TogetherQueueDrawerView: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(tracks) { track in
-                        let isCurrent = player.track?.id == track.id
-
-                        HStack(spacing: 12) {
-                            if isCurrent {
-                                Image(systemName: "speaker.wave.2.fill")
-                                    .font(ChatFont.font(13))
-                                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
-                                    .frame(width: 20)
-                            } else {
-                                Text(trackOrder(track))
-                                    .font(ChatFont.font(12, weight: .medium))
-                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                                    .frame(width: 20)
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
-                                    .font(ChatFont.font(13.5, weight: isCurrent ? .semibold : .regular))
-                                    .foregroundStyle(isCurrent
-                                        ? CSSThemeVariables.accent(scope: .chat)
-                                        : CSSThemeVariables.textMain(scope: .chat))
-                                    .lineLimit(1)
-
-                                Text(track.artist)
-                                    .font(ChatFont.font(10.5))
-                                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-
-                            Text(track.durationString)
-                                .font(ChatFont.font(11))
-                                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
+                    ForEach(Array(tracks.enumerated()), id: \.element.id) { idx, track in
+                        TogetherQueueRow(
+                            track: track,
+                            index: "\(idx + 1)",
+                            isCurrent: player.track?.id == track.id
+                        ) {
                             player.load(track)
                             TogetherStore.shared.play(trackId: track.id, at: 0, by: .user)
                             dismiss()
@@ -1067,12 +1035,48 @@ struct TogetherQueueDrawerView: View {
             }
         }
     }
+}
 
-    private func trackOrder(_ track: TogetherTrack) -> String {
-        if let idx = tracks.firstIndex(of: track) {
-            return "\(idx + 1)"
+private struct TogetherQueueRow: View {
+    let track: TogetherTrack
+    let index: String
+    let isCurrent: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if isCurrent {
+                Image(systemName: "speaker.wave.2.fill")
+                    .font(ChatFont.font(13))
+                    .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
+                    .frame(width: 20)
+            } else {
+                Text(index)
+                    .font(ChatFont.font(12, weight: .medium))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    .frame(width: 20)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(track.title)
+                    .font(ChatFont.font(13.5, weight: isCurrent ? .semibold : .regular))
+                    .foregroundStyle(isCurrent ? CSSThemeVariables.accent(scope: .chat) : CSSThemeVariables.textMain(scope: .chat))
+                    .lineLimit(1)
+
+                Text(track.artist)
+                    .font(ChatFont.font(10.5))
+                    .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text(track.durationString)
+                .font(ChatFont.font(11))
+                .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
         }
-        return "1"
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
     }
 }
 
