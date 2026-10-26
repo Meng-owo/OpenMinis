@@ -27,6 +27,8 @@ struct TogetherSkinValues: Codable, Equatable {
     var shadow: Double = 1.0
     /// 壁纸档位：warm / cool / rose（对应主题里三套背景）
     var wall: String = "warm"
+    /// 壁纸压色：0 = 原图直出，越大越暗。以前写死 0.82，现在可调。
+    var wallpaperShade: Double = 0.45
 
     init() {}
 
@@ -37,6 +39,7 @@ struct TogetherSkinValues: Codable, Equatable {
         cardRadius = (try? c.decodeIfPresent(Double.self, forKey: .cardRadius)) ?? 20
         shadow = (try? c.decodeIfPresent(Double.self, forKey: .shadow)) ?? 1.0
         wall = (try? c.decodeIfPresent(String.self, forKey: .wall)) ?? "warm"
+        wallpaperShade = (try? c.decodeIfPresent(Double.self, forKey: .wallpaperShade)) ?? 0.45
     }
 }
 
@@ -72,6 +75,11 @@ enum TogetherSkin {
     }
 
     static var cardRadius: CGFloat { CGFloat(values.cardRadius) }
+
+    /// 壁纸压色。收口到一处，播放页和另外四页都读它。
+    static var wallpaperShade: Double {
+        min(0.9, max(0, values.wallpaperShade))
+    }
 }
 
 // MARK: - 身份

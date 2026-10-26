@@ -195,8 +195,10 @@ struct AIChatView: View {
 
     /// 一起听微控条占的高度：38 条 + 2 间距。
     private var showTogetherBar: Bool {
-        // 只在真的在放的时候出现；暂停/没播就收回去，别挡选项。
-        togetherPlayer.isActive && togetherPlayer.isPlaying && !showTogether
+        // 以前还要求 isPlaying：一暂停、或一首放完，整条直接消失，而全 App 没有第二个
+        // 常驻入口（只有聊天菜单里那个），用户暂停一次就找不到回播放页的路。
+        // 改成"有歌就留着"——暂停也该能点回去。
+        togetherPlayer.track != nil && !showTogether
     }
 
     private var togetherBarInset: CGFloat {

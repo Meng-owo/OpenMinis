@@ -20,20 +20,41 @@ import UniformTypeIdentifiers
 // 主题中心每个壁纸槽位都得有页面真的去读，否则"换完没反应"。
 // 这里统一一层：主题底色 + 选中的图（压暗到和播放页一致），
 // 用 .background 挂上去，不参与布局，不改内容尺寸。
+
+/// 壁纸压色。以前 0.82 写死在两处，两处还不一样（播放页一处、这个文件一处）。
+/// 现在收成一个口子：`together/skin.json` 里的 `wallpaperShade`，0 = 原图直出，越大越暗。
+@MainActor
+enum TogetherWallpaperTone {
+    /// 浅色照片上直接压白字看不清，所以默认留一点（0.45，见 TogetherSkinValues）。
+    /// 要"换上去什么样就是什么样"，把 skin.json 里的 wallpaperShade 调成 0。
+    static func opacity(for slot: String) -> Double {
+        _ = slot   // 预留:以后可以按槽位给不同压色
+        let v = TogetherSkin.wallpaperShade
+        return min(0.9, max(0, v))
+    }
+}
+
 struct TogetherWallpaperLayer: View {
     let slot: String
 
     var body: some View {
-        ZStack {
-            CSSThemeVariables.bg(scope: .chat)
-            // 私藏壁纸是兜底:某一页没单独挑图时,用这张。以前它只写不读,等于死槽。
-            if let url = TogetherImages.url(for: slot) ?? TogetherImages.url(for: TogetherImages.wallpaperSweet),
-               let img = TogetherImages.cachedImage(for: url) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(0.82))
-                    .clipped()
+        // GeometryReader 只吃父给的尺寸、绝不反过来撑大父视图——这是这层不参与布局的关键。
+        // 以前是裸 ZStack 套 scaledToFill，图比屏幕宽时整块会变大，
+        // 塞进 body 的 ZStack 当兄弟就会把内容往右下挤（换壁纸后整页错位就是这个）。
+        GeometryReader { geo in
+            ZStack {
+                CSSThemeVariables.bg(scope: .chat)
+                // 私藏壁纸是兜底:某一页没单独挑图时,用这张。以前它只写不读,等于死槽。
+                if let url = TogetherImages.url(for: slot) ?? TogetherImages.url(for: TogetherImages.wallpaperSweet),
+                   let img = TogetherImages.cachedImage(for: url) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()
+                    CSSThemeVariables.bg(scope: .chat)
+                        .opacity(TogetherWallpaperTone.opacity(for: slot))
+                }
             }
         }
         .ignoresSafeArea()

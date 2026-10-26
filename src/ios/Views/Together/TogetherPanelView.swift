@@ -139,17 +139,30 @@ struct TogetherPanelView: View {
 
     // MARK: - 背景
 
-    private var pageBackground: some View {
+    // 壁纸永远只当背景铺，绝不当 ZStack 的兄弟视图。
+    //
+    // 以前这里是 `ZStack { bg; Image.scaledToFill() }`，被塞进 body 的 ZStack 当兄弟。
+    // scaledToFill 会把这个 ZStack 撑到「至少铺满且保持比例」——图比例和屏幕不一致时
+    // 它比屏幕大，GeometryReader 又按左上角摆放，超出的部分全往右下挤，于是整页元素
+    // 右移、压到唱片上，四功能行被顶出屏幕。换一张别的比例的图就必现。
+    //
+    // 改成 .background：只按宿主尺寸铺，不参与布局，图多大都撑不动任何子视图。
+    // 标 @MainActor：压色走 TogetherSkin（@MainActor），从非隔离的 computed property 里调会编译不过。
+    @MainActor private var pageBackground: some View {
         ZStack {
             CSSThemeVariables.bg(scope: .chat)
             // 用缓存版:滚动时每帧重新解码整张图会掉帧,缓存也保证换图后立刻生效。
             if let url = TogetherImages.url(for: TogetherImages.wallpaperNow),
                let img = TogetherImages.cachedImage(for: url) {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFill()
-                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(0.82))
+                Color.clear
+                    .overlay(
+                        Image(uiImage: img)
+                            .resizable()
+                            .scaledToFill()
+                    )
+                    // 先裁掉溢出的那部分，再压暗。顺序反了的话压暗层会被裁掉。
                     .clipped()
+                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(TogetherWallpaperTone.opacity(for: TogetherImages.wallpaperNow)))
             }
         }
         .ignoresSafeArea()
@@ -159,16 +172,10 @@ struct TogetherPanelView: View {
 
     private func topBar(_ s: CGFloat) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "chevron.down")
-                    .font(ChatFont.font(16, weight: .semibold))
-                    .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(CSSThemeVariables.optionBg(scope: .chat).opacity(0.8)))
-            }
-            .buttonStyle(.plain)
+            // 关闭键只由容器 TogetherRootView 那一颗负责（四个 tab 都要有关闭键）。
+            // 这里原来又挂了一颗 chevron.down：同样 topLeading、36pt vs 容器 34pt，
+            // 起算只差 2pt，两圈叠在一起、点击也互抢。删页内这颗，留容器那颗。
+            Color.clear.frame(width: 36, height: 36)
 
             Spacer()
 
