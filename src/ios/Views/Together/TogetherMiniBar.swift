@@ -143,21 +143,21 @@ struct TogetherMiniBar: View {
 
     private var controls: some View {
         HStack(spacing: 10) {
-            Button { step(-1) } label: {
+            Button { player.previousTrack(); reload() } label: {
                 Image(systemName: "backward.fill")
                     .font(ChatFont.font(11, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
             }
             .buttonStyle(.plain)
 
-            Button { player.toggle() } label: {
+            Button { player.userToggle(); reload() } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(ChatFont.font(12, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
             }
             .buttonStyle(.plain)
 
-            Button { step(1) } label: {
+            Button { player.nextTrack(); reload() } label: {
                 Image(systemName: "forward.fill")
                     .font(ChatFont.font(11, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
@@ -209,27 +209,6 @@ struct TogetherMiniBar: View {
     private func reload() {
         state = TogetherStore.shared.load()
         lyrics = player.track.flatMap { TogetherStore.shared.lyrics(for: $0) }
-    }
-
-    private func step(_ delta: Int) {
-        let lib = TogetherStore.shared.library()
-        guard !lib.tracks.isEmpty else { return }
-
-        let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
-        let queue = ids.compactMap { lib.track(id: $0) }
-        guard !queue.isEmpty else { return }
-
-        var next: TogetherTrack
-        if state.playback.shuffle {
-            next = queue.filter { $0.id != player.track?.id }.randomElement() ?? queue[0]
-        } else {
-            let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
-            next = queue[(idx + delta + queue.count) % queue.count]
-        }
-
-        player.load(next)
-        TogetherStore.shared.play(trackId: next.id, at: 0, by: .user)
-        reload()
     }
 }
 

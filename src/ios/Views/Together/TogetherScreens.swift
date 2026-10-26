@@ -193,6 +193,8 @@ struct TogetherLibraryView: View {
     /// 正在换封面的那个歌单
     @State private var coverTarget: TogetherPlaylist?
     private let importer = LocalFileImporter()
+    /// 一起听的状态在别的进程也会变（AI 那边改歌单），列表得自己刷，别等重进 App。
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -287,6 +289,10 @@ struct TogetherLibraryView: View {
             .padding(.bottom, 24)
         }
         .onAppear { playlists = TogetherStore.shared.livePlaylists() }
+        .onReceive(ticker) { _ in
+            let fresh = TogetherStore.shared.livePlaylists()
+            if fresh != playlists { playlists = fresh }
+        }
         .navigationDestination(for: String.self) { id in
             if id == TogetherAllSongsView.routeID {
                 TogetherAllSongsView()
@@ -464,6 +470,9 @@ struct TogetherAllSongsView: View {
 
     @State private var tracks: [TogetherTrack] = []
     @State private var searchText = ""
+    @State private var pendingDelete: TogetherTrack?
+    @State private var showDeleteConfirm = false
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     private var filtered: [TogetherTrack] {
         guard !searchText.isEmpty else { return tracks }
@@ -567,14 +576,35 @@ struct TogetherAllSongsView: View {
             .padding(.bottom, 24)
         }
         .onAppear { reload() }
+        .onReceive(ticker) { _ in reload() }
+        .alert(TogetherCopy.deletePermanently, isPresented: $showDeleteConfirm, presenting: pendingDelete) { track in
+            Button(AppLocalized("Delete", comment: "删除"), role: .destructive) {
+                performDelete(track)
+            }
+            Button(AppLocalized("Cancel", comment: "取消"), role: .cancel) {}
+        } message: { _ in
+            Text(TogetherCopy.deleteTrackMessage)
+        }
         .togetherWallpaper(TogetherImages.wallpaperLibrary)
     }
 
     private func reload() {
-        tracks = TogetherStore.shared.library().tracks
+        // 确认框还挂着时先别重排列表，否则待删的那首歌可能已经从数组里消失，确认就落空了。
+        guard !showDeleteConfirm else { return }
+        let fresh = TogetherStore.shared.library().tracks
+        if fresh != tracks { tracks = fresh }
     }
 
     private func deleteTrack(_ track: TogetherTrack) {
+        // 删音频文件不可逆，先问一句，确认后才真删。
+        pendingDelete = track
+        showDeleteConfirm = true
+    }
+
+    private func performDelete(_ track: TogetherTrack) {
+        // 先把确认态收掉：reload 在确认态下会故意不重排列表。
+        showDeleteConfirm = false
+        pendingDelete = nil
         if TogetherPlayer.shared.track?.id == track.id {
             TogetherPlayer.shared.stop()
         }
@@ -589,6 +619,7 @@ struct TogetherLikedView: View {
 
     @State private var liked: [TogetherTrack] = []
     @State private var state = TogetherState()
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -684,6 +715,7 @@ struct TogetherLikedView: View {
             .padding(.bottom, 24)
         }
         .onAppear(perform: reload)
+        .onReceive(ticker) { _ in reload() }
         .togetherWallpaper(TogetherImages.wallpaperLiked)
     }
 
@@ -700,9 +732,11 @@ struct TogetherLikedView: View {
     }
 
     private func reload() {
-        state = TogetherStore.shared.load()
+        let fresh = TogetherStore.shared.load()
+        if fresh.revision != state.revision { state = fresh }
         let lib = TogetherStore.shared.library()
-        liked = state.liked.compactMap { id in lib.track(id: id) }
+        let freshLiked = state.liked.compactMap { id in lib.track(id: id) }
+        if freshLiked != liked { liked = freshLiked }
     }
 }
 
@@ -841,7 +875,7 @@ struct TogetherSyncView: View {
 
             Spacer(minLength: 0)
 
-            Button { TogetherPlayer.shared.toggle() } label: {
+            Button { TogetherPlayer.shared.userToggle(); state = TogetherStore.shared.load() } label: {
                 Image(systemName: TogetherPlayer.shared.isPlaying ? "pause.fill" : "play.fill")
                     .font(ChatFont.font(14, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.accentFg(scope: .chat))
@@ -976,6 +1010,10 @@ struct TogetherPlaylistEditor: View {
     @State private var coverItem: PhotosPickerItem?
     @State private var showTagSheet = false
     @State private var confirmDelete = false
+    @State private var pendingDelete: TogetherTrack?
+    @State private var showDeleteConfirm = false
+    /// 打开时的背景值：保存时和它比，改过才写盘，别每次都多发一条 playlist.bg。
+    @State private var originalBg: String = "cover-1"
 
     /// 预设标签存"键",不存译文:译文随语言变,存进歌单后一切语言就对不上。
     /// 旧数据存的是译文,displayTag 认不出来就原样显示,不丢。
@@ -1065,6 +1103,14 @@ struct TogetherPlaylistEditor: View {
                 tagSelectionSheet
                     .presentationDetents([.height(300)])
                     .presentationBackground(CSSThemeVariables.bg(scope: .chat))
+            }
+            .alert(TogetherCopy.deletePermanently, isPresented: $showDeleteConfirm, presenting: pendingDelete) { track in
+                Button(AppLocalized("Delete", comment: "删除"), role: .destructive) {
+                    performDelete(track)
+                }
+                Button(AppLocalized("Cancel", comment: "取消"), role: .cancel) {}
+            } message: { _ in
+                Text(TogetherCopy.deleteTrackMessage)
             }
         }
     }
@@ -1253,6 +1299,15 @@ struct TogetherPlaylistEditor: View {
     }
 
     private func deleteTrack(_ track: TogetherTrack) {
+        // 删音频文件不可逆，先问一句，确认后才真删。
+        pendingDelete = track
+        showDeleteConfirm = true
+    }
+
+    private func performDelete(_ track: TogetherTrack) {
+        // 先把确认态收掉：reload 在确认态下会故意不重排列表。
+        showDeleteConfirm = false
+        pendingDelete = nil
         if TogetherPlayer.shared.track?.id == track.id {
             TogetherPlayer.shared.stop()
         }
@@ -1266,10 +1321,16 @@ struct TogetherPlaylistEditor: View {
         tags = live.tags
         desc = live.desc
         bg = live.bg ?? "cover-1"
+        originalBg = bg
     }
 
     private func save() {
         _ = TogetherStore.shared.updatePlaylistInfo(id: playlist.id, name: name, tags: tags, desc: desc, by: .user)
+        // 背景不是名字的一部分，updatePlaylistInfo 不碰它；改过就单独存一次，否则退出再进会丢。
+        if bg != originalBg {
+            TogetherStore.shared.setPlaylistBackground(id: playlist.id, bg: bg, by: .user)
+            originalBg = bg
+        }
     }
 }
 // MARK: - 歌单详情
@@ -1288,6 +1349,9 @@ struct TogetherPlaylistDetail: View {
     @State private var showEditor = false
     @State private var showAddSongs = false
     @State private var state = TogetherState()
+    @State private var pendingDelete: TogetherTrack?
+    @State private var showDeleteConfirm = false
+    private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     private var filteredTracks: [TogetherTrack] {
         if searchText.isEmpty { return tracks }
@@ -1364,6 +1428,15 @@ struct TogetherPlaylistDetail: View {
             }
         }
         .onAppear(perform: reload)
+        .onReceive(ticker) { _ in reload() }
+        .alert(TogetherCopy.deletePermanently, isPresented: $showDeleteConfirm, presenting: pendingDelete) { track in
+            Button(AppLocalized("Delete", comment: "删除"), role: .destructive) {
+                performDelete(track)
+            }
+            Button(AppLocalized("Cancel", comment: "取消"), role: .cancel) {}
+        } message: { _ in
+            Text(TogetherCopy.deleteTrackMessage)
+        }
         .sheet(isPresented: $showEditor, onDismiss: reload) {
             if let playlist {
                 TogetherPlaylistEditor(playlist: playlist)
@@ -1524,6 +1597,15 @@ struct TogetherPlaylistDetail: View {
     }
 
     private func deleteTrack(_ track: TogetherTrack) {
+        // 删音频文件不可逆，先问一句，确认后才真删。
+        pendingDelete = track
+        showDeleteConfirm = true
+    }
+
+    private func performDelete(_ track: TogetherTrack) {
+        // 先把确认态收掉：reload 在确认态下会故意不重排列表。
+        showDeleteConfirm = false
+        pendingDelete = nil
         if TogetherPlayer.shared.track?.id == track.id {
             TogetherPlayer.shared.stop()
         }
@@ -1532,10 +1614,15 @@ struct TogetherPlaylistDetail: View {
     }
 
     private func reload() {
-        state = TogetherStore.shared.load()
-        playlist = TogetherStore.shared.livePlaylists().first { $0.id == playlistId }
+        // 确认框还挂着时先别重排列表，否则待删的那首歌可能已经从数组里消失，确认就落空了。
+        guard !showDeleteConfirm else { return }
+        let freshState = TogetherStore.shared.load()
+        if freshState.revision != state.revision { state = freshState }
+        let freshPlaylist = TogetherStore.shared.livePlaylists().first { $0.id == playlistId }
+        if freshPlaylist != playlist { playlist = freshPlaylist }
         let lib = TogetherStore.shared.library()
-        tracks = (playlist?.tracks ?? []).compactMap { lib.track(id: $0) }
+        let freshTracks = (freshPlaylist?.tracks ?? []).compactMap { lib.track(id: $0) }
+        if freshTracks != tracks { tracks = freshTracks }
     }
 }
 

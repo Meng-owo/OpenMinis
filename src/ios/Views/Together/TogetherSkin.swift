@@ -152,6 +152,8 @@ enum TogetherCopy {
     static var descPlaceholder: String { AppLocalized("Write a brief introduction...", comment: "一起听 · 简介占位") }
     static var removeFromPlaylist: String { AppLocalized("Remove from playlist", comment: "一起听 · 从歌单移除") }
     static var deletePermanently: String { AppLocalized("Delete file permanently", comment: "一起听 · 彻底删除") }
+    /// 删歌不可逆，确认框必须把后果说清楚。
+    static var deleteTrackMessage: String { AppLocalized("This permanently deletes the audio file and can't be undone.", comment: "一起听 · 删歌确认说明") }
     static var searchSongOrArtist: String { AppLocalized("Search title or artist", comment: "一起听 · 搜索歌名或歌手") }
     static var themeCenter: String { AppLocalized("Theme Center", comment: "一起听 · 装扮中心") }
     static var nowPlayingWallpaper: String { AppLocalized("Now Playing Wallpaper", comment: "一起听 · 播放页壁纸") }

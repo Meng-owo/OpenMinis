@@ -545,7 +545,8 @@ struct TogetherPanelView: View {
 
             // 上一首
             Button {
-                step(-1)
+                player.previousTrack()
+                state = TogetherStore.shared.load()
             } label: {
                 Image(systemName: "backward.fill")
                     .font(ChatFont.font(23 * s, weight: .medium))
@@ -556,7 +557,8 @@ struct TogetherPanelView: View {
 
             // 播放/暂停大圆键
             Button {
-                player.toggle()
+                player.userToggle()
+                state = TogetherStore.shared.load()
             } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(ChatFont.font(26 * s, weight: .semibold))
@@ -571,7 +573,8 @@ struct TogetherPanelView: View {
 
             // 下一首
             Button {
-                step(1)
+                player.nextTrack()
+                state = TogetherStore.shared.load()
             } label: {
                 Image(systemName: "forward.fill")
                     .font(ChatFont.font(23 * s, weight: .medium))
@@ -686,28 +689,6 @@ struct TogetherPanelView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             resonancePulse = false
         }
-    }
-
-    private func step(_ delta: Int) {
-        let lib = TogetherStore.shared.library()
-        guard !lib.tracks.isEmpty else { return }
-
-        // 有队列按队列走，没有才退回整个曲库。
-        let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
-        let pool = ids.compactMap { lib.track(id: $0) }
-        guard !pool.isEmpty else { return }
-
-        var next: TogetherTrack
-        if state.playback.shuffle {
-            next = pool.filter { $0.id != player.track?.id }.randomElement() ?? pool[0]
-        } else {
-            let idx = ids.firstIndex(of: player.track?.id ?? "") ?? 0
-            next = pool[(idx + delta + pool.count) % pool.count]
-        }
-
-        player.load(next)
-        TogetherStore.shared.play(trackId: next.id, at: 0, by: .user)
-        state = TogetherStore.shared.load()
     }
 
     private func checkEcho(at pos: Double) {

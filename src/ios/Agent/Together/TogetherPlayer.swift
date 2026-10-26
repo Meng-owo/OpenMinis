@@ -132,6 +132,19 @@ final class TogetherPlayer: ObservableObject {
         if isPlaying { pause() } else { play() }
     }
 
+    /// 用户亲手按的播放/暂停：本地状态和 state.json 一起改，重启后还是她按的那一下。
+    /// AI 派来的 pause / resume 也走 stop 或 followTick，不经过这里，免得把控制权记成用户。
+    func userToggle() {
+        if isPlaying {
+            pause()
+            store.setPlaying(false, by: .user)
+        } else {
+            play()
+            // 一首都没装载时 play() 不会真响，别把 state 写成“在放”。
+            if isPlaying { store.setPlaying(true, by: .user) }
+        }
+    }
+
     func seek(to seconds: Double) {
         guard let p = player else { return }
         let maxTime = duration > 0 ? min(seconds, duration) : seconds
