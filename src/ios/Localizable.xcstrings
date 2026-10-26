@@ -141363,6 +141363,64 @@
         }
       }
     },
+    "This permanently deletes the audio file and can't be undone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Audiodatei wird dauerhaft gelöscht und kann nicht wiederhergestellt werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This permanently deletes the audio file and can't be undone."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto elimina el archivo de audio de forma permanente y no se puede deshacer."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cela supprime définitivement le fichier audio, sans possibilité d'annulation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音声ファイルは完全に削除され、元に戻せません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오디오 파일이 영구적으로 삭제되며 되돌릴 수 없습니다."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Аудиофайл будет удалён навсегда, отменить это нельзя."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这会永久删除音频文件，无法撤销。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這會永久刪除音訊檔，無法復原。"
+          }
+        }
+      }
+    },
     "Delete this playlist": {
       "localizations": {
         "de": {

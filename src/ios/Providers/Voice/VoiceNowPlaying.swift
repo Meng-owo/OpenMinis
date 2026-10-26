@@ -142,7 +142,7 @@ final class VoiceNowPlaying {
 
     private func handleToggle() {
         if TogetherPlayer.shared.isActive {
-            TogetherPlayer.shared.toggle()
+            TogetherPlayer.shared.userToggle()
             refresh()
             return
         }
@@ -156,7 +156,7 @@ final class VoiceNowPlaying {
 
     private func handlePlay() {
         if TogetherPlayer.shared.isActive {
-            TogetherPlayer.shared.play()
+            TogetherPlayer.shared.userPlay()
             refresh()
             return
         }
@@ -171,7 +171,7 @@ final class VoiceNowPlaying {
 
     private func handlePause() {
         if TogetherPlayer.shared.isActive {
-            TogetherPlayer.shared.pause()
+            TogetherPlayer.shared.userPause()
             refresh()
             return
         }

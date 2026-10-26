@@ -52,7 +52,9 @@ final class TogetherPlayer: ObservableObject {
     // MARK: 播放
 
     /// 换一首。position 是起始秒数。
-    func load(_ newTrack: TogetherTrack, from position: Double = 0) {
+    /// autoplay 为 false 时只装载不发声——恢复"上次是暂停"的状态要用它，
+    /// 否则先播一下再暂停，杀进程重开会听到"响一下"，暂停就没粘住。
+    func load(_ newTrack: TogetherTrack, from position: Double = 0, autoplay: Bool = true) {
         guard let url = store.audioURL(for: newTrack) else {
             logger.error("[Together] \(newTrack.title) 没有音频文件")
             return
@@ -88,8 +90,12 @@ final class TogetherPlayer: ObservableObject {
         } else {
             currentTime = 0
         }
-        p.play()
-        isPlaying = true
+        if autoplay {
+            p.play()
+            isPlaying = true
+        } else {
+            isPlaying = false
+        }
         VoiceNowPlaying.shared.refresh()
 
         // 扫目录进来的歌没有时长，读一次回填，列表就不会一直显示 0:00。
@@ -134,15 +140,24 @@ final class TogetherPlayer: ObservableObject {
 
     /// 用户亲手按的播放/暂停：本地状态和 state.json 一起改，重启后还是她按的那一下。
     /// AI 派来的 pause / resume 也走 stop 或 followTick，不经过这里，免得把控制权记成用户。
+    /// 面板、微控条、同步页、锁屏、控制中心、耳机都走这一个入口，暂停才会真的粘住。
     func userToggle() {
-        if isPlaying {
-            pause()
-            store.setPlaying(false, by: .user)
-        } else {
-            play()
-            // 一首都没装载时 play() 不会真响，别把 state 写成“在放”。
-            if isPlaying { store.setPlaying(true, by: .user) }
+        if isPlaying { userPause() } else { userPlay() }
+    }
+
+    /// 用户亲手按的播放（锁屏 play / 耳机播放键）。
+    func userPlay() {
+        play()
+        if isPlaying, !store.load().playback.playing {
+            store.setPlaying(true, by: .user)
         }
+    }
+
+    /// 用户亲手按的暂停（锁屏 pause / 耳机暂停键）。没在放就不写，免得平白把 by 改成 user。
+    func userPause() {
+        guard isPlaying else { return }
+        pause()
+        store.setPlaying(false, by: .user)
     }
 
     func seek(to seconds: Double) {
@@ -166,19 +181,42 @@ final class TogetherPlayer: ObservableObject {
 
         let state = store.load()
         let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
-        let pool = ids.compactMap { lib.track(id: $0) }
-        guard !pool.isEmpty else { return }
+        let currentId = track?.id ?? ""
 
-        var next: TogetherTrack
+        // 按原队列顺序留下还活着的歌。
+        let livePool = ids.compactMap { lib.track(id: $0) }
+        guard !livePool.isEmpty else { return }
+
         if state.playback.shuffle {
-            next = pool.filter { $0.id != track?.id }.randomElement() ?? pool[0]
-        } else {
-            // 队列里可能缺歌,所以按 ids 定位、再取歌,不用过滤后的 pool 当下标。
-            let idx = ids.firstIndex(of: track?.id ?? "") ?? 0
-            let pos = (idx + delta + ids.count * 2) % ids.count
-            next = lib.track(id: ids[pos]) ?? pool[0]
+            let next = livePool.filter { $0.id != currentId }.randomElement() ?? livePool[0]
+            // 只剩当前这一首有效歌：停住，别从头重放。
+            if next.id == currentId { return }
+            load(next, from: 0)
+            store.play(trackId: next.id, at: 0, by: .user)
+            return
         }
 
+        // 顺序 / 单曲：从当前在原始队列里的位置出发，按方向逐格走，
+        // 跳过已删的孤儿 ID，直到踩到下一首有效歌。
+        // 以前用过滤前的下标取歌，取到已删的歌就回落第一首，原地重复当前这首；
+        // 删歌后点下一首等于没反应。现在只在整圈走完都没有别的有效歌时，才停在当前这首。
+        var picked: TogetherTrack?
+        if let start = ids.firstIndex(of: currentId) {
+            var step = 1
+            while step <= ids.count {
+                let pos = ((start + delta * step) % ids.count + ids.count) % ids.count
+                if let t = lib.track(id: ids[pos]), t.id != currentId {
+                    picked = t
+                    break
+                }
+                step += 1
+            }
+        } else {
+            // 当前歌不在队列里（比如队列刚被清过）：往后取第一首有效，往前取最后一首有效。
+            picked = delta >= 0 ? livePool.first : livePool.last
+        }
+
+        guard let next = picked else { return }
         load(next, from: 0)
         store.play(trackId: next.id, at: 0, by: .user)
     }
@@ -198,10 +236,8 @@ final class TogetherPlayer: ObservableObject {
         guard !isActive else { return }
         let state = store.load()
         guard let t = state.track, t.file != nil else { return }
-        load(t, from: state.playback.position)
-        if !state.playback.playing {
-            pause()
-        }
+        // 恢复时按上次记的状态装载：记着在放才出声，记着暂停就只装载不响。
+        load(t, from: state.playback.position, autoplay: state.playback.playing)
     }
 
     // MARK: 跟随 AI

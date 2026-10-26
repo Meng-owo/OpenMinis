@@ -1305,7 +1305,7 @@ struct TogetherPlaylistEditor: View {
     }
 
     private func performDelete(_ track: TogetherTrack) {
-        // 先把确认态收掉：reload 在确认态下会故意不重排列表。
+        // 先把确认态收掉，再删；编辑器的 reload 没有列表轮询，删完直接重读即可。
         showDeleteConfirm = false
         pendingDelete = nil
         if TogetherPlayer.shared.track?.id == track.id {
