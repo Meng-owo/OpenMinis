@@ -104,10 +104,16 @@ enum TogetherIdentity {
 
 enum TogetherCopy {
     static var title: String { AppLocalized("Together", comment: "一起听 · 面板标题") }
-    static var emptyTitle: String { AppLocalized("No songs yet", comment: "一起听 · 空状态标题") }
-    static var emptyHint: String {
-        AppLocalized("Add a song, or drop a file in.", comment: "一起听 · 空状态说明")
+    static var emptyTitle: String {
+        String(format: AppLocalized("%@'s library is empty", comment: "一起听 · 空状态标题"), ChatAddressing.assistant())
     }
+    static var emptyHint: String {
+        String(format: AppLocalized("Add a song, or ask %@ to add one.", comment: "一起听 · 空状态说明"), ChatAddressing.assistant())
+    }
+    /// 喜欢列表空了 ≠ 歌库空了,不能共用一句。
+    static var likedEmpty: String { AppLocalized("Nothing liked yet", comment: "一起听 · 喜欢空态") }
+    /// 单曲缺标题时的占位,与"歌库为空"不是一回事,拆开。
+    static var untitledTrack: String { AppLocalized("Untitled track", comment: "一起听 · 缺标题占位") }
     static var untitledPlaylist: String { AppLocalized("Untitled", comment: "一起听 · 新歌单默认名") }
     static var newPlaylist: String { AppLocalized("New playlist", comment: "一起听 · 新建") }
     static var myPlaylists: String { AppLocalized("My playlists", comment: "一起听 · 歌单库标题") }

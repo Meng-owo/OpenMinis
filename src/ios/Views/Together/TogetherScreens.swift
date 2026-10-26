@@ -26,7 +26,8 @@ struct TogetherWallpaperLayer: View {
     var body: some View {
         ZStack {
             CSSThemeVariables.bg(scope: .chat)
-            if let url = TogetherImages.url(for: slot),
+            // 私藏壁纸是兜底:某一页没单独挑图时,用这张。以前它只写不读,等于死槽。
+            if let url = TogetherImages.url(for: slot) ?? TogetherImages.url(for: TogetherImages.wallpaperSweet),
                let img = TogetherImages.cachedImage(for: url) {
                 Image(uiImage: img)
                     .resizable()
@@ -529,12 +530,17 @@ struct TogetherAllSongsView: View {
                 .padding(.top, 14)
 
                 if tracks.isEmpty {
-                    Text(TogetherCopy.emptyHint)
-                        .font(ChatFont.font(12.5))
-                        .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 40)
+                    VStack(spacing: 6) {
+                        Text(TogetherCopy.emptyTitle)
+                            .font(ChatFont.font(13.5, weight: .semibold))
+                            .foregroundStyle(CSSThemeVariables.text(scope: .chat))
+                        Text(TogetherCopy.emptyHint)
+                            .font(ChatFont.font(12.5))
+                            .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.top, 40)
                 }
             }
             .padding(.bottom, 24)
@@ -648,7 +654,7 @@ struct TogetherLikedView: View {
                 .padding(.top, 14)
 
                 if liked.isEmpty {
-                    Text(TogetherCopy.emptyHint)
+                    Text(TogetherCopy.likedEmpty)
                         .font(ChatFont.font(12.5))
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                         .padding(.top, 40)
@@ -802,7 +808,7 @@ struct TogetherSyncView: View {
                 .frame(width: 52, height: 52)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(TogetherPlayer.shared.track?.title ?? TogetherCopy.emptyTitle)
+                Text(TogetherPlayer.shared.track?.title ?? TogetherCopy.untitledTrack)
                     .font(ChatFont.font(14, weight: .medium))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .lineLimit(1)
@@ -950,25 +956,33 @@ struct TogetherPlaylistEditor: View {
     @State private var showTagSheet = false
     @State private var confirmDelete = false
 
-    private var presetTags: [String] {
-        [
-            AppLocalized("Pop", comment: "一起听 · 标签 流行"),
-            AppLocalized("Sad", comment: "一起听 · 标签 伤感"),
-            AppLocalized("Healing", comment: "一起听 · 标签 治愈"),
-            AppLocalized("Romantic", comment: "一起听 · 标签 浪漫"),
-            AppLocalized("Night", comment: "一起听 · 标签 夜晚"),
-            AppLocalized("Drive", comment: "一起听 · 标签 车载"),
-            AppLocalized("Electronic", comment: "一起听 · 标签 电子"),
-            AppLocalized("Light music", comment: "一起听 · 标签 轻音乐"),
-            AppLocalized("White noise", comment: "一起听 · 标签 白噪音"),
-            AppLocalized("Rock", comment: "一起听 · 标签 摇滚"),
-            AppLocalized("ACG", comment: "一起听 · 标签 ACG"),
-            AppLocalized("Instrumental", comment: "一起听 · 标签 纯音乐"),
-        ]
+    /// 预设标签存"键",不存译文:译文随语言变,存进歌单后一切语言就对不上。
+    /// 旧数据存的是译文,displayTag 认不出来就原样显示,不丢。
+    private static let presetTagKeys = [
+        "pop", "sad", "healing", "romantic", "night", "drive",
+        "electronic", "light", "whiteNoise", "rock", "acg", "instrumental",
+    ]
+
+    private func displayTag(_ raw: String) -> String {
+        switch raw {
+        case "pop": return AppLocalized("Pop", comment: "一起听 · 标签 流行")
+        case "sad": return AppLocalized("Sad", comment: "一起听 · 标签 伤感")
+        case "healing": return AppLocalized("Healing", comment: "一起听 · 标签 治愈")
+        case "romantic": return AppLocalized("Romantic", comment: "一起听 · 标签 浪漫")
+        case "night": return AppLocalized("Night", comment: "一起听 · 标签 夜晚")
+        case "drive": return AppLocalized("Drive", comment: "一起听 · 标签 车载")
+        case "electronic": return AppLocalized("Electronic", comment: "一起听 · 标签 电子")
+        case "light": return AppLocalized("Light music", comment: "一起听 · 标签 轻音乐")
+        case "whiteNoise": return AppLocalized("White noise", comment: "一起听 · 标签 白噪音")
+        case "rock": return AppLocalized("Rock", comment: "一起听 · 标签 摇滚")
+        case "acg": return AppLocalized("ACG", comment: "一起听 · 标签 ACG")
+        case "instrumental": return AppLocalized("Instrumental", comment: "一起听 · 标签 纯音乐")
+        default: return raw
+        }
     }
 
     private var tagsLabel: String {
-        tags.isEmpty ? TogetherCopy.noTags : tags.joined(separator: " · ")
+        tags.isEmpty ? TogetherCopy.noTags : tags.map(displayTag).joined(separator: " · ")
     }
 
     private var tagsColor: Color {
@@ -1201,7 +1215,7 @@ struct TogetherPlaylistEditor: View {
                 tags.append(t)
             }
         } label: {
-            Text(t)
+            Text(displayTag(t))
                 .font(ChatFont.font(12, weight: isSelected ? .semibold : .regular))
                 .foregroundStyle(fgColor)
                 .padding(.horizontal, 12)

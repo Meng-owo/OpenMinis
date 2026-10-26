@@ -142,8 +142,9 @@ struct TogetherPanelView: View {
     private var pageBackground: some View {
         ZStack {
             CSSThemeVariables.bg(scope: .chat)
+            // 用缓存版:滚动时每帧重新解码整张图会掉帧,缓存也保证换图后立刻生效。
             if let url = TogetherImages.url(for: TogetherImages.wallpaperNow),
-               let img = UIImage(contentsOfFile: url.path) {
+               let img = TogetherImages.cachedImage(for: url) {
                 Image(uiImage: img)
                     .resizable()
                     .scaledToFill()
@@ -1051,7 +1052,6 @@ struct TogetherEchoDrawerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var state = TogetherStore.shared.load()
-    @State private var draft = ""
 
     private var notes: [TogetherNote] {
         state.notes
@@ -1093,7 +1093,7 @@ struct TogetherEchoDrawerView: View {
             Text(AppLocalized("No lines on this song yet", comment: "一起听 · 回声空态"))
                 .font(ChatFont.font(14, weight: .medium))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-            Text(AppLocalized("Leave one below — it surfaces when the song reaches that second", comment: "一起听 · 回声引导"))
+            Text(AppLocalized("Tap the pen to leave a line at this second", comment: "一起听 · 回声引导"))
                 .font(ChatFont.font(11.5))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.8))
             Spacer()
@@ -1312,8 +1312,10 @@ struct TogetherThemeCenterView: View {
     @State private var state = TogetherStore.shared.load()
     @State private var activeSlot: String?
     @State private var pickerItem: PhotosPickerItem?
+    @State private var showPicker = false
 
     private var aiName: String { ChatAddressing.assistant() }
+    private var userName: String { ChatAddressing.user() }
 
     private let slots: [(id: String, title: String, subtitle: String)] = [
         (TogetherImages.wallpaperNow, TogetherCopy.nowPlayingWallpaper, AppLocalized("Full-screen mood wallpaper on the player", comment: "一起听 · 播放页壁纸说明")),
@@ -1358,10 +1360,10 @@ struct TogetherThemeCenterView: View {
                     .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
                 }
             }
-            .photosPicker(isPresented: Binding<Bool>(
-                get: { activeSlot != nil },
-                set: { if !$0 { activeSlot = nil } }
-            ), selection: $pickerItem, matching: .images)
+            // 坑:呈现条件不能挂在 activeSlot 上。相册一关,SwiftUI 会先把这里 set(false)
+            // 跑掉、activeSlot 被清空,紧接着 onChange 才拿到选中的图,slot 已是 nil,
+            // 直接静默 return —— 表现就是"能进相册,选完没反应"。两者解耦,只由按钮清。
+            .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
             .onChange(of: pickerItem) { item in
                 guard let item, let slot = activeSlot else { return }
                 Task {
@@ -1381,7 +1383,7 @@ struct TogetherThemeCenterView: View {
                 .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(AppLocalized("Music theme", comment: "一起听 · 装扮中心横幅标题"))
+                Text(String(format: AppLocalized("%@ & %@'s music nook", comment: "一起听 · 装扮中心横幅标题"), userName, aiName))
                     .font(ChatFont.font(14, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                 Text(String(format: AppLocalized("Tap a cover to change it, or let %@ pick one for you", comment: "一起听 · 装扮中心横幅说明"), aiName))
@@ -1450,6 +1452,7 @@ struct TogetherThemeCenterView: View {
 
             Button {
                 activeSlot = slot.id
+                showPicker = true
             } label: {
                 Text(TogetherCopy.changeCoverTitle)
                     .font(ChatFont.font(11, weight: .medium))

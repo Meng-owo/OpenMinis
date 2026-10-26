@@ -160,8 +160,10 @@ final class TogetherPlayer: ObservableObject {
         if state.playback.shuffle {
             next = pool.filter { $0.id != track?.id }.randomElement() ?? pool[0]
         } else {
+            // 队列里可能缺歌,所以按 ids 定位、再取歌,不用过滤后的 pool 当下标。
             let idx = ids.firstIndex(of: track?.id ?? "") ?? 0
-            next = pool[(idx + delta + pool.count) % pool.count]
+            let pos = (idx + delta + ids.count * 2) % ids.count
+            next = lib.track(id: ids[pos]) ?? pool[0]
         }
 
         load(next, from: 0)
@@ -366,7 +368,8 @@ final class TogetherPlayer: ObservableObject {
     private func teardown() {
         // 换歌不能把语音让路的监听一起摘掉：这两个通知只认"播放器还在不在放"，
         // 和具体某一首歌无关。以前每 load 一次就清空，第一首之后监听就永久没了，
-        // 语音一响音乐不暂停、说完也不续播。观察者跟 App 同寿命，只在 init 装一次。
+        // 语音一响音乐不暂停、说完也不续播。观察者跟 App 同寿命,由 startFollowing()
+        // 幂等装一次(observeVoice 里有 isEmpty 守卫),不再随换歌清理。
         if let token = endToken {
             NotificationCenter.default.removeObserver(token)
             endToken = nil

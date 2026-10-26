@@ -199,6 +199,20 @@ final class VoiceNowPlaying {
         }
         refresh()
     }
+
+    // [R36] 上面两个 target 之前只写了调用,没写实现,整个 target 编不过。
+    // 一起听在放就按它的队列切;不在放就不接管(锁屏只对"正在放的东西"负责)。
+    private func handleNextTrack() {
+        guard TogetherPlayer.shared.isActive else { return }
+        TogetherPlayer.shared.nextTrack()
+        refresh()
+    }
+
+    private func handlePreviousTrack() {
+        guard TogetherPlayer.shared.isActive else { return }
+        TogetherPlayer.shared.previousTrack()
+        refresh()
+    }
 }
 
 // MARK: - Engine hooks
