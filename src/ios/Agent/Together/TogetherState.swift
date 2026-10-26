@@ -348,7 +348,7 @@ struct TogetherState: Codable, Equatable {
     /// 自定义图片槽位：key → 相对 shared 根的路径（images/xxx.jpg）。
     /// 键的约定见 TogetherImages：lyrics-cover / wallpaper-now / cover-1 …
     var images: [String: String] = [:]
-    /// 心动共振（小梦和醒醒的小秘密）
+    /// 心动共振（双人小秘密）
     var resonance: TogetherResonance?
     /// 这一轮"听这首歌"的刻录额度：每次听，你和我各只能刻一句。
     var listen = TogetherListen()
@@ -571,7 +571,7 @@ extension TogetherLyrics {
 }
 
 
-/// 小惊喜：小梦和醒醒的心动共振。
+/// 小惊喜：双人和角色的心动共振。
 /// 轻触双人小挂件时，屏幕扩散心动微光，给对方发一段心跳和低语。
 struct TogetherResonance: Codable, Equatable {
     var from: String = ""

@@ -15,6 +15,36 @@ import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
 
+// MARK: - 共用：页面壁纸
+//
+// 主题中心每个壁纸槽位都得有页面真的去读，否则"换完没反应"。
+// 这里统一一层：主题底色 + 选中的图（压暗到和播放页一致），
+// 用 .background 挂上去，不参与布局，不改内容尺寸。
+struct TogetherWallpaperLayer: View {
+    let slot: String
+
+    var body: some View {
+        ZStack {
+            CSSThemeVariables.bg(scope: .chat)
+            if let url = TogetherImages.url(for: slot),
+               let img = TogetherImages.cachedImage(for: url) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .overlay(CSSThemeVariables.bg(scope: .chat).opacity(0.82))
+                    .clipped()
+            }
+        }
+        .ignoresSafeArea()
+    }
+}
+
+extension View {
+    func togetherWallpaper(_ slot: String) -> some View {
+        background(TogetherWallpaperLayer(slot: slot))
+    }
+}
+
 // MARK: - 共用：封面
 
 @MainActor
@@ -247,6 +277,7 @@ struct TogetherLibraryView: View {
                 .presentationDetents([.height(220)])
                 .presentationBackground(CSSThemeVariables.bg(scope: .chat))
         }
+        .togetherWallpaper(TogetherImages.wallpaperLibrary)
     }
 
     private var header: some View {
@@ -277,7 +308,7 @@ struct TogetherLibraryView: View {
     private var summaryLine: String {
         let songs = TogetherStore.shared.library().tracks.count
         let lists = playlists.count
-        return "\(songs) songs · \(lists) playlists"
+        return String(format: AppLocalized("%1$d songs · %2$d playlists", comment: "一起听 · 库概览"), songs, lists)
     }
 
     private func playlistCard(_ playlist: TogetherPlaylist) -> some View {
@@ -297,7 +328,7 @@ struct TogetherLibraryView: View {
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .lineLimit(1)
 
-                Text("\(playlist.tracks.count) songs")
+                Text(String(format: AppLocalized("%d songs", comment: "一起听 · 歌曲数"), playlist.tracks.count))
                     .font(ChatFont.font(10.5))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
             }
@@ -330,7 +361,7 @@ struct TogetherLibraryView: View {
                     Text(TogetherCopy.allSongs)
                         .font(ChatFont.font(14, weight: .medium))
                         .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                    Text("\(TogetherStore.shared.library().tracks.count) \(TogetherCopy.songs)")
+                    Text(String(format: AppLocalized("%d songs", comment: "一起听 · 歌曲数"), TogetherStore.shared.library().tracks.count))
                         .font(ChatFont.font(11.5))
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                 }
@@ -428,7 +459,7 @@ struct TogetherAllSongsView: View {
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                     .padding(.top, 26)
 
-                Text("\(tracks.count) \(TogetherCopy.songs)")
+                Text(String(format: AppLocalized("%d songs", comment: "一起听 · 歌曲数"), tracks.count))
                     .font(ChatFont.font(11.5))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                     .padding(.top, 6)
@@ -509,6 +540,7 @@ struct TogetherAllSongsView: View {
             .padding(.bottom, 24)
         }
         .onAppear { reload() }
+        .togetherWallpaper(TogetherImages.wallpaperLibrary)
     }
 
     private func reload() {
@@ -554,7 +586,7 @@ struct TogetherLikedView: View {
                             .clipShape(Circle())
                             .overlay(Circle().strokeBorder(CSSThemeVariables.bg(scope: .chat), lineWidth: 2))
                     }
-                    Text("\(liked.count) songs · liked by both")
+                    Text(String(format: AppLocalized("%d liked songs", comment: "一起听 · 喜欢的音乐数量"), liked.count))
                         .font(ChatFont.font(11.5, design: .serif))
                         .italic()
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
@@ -625,6 +657,7 @@ struct TogetherLikedView: View {
             .padding(.bottom, 24)
         }
         .onAppear(perform: reload)
+        .togetherWallpaper(TogetherImages.wallpaperLiked)
     }
 
     private var cover: some View {
@@ -694,6 +727,7 @@ struct TogetherSyncView: View {
             let fresh = TogetherStore.shared.load()
             if fresh.revision != state.revision { state = fresh }
         }
+        .togetherWallpaper(TogetherImages.wallpaperSync)
     }
 
     private var duo: some View {
@@ -916,7 +950,22 @@ struct TogetherPlaylistEditor: View {
     @State private var showTagSheet = false
     @State private var confirmDelete = false
 
-    private let presetTags = ["流行", "伤感", "治愈", "浪漫", "夜晚", "车载", "电子", "轻音乐", "白噪音", "摇滚", "ACG", "纯音乐"]
+    private var presetTags: [String] {
+        [
+            AppLocalized("Pop", comment: "一起听 · 标签 流行"),
+            AppLocalized("Sad", comment: "一起听 · 标签 伤感"),
+            AppLocalized("Healing", comment: "一起听 · 标签 治愈"),
+            AppLocalized("Romantic", comment: "一起听 · 标签 浪漫"),
+            AppLocalized("Night", comment: "一起听 · 标签 夜晚"),
+            AppLocalized("Drive", comment: "一起听 · 标签 车载"),
+            AppLocalized("Electronic", comment: "一起听 · 标签 电子"),
+            AppLocalized("Light music", comment: "一起听 · 标签 轻音乐"),
+            AppLocalized("White noise", comment: "一起听 · 标签 白噪音"),
+            AppLocalized("Rock", comment: "一起听 · 标签 摇滚"),
+            AppLocalized("ACG", comment: "一起听 · 标签 ACG"),
+            AppLocalized("Instrumental", comment: "一起听 · 标签 纯音乐"),
+        ]
+    }
 
     private var tagsLabel: String {
         tags.isEmpty ? TogetherCopy.noTags : tags.joined(separator: " · ")
@@ -1424,7 +1473,7 @@ struct TogetherPlaylistDetail: View {
             TogetherPlayer.shared.load(track)
             TogetherStore.shared.play(trackId: track.id, at: 0, by: .user, queue: tracks.map { $0.id })
         } label: {
-            Label("播放", systemImage: "play.fill")
+            Label(AppLocalized("Play", comment: "一起听 · 播放"), systemImage: "play.fill")
         }
         Button(role: .destructive) {
             TogetherStore.shared.removeTrack(track.id, from: playlistId)
@@ -1522,29 +1571,45 @@ enum TogetherPhotoImport {
         try? await item.loadTransferable(type: Data.self)
     }
 
-    static func toSlot(_ item: PhotosPickerItem, slot: String) async {
-        guard let bytes = await data(item) else { return }
+    /// 落一张图到槽位。成功/失败都给一句反馈——以前全程静默，
+    /// 用户看不到到底成没成，体感就是"换图失败"。
+    @discardableResult
+    static func toSlot(_ item: PhotosPickerItem, slot: String) async -> Bool {
+        guard let bytes = await data(item) else {
+            MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+            return false
+        }
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("together-\(slot)-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: tmp) }
         do {
             try bytes.write(to: tmp)
-            _ = TogetherStore.shared.setImage(slot: slot, from: tmp)
-            try? FileManager.default.removeItem(at: tmp)
-        } catch {
-            try? FileManager.default.removeItem(at: tmp)
-        }
+            if TogetherStore.shared.setImage(slot: slot, from: tmp) != nil {
+                MinisToast.show(AppLocalized("Cover updated", comment: "一起听 · 换图成功"), systemImage: "checkmark.circle")
+                return true
+            }
+        } catch {}
+        MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+        return false
     }
 
-    static func toPlaylist(_ item: PhotosPickerItem, id: String) async {
-        guard let bytes = await data(item) else { return }
+    @discardableResult
+    static func toPlaylist(_ item: PhotosPickerItem, id: String) async -> Bool {
+        guard let bytes = await data(item) else {
+            MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+            return false
+        }
         let tmp = FileManager.default.temporaryDirectory
             .appendingPathComponent("together-playlist-\(id)-\(UUID().uuidString).jpg")
+        defer { try? FileManager.default.removeItem(at: tmp) }
         do {
             try bytes.write(to: tmp)
-            _ = TogetherStore.shared.setPlaylistImage(id: id, from: tmp)
-            try? FileManager.default.removeItem(at: tmp)
-        } catch {
-            try? FileManager.default.removeItem(at: tmp)
-        }
+            if TogetherStore.shared.setPlaylistImage(id: id, from: tmp) {
+                MinisToast.show(AppLocalized("Cover updated", comment: "一起听 · 换图成功"), systemImage: "checkmark.circle")
+                return true
+            }
+        } catch {}
+        MinisToast.show(TogetherCopy.importFailed, systemImage: "exclamationmark.circle")
+        return false
     }
 }

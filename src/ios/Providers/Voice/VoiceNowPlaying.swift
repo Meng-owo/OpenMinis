@@ -122,6 +122,16 @@ final class VoiceNowPlaying {
             self?.handleSeek(to: e.positionTime)
             return .success
         }
+        // [R35] 一起听锁屏切歌。以前只有 toggle/play/pause/seek，
+        // 锁屏和耳机能暂停/拖进度，却切不了歌。
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            self?.handleNextTrack()
+            return .success
+        }
+        center.previousTrackCommand.addTarget { [weak self] _ in
+            self?.handlePreviousTrack()
+            return .success
+        }
     }
 
     /// Route to the engine that currently owns the session: the reader

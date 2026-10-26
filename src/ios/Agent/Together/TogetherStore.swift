@@ -442,6 +442,8 @@ extension TogetherStore {
     }
 
     /// 播放进度回写。这个不进事件流——每秒一条会把文件淹了。
+    /// 只写 position / updatedAt，不碰 playback.by：
+    /// 遥控器在谁手里是"谁点了遥控"决定的，不是"谁的进度在跑"。
     func reportProgress(position: Double) {
         mutate(by: .user, event: "") { state in
             state.playback.position = position
@@ -881,7 +883,7 @@ extension TogetherStore {
         }
     }
 
-    /// 小惊喜：小梦和醒醒的心动共振
+    /// 小惊喜：双人和角色的心动共振
     func triggerResonance(from actor: TogetherActor, whisper: String) {
         mutate(by: actor, event: "resonance") { state in
             state.resonance = TogetherResonance(

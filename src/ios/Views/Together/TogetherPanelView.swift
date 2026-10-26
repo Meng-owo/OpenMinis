@@ -34,16 +34,14 @@ struct TogetherPanelView: View {
     @State private var echoLastPosition: Double = 0
     @State private var echoCorner: Int = 0
 
-    /// 抽屉与中心弹窗
-    @State private var showEchoDrawer = false
-    @State private var showNoteComposer = false
+    /// 抽屉与中心弹窗：同一视图只挂一个 .sheet，靠这个枚举切换。
+    /// 以前四个 .sheet(isPresented:) 叠在同一个视图上会互相顶掉——
+    /// 刻字弹窗被回声墙抽屉抢掉就是这么来的。
+    @State private var activeSheet: PanelSheet?
     @State private var noteDraft = ""
-    @State private var showQueueDrawer = false
-    @State private var showThemeCenter = false
 
     /// 小惊喜：心动共振光效脉冲
     @State private var resonancePulse = false
-    @State private var resonanceWhisper = ""
 
     private let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
     private var track: TogetherTrack? { state.track ?? player.track }
@@ -120,24 +118,22 @@ struct TogetherPanelView: View {
         .onChange(of: player.currentTime) { pos in
             checkEcho(at: pos)
         }
-        .sheet(isPresented: $showEchoDrawer) {
-            if let t = track {
-                TogetherEchoDrawerView(track: t) { target in
-                    player.seek(to: target)
-                    TogetherStore.shared.seek(to: target, by: .user)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .echo:
+                if let t = track {
+                    TogetherEchoDrawerView(track: t) { target in
+                        player.seek(to: target)
+                        TogetherStore.shared.seek(to: target, by: .user)
+                    }
                 }
-                
-                
+            case .note:
+                noteComposer
+            case .queue:
+                TogetherQueueDrawerView()
+            case .theme:
+                TogetherThemeCenterView()
             }
-        }
-        .sheet(isPresented: $showNoteComposer) { noteComposer }
-        .sheet(isPresented: $showQueueDrawer) {
-            TogetherQueueDrawerView()
-                
-                
-        }
-        .sheet(isPresented: $showThemeCenter) {
-            TogetherThemeCenterView()
         }
     }
 
@@ -185,7 +181,7 @@ struct TogetherPanelView: View {
             // 右侧：装扮中心调色盘 + 回声开关
             HStack(spacing: 8) {
                 Button {
-                    showThemeCenter = true
+                    activeSheet = .theme
                 } label: {
                     Image(systemName: "paintpalette.fill")
                         .font(ChatFont.font(13))
@@ -431,7 +427,7 @@ struct TogetherPanelView: View {
 
             // 历史回声墙抽屉
             Button {
-                showEchoDrawer = true
+                activeSheet = .echo
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "bubble.left.and.bubble.right")
@@ -448,7 +444,7 @@ struct TogetherPanelView: View {
 
             // 直接刻字（在这一秒留一句）
             Button {
-                showNoteComposer = true
+                activeSheet = .note
             } label: {
                 Image(systemName: "square.and.pencil")
                     .font(ChatFont.font(19 * s))
@@ -578,7 +574,7 @@ struct TogetherPanelView: View {
 
             // 播放队列抽屉按钮
             Button {
-                showQueueDrawer = true
+                activeSheet = .queue
             } label: {
                 Image(systemName: "list.bullet")
                     .font(ChatFont.font(19 * s))
@@ -593,11 +589,11 @@ struct TogetherPanelView: View {
 
     private var noteComposer: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(String(format: "刻在 %@", mmss(player.currentTime)))
+            Text(String(format: AppLocalized("Engraved at %@", comment: "一起听 · 刻字位置"), mmss(player.currentTime)))
                 .font(ChatFont.font(15, weight: .semibold))
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
 
-            TextField("这一秒你想留一句什么", text: $noteDraft, axis: .vertical)
+            TextField(AppLocalized("Leave a line at this second", comment: "一起听 · 刻字输入占位"), text: $noteDraft, axis: .vertical)
                 .font(ChatFont.font(14))
                 .lineLimit(1...3)
                 .padding(12)
@@ -609,7 +605,7 @@ struct TogetherPanelView: View {
             HStack(spacing: 10) {
                 Button(AppLocalized("Cancel", comment: "取消")) {
                     noteDraft = ""
-                    showNoteComposer = false
+                    activeSheet = nil
                 }
                 .font(ChatFont.font(14))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
@@ -645,7 +641,7 @@ struct TogetherPanelView: View {
         }
         state = TogetherStore.shared.load()
         noteDraft = ""
-        showNoteComposer = false
+        activeSheet = nil
     }
 
     private var playModeIcon: String {
@@ -677,7 +673,8 @@ struct TogetherPanelView: View {
 
     private func triggerHeartbeat() {
         resonancePulse = true
-        TogetherStore.shared.triggerResonance(from: .user, whisper: "醒醒轻轻碰了碰小梦")
+        let whisper = String(format: AppLocalized("%@ nudged %@", comment: "一起听 · 心动共振低语"), userName, aiName)
+        TogetherStore.shared.triggerResonance(from: .user, whisper: whisper)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
             resonancePulse = false
         }
@@ -768,7 +765,7 @@ struct TogetherPanelView: View {
             Image(systemName: "music.note")
                 .font(ChatFont.font(48))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.4))
-            Text("没有正在播放的歌曲")
+            Text(AppLocalized("Nothing playing right now", comment: "一起听 · 空态"))
                 .font(ChatFont.font(14, weight: .medium))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
             Spacer()
@@ -848,6 +845,7 @@ struct TogetherInlineLyricsView: View {
                 .onTapGesture { onToggleDisc() }
             }
         }
+        .togetherWallpaper(TogetherImages.lyricsCover)
     }
 
     private func lyricLine(_ line: TogetherLyricLine, isCurrent: Bool) -> some View {
@@ -1092,10 +1090,10 @@ struct TogetherEchoDrawerView: View {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(ChatFont.font(40))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.4))
-            Text("这首歌还没有刻过字")
+            Text(AppLocalized("No lines on this song yet", comment: "一起听 · 回声空态"))
                 .font(ChatFont.font(14, weight: .medium))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
-            Text("在下面留下一句，播到那一秒时就会浮现回声")
+            Text(AppLocalized("Leave one below — it surfaces when the song reaches that second", comment: "一起听 · 回声引导"))
                 .font(ChatFont.font(11.5))
                 .foregroundStyle(CSSThemeVariables.textDim(scope: .chat).opacity(0.8))
             Spacer()
@@ -1153,7 +1151,7 @@ struct TogetherEchoDrawerView: View {
 
     private var inputBar: some View {
         HStack(spacing: 10) {
-            TextField("在这一秒留下你的一句话...", text: $draft)
+            TextField(AppLocalized("Leave a line at this second...", comment: "一起听 · 回声输入占位"), text: $draft)
                 .textFieldStyle(.plain)
                 .font(ChatFont.font(13.5))
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
@@ -1224,7 +1222,7 @@ struct TogetherQueueDrawerView: View {
                         }
                     }
                 } header: {
-                    Text("当前列表共 \(tracks.count) 首歌曲")
+                    Text(String(format: AppLocalized("%d songs in this list", comment: "一起听 · 队列数量"), tracks.count))
                         .font(ChatFont.font(11))
                         .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
                 }
@@ -1315,13 +1313,15 @@ struct TogetherThemeCenterView: View {
     @State private var activeSlot: String?
     @State private var pickerItem: PhotosPickerItem?
 
+    private var aiName: String { ChatAddressing.assistant() }
+
     private let slots: [(id: String, title: String, subtitle: String)] = [
-        (TogetherImages.wallpaperNow, TogetherCopy.nowPlayingWallpaper, "播放主界面的全屏氛围大壁纸"),
-        (TogetherImages.lyricsCover, TogetherCopy.lyricsWallpaper, "歌词页面的背景与专属封面"),
-        (TogetherImages.wallpaperLibrary, TogetherCopy.libraryWallpaper, "所有歌单列表的背景壁纸"),
-        (TogetherImages.wallpaperSync, TogetherCopy.syncWallpaper, "双人伴听同步页面的背景"),
-        (TogetherImages.wallpaperLiked, TogetherCopy.likedWallpaper, "红心喜欢歌曲列表的背景"),
-        (TogetherImages.wallpaperSweet, TogetherCopy.sweetWallpaper, "小梦给醒醒挑的私藏壁纸"),
+        (TogetherImages.wallpaperNow, TogetherCopy.nowPlayingWallpaper, AppLocalized("Full-screen mood wallpaper on the player", comment: "一起听 · 播放页壁纸说明")),
+        (TogetherImages.lyricsCover, TogetherCopy.lyricsWallpaper, AppLocalized("Background and cover for the lyrics page", comment: "一起听 · 歌词页壁纸说明")),
+        (TogetherImages.wallpaperLibrary, TogetherCopy.libraryWallpaper, AppLocalized("Wallpaper behind your playlist lists", comment: "一起听 · 歌单库壁纸说明")),
+        (TogetherImages.wallpaperSync, TogetherCopy.syncWallpaper, AppLocalized("Background for the together page", comment: "一起听 · 伴听页壁纸说明")),
+        (TogetherImages.wallpaperLiked, TogetherCopy.likedWallpaper, AppLocalized("Wallpaper behind liked songs", comment: "一起听 · 喜欢页壁纸说明")),
+        (TogetherImages.wallpaperSweet, TogetherCopy.sweetWallpaper, AppLocalized("A private wallpaper picked just for you", comment: "一起听 · 私藏壁纸说明")),
     ]
 
     private let columns = [
@@ -1381,10 +1381,10 @@ struct TogetherThemeCenterView: View {
                 .foregroundStyle(CSSThemeVariables.accent(scope: .chat))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("我们俩的音乐专属装扮")
+                Text(AppLocalized("Music theme", comment: "一起听 · 装扮中心横幅标题"))
                     .font(ChatFont.font(14, weight: .semibold))
                     .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
-                Text("点击直接更换，或者让我在后台随时为你挑一张换上")
+                Text(String(format: AppLocalized("Tap a cover to change it, or let %@ pick one for you", comment: "一起听 · 装扮中心横幅说明"), aiName))
                     .font(ChatFont.font(11))
                     .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
             }
@@ -1473,4 +1473,10 @@ struct TogetherThemeCenterView: View {
 
 private struct SlotItem: Identifiable {
     let id: String
+}
+
+/// 面板同一时刻只展示一个弹层，靠这个枚举切。
+private enum PanelSheet: String, Identifiable {
+    case echo, note, queue, theme
+    var id: String { rawValue }
 }

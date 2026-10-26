@@ -143,6 +143,31 @@ final class TogetherPlayer: ObservableObject {
         VoiceNowPlaying.shared.refresh()
     }
 
+    /// 锁屏 / 控制中心切歌。和面板、微控条用同一套队列规则。
+    func nextTrack() { skipTrack(+1) }
+    func previousTrack() { skipTrack(-1) }
+
+    private func skipTrack(_ delta: Int) {
+        let lib = store.library()
+        guard !lib.tracks.isEmpty else { return }
+
+        let state = store.load()
+        let ids = state.playback.queue.isEmpty ? lib.tracks.map { $0.id } : state.playback.queue
+        let pool = ids.compactMap { lib.track(id: $0) }
+        guard !pool.isEmpty else { return }
+
+        var next: TogetherTrack
+        if state.playback.shuffle {
+            next = pool.filter { $0.id != track?.id }.randomElement() ?? pool[0]
+        } else {
+            let idx = ids.firstIndex(of: track?.id ?? "") ?? 0
+            next = pool[(idx + delta + pool.count) % pool.count]
+        }
+
+        load(next, from: 0)
+        store.play(trackId: next.id, at: 0, by: .user)
+    }
+
     func stop() {
         teardown()
         track = nil
@@ -339,8 +364,9 @@ final class TogetherPlayer: ObservableObject {
     }
 
     private func teardown() {
-        voiceObservers.forEach { NotificationCenter.default.removeObserver($0) }
-        voiceObservers.removeAll()
+        // 换歌不能把语音让路的监听一起摘掉：这两个通知只认"播放器还在不在放"，
+        // 和具体某一首歌无关。以前每 load 一次就清空，第一首之后监听就永久没了，
+        // 语音一响音乐不暂停、说完也不续播。观察者跟 App 同寿命，只在 init 装一次。
         if let token = endToken {
             NotificationCenter.default.removeObserver(token)
             endToken = nil
@@ -363,11 +389,11 @@ final class TogetherPlayer: ObservableObject {
 extension TogetherPlayer {
     var nowPlayingTitle: String {
         let t = track?.title ?? ""
-        return t.isEmpty ? "一起听" : t
+        return t.isEmpty ? TogetherCopy.title : t
     }
 
     var nowPlayingArtist: String {
         let a = track?.artist ?? ""
-        return a.isEmpty ? "一起听" : a
+        return a.isEmpty ? TogetherCopy.title : a
     }
 }
