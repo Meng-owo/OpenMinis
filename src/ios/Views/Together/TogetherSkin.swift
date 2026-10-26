@@ -104,10 +104,12 @@ enum TogetherIdentity {
 
 enum TogetherCopy {
     static var title: String { AppLocalized("Together", comment: "一起听 · 面板标题") }
-    static var emptyTitle: String {
+    // 这两个要读人设名(主线程隔离),所以自己标注;其余成员保持非隔离,
+    // 好让 Agent 层(非主线程)也能取到纯文案。
+    @MainActor static var emptyTitle: String {
         String(format: AppLocalized("%@'s library is empty", comment: "一起听 · 空状态标题"), ChatAddressing.assistant())
     }
-    static var emptyHint: String {
+    @MainActor static var emptyHint: String {
         String(format: AppLocalized("Add a song, or ask %@ to add one.", comment: "一起听 · 空状态说明"), ChatAddressing.assistant())
     }
     /// 喜欢列表空了 ≠ 歌库空了,不能共用一句。

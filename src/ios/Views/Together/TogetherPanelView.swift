@@ -1052,6 +1052,7 @@ struct TogetherEchoDrawerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var state = TogetherStore.shared.load()
+    @State private var draft = ""
 
     private var notes: [TogetherNote] {
         state.notes

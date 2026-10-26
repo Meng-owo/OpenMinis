@@ -533,7 +533,7 @@ struct TogetherAllSongsView: View {
                     VStack(spacing: 6) {
                         Text(TogetherCopy.emptyTitle)
                             .font(ChatFont.font(13.5, weight: .semibold))
-                            .foregroundStyle(CSSThemeVariables.text(scope: .chat))
+                            .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
                         Text(TogetherCopy.emptyHint)
                             .font(ChatFont.font(12.5))
                             .foregroundStyle(CSSThemeVariables.textDim(scope: .chat))
@@ -1186,7 +1186,7 @@ struct TogetherPlaylistEditor: View {
                 .foregroundStyle(CSSThemeVariables.textMain(scope: .chat))
 
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 70))], spacing: 10) {
-                ForEach(presetTags, id: \.self) { t in
+                ForEach(Self.presetTagKeys, id: \.self) { t in
                     tagPill(t)
                 }
             }
